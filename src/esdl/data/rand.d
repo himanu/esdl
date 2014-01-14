@@ -101,13 +101,13 @@ abstract class Constraint (string C) : _ESDL__ConstraintBase
   // pragma(msg, _parseTree.capture);
 
   // Called by mixin to create functions out of parsed constraints
-  static char[] constraintFoo(string CST)() {
+  static char[] constraintFoo(string CST) {
     import esdl.data.cstx;
     return translate(CST);
   }
 
   debug(CONSTRAINTS) {
-    pragma(msg, constraintFoo!C());
+    pragma(msg, constraintFoo(C));
   }
 };
 
@@ -134,7 +134,7 @@ class Constraint(string C, string NAME, T, S): Constraint!C
     }
   }
   else {
-    mixin(constraintFoo!C());
+    mixin(constraintFoo(C));
   }
 }
 
