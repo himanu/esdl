@@ -1397,7 +1397,18 @@ struct BitString(bool L)
       for (size_t i=0; i*BitLength!T < len; ++i) {
         auto v = aptr[(i*BitLength!T)/bitsPerSizeT];
         static if(BIGENDIAN) arr ~= (cast(T) (v >> ((i*BitLength!T) & (bitsPerSizeT-1)))).reverse;
-        else arr ~= cast(T) (v >> ((i*BitLength!T) & (bitsPerSizeT-1)));
+        else {
+	  // FIXME
+	  static if(is(T == bit)) {
+	    if((v >> ((i*BitLength!T) & (bitsPerSizeT-1))) % 2) {
+	      arr ~= cast(T) false;
+	    }
+	    else {
+	      arr ~= cast(T) true;
+	    }
+	    // arr ~= cast(T) (v >> ((i*BitLength!T) & (bitsPerSizeT-1)));
+	  }
+	}
       }
     }
 
