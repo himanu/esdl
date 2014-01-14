@@ -1,0 +1,94 @@
+// Copyright: Coverify Systems Technology 2013 - 2014
+// License:   Distributed under the Boost Software License, Version 1.0.
+//            (See accompanying file LICENSE_1_0.txt or copy at
+//            http://www.boost.org/LICENSE_1_0.txt)
+// Authors:   Puneet Goel <puneet@coverify.com>
+
+import esdl.base.core;
+import uvm.meta.mailbox;
+
+class Foo: Entity {
+  mailbox!uint fifo;
+
+  this() {
+    fifo = new mailbox!uint (10);
+  }
+  void fifoConsume()
+  {
+    import std.stdio;
+    for(int i=0; i != 50; ++i)
+      {
+	// writeln("Waiting for read");
+	uint a = fifo.read();
+	writeln("Reading from mailbox: ", a);
+	wait(2.nsec);
+      }
+    // wait(20.nsec);
+    for(int i=0; i != 50; ++i)
+      {
+	// writeln("Waiting for read");
+	uint a = fifo.read();
+	writeln("Reading from mailbox: ", a);
+	// wait(2.nsec);
+      }
+  }
+
+  void fifoProduce()
+  {
+    import std.stdio;
+    for(int i=0; i != 100; ++i)
+      {
+	wait(1.nsec);
+	fifo.write(i);
+	writeln("Just wrote: ", i);
+      }
+  }
+
+  void procMailbox()
+  {
+    fork
+      (
+       process(() {fifoConsume();}),
+       process(() {fifoProduce();}),
+       ).joinAll;
+  }
+
+  Task!procMailbox fifoRun;
+      
+  override void doConfig() {
+    timePrecision = 10.psec;
+    timeUnit = 100.psec;
+  }
+
+}
+
+class Sim: RootEntity {
+
+  this(string name)
+    {
+      super(name);
+    }
+
+  // Inst!(Foo) [320] top;
+  // Inst!(Foo) [2] top;
+  Inst!Foo foo;
+  // Foo[2] foo;
+  override void doConfig() {
+    timeUnit = (100.psec);
+    timePrecision = (10.psec);
+    // writeln("Configure the RootEntity: ", this.getFullName);
+  }
+}
+
+int main()
+{
+  // top level module
+  // writeln("Size of EventNotice is: ", EventNotice.sizeof);
+  // writeln("Size of Time is: ", Time.sizeof);
+  
+  Sim theRootEntity = new Sim("theRootEntity");
+  theRootEntity.elaborate();
+  theRootEntity.simulate(1000.nsec);
+  // theRootEntity.terminate();
+  return 0;
+}
