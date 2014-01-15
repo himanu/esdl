@@ -2668,7 +2668,7 @@ private EventObj getEventObj(E)(ref E e) {
 	return e.defaultEvent();
       }
       else {
-	assert(false, "No defaultEvent associated with Port");
+	static assert(false, "No defaultEvent associated with Port");
       }
     }
   else static if(is(E unused: Signal!(T, M), T, bool M) ||
@@ -2680,13 +2680,13 @@ private EventObj getEventObj(E)(ref E e) {
 	return e.defaultEvent();
       }
       else {
-	assert(false, "No defaultEvent associated with Interface: " ~
-	       E.stringof);
+	static assert(false, "No defaultEvent associated with Interface: " ~
+		      E.stringof);
       }
     }
     else {
-      assert(false, "Unable to convert to EventObj from type "
-	     ~ typeid(e).stringof);
+      static assert(false, "Unable to convert to EventObj from type " ~
+		    E.stringof);
     }
 }
 
