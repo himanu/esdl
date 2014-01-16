@@ -558,13 +558,13 @@ void translateForeach(in string CST, char[] buffer, ref size_t srcCursor,
   if(index.length != 0) {
     xVar x;
     x.varName = index;
-    x.xLat = "_esdl__cstRandIndex!q{" ~ array ~ "}(_outer)";
+    x.xLat = "_esdl__cstRandArrIndex!q{" ~ array ~ "}(_outer)";
     varMap ~= x;
   }
     
   xVar x;
   x.varName = elem;
-  x.xLat = "_esdl__cstRandElem!q{" ~ array ~ "}(_outer)";
+  x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
   varMap ~= x;
 
   translateBlock(CST, buffer, srcCursor, dstCursor, varMap);
