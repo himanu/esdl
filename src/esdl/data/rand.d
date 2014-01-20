@@ -197,9 +197,9 @@ class CstStage {
   // List of randomized variables associated with this stage. Each
   // variable can be associated with only one stage
   CstVecPrim[] _randVecs;
-  // List of CstBddExpr that are assiciated with this stage. A
-  // constraint exression can be listed only in one stage
   CstBddExpr[] _bddExprs;
+  CstVecLoopVar[] _loopVars;
+  CstVecRandArr[] _lengthVars;
 
   public void id(uint i) {
     _id = i;
@@ -231,10 +231,22 @@ public class ConstraintEngine {
 
   public CstStage[] _cstStages;
 
-  // list of constraint statements to solve at a given stage
+  public void markCstStageLoops(CstBddExpr expr) {
+    auto vecs = expr.getPrims();
+    foreach(ref vec; vecs) {
+      if(vec !is null) {
+	auto stage = vec.stage();
+	if(stage !is null) {
+	  stage._loopVars ~= expr.loopVars;
+	}
+      }
+    }
+  }
 
-  public void addCstStage(CstVecPrim[] vecs) {
+  // list of constraint statements to solve at a given stage
+  public void addCstStage(CstBddExpr expr) {
     // uint stage = cast(uint) _cstStages.length;
+    auto vecs = expr.getPrims();
     CstStage stage;
     foreach(ref vec; vecs) {
       if(vec !is null) {
@@ -254,6 +266,8 @@ public class ConstraintEngine {
 	}
       }
     }
+    stage._bddExprs ~= expr;
+    stage._lengthVars ~= expr.lengthVars();
   }
 
   public void mergeCstStages(CstStage fromStage, CstStage toStage) {
@@ -301,7 +315,6 @@ public class ConstraintEngine {
   }
 
   void solve() {
-    import std.conv;
     // import std.stdio;
     // writeln("Solving BDD for number of contraints = ", cstList.length);
 
@@ -320,83 +333,105 @@ public class ConstraintEngine {
     }
 
     auto cstExprs = cstStmts._exprs;
+
+    foreach(expr; cstExprs) {
+      if(expr.loopVars().length is 0) {
+	addCstStage(expr);
+      }
+    }
+
+    foreach(expr; cstExprs) {
+      if(expr.loopVars().length !is 0) {
+	// We want to mark the stages that are dependent on a
+	// loopVar -- so that when these loops get resolved, we are
+	// able to factor in more constraints into these stages and
+	// then resolve
+	markCstStageLoops(expr);
+      }
+    }
+
+    auto usExprs = cstExprs;	// unstaged Expressions -- all
     auto urExprs = cstExprs;	// unresolved Expressions -- all
+
+    // First we solve the constraint groups that are responsible for
+    // setting the length of the rand!n dynamic arrays. After each
+    // such constraint group is resolved, we go back and expand the
+    // constraint expressions that depend on the LOOP Variables.
+
+    // Once we have unrolled all the LOOPS, we go ahead and resolve
+    // everything that remains.
+    
     uint stageIdx=0;
+    bool allArraysResolved=false;
 
     while(urExprs.length > 0) {
 
       cstExprs = urExprs;
       urExprs.length = 0;
 
-      foreach(expr; cstExprs) {
-	addCstStage(expr.getPrims());
-      }
-
-      foreach(expr; cstExprs) {
-	foreach(exprStage; expr.getStages()) {
-	  // process anyways
-	  exprStage._bddExprs ~= expr;
-	}
-      }
 
       for (; stageIdx != _cstStages.length; ++stageIdx) {
 	auto stage = _cstStages[stageIdx];
 	if(stage !is null &&
 	   stage._randVecs.length !is 0) {
-	  
-	  // initialize the bdd vectors
-	  foreach(vec; stage._randVecs) {
-	    if(vec.stage is stage && vec.bddvec is null) {
-	      vec.bddvec = _buddy.buildVec(_domains[vec.domIndex], vec.signed);
-	    }
-	  }
-
-	  // make the bdd tree
-	  auto exprs = stage._bddExprs;
-
-	  bdd solveBDD = _buddy.one();
-	  foreach(expr; exprs) {
-	    solveBDD &= expr.getBDD(stage, _buddy);
-	  }
-
-	  // The idea is that we apply the max length constraint only if
-	  // there is another constraint on the lenght. If there is no
-	  // other constraint, then the array is taken care of later at
-	  // the time of setting the non-constrained random variables
-
-	  // FIXME -- this behavior needs to change. Consider the
-	  // scenario where the length is not constrained but the
-	  // elements are
-	  arrayMaxLengthCst.applyMaxArrayLengthCst(solveBDD, stage);
-
-	  double[uint] bddDist;
-	  solveBDD.satDist(bddDist);
-
-	  auto solution = solveBDD.randSatOne(this._rgen.get(),
-					      bddDist);
-
-	  auto solVecs = solution.toVector();
-	  enforce(solVecs.length == 1,
-		  "Expecting exactly one solutions here; got: " ~
-		  to!string(solVecs.length));
-
-	  auto bits = solVecs[0];
-
-	  foreach(vec; stage._randVecs) {
-	    vec.value = 0;	// init
-	    foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
-	      if(bits[j] == 1) {
-		vec.value = vec.value + (1L << i);
-	      }
-	      if(bits[j] == -1) {
-		vec.value = vec.value + ((cast(ulong) _rgen.flip()) << i);
-	      }
-	    }
-	    // vec.bddvec = null;
-	  }
+	  solveStage(stage);
 	}
 	if(stage !is null) {stage.id(stageIdx);};
       }
+    }
+  }
+
+  void solveStage(CstStage stage) {
+    import std.conv;
+    // initialize the bdd vectors
+    foreach(vec; stage._randVecs) {
+      if(vec.stage is stage && vec.bddvec is null) {
+	vec.bddvec = _buddy.buildVec(_domains[vec.domIndex], vec.signed);
+      }
+    }
+
+    // make the bdd tree
+    auto exprs = stage._bddExprs;
+
+    bdd solveBDD = _buddy.one();
+    foreach(expr; exprs) {
+      solveBDD &= expr.getBDD(stage, _buddy);
+    }
+
+    // The idea is that we apply the max length constraint only if
+    // there is another constraint on the lenght. If there is no
+    // other constraint, then the array is taken care of later at
+    // the time of setting the non-constrained random variables
+
+    // FIXME -- this behavior needs to change. Consider the
+    // scenario where the length is not constrained but the
+    // elements are
+    arrayMaxLengthCst.applyMaxArrayLengthCst(solveBDD, stage);
+
+    double[uint] bddDist;
+    solveBDD.satDist(bddDist);
+
+    auto solution = solveBDD.randSatOne(this._rgen.get(),
+					bddDist);
+
+    auto solVecs = solution.toVector();
+    enforce(solVecs.length == 1,
+	    "Expecting exactly one solutions here; got: " ~
+	    to!string(solVecs.length));
+
+    auto bits = solVecs[0];
+
+    foreach(vec; stage._randVecs) {
+      vec.value = 0;	// init
+      foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
+	if(bits[j] == 1) {
+	  vec.value = vec.value + (1L << i);
+	}
+	if(bits[j] == -1) {
+	  vec.value = vec.value + ((cast(ulong) _rgen.flip()) << i);
+	}
+      }
+      // vec.bddvec = null;
     }
   }
 
