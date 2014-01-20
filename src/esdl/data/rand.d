@@ -229,8 +229,6 @@ public class ConstraintEngine {
     _rgen.seed(seed);
   }
 
-  public CstStage[] _cstStages;
-
   public void markCstStageLoops(CstBddExpr expr) {
     auto vecs = expr.getPrims();
     foreach(ref vec; vecs) {
@@ -244,7 +242,7 @@ public class ConstraintEngine {
   }
 
   // list of constraint statements to solve at a given stage
-  public void addCstStage(CstBddExpr expr) {
+  public void addCstStage(CstBddExpr expr, ref CstStage[] cstStages) {
     // uint stage = cast(uint) _cstStages.length;
     auto vecs = expr.getPrims();
     CstStage stage;
@@ -253,15 +251,14 @@ public class ConstraintEngine {
 	if(vec.stage() is null) {
 	  if(stage is null) {
 	    stage = new CstStage();	    
-	    _cstStages.length += 1;
-	    _cstStages[$-1] = stage;
+	    cstStages ~= stage;
 	  }
 	  vec.stage = stage;
 	  stage._randVecs ~= vec;
-	  // _cstStages[stage]._randVecs ~= vec;
+	  // cstStages[stage]._randVecs ~= vec;
 	}
 	if(stage !is vec.stage()) { // need to merge stages
-	  mergeCstStages(stage, vec.stage());
+	  mergeCstStages(stage, vec.stage(), cstStages);
 	  stage = vec.stage();
 	}
       }
@@ -270,7 +267,8 @@ public class ConstraintEngine {
     stage._lengthVars ~= expr.lengthVars();
   }
 
-  public void mergeCstStages(CstStage fromStage, CstStage toStage) {
+  public void mergeCstStages(CstStage fromStage, CstStage toStage,
+			     ref CstStage[] cstStages) {
     if(fromStage is null) {
       // fromStage has not been created yet
       return;
@@ -279,11 +277,11 @@ public class ConstraintEngine {
       vec.stage = toStage;
     }
     toStage._randVecs ~= fromStage._randVecs;
-    if(_cstStages[$-1] is fromStage) {
-      _cstStages.length -= 1;
+    if(cstStages[$-1] is fromStage) {
+      cstStages.length -= 1;
     }
     else {
-      _cstStages[$-1] = null;
+      cstStages[$-1] = null;
     }
   }
 
@@ -324,7 +322,7 @@ public class ConstraintEngine {
 
     auto cstStmts = new CstBlock();	// start empty
 
-    _cstStages.length = 0;
+    CstStage[] cstStages;
 
     foreach(ref _ESDL__ConstraintBase cst; cstList) {
       if(cst.isEnabled()) {
@@ -336,7 +334,7 @@ public class ConstraintEngine {
 
     foreach(expr; cstExprs) {
       if(expr.loopVars().length is 0) {
-	addCstStage(expr);
+	addCstStage(expr, cstStages);
       }
     }
 
@@ -351,7 +349,7 @@ public class ConstraintEngine {
     }
 
     auto usExprs = cstExprs;	// unstaged Expressions -- all
-    auto urExprs = cstExprs;	// unresolved Expressions -- all
+    auto urStages = cstStages;	// unresolved stages -- all
 
     // First we solve the constraint groups that are responsible for
     // setting the length of the rand!n dynamic arrays. After each
@@ -361,27 +359,41 @@ public class ConstraintEngine {
     // Once we have unrolled all the LOOPS, we go ahead and resolve
     // everything that remains.
     
-    uint stageIdx=0;
+    int stageIdx=0;
     bool allArraysResolved=false;
 
-    while(urExprs.length > 0) {
+    while(usExprs.length > 0 || urStages.length > 0) {
 
-      cstExprs = urExprs;
-      urExprs.length = 0;
+      cstExprs = usExprs;
+      usExprs.length = 0;
+      cstStages = urStages;
+      urStages.length = 0;
 
-
-      for (; stageIdx != _cstStages.length; ++stageIdx) {
-	auto stage = _cstStages[stageIdx];
+      foreach(stage; cstStages) {
 	if(stage !is null &&
 	   stage._randVecs.length !is 0) {
-	  solveStage(stage);
+	  if(allArraysResolved) {
+	    solveStage(stage, stageIdx);
+	  }
+	  // resolve allArraysResolved
+	  else {
+	    allArraysResolved = true;
+	    if(stage._loopVars.length is 0 &&
+	       stage._lengthVars.length !is 0) {
+	      solveStage(stage, stageIdx);
+	      allArraysResolved = false;
+	    }
+	    else {
+	      urStages ~= stage;
+	      // usExprs ~= stage; 
+	    }
+	  }
 	}
-	if(stage !is null) {stage.id(stageIdx);};
       }
     }
   }
 
-  void solveStage(CstStage stage) {
+  void solveStage(CstStage stage, ref int stageIdx) {
     import std.conv;
     // initialize the bdd vectors
     foreach(vec; stage._randVecs) {
@@ -433,6 +445,8 @@ public class ConstraintEngine {
       }
       // vec.bddvec = null;
     }
+    if(stage !is null) {stage.id(stageIdx);};
+    ++stageIdx;
   }
 
   void printSolution() {
