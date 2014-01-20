@@ -87,7 +87,7 @@ abstract class _ESDL__ConstraintBase
 
   abstract public CstBlock getCstExpr();
 
-  public void applyMaxArrayLengthCst(ref bdd solveBDD, uint stage) {}
+  public void applyMaxArrayLengthCst(ref bdd solveBDD, CstStage stage) {}
 }
 
 abstract class Constraint (string C) : _ESDL__ConstraintBase
@@ -124,7 +124,8 @@ class Constraint(string C, string NAME, T, S): Constraint!C
   // This mixin writes out the bdd functions after parsing the
   // constraint string at compile time
   static if(NAME == "_esdl__lengthConstraint") {
-    override public void applyMaxArrayLengthCst(ref bdd solveBDD, uint stage) {
+    override public void applyMaxArrayLengthCst(ref bdd solveBDD,
+						CstStage stage) {
       _esdl__initLengthCsts(_outerD, solveBDD, stage);
     }
 
@@ -192,15 +193,25 @@ struct RandGen
 
 // Later we will use freelist to allocate CstStage
 class CstStage {
-  uint _id;
+  int _id = -1;
   // List of randomized variables associated with this stage. Each
   // variable can be associated with only one stage
   CstVecPrim[] _randVecs;
   // List of CstBddExpr that are assiciated with this stage. A
   // constraint exression can be listed only in one stage
   CstBddExpr[] _bddExprs;
-  this(size_t id) {
-    _id = cast(uint) id;
+
+  public void id(uint i) {
+    _id = i;
+  }
+
+  public uint id() {
+    return _id;
+  }
+
+  public bool solved() {
+    if(_id != -1) return true;
+    else return false;
   }
 }
 
@@ -211,8 +222,7 @@ public class ConstraintEngine {
   // ParseTree parseList[];
   RandGen _rgen;
   Buddy _buddy;
-  CstBlock _cstStmts;		// All the constraint statements from
-				// the enabled constraints
+  
   BddDomain[] _domains;
 
   this(uint seed) {
@@ -224,18 +234,21 @@ public class ConstraintEngine {
   // list of constraint statements to solve at a given stage
 
   public void addCstStage(CstVecPrim[] vecs) {
-    uint stage = cast(uint) _cstStages.length;
+    // uint stage = cast(uint) _cstStages.length;
+    CstStage stage;
     foreach(ref vec; vecs) {
       if(vec !is null) {
-	if(vec.stage() is uint.max) {
-	  if(stage >= _cstStages.length) {
-	    _cstStages.length = stage + 1;
-	    _cstStages[stage] = new CstStage(stage);
+	if(vec.stage() is null) {
+	  if(stage is null) {
+	    stage = new CstStage();	    
+	    _cstStages.length += 1;
+	    _cstStages[$-1] = stage;
 	  }
 	  vec.stage = stage;
-	  _cstStages[stage]._randVecs ~= vec;
+	  stage._randVecs ~= vec;
+	  // _cstStages[stage]._randVecs ~= vec;
 	}
-	if(stage != vec.stage()) { // need to merge stages
+	if(stage !is vec.stage()) { // need to merge stages
 	  mergeCstStages(stage, vec.stage());
 	  stage = vec.stage();
 	}
@@ -243,20 +256,20 @@ public class ConstraintEngine {
     }
   }
 
-  public void mergeCstStages(uint fromStage, uint toStage) {
-    if(fromStage == _cstStages.length) {
+  public void mergeCstStages(CstStage fromStage, CstStage toStage) {
+    if(fromStage is null) {
       // fromStage has not been created yet
       return;
     }
-    foreach(ref vec; _cstStages[fromStage]._randVecs) {
+    foreach(ref vec; fromStage._randVecs) {
       vec.stage = toStage;
     }
-    _cstStages[toStage]._randVecs ~= _cstStages[fromStage]._randVecs;
-    if(_cstStages.length == fromStage + 1) {
+    toStage._randVecs ~= fromStage._randVecs;
+    if(_cstStages[$-1] is fromStage) {
       _cstStages.length -= 1;
     }
     else {
-      _cstStages[fromStage] = null;
+      _cstStages[$-1] = null;
     }
   }
 
@@ -265,6 +278,7 @@ public class ConstraintEngine {
     int[] domList;
     auto cstStmts = new CstBlock();	// start empty
 
+    // take all the constraints -- even if disabled
     foreach(ref _ESDL__ConstraintBase cst; cstList) {
       cstStmts ~= cst.getCstExpr();
     }
@@ -295,79 +309,93 @@ public class ConstraintEngine {
       initDomains();
     }
 
-    _cstStmts = new CstBlock();	// start empty
+    auto cstStmts = new CstBlock();	// start empty
 
     _cstStages.length = 0;
 
     foreach(ref _ESDL__ConstraintBase cst; cstList) {
       if(cst.isEnabled()) {
-	_cstStmts ~= cst.getCstExpr();
+	cstStmts ~= cst.getCstExpr();
       }
     }
 
-    foreach(stmt; _cstStmts._exprs) {
-      addCstStage(stmt.getPrims());
-    }
+    auto cstExprs = cstStmts._exprs;
+    auto urExprs = cstExprs;	// unresolved Expressions -- all
+    uint stageIdx=0;
 
-    foreach(stmt; _cstStmts._exprs) {
-      foreach(stage; stmt.getStages()) {
-	_cstStages[stage]._bddExprs ~= stmt;
+    while(urExprs.length > 0) {
+
+      cstExprs = urExprs;
+      urExprs.length = 0;
+
+      foreach(expr; cstExprs) {
+	addCstStage(expr.getPrims());
       }
-    }
 
-    for (uint stage=0; stage!=_cstStages.length; ++stage) {
-      if(_cstStages[stage]._randVecs.length !is 0) {
-
-	// initialize the bdd vectors
-	foreach(vec; _cstStages[stage]._randVecs) {
-	  if(vec.stage() == stage && vec.bddvec is null) {
-	    vec.bddvec = _buddy.buildVec(_domains[vec.domIndex], vec.signed);
-	  }
+      foreach(expr; cstExprs) {
+	foreach(exprStage; expr.getStages()) {
+	  // process anyways
+	  exprStage._bddExprs ~= expr;
 	}
+      }
 
-	// make the bdd tree
-	auto stmts = _cstStages[stage]._bddExprs;
-
-	bdd solveBDD = _buddy.one();
-	foreach(stmt; stmts) {
-	  solveBDD &= stmt.getBDD(stage, _buddy);
-	}
-
-	// The idea is that we apply the max length constraint only if
-	// there is another constraint on the lenght. If there is no
-	// other constraint, then the array is taken care of later at
-	// the time of setting the non-constrained random variables
-
-	// FIXME -- this behavior needs to change. Consider the
-	// scenario where the length is not constrained but the
-	// elements are
-	arrayMaxLengthCst.applyMaxArrayLengthCst(solveBDD, stage);
-
-	double[uint] bddDist;
-	solveBDD.satDist(bddDist);
-
-	auto solution = solveBDD.randSatOne(this._rgen.get(),
-					    bddDist);
-
-	auto solVecs = solution.toVector();
-	enforce(solVecs.length == 1,
-		"Expecting exactly one solutions here; got: " ~
-		to!string(solVecs.length));
-
-	auto bits = solVecs[0];
-
-	foreach(vec; _cstStages[stage]._randVecs) {
-	  vec.value = 0;	// init
-	  foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
-	    if(bits[j] == 1) {
-	      vec.value = vec.value + (1L << i);
-	    }
-	    if(bits[j] == -1) {
-	      vec.value = vec.value + ((cast(ulong) _rgen.flip()) << i);
+      for (; stageIdx != _cstStages.length; ++stageIdx) {
+	auto stage = _cstStages[stageIdx];
+	if(stage !is null &&
+	   stage._randVecs.length !is 0) {
+	  
+	  // initialize the bdd vectors
+	  foreach(vec; stage._randVecs) {
+	    if(vec.stage is stage && vec.bddvec is null) {
+	      vec.bddvec = _buddy.buildVec(_domains[vec.domIndex], vec.signed);
 	    }
 	  }
-	  // vec.bddvec = null;
+
+	  // make the bdd tree
+	  auto exprs = stage._bddExprs;
+
+	  bdd solveBDD = _buddy.one();
+	  foreach(expr; exprs) {
+	    solveBDD &= expr.getBDD(stage, _buddy);
+	  }
+
+	  // The idea is that we apply the max length constraint only if
+	  // there is another constraint on the lenght. If there is no
+	  // other constraint, then the array is taken care of later at
+	  // the time of setting the non-constrained random variables
+
+	  // FIXME -- this behavior needs to change. Consider the
+	  // scenario where the length is not constrained but the
+	  // elements are
+	  arrayMaxLengthCst.applyMaxArrayLengthCst(solveBDD, stage);
+
+	  double[uint] bddDist;
+	  solveBDD.satDist(bddDist);
+
+	  auto solution = solveBDD.randSatOne(this._rgen.get(),
+					      bddDist);
+
+	  auto solVecs = solution.toVector();
+	  enforce(solVecs.length == 1,
+		  "Expecting exactly one solutions here; got: " ~
+		  to!string(solVecs.length));
+
+	  auto bits = solVecs[0];
+
+	  foreach(vec; stage._randVecs) {
+	    vec.value = 0;	// init
+	    foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
+	      if(bits[j] == 1) {
+		vec.value = vec.value + (1L << i);
+	      }
+	      if(bits[j] == -1) {
+		vec.value = vec.value + ((cast(ulong) _rgen.flip()) << i);
+	      }
+	    }
+	    // vec.bddvec = null;
+	  }
 	}
+	if(stage !is null) {stage.id(stageIdx);};
       }
     }
   }
@@ -580,7 +608,7 @@ void _esdl__initCst(size_t I=0, size_t CI=0, T, S) (T t, S s) {
 // I is the index within the class
 // CI is the cumulative index -- starts from the most derived class
 // and increases as we move up in the class hierarchy
-void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref bdd solveBDD, uint stage)
+void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref bdd solveBDD, CstStage stage)
   if(is(T: RandomizableIntf) && is(T == class)) {
     static if (I < t.tupleof.length) {
       if(findRandAttr!(I, t)) {
@@ -600,7 +628,7 @@ void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref bdd
   }
 
 void _esdl__initLengthCst(size_t I=0, size_t RI=0, T) (T t, ref bdd solveBDD,
-						       uint stage) {
+						       CstStage stage) {
   import std.traits;
   import std.conv;
   import std.string;
@@ -806,7 +834,7 @@ public bool randomize(T) (ref T t)
     foreach(rnd; t._cstRands) {
       if(rnd !is null) {
 	// stages would be assigned again from scratch
-	rnd.stage = uint.max;
+	rnd.stage = null;
 	// FIXME -- Perhaps some other fields too need to be reinitialized
       }
     }
@@ -871,11 +899,11 @@ abstract class CstVecExpr
   abstract public CstVecPrim[] getPrims();
 
   // get the list of stages this expression should be avaluated in
-  abstract public uint[] getStages();
+  abstract public CstStage[] getStages();
 
-  abstract public BddVec getBDD(uint stage, Buddy buddy);
+  abstract public BddVec getBDD(CstStage stage, Buddy buddy);
 
-  abstract public long evaluate(uint stage);
+  abstract public long evaluate(CstStage stage);
 
   public CstVec2VecExpr opBinary(string op)(CstVecExpr other)
   {
@@ -948,8 +976,8 @@ class CstVecPrim: CstVecExpr
   abstract public bool isRand();
   abstract public long value();
   abstract public void value(long v);
-  abstract public uint stage();
-  abstract public void stage(uint s);
+  abstract public CstStage stage();
+  abstract public void stage(CstStage s);
   abstract public uint domIndex();
   abstract public void domIndex(uint s);
   abstract public uint bitcount();
@@ -990,9 +1018,9 @@ class CstVecLoopVar: CstVecPrim
     }
   }
 
-  bool isUnrollable(uint stage) {
+  bool isUnrollable(CstStage stage) {
     if(! _loopVar.isRand()) return true;
-    if(stage > _loopVar.stage) return true;
+    if(_loopVar.stage.solved()) return true;
     else return false;
   }
 
@@ -1002,15 +1030,15 @@ class CstVecLoopVar: CstVecPrim
   }
 
   // get the list of stages this expression should be avaluated in
-  override public uint[] getStages() {
+  override public CstStage[] getStages() {
     return _loopVar.getStages();
   }
 
-  override public BddVec getBDD(uint stage, Buddy buddy) {
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
     assert(false, "Can not getBDD for a Loop Variable without unrolling");
   }
 
-  override public long evaluate(uint stage) {
+  override public long evaluate(CstStage stage) {
     assert(false, "Can not evaluate for a Loop Variable without unrolling");
   }
 
@@ -1023,10 +1051,10 @@ class CstVecLoopVar: CstVecPrim
   override public void value(long v) {
     loopVar.value(v);
   }
-  override public uint stage() {
+  override public CstStage stage() {
     return loopVar.stage();
   }
-  override public void stage(uint s) {
+  override public void stage(CstStage s) {
     loopVar.stage(s);
   }
   override public uint domIndex() {
@@ -1083,9 +1111,9 @@ class CstVecRandArr: CstVecRand
     else return [];
   }
 
-  bool isUnrollable(uint stage) {
+  bool isUnrollable(CstStage stage) {
     if(! isRand) return true;
-    if(stage > this.stage) return true;
+    if(this.stage.solved()) return true;
     else return false;
   }
 
@@ -1125,7 +1153,7 @@ class CstVecRand: CstVecPrim
   uint _domIndex = uint.max;
   long _value;
   uint _bitcount;
-  uint _stage = uint.max;
+  CstStage _stage = null;
   bool _signed;
   bool _isRand;
   string _name;
@@ -1150,18 +1178,18 @@ class CstVecRand: CstVecPrim
     return _prims;
   }
 
-  override public uint[] getStages() {
-    uint[] stages;
+  override public CstStage[] getStages() {
+    CstStage[] stages;
     if(isRand) stages = [this.stage()];
     return stages;
   }
 
-  override public BddVec getBDD(uint stage, Buddy buddy) {
-    if(this.isRand && stage == _stage) {
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    if(this.isRand && stage is _stage) {
       return _bddvec;
     }
     else if((! this.isRand) ||
-	    this.isRand && stage > _stage) { // work with the value
+	    this.isRand && _stage.solved()) { // work with the value
       return buddy.buildVec(_value);
     }
     else {
@@ -1169,8 +1197,8 @@ class CstVecRand: CstVecPrim
     }
   }
 
-  override public long evaluate(uint stage) {
-    if(! this.isRand || stage > _stage) {
+  override public long evaluate(CstStage stage) {
+    if(! this.isRand || _stage.solved()) {
       return _value;
     }
     else {
@@ -1190,11 +1218,11 @@ class CstVecRand: CstVecPrim
     _value = v;
   }
 
-  override public uint stage() {
+  override public CstStage stage() {
     return _stage;
   }
 
-  override public void stage(uint s) {
+  override public void stage(CstStage s) {
     _stage = s;
   }
 
@@ -1253,15 +1281,15 @@ class CstVecConst: CstVecPrim
     return [];
   }
 
-  override public uint[] getStages() {
+  override public CstStage[] getStages() {
     return [];
   }
 
-  override public BddVec getBDD(uint stage, Buddy buddy) {
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
     return buddy.buildVec(_value);
   }
 
-  override public long evaluate(uint stage) {
+  override public long evaluate(CstStage stage) {
     return _value;
   }
 
@@ -1277,11 +1305,11 @@ class CstVecConst: CstVecPrim
     _value = value;
   }
 
-  override public uint stage() {
+  override public CstStage stage() {
     assert(false, "no stage for CstVecConst");
   }
 
-  override public void stage(uint s) {
+  override public void stage(CstStage s) {
     assert(false, "no stage for CstVecConst");
   }
 
@@ -1336,7 +1364,7 @@ class CstVec2VecExpr: CstVecExpr
     }
   }
 
-  override public uint[] getStages() {
+  override public CstStage[] getStages() {
     import std.exception;
     import std.algorithm: max;
 
@@ -1346,12 +1374,14 @@ class CstVec2VecExpr: CstVecExpr
     if(_lhs.getStages.length is 0) return _rhs.getStages;
     else if(_rhs.getStages.length is 0) return _lhs.getStages;
     else {
-      uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
-      return [stage];
+      // Stages need to be merged
+      // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
+      // return [stage];
+      return _lhs.getStages;
     }
   }
 
-  override public BddVec getBDD(uint stage, Buddy buddy) {
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.loopVars.length !is 0) {
       assert(false,
 	     "CstVec2VecExpr: Need to unroll the loopVars"
@@ -1379,7 +1409,7 @@ class CstVec2VecExpr: CstVecExpr
     }
   }
 
-  override public long evaluate(uint stage) {
+  override public long evaluate(CstStage stage) {
     auto lvec = _lhs.evaluate(stage);
     auto rvec = _rhs.evaluate(stage);
 
@@ -1454,9 +1484,9 @@ abstract class CstBddExpr
 
   abstract public CstVecPrim[] getPrims();
 
-  abstract public uint[] getStages();
+  abstract public CstStage[] getStages();
 
-  abstract public bdd getBDD(uint stage, Buddy buddy);
+  abstract public bdd getBDD(CstStage stage, Buddy buddy);
 
   public CstBdd2BddExpr opBinary(string op)(CstBddExpr other)
   {
@@ -1485,13 +1515,13 @@ class CstBdd2BddExpr: CstBddExpr
     return _lhs.getPrims() ~ _rhs.getPrims();
   }
 
-  override public uint[] getStages() {
-    uint[] stages;
+  override public CstStage[] getStages() {
+    CstStage[] stages;
 
     foreach(lstage; _lhs.getStages) {
       bool already = false;
       foreach(stage; stages) {
-	if(stage == lstage) {
+	if(stage is lstage) {
 	  already = true;
 	}
       }
@@ -1500,7 +1530,7 @@ class CstBdd2BddExpr: CstBddExpr
     foreach(rstage; _rhs.getStages) {
       bool already = false;
       foreach(stage; stages) {
-	if(stage == rstage) {
+	if(stage is rstage) {
 	  already = true;
 	}
       }
@@ -1510,7 +1540,7 @@ class CstBdd2BddExpr: CstBddExpr
     return stages;
   }
 
-  override public bdd getBDD(uint stage, Buddy buddy) {
+  override public bdd getBDD(CstStage stage, Buddy buddy) {
     if(this.loopVars.length !is 0) {
       assert(false,
 	     "CstBdd2BddExpr: Need to unroll the loopVars"
@@ -1560,7 +1590,7 @@ class CstVec2BddExpr: CstBddExpr
   CstVecExpr _rhs;
   CstBinBddOp _op;
 
-  override public uint[] getStages() {
+  override public CstStage[] getStages() {
     import std.exception;
     import std.algorithm: max;
     enforce(_lhs.getStages.length <= 1 &&
@@ -1569,8 +1599,9 @@ class CstVec2BddExpr: CstBddExpr
     if(_lhs.getStages.length is 0) return _rhs.getStages;
     else if(_rhs.getStages.length is 0) return _lhs.getStages;
     else {
-      uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
-      return [stage];
+      // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
+      // return [stage];
+      return _lhs.getStages;
     }
   }
 
@@ -1578,7 +1609,7 @@ class CstVec2BddExpr: CstBddExpr
     return _lhs.getPrims() ~ _rhs.getPrims();
   }
 
-  override public bdd getBDD(uint stage, Buddy buddy) {
+  override public bdd getBDD(CstStage stage, Buddy buddy) {
     if(this.loopVars.length !is 0) {
       assert(false,
 	     "CstVec2BddExpr: Need to unroll the loopVars"
@@ -1638,14 +1669,14 @@ class CstBlock: CstBddExpr
     return prims;
   }
 
-  override public uint[] getStages() {
-    uint[] stages;
+  override public CstStage[] getStages() {
+    CstStage[] stages;
 
     foreach(expr; _exprs) {
       foreach(lstage; expr.getStages) {
 	bool already = false;
 	foreach(stage; stages) {
-	  if(stage == lstage) {
+	  if(stage is lstage) {
 	    already = true;
 	  }
 	}
@@ -1656,7 +1687,7 @@ class CstBlock: CstBddExpr
     return stages;
   }
 
-  override public bdd getBDD(uint stage, Buddy buddy) {
+  override public bdd getBDD(CstStage stage, Buddy buddy) {
     assert(false, "getBDD not implemented for CstBlock");
   }
 
