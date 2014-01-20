@@ -278,6 +278,9 @@ public class ConstraintEngine {
       }
     }
 
+    import std.stdio;
+    writeln("Total domains: ", domIndex);
+
     _buddy.clearAllDomains();
     _domains = _buddy.extDomain(domList);
 
@@ -301,6 +304,7 @@ public class ConstraintEngine {
 	_cstStmts ~= cst.getCstExpr();
       }
     }
+
     foreach(stmt; _cstStmts._exprs) {
       addCstStage(stmt.getPrims());
     }
@@ -853,8 +857,14 @@ abstract class CstVecExpr
 
   CstVecLoopVar[] _loopVars;
 
-  public CstVecLoopVar[] getLoopVars() {
+  public CstVecLoopVar[] loopVars() {
     return _loopVars;
+  }
+
+  CstVecRandArr[] _lengthVars;
+
+  public CstVecRandArr[] lengthVars() {
+    return _lengthVars;
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
@@ -959,6 +969,14 @@ class CstVecLoopVar: CstVecPrim
     return _loopVar;
   }
 
+  override CstVecLoopVar[] loopVars() {
+    return [this];
+  }
+
+  override CstVecRandArr[] lengthVars() {
+    return [];
+  }
+
   this(CstVecPrim loopVar) {
     _loopVar = loopVar;
   }
@@ -1048,6 +1066,23 @@ class CstVecRandArr: CstVecRand
 
   size_t _maxValue = 0;
 
+  size_t maxValue() {
+    return _maxValue;
+  }
+
+  public CstVecPrim[] getArrPrims() {
+    CstVecPrim[] elems;
+    foreach (elem; _elems) {
+      elems ~= elem;
+    }
+    return elems;
+  }
+  
+  override public CstVecRandArr[] lengthVars() {
+    if(isRand()) return [this];
+    else return [];
+  }
+
   bool isUnrollable(uint stage) {
     if(! isRand) return true;
     if(stage > this.stage) return true;
@@ -1080,6 +1115,7 @@ class CstVecRandArr: CstVecRand
     _elemSigned = elemSigned;
     _elemBitcount = elemBitcount;
     _elemIsRand = elemIsRand;
+    _elems.length = value;
   }
 }
 
@@ -1287,7 +1323,17 @@ class CstVec2VecExpr: CstVecExpr
   CstBinVecOp _op;
 
   override public CstVecPrim[] getPrims() {
-    return _lhs.getPrims() ~ _rhs.getPrims();
+    if(_op !is CstBinVecOp.LOOPINDEX || _rhs.loopVars.length is 0) {
+      return _lhs.getPrims() ~ _rhs.getPrims();
+    }
+    else {
+      // LOOP
+      // first make sure that the _lhs is an array
+      auto lhs = cast(CstVecRandArr) _lhs;
+      // FIXME -- what if the LOOPINDEX is use with non-rand array?
+      assert(lhs !is null, "LOOPINDEX can not work with non-arrays");
+      return lhs.getArrPrims();
+    }
   }
 
   override public uint[] getStages() {
@@ -1306,8 +1352,11 @@ class CstVec2VecExpr: CstVecExpr
   }
 
   override public BddVec getBDD(uint stage, Buddy buddy) {
-    import std.conv;
-
+    if(this.loopVars.length !is 0) {
+      assert(false,
+	     "CstVec2VecExpr: Need to unroll the loopVars"
+	     " before attempting to solve BDD");
+    }
     BddVec vec;
 
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -1355,13 +1404,23 @@ class CstVec2VecExpr: CstVecExpr
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach(loopVar; lhs._loopVars ~ rhs._loopVars) {
+    foreach(loopVar; lhs.loopVars ~ rhs.loopVars) {
       bool add = true;
       foreach(l; _loopVars) {
 	if(l is loopVar) add = false;
 	break;
       }
       if(add) _loopVars ~= loopVar;
+    }
+    foreach(lengthVar; lhs.lengthVars ~ rhs.lengthVars) {
+      if(op !is CstBinVecOp.LOOPINDEX) {
+	bool add = true;
+	foreach(l; _lengthVars) {
+	  if(l is lengthVar) add = false;
+	  break;
+	}
+	if(add) _lengthVars ~= lengthVar;
+      }
     }
   }
 
@@ -1382,6 +1441,16 @@ abstract class CstBddExpr
 
   // In case this expr is unRolled, the _loopVars here would be empty
   CstVecLoopVar[] _loopVars;
+
+  public CstVecLoopVar[] loopVars() {
+    return _loopVars;
+  }
+
+  CstVecRandArr[] _lengthVars;
+
+  public CstVecRandArr[] lengthVars() {
+    return _lengthVars;
+  }
 
   abstract public CstVecPrim[] getPrims();
 
@@ -1442,7 +1511,11 @@ class CstBdd2BddExpr: CstBddExpr
   }
 
   override public bdd getBDD(uint stage, Buddy buddy) {
-    import std.conv;
+    if(this.loopVars.length !is 0) {
+      assert(false,
+	     "CstBdd2BddExpr: Need to unroll the loopVars"
+	     " before attempting to solve BDD");
+    }
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
 
@@ -1457,13 +1530,21 @@ class CstBdd2BddExpr: CstBddExpr
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach(loopVar; lhs._loopVars ~ rhs._loopVars) {
+    foreach(loopVar; lhs.loopVars ~ rhs.loopVars) {
       bool add = true;
       foreach(l; _loopVars) {
 	if(l is loopVar) add = false;
 	break;
       }
       if(add) _loopVars ~= loopVar;
+    }
+    foreach(lengthVar; lhs.lengthVars ~ rhs.lengthVars) {
+      bool add = true;
+      foreach(l; _lengthVars) {
+	if(l is lengthVar) add = false;
+	break;
+      }
+      if(add) _lengthVars ~= lengthVar;
     }
   }
 }
@@ -1498,7 +1579,11 @@ class CstVec2BddExpr: CstBddExpr
   }
 
   override public bdd getBDD(uint stage, Buddy buddy) {
-    import std.conv;
+    if(this.loopVars.length !is 0) {
+      assert(false,
+	     "CstVec2BddExpr: Need to unroll the loopVars"
+	     " before attempting to solve BDD");
+    }
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
 
@@ -1516,13 +1601,21 @@ class CstVec2BddExpr: CstBddExpr
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach(loopVar; lhs._loopVars ~ rhs._loopVars) {
+    foreach(loopVar; lhs.loopVars ~ rhs.loopVars) {
       bool add = true;
       foreach(l; _loopVars) {
 	if(l is loopVar) add = false;
 	break;
       }
       if(add) _loopVars ~= loopVar;
+    }
+    foreach(lengthVar; lhs.lengthVars ~ rhs.lengthVars) {
+      bool add = true;
+      foreach(l; _lengthVars) {
+	if(l is lengthVar) add = false;
+	break;
+      }
+      if(add) _lengthVars ~= lengthVar;
     }
   }
 }
@@ -1629,7 +1722,7 @@ public CstVecPrim _esdl__cstRand(string VAR, T)(ref T t)
       return _esdl__randNamedApply!(LOOKUP, _esdl__cstRand)(t);
     }
     else static if(VAR[IDX..$] == ".length") {
-	return _esdl__randNamedApply!(LOOKUP, _esdl__cstRandArr)(t);
+	return _esdl__randNamedApply!(LOOKUP, _esdl__cstRandArrLength)(t);
     }
     else static if(VAR[IDX] == '.') {
       // hierarchical constraints -- not implemented yet
@@ -1709,7 +1802,7 @@ public CstVecPrim _esdl__cstRandElem(string VAR, size_t I,
   return cstVecPrim;
 }
 
-public CstVecPrim _esdl__cstRandArr(string VAR, size_t I,
+public CstVecPrim _esdl__cstRandArrLength(string VAR, size_t I,
 				    size_t CI, size_t RI, T)(ref T t) {
   import std.traits;
   import std.range;
@@ -1753,6 +1846,69 @@ public CstVecPrim _esdl__cstRandArr(string VAR, size_t I,
     else static assert("Can not use .length with non-arrays");
 }
 
+public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
+					size_t CI, size_t RI, T)(ref T t) {
+  import std.traits;
+  import std.range;
+
+  // need to know the size and sign for creating a bddvec
+  alias typeof(t.tupleof[I]) L;
+  static assert(isArray!L);
+  alias ElementType!L E;
+  static assert(isIntegral!E || isBitVector!E);
+
+  bool signed = isVarSigned!E;
+  static if(isIntegral!E)        uint bitcount = E.sizeof * 8;
+  else static if(isBitVector!E)  uint bitcount = E.SIZE;
+
+
+  if(findRandAttr!(I, t) == -1) { // no @rand attr
+    return _esdl__cstRand(t.tupleof[I].length, t);
+  }
+  else {
+    auto cstVecPrim = t._cstRands[RI];
+    auto cstVecRandArr = cast(CstVecRandArr) cstVecPrim;
+    if(cstVecRandArr is null && cstVecPrim !is null) {
+      assert(false, "Non-array CstVecPrim for an Array");
+    }
+    static if(isDynamicArray!L) { // @rand!N form
+      enum size_t RLENGTH = findRandArrayAttr!(I, t);
+      static assert(RLENGTH != -1);
+      if(cstVecRandArr is null) {
+	cstVecRandArr = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
+				       false, 32, true, signed, bitcount, true);
+	t._cstRands[RI] = cstVecRandArr;
+      }
+    }
+    else static if(isStaticArray!L) { // @rand with static array
+	enum ISRAND = findRandElemAttr!(I, t);
+	static assert(ISRAND !is -1);
+	size_t RLENGTH = t.tupleof[I].length;
+	if(cstVecRandArr is null) {
+	  cstVecRandArr = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
+					 false, 32, false, signed, bitcount, true);
+	  t._cstRands[RI] = cstVecRandArr;
+	}
+      }
+      else static assert("Can not use .length with non-arrays");
+    for (size_t i=0; i!=RLENGTH; ++i) {
+      if(cstVecRandArr[i] is null) {
+	import std.conv: to;
+	auto init = (ElementType!(typeof(t.tupleof[I]))).init;
+	if(i < t.tupleof[I].length) {
+	  cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
+					    t.tupleof[I][i], signed, bitcount, true);
+	}
+	else {
+	  cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
+					    init, signed, bitcount, true);
+	}
+      }
+    }
+    return cstVecRandArr;
+  }
+}
+
 public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
     return _esdl__randNamedApply!(VAR, _esdl__cstRandArrIndex)(t);
@@ -1760,12 +1916,12 @@ public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, T)(ref T t)
 
 public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, size_t I,
 					 size_t CI, size_t RI, T)(ref T t) {
-  return new CstVecLoopVar(_esdl__cstRandArr!(VAR, I, CI, RI, T)(t));
+  return new CstVecLoopVar(_esdl__cstRandArrLength!(VAR, I, CI, RI, T)(t));
 }
 
 public CstVecExpr _esdl__cstRandArrElem(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
-    auto arr = _esdl__randNamedApply!(VAR, _esdl__cstRandArr)(t);
+    auto arr = _esdl__randNamedApply!(VAR, _esdl__cstRandArrElem)(t);
     auto idx = new CstVecLoopVar(arr);
     return arr[idx];
   }
