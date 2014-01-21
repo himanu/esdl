@@ -11,7 +11,7 @@ import esdl.data.bvec;
 
 class Bar: Randomizable
 {
-  @rand!4 byte[] foo;
+  @rand!8 byte[] foo;
   @rand byte[8] bar;
 
   @rand ubyte baz = 12;
@@ -34,7 +34,7 @@ class Bar: Randomizable
     }
     
     foreach(i, f; bar) {
-      f <= 16;
+      f <= i;
       f >= 0;
     }
   } cstFoo;
@@ -44,7 +44,7 @@ class Bar: Randomizable
 void main()
 {
   auto foo = new Bar;
-  for (size_t i=0; i!=32; ++i)
+  for (size_t i=0; i!=16; ++i)
     {
       foo.randomize();
       foo.display();

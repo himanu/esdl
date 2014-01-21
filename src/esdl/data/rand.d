@@ -1078,6 +1078,9 @@ class CstVecPrim: CstVecExpr
   public CstVecLoopVar loopVar() {
     assert(false, "loopVar may only be called for a CstVecRandArr");
   }
+  public CstVecLoopVar makeLoopVar() {
+    assert(false, "makeLoopVar may only be called for a CstVecRandArr");
+  }
   override public CstVecPrim unroll(CstVecLoopVar l, uint n) {
     return this;
   }
@@ -1233,6 +1236,13 @@ class CstVecRandArr: CstVecRand
   }
 
   override public CstVecLoopVar loopVar() {
+    return _loopVar;
+  }
+
+  override public CstVecLoopVar makeLoopVar() {
+    if(_loopVar is null) {
+      _loopVar = new CstVecLoopVar(this);
+    }
     return _loopVar;
   }
 
@@ -2163,12 +2173,14 @@ public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, T)(ref T t)
 
 public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, size_t I,
 					 size_t CI, size_t RI, T)(ref T t) {
-  return new CstVecLoopVar(_esdl__cstRandArrLength!(VAR, I, CI, RI, T)(t));
+  auto lvar = _esdl__cstRandArrLength!(VAR, I, CI, RI, T)(t);
+  
+  return lvar.makeLoopVar();
 }
 
 public CstVecExpr _esdl__cstRandArrElem(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
     auto arr = _esdl__randNamedApply!(VAR, _esdl__cstRandArrElem)(t);
-    auto idx = new CstVecLoopVar(arr);
+    auto idx = arr.makeLoopVar();
     return arr[idx];
   }
