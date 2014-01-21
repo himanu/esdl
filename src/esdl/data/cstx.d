@@ -656,6 +656,16 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
       }
     }
     else if(parseLiteral(CST, srcCursor) > 0) {
+      if(newStatement is true) {
+	dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
+	cmpDstAnchor = dstCursor++;
+	andDstAnchor = dstCursor++;
+	orDstAnchor  = dstCursor++;
+	impDstAnchor = dstCursor++;
+	newStatement = false;
+      }
+
+      dstCursor = fill(leftBrace, buffer, dstCursor);
       dstCursor = fill("_esdl__cstRand(", buffer, dstCursor);
       dstCursor = fill(CST[srcTag..srcCursor],
 		       buffer, dstCursor);
