@@ -951,6 +951,8 @@ abstract class CstVecExpr
 
   abstract public long evaluate(CstStage stage);
 
+  abstract public CstVecExpr unroll(CstVecLoopVar l, uint n);
+
   public CstVec2VecExpr opBinary(string op)(CstVecExpr other)
   {
     static if(op == "&") {
@@ -1037,6 +1039,9 @@ class CstVecPrim: CstVecExpr
   public CstVecLoopVar loopVar() {
     assert(false, "loopVar may only be called for a CstVecRandArr");
   }
+  override public CstVecPrim unroll(CstVecLoopVar l, uint n) {
+    return this;
+  }
 }
 
 // This class represents an unrolled Foreach loop at vec level
@@ -1049,10 +1054,20 @@ class CstVecLoopVar: CstVecPrim
     return _lengthVar;
   }
 
+  uint maxVal() {
+    if(! this.isUnrollable()) {
+      assert(false, "Can not find maxVal since the "
+	     "Loop Variable is unrollable");
+    }
+    return cast(uint) lengthVar().value;
+  }
+  
   override CstVecLoopVar[] loopVars() {
     return [this];
   }
 
+  // this will not return the lengthVar since the length variable is
+  // not getting constraint here
   override CstVecRandArr[] lengthVars() {
     return [];
   }
@@ -1071,7 +1086,7 @@ class CstVecLoopVar: CstVecPrim
     }
   }
 
-  bool isUnrollable(CstStage stage) {
+  bool isUnrollable() {
     if(! _lengthVar.isRand()) return true;
     if(_lengthVar.stage.solved()) return true;
     else return false;
@@ -1131,6 +1146,10 @@ class CstVecLoopVar: CstVecPrim
   override public string name() {
     return loopVar.name();
   }
+  override public CstVecPrim unroll(CstVecLoopVar l, uint n) {
+    if(this !is l) return this;
+    else return new CstVecConst(n, false);
+  }
 }
 
 class CstVecRandArr: CstVecRand
@@ -1173,7 +1192,7 @@ class CstVecRandArr: CstVecRand
     else return [];
   }
 
-  bool isUnrollable(CstStage stage) {
+  bool isUnrollable() {
     if(! isRand) return true;
     if(this.stage.solved()) return true;
     else return false;
@@ -1492,6 +1511,20 @@ class CstVec2VecExpr: CstVecExpr
     }
   }
 
+  override public CstVec2VecExpr unroll(CstVecLoopVar l, uint n) {
+    bool loop = false;
+    foreach(loopVar; loopVars()) {
+      if(l is loopVar) {
+	loop = true;
+	break;
+      }
+    }
+    if(! loop) return this;
+    else {
+      return new CstVec2VecExpr(_lhs.unroll(l, n), _rhs.unroll(l, n), _op);
+    }
+  }
+
   public this(CstVecExpr lhs, CstVecExpr rhs, CstBinVecOp op) {
     _lhs = lhs;
     _rhs = rhs;
@@ -1544,6 +1577,19 @@ abstract class CstBddExpr
     return _lengthVars;
   }
 
+  public CstBddExpr[] unroll(CstVecLoopVar l) {
+    CstBddExpr[] retval;
+    if(! l.isUnrollable()) {
+      assert(false, "CstVecLoopVar is not unrollabe yet");
+    }
+    for (uint i = 0; i != l.maxVal(); ++i) {
+      retval ~= this.unroll(l, i);
+    }
+    return retval;
+  }
+  
+  abstract public CstBddExpr unroll(CstVecLoopVar l, uint n);
+  
   abstract public CstVecPrim[] getPrims();
 
   abstract public CstStage[] getStages();
@@ -1615,6 +1661,20 @@ class CstBdd2BddExpr: CstBddExpr
     case CstBddOp.AND: return lvec &  rvec;
     case CstBddOp.OR:  return lvec |  rvec;
     case CstBddOp.IMP: return lvec.imp(rvec);
+    }
+  }
+
+  override public CstBdd2BddExpr unroll(CstVecLoopVar l, uint n) {
+    bool loop = false;
+    foreach(loopVar; loopVars()) {
+      if(l is loopVar) {
+	loop = true;
+	break;
+      }
+    }
+    if(! loop) return this;
+    else {
+      return new CstBdd2BddExpr(_lhs.unroll(l, n), _rhs.unroll(l, n), _op);
     }
   }
 
@@ -1690,6 +1750,20 @@ class CstVec2BddExpr: CstBddExpr
     }
   }
 
+  override public CstVec2BddExpr unroll(CstVecLoopVar l, uint n) {
+    bool loop = false;
+    foreach(loopVar; loopVars()) {
+      if(l is loopVar) {
+	loop = true;
+	break;
+      }
+    }
+    if(! loop) return this;
+    else {
+      return new CstVec2BddExpr(_lhs.unroll(l, n), _rhs.unroll(l, n), _op);
+    }
+  }
+
   public this(CstVecExpr lhs, CstVecExpr rhs, CstBinBddOp op) {
     _lhs = lhs;
     _rhs = rhs;
@@ -1729,6 +1803,10 @@ class CstBlock: CstBddExpr
     }
 
     return prims;
+  }
+
+  override public CstBlock unroll(CstVecLoopVar l, uint n) {
+    assert(false, "Can not unroll a CstBlock");
   }
 
   override public CstStage[] getStages() {
