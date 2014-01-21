@@ -213,6 +213,14 @@ class CstStage {
     if(_id != -1) return true;
     else return false;
   }
+
+  public bool hasLoops() {
+    foreach(loop; _loopVars) {
+      if(! loop.isUnrollable()) return true;
+    }
+    return false;
+  }
+
 }
 
 public class ConstraintEngine {
@@ -331,25 +339,8 @@ public class ConstraintEngine {
     }
 
     auto cstExprs = cstStmts._exprs;
-
-    foreach(expr; cstExprs) {
-      if(expr.loopVars().length is 0) {
-	addCstStage(expr, cstStages);
-      }
-    }
-
-    foreach(expr; cstExprs) {
-      if(expr.loopVars().length !is 0) {
-	// We want to mark the stages that are dependent on a
-	// loopVar -- so that when these loops get resolved, we are
-	// able to factor in more constraints into these stages and
-	// then resolve
-	markCstStageLoops(expr);
-      }
-    }
-
     auto usExprs = cstExprs;	// unstaged Expressions -- all
-    auto urStages = cstStages;	// unresolved stages -- all
+    auto usStages = cstStages;	// unresolved stages -- all
 
     // First we solve the constraint groups that are responsible for
     // setting the length of the rand!n dynamic arrays. After each
@@ -362,13 +353,43 @@ public class ConstraintEngine {
     int stageIdx=0;
     bool allArraysResolved=false;
 
-    while(usExprs.length > 0 || urStages.length > 0) {
-
+    while(usExprs.length > 0 || usStages.length > 0) {
       cstExprs = usExprs;
       usExprs.length = 0;
-      cstStages = urStages;
-      urStages.length = 0;
+      auto urExprs = usExprs;	// unrolled expressions
+      cstStages = usStages;
+      usStages.length = 0;
 
+
+
+      foreach(expr; cstExprs) {
+	if(expr.unrollable() is null) {
+	  urExprs ~= expr;
+	}
+	else {
+	  urExprs ~= expr.unroll();
+	}
+      }
+
+      foreach(expr; urExprs) {
+	if(expr.loopVars().length is 0) {
+	  import std.stdio;
+	  writeln(expr.getPrims());
+	  addCstStage(expr, cstStages);
+	}
+      }
+
+      foreach(expr; urExprs) {
+	if(expr.loopVars().length !is 0) {
+	  // We want to mark the stages that are dependent on a
+	  // loopVar -- so that when these loops get resolved, we are
+	  // able to factor in more constraints into these stages and
+	  // then resolve
+	  markCstStageLoops(expr);
+	  usExprs ~= expr;
+	}
+      }
+      
       foreach(stage; cstStages) {
 	if(stage !is null &&
 	   stage._randVecs.length !is 0) {
@@ -378,14 +399,13 @@ public class ConstraintEngine {
 	  // resolve allArraysResolved
 	  else {
 	    allArraysResolved = true;
-	    if(stage._loopVars.length is 0 &&
+	    if(stage.hasLoops() is 0 &&
 	       stage._lengthVars.length !is 0) {
 	      solveStage(stage, stageIdx);
 	      allArraysResolved = false;
 	    }
 	    else {
-	      urStages ~= stage;
-	      // usExprs ~= stage; 
+	      usStages ~= stage;
 	    }
 	  }
 	}
@@ -445,7 +465,7 @@ public class ConstraintEngine {
       }
       // vec.bddvec = null;
     }
-    if(stage !is null) {stage.id(stageIdx);};
+    if(stage !is null) stage.id(stageIdx);
     ++stageIdx;
   }
 
@@ -949,7 +969,7 @@ abstract class CstVecExpr
 
   abstract public BddVec getBDD(CstStage stage, Buddy buddy);
 
-  abstract public long evaluate(CstStage stage);
+  abstract public long evaluate();
 
   abstract public CstVecExpr unroll(CstVecLoopVar l, uint n);
 
@@ -1088,7 +1108,8 @@ class CstVecLoopVar: CstVecPrim
 
   bool isUnrollable() {
     if(! _lengthVar.isRand()) return true;
-    if(_lengthVar.stage.solved()) return true;
+    if(_lengthVar.stage !is null &&
+       _lengthVar.stage.solved()) return true;
     else return false;
   }
 
@@ -1106,7 +1127,7 @@ class CstVecLoopVar: CstVecPrim
     assert(false, "Can not getBDD for a Loop Variable without unrolling");
   }
 
-  override public long evaluate(CstStage stage) {
+  override public long evaluate() {
     assert(false, "Can not evaluate for a Loop Variable without unrolling");
   }
 
@@ -1278,7 +1299,7 @@ class CstVecRand: CstVecPrim
     }
   }
 
-  override public long evaluate(CstStage stage) {
+  override public long evaluate() {
     if(! this.isRand || _stage.solved()) {
       return _value;
     }
@@ -1370,7 +1391,7 @@ class CstVecConst: CstVecPrim
     return buddy.buildVec(_value);
   }
 
-  override public long evaluate(CstStage stage) {
+  override public long evaluate() {
     return _value;
   }
 
@@ -1432,7 +1453,7 @@ class CstVec2VecExpr: CstVecExpr
   CstBinVecOp _op;
 
   override public CstVecPrim[] getPrims() {
-    if(_op !is CstBinVecOp.LOOPINDEX || _rhs.loopVars.length is 0) {
+    if(_op !is CstBinVecOp.LOOPINDEX) {
       return _lhs.getPrims() ~ _rhs.getPrims();
     }
     else {
@@ -1441,7 +1462,12 @@ class CstVec2VecExpr: CstVecExpr
       auto lhs = cast(CstVecRandArr) _lhs;
       // FIXME -- what if the LOOPINDEX is use with non-rand array?
       assert(lhs !is null, "LOOPINDEX can not work with non-arrays");
-      return lhs.getArrPrims();
+      if(_rhs.loopVars.length is 0) {
+	return [lhs[_rhs.evaluate()]];
+      }
+      else {
+	return lhs.getArrPrims();
+      }
     }
   }
 
@@ -1483,16 +1509,16 @@ class CstVec2VecExpr: CstVecExpr
     case CstBinVecOp.DIV: return lvec /  rvec;
     case CstBinVecOp.LSH: return lvec << rvec;
     case CstBinVecOp.RSH: return lvec >> rvec;
-    case CstBinVecOp.LOOPINDEX: return _lhs[_rhs.evaluate(stage)].getBDD(stage, buddy);
+    case CstBinVecOp.LOOPINDEX: return _lhs[_rhs.evaluate()].getBDD(stage, buddy);
     case CstBinVecOp.BITINDEX: {
       assert(false, "BITINDEX is not implemented yet!");
     }
     }
   }
 
-  override public long evaluate(CstStage stage) {
-    auto lvec = _lhs.evaluate(stage);
-    auto rvec = _rhs.evaluate(stage);
+  override public long evaluate() {
+    auto lvec = _lhs.evaluate();
+    auto rvec = _rhs.evaluate();
 
     final switch(_op) {
     case CstBinVecOp.AND: return lvec &  rvec;
@@ -1504,7 +1530,7 @@ class CstVec2VecExpr: CstVecExpr
     case CstBinVecOp.DIV: return lvec /  rvec;
     case CstBinVecOp.LSH: return lvec << rvec;
     case CstBinVecOp.RSH: return lvec >> rvec;
-    case CstBinVecOp.LOOPINDEX: return _lhs[rvec].evaluate(stage);
+    case CstBinVecOp.LOOPINDEX: return _lhs[rvec].evaluate();
     case CstBinVecOp.BITINDEX: {
       assert(false, "BITINDEX is not implemented yet!");
     }
@@ -1577,6 +1603,21 @@ abstract class CstBddExpr
     return _lengthVars;
   }
 
+  public CstBddExpr[] unroll() {
+    CstBddExpr[] retval;
+    auto loop = this.unrollable();
+    if(loop is null) {
+      return [this];
+    }
+    else {
+      foreach(expr; this.unroll(loop)) {
+	if(expr.unrollable() is null) retval ~= expr;
+	else retval ~= expr.unroll();
+      }
+    }
+    return retval;
+  }
+  
   public CstBddExpr[] unroll(CstVecLoopVar l) {
     CstBddExpr[] retval;
     if(! l.isUnrollable()) {
@@ -1587,7 +1628,14 @@ abstract class CstBddExpr
     }
     return retval;
   }
-  
+
+  public CstVecLoopVar unrollable() {
+    foreach(loop; _loopVars) {
+      if(loop.isUnrollable()) return loop;
+    }
+    return null;
+  }
+
   abstract public CstBddExpr unroll(CstVecLoopVar l, uint n);
   
   abstract public CstVecPrim[] getPrims();
