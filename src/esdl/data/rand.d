@@ -899,9 +899,6 @@ public bool randomize(T) (ref T t)
     return true;
   }
 
-
-
-
 // All the operations that produce a BddVec
 enum CstBinVecOp: byte
   {   AND,
@@ -1034,16 +1031,22 @@ class CstVecPrim: CstVecExpr
   abstract public BddVec bddvec();
   abstract public void bddvec(BddVec b);
   abstract public string name();
+  public void loopVar(CstVecLoopVar var) {
+    assert(false, "loopVar may only be called for a CstVecRandArr");
+  }
+  public CstVecLoopVar loopVar() {
+    assert(false, "loopVar may only be called for a CstVecRandArr");
+  }
 }
 
 // This class represents an unrolled Foreach loop at vec level
 class CstVecLoopVar: CstVecPrim
 {
   // _loopVar will point to the array this CstVecLoopVar is tied to
-  CstVecPrim _loopVar;
+  CstVecPrim _lengthVar;
 
-  CstVecPrim loopVar() {
-    return _loopVar;
+  CstVecPrim lengthVar() {
+    return _lengthVar;
   }
 
   override CstVecLoopVar[] loopVars() {
@@ -1054,12 +1057,13 @@ class CstVecLoopVar: CstVecPrim
     return [];
   }
 
-  this(CstVecPrim loopVar) {
-    _loopVar = loopVar;
+  this(CstVecPrim lengthVar) {
+    _lengthVar = lengthVar;
+    lengthVar.loopVar(this);
   }
 
-  bool isUnrollable(CstVecRand loopVar) {
-    if(loopVar is _loopVar) {
+  bool isUnrollable(CstVecRand lengthVar) {
+    if(lengthVar is _lengthVar) {
       return true;
     }
     else {
@@ -1068,19 +1072,19 @@ class CstVecLoopVar: CstVecPrim
   }
 
   bool isUnrollable(CstStage stage) {
-    if(! _loopVar.isRand()) return true;
-    if(_loopVar.stage.solved()) return true;
+    if(! _lengthVar.isRand()) return true;
+    if(_lengthVar.stage.solved()) return true;
     else return false;
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
   override public CstVecPrim[] getPrims() {
-    return _loopVar.getPrims();
+    return lengthVar.getPrims();
   }
 
   // get the list of stages this expression should be avaluated in
   override public CstStage[] getStages() {
-    return _loopVar.getStages();
+    return lengthVar.getStages();
   }
 
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -1142,6 +1146,7 @@ class CstVecRandArr: CstVecRand
   bool _elemIsRand;
 
   size_t _maxValue = 0;
+  CstVecLoopVar _loopVar;
 
   size_t maxValue() {
     return _maxValue;
@@ -1155,6 +1160,14 @@ class CstVecRandArr: CstVecRand
     return elems;
   }
   
+  override public void loopVar(CstVecLoopVar var) {
+    _loopVar = loopVar;
+  }
+
+  override public CstVecLoopVar loopVar() {
+    return _loopVar;
+  }
+
   override public CstVecRandArr[] lengthVars() {
     if(isRand()) return [this];
     else return [];
