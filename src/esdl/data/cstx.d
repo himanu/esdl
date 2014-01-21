@@ -613,14 +613,21 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
     // countExp += 1;
 
     srcTag = srcCursor;
-    parseLeftSpace(CST, srcCursor);
+    parseSpace(CST, srcCursor);
 
     dstCursor = fill(CST[srcTag..srcCursor],
 		     buffer, dstCursor);
-
     srcTag = srcCursor;
+    // Parse any left braces now
+    parseLeftSpace(CST, srcCursor);
+    auto leftBrace = CST[srcTag..srcCursor];
+    srcTag = srcCursor;
+    
     if(parseIdentifier(CST, srcCursor) > 0) {
       if(CST[srcTag..srcCursor] == "foreach") {
+	if(leftBrace.length !is 0) {
+	  assert(false, "Illegal left brace before foreach");
+	}
 	translateForeach(CST, buffer, srcCursor,
 			 dstCursor, varMap);
 	continue;
@@ -635,6 +642,8 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 	newStatement = false;
       }
 
+      dstCursor = fill(leftBrace, buffer, dstCursor);
+      
       int idx = idMatch(CST[srcTag..srcCursor], varMap);
       if(idx == -1) {
 	dstCursor = fill("_esdl__cstRand!q{", buffer, dstCursor);
