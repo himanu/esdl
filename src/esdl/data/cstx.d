@@ -459,6 +459,14 @@ char[] translate(in string CST) {
 
   buffer.length = size1 + 2 * size2;
 
+  foreach(ref char c; buffer) {
+    c = ' ';
+  }
+
+  dstCursor = fill("\noverride public CstBlock getCstExpr() {"
+		   "\n  auto cstExpr = new CstBlock;\n",
+		   buffer, dstCursor);
+
   translateBlock(CST, buffer, srcCursor, dstCursor);
 
   return buffer;
@@ -594,14 +602,6 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 
   bool newStatement = true;
 
-  foreach(ref char c; buffer) {
-    c = ' ';
-  }
-
-  dstCursor = fill("\noverride public CstBlock getCstExpr() {"
-		   "\n  auto cstExpr = new CstBlock;\n",
-		   buffer, dstCursor);
-
   while(srcCursor < CST.length) {
     srcTag = srcCursor;
     parseSpace(CST, srcCursor);
@@ -612,15 +612,6 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 
     // countExp += 1;
 
-    if(newStatement is true) {
-
-      dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
-      cmpDstAnchor = dstCursor++;
-      andDstAnchor = dstCursor++;
-      orDstAnchor  = dstCursor++;
-      impDstAnchor = dstCursor++;
-      newStatement = false;
-    }
     srcTag = srcCursor;
     parseLeftSpace(CST, srcCursor);
 
@@ -634,6 +625,16 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 			 dstCursor, varMap);
 	continue;
       }
+
+      if(newStatement is true) {
+	dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
+	cmpDstAnchor = dstCursor++;
+	andDstAnchor = dstCursor++;
+	orDstAnchor  = dstCursor++;
+	impDstAnchor = dstCursor++;
+	newStatement = false;
+      }
+
       int idx = idMatch(CST[srcTag..srcCursor], varMap);
       if(idx == -1) {
 	dstCursor = fill("_esdl__cstRand!q{", buffer, dstCursor);

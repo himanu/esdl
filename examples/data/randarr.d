@@ -11,7 +11,7 @@ import esdl.data.bvec;
 
 class Bar: Randomizable
 {
-  @rand!16 byte[] foo;
+  @rand!4 byte[] foo;
   @rand byte[8] bar;
 
   @rand ubyte baz = 12;
@@ -23,15 +23,20 @@ class Bar: Randomizable
   }
 
   Constraint! q{
-    foo.length > 7;
+    foo.length > 2;
     baz < 16;
   } cstFooLength;
 
   Constraint! q{
-    // foreach(i, f; foo) {
-    //   f < 64;
-    //   f > 16;
-    // }
+    foreach(i, f; foo) {
+      f < 64;
+      f > 16;
+    }
+    
+    foreach(i, f; bar) {
+      f <= 16;
+      f >= 0;
+    }
   } cstFoo;
 
 }

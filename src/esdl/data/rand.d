@@ -312,9 +312,6 @@ public class ConstraintEngine {
       }
     }
 
-    import std.stdio;
-    writeln("Total domains: ", domIndex);
-
     _buddy.clearAllDomains();
     _domains = _buddy.extDomain(domList);
 
@@ -361,7 +358,6 @@ public class ConstraintEngine {
       usStages.length = 0;
 
 
-
       foreach(expr; cstExprs) {
 	if(expr.unrollable() is null) {
 	  urExprs ~= expr;
@@ -373,8 +369,6 @@ public class ConstraintEngine {
 
       foreach(expr; urExprs) {
 	if(expr.loopVars().length is 0) {
-	  import std.stdio;
-	  writeln(expr.getPrims());
 	  addCstStage(expr, cstStages);
 	}
       }
@@ -749,16 +743,22 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 	  static assert(findRandArrayAttr!(I, t, 1) == int.min);
 	  // enum ATTRS = __traits(getAttributes, t.tupleof[I]);
 	  // alias ATTRS[RLENGTH] ATTR;
-	  auto vecVal = vecVals[RI];
+	  auto vecVal = cast(CstVecRandArr) vecVals[RI];
 	  if(vecVal is null) {
 	    t.tupleof[I].length = rgen.gen(0, RLENGTH+1);
 	  }
 	  else {
 	    t.tupleof[I].length = vecVal.value;
 	  }
-	  foreach(ref v; t.tupleof[I]) {
+	  foreach(idx, ref v; t.tupleof[I]) {
 	    import std.range;
-	    v = rgen.gen!(ElementType!L);
+	    auto elemVal = vecVal[idx];
+	    if(elemVal is null) {
+	      v = rgen.gen!(ElementType!L);
+	    }
+	    else {
+	      v = cast(ElementType!L) elemVal.value;
+	    }
 	  }
 	  // t.tupleof[I] = rgen.gen!L;
 	  // }
@@ -775,9 +775,24 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
       else {
 	static if(findRandElemAttr!(I, t) != -1) { // is @rand
 	  static if(isStaticArray!L) {
-	    foreach(ref v; t.tupleof[I]) {
-	      import std.range;
-	      v = rgen.gen!(ElementType!L);
+	    auto vecVal = cast(CstVecRandArr) vecVals[RI];
+	    if(vecVal is null) {
+	      foreach(idx, ref v; t.tupleof[I]) {
+		import std.range;
+		v = rgen.gen!(ElementType!L);
+	      }
+	    }
+	    else {
+	      foreach(idx, ref v; t.tupleof[I]) {
+		import std.range;
+		auto elemVal = vecVal[idx];
+		if(elemVal is null) {
+		  v = rgen.gen!(ElementType!L);
+		}
+		else {
+		  v = cast(ElementType!L) elemVal.value;
+		}
+	      }
 	    }
 	  }
 	  else {
@@ -903,7 +918,8 @@ public bool randomize(T) (ref T t)
     foreach(rnd; t._cstRands) {
       if(rnd !is null) {
 	// stages would be assigned again from scratch
-	rnd.stage = null;
+	rnd.reset();
+	
 	// FIXME -- Perhaps some other fields too need to be reinitialized
       }
     }
@@ -1046,6 +1062,9 @@ class CstVecPrim: CstVecExpr
   abstract public void value(long v);
   abstract public CstStage stage();
   abstract public void stage(CstStage s);
+  public void reset() {
+    stage = null;
+  }
   abstract public uint domIndex();
   abstract public void domIndex(uint s);
   abstract public uint bitcount();
@@ -1132,40 +1151,40 @@ class CstVecLoopVar: CstVecPrim
   }
 
   override public bool isRand() {
-    return loopVar.isRand();
+    return lengthVar.isRand();
   }
   override public long value() {
-    return loopVar.value();
+    return lengthVar.value();
   }
   override public void value(long v) {
-    loopVar.value(v);
+    lengthVar.value(v);
   }
   override public CstStage stage() {
-    return loopVar.stage();
+    return lengthVar.stage();
   }
   override public void stage(CstStage s) {
-    loopVar.stage(s);
+    lengthVar.stage(s);
   }
   override public uint domIndex() {
-    return loopVar.domIndex;
+    return lengthVar.domIndex;
   }
   override public void domIndex(uint s) {
-    loopVar.domIndex(s);
+    lengthVar.domIndex(s);
   }
   override public uint bitcount() {
-    return loopVar.bitcount();
+    return lengthVar.bitcount();
   }
   override public bool signed() {
-    return loopVar.signed();
+    return lengthVar.signed();
   }
   override public BddVec bddvec() {
-    return loopVar.bddvec();
+    return lengthVar.bddvec();
   }
   override public void bddvec(BddVec b) {
-    loopVar.bddvec(b);
+    lengthVar.bddvec(b);
   }
   override public string name() {
-    return loopVar.name();
+    return lengthVar.name();
   }
   override public CstVecPrim unroll(CstVecLoopVar l, uint n) {
     if(this !is l) return this;
@@ -1187,6 +1206,15 @@ class CstVecRandArr: CstVecRand
 
   size_t _maxValue = 0;
   CstVecLoopVar _loopVar;
+
+  override public void reset() {
+    stage = null;
+    foreach(elem; _elems) {
+      if(elem !is null) {
+	elem.reset();
+      }
+    }
+  }
 
   size_t maxValue() {
     return _maxValue;
@@ -1356,10 +1384,10 @@ class CstVecRand: CstVecPrim
     if(is(T == string)) {
       import std.conv;
       if(isRand) {
-	return "RAND-" ~ "#" ~ _name ~ "-" ~ _value.to!string();
+	return "RAND-" ~ "#" ~ _name ~ ":" ~ _value.to!string();
       }
       else {
-	return "VAL#" ~ _name ~ "-" ~ _value.to!string();
+	return "VAL#" ~ _name ~ ":" ~ _value.to!string();
       }
     }
 
