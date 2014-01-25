@@ -77,8 +77,9 @@ abstract class _ESDL__ConstraintBase
     _enabled = true;
   }
 
-  public bdd getConstraintBDD() {
-    return _cstEng._buddy.one();
+  public BDD getConstraintBDD() {
+    BDD retval = _cstEng._buddy.one();
+    return retval;
   }
 
   public string name() {
@@ -87,7 +88,7 @@ abstract class _ESDL__ConstraintBase
 
   abstract public CstBlock getCstExpr();
 
-  public void applyMaxArrayLengthCst(ref bdd solveBDD, CstStage stage) {}
+  public void applyMaxArrayLengthCst(ref BDD solveBDD, CstStage stage) {}
 }
 
 abstract class Constraint (string C) : _ESDL__ConstraintBase
@@ -124,7 +125,7 @@ class Constraint(string C, string NAME, T, S): Constraint!C
   // This mixin writes out the bdd functions after parsing the
   // constraint string at compile time
   static if(NAME == "_esdl__lengthConstraint") {
-    override public void applyMaxArrayLengthCst(ref bdd solveBDD,
+    override public void applyMaxArrayLengthCst(ref BDD solveBDD,
 						CstStage stage) {
       _esdl__initLengthCsts(_outerD, solveBDD, stage);
     }
@@ -432,7 +433,7 @@ public class ConstraintEngine {
     // make the bdd tree
     auto exprs = stage._bddExprs;
 
-    bdd solveBDD = _buddy.one();
+    BDD solveBDD = _buddy.one();
     foreach(expr; exprs) {
       solveBDD &= expr.getBDD(stage, _buddy);
     }
@@ -675,7 +676,7 @@ void _esdl__initCst(size_t I=0, size_t CI=0, T, S) (T t, S s) {
 // I is the index within the class
 // CI is the cumulative index -- starts from the most derived class
 // and increases as we move up in the class hierarchy
-void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref bdd solveBDD, CstStage stage)
+void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref BDD solveBDD, CstStage stage)
   if(is(T: RandomizableIntf) && is(T == class)) {
     static if (I < t.tupleof.length) {
       if(findRandAttr!(I, t)) {
@@ -694,7 +695,7 @@ void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref bdd
       }
   }
 
-void _esdl__initLengthCst(size_t I=0, size_t RI=0, T) (T t, ref bdd solveBDD,
+void _esdl__initLengthCst(size_t I=0, size_t RI=0, T) (T t, ref BDD solveBDD,
 						       CstStage stage) {
   import std.traits;
   import std.conv;
@@ -1681,7 +1682,7 @@ abstract class CstBddExpr
 
   abstract public CstStage[] getStages();
 
-  abstract public bdd getBDD(CstStage stage, Buddy buddy);
+  abstract public BDD getBDD(CstStage stage, Buddy buddy);
 
   public CstBdd2BddExpr opBinary(string op)(CstBddExpr other)
   {
@@ -1735,7 +1736,7 @@ class CstBdd2BddExpr: CstBddExpr
     return stages;
   }
 
-  override public bdd getBDD(CstStage stage, Buddy buddy) {
+  override public BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.loopVars.length !is 0) {
       assert(false,
 	     "CstBdd2BddExpr: Need to unroll the loopVars"
@@ -1744,11 +1745,13 @@ class CstBdd2BddExpr: CstBddExpr
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
 
+    BDD retval;
     final switch(_op) {
-    case CstBddOp.AND: return lvec &  rvec;
-    case CstBddOp.OR:  return lvec |  rvec;
-    case CstBddOp.IMP: return lvec.imp(rvec);
+    case CstBddOp.AND: retval = lvec &  rvec; break;
+    case CstBddOp.OR:  retval = lvec |  rvec; break;
+    case CstBddOp.IMP: retval = lvec.imp(rvec); break;
     }
+    return retval;
   }
 
   override public CstBdd2BddExpr unroll(CstVecLoopVar l, uint n) {
@@ -1818,7 +1821,7 @@ class CstVec2BddExpr: CstBddExpr
     return _lhs.getPrims() ~ _rhs.getPrims();
   }
 
-  override public bdd getBDD(CstStage stage, Buddy buddy) {
+  override public BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.loopVars.length !is 0) {
       assert(false,
 	     "CstVec2BddExpr: Need to unroll the loopVars"
@@ -1827,14 +1830,16 @@ class CstVec2BddExpr: CstBddExpr
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
 
+    BDD retval;
     final switch(_op) {
-    case CstBinBddOp.LTH: return lvec.lth(rvec);
-    case CstBinBddOp.LTE: return lvec.lte(rvec);
-    case CstBinBddOp.GTH: return lvec.gth(rvec);
-    case CstBinBddOp.GTE: return lvec.gte(rvec);
-    case CstBinBddOp.EQU: return lvec.equ(rvec);
-    case CstBinBddOp.NEQ: return lvec.neq(rvec);
+    case CstBinBddOp.LTH: retval = lvec.lth(rvec); break;
+    case CstBinBddOp.LTE: retval = lvec.lte(rvec); break;
+    case CstBinBddOp.GTH: retval = lvec.gth(rvec); break;
+    case CstBinBddOp.GTE: retval = lvec.gte(rvec); break;
+    case CstBinBddOp.EQU: retval = lvec.equ(rvec); break;
+    case CstBinBddOp.NEQ: retval = lvec.neq(rvec); break;
     }
+    return retval;
   }
 
   override public CstVec2BddExpr unroll(CstVecLoopVar l, uint n) {
@@ -1914,7 +1919,7 @@ class CstBlock: CstBddExpr
     return stages;
   }
 
-  override public bdd getBDD(CstStage stage, Buddy buddy) {
+  override public BDD getBDD(CstStage stage, Buddy buddy) {
     assert(false, "getBDD not implemented for CstBlock");
   }
 
