@@ -228,13 +228,26 @@ public class ConstraintEngine {
   _ESDL__ConstraintBase cstList[];
   _ESDL__ConstraintBase arrayMaxLengthCst;
   // ParseTree parseList[];
+  public CstVecPrim[] _cstRands;
   RandGen _rgen;
   Buddy _buddy;
   
   BddDomain[] _domains;
 
-  this(uint seed) {
+  this(uint seed, size_t rnum) {
     _rgen.seed(seed);
+    _buddy = _new!Buddy(400, 400);
+    _cstRands.length = rnum;
+  }
+
+  ~this() {
+    import core.memory: GC;
+    cstList.length = 0;
+    arrayMaxLengthCst = null;
+    _cstRands.length = 0;
+    _domains.length = 0;
+    // GC.collect();
+    // _buddy._delete();
   }
 
   public void markCstStageLoops(CstBddExpr expr) {
@@ -562,8 +575,6 @@ interface RandomizableIntf
   static final string _esdl__randomizable() {
     return q{
 
-      public CstVecPrim[] _cstRands;
-
       public ConstraintEngine _esdl__cstEng;
       public uint _esdl__randSeed;
 
@@ -598,9 +609,9 @@ class Randomizable: RandomizableIntf
 
 T _new(T, Args...) (Args args) {
   version(EMPLACE) {
-    import std.stdio, std.conv, core.stdc.stdlib;
+    import std.stdio, std.conv, core.memory;
     size_t objSize = __traits(classInstanceSize, T);
-    void* tmp = core.stdc.stdlib.malloc(objSize);
+    void* tmp = GC.malloc(objSize);
     if (!tmp) throw new Exception("Memory allocation failed");
     void[] mem = tmp[0..objSize];
     T obj = emplace!(T, Args)(mem, args);
@@ -612,16 +623,9 @@ T _new(T, Args...) (Args args) {
 }
 
 void _delete(T)(T obj) {
+  import core.memory;
   clear(obj);
-  core.stdc.stdlib.free(cast(void*)obj);
-}
-
-public void _esdl__initCstEngine(T) (T t) {
-  t._esdl__cstEng = new ConstraintEngine(t._esdl__randSeed);
-  with(t._esdl__cstEng) {
-    _buddy = _new!Buddy(400, 400);
-    _esdl__initCsts(t, t);
-  }
+  GC.free(cast(void*)obj);
 }
 
 // I is the index within the class
@@ -701,7 +705,7 @@ void _esdl__initLengthCst(size_t I=0, size_t RI=0, T) (T t, ref bdd solveBDD,
   enum string NAME = chompPrefix (t.tupleof[I].stringof, "t.");
   static if(isDynamicArray!L) {
     enum RLENGTH = findRandArrayAttr!(I, t);
-    auto cstVecPrim = t._cstRands[RI];
+    auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim !is null && cstVecPrim.stage() == stage) {
       solveBDD &= cstVecPrim.getBDD(stage, solveBDD.root()).
 	lte(_esdl__cstRand(RLENGTH, t).getBDD(stage, solveBDD.root()));
@@ -900,22 +904,19 @@ public bool randomize(T) (ref T t)
     import std.exception;
     import std.conv;
 
-    if(t._cstRands.length is 0) {
-      auto randCount = _esdl__countRands(t);
-      t._cstRands.length = randCount;
+    // Initialize the constraint database if not already done
+    if (t._esdl__cstEng is null) {
+      t._esdl__cstEng = new ConstraintEngine(t._esdl__randSeed,
+					     _esdl__countRands(t));
+      _esdl__initCsts(t, t);
     }
 
     // Call the pre_randomize hook
     t.pre_randomize();
 
-    // Initialize the constraint database if not already done
-    if (t._esdl__cstEng is null) {
-      _esdl__initCstEngine(t);
-    }
+    auto values = t._esdl__cstEng._cstRands;
 
-    auto values = t._cstRands;
-
-    foreach(rnd; t._cstRands) {
+    foreach(rnd; t._esdl__cstEng._cstRands) {
       if(rnd !is null) {
 	// stages would be assigned again from scratch
 	rnd.reset();
@@ -926,7 +927,7 @@ public bool randomize(T) (ref T t)
 
     t._esdl__cstEng.solve();
 
-    values = t._cstRands;
+    values = t._esdl__cstEng._cstRands;
 
     _esdl__setRands(t, values, t._esdl__cstEng._rgen);
 
@@ -1967,8 +1968,10 @@ private size_t _esdl__cstDelimiter(string name) {
 }
 
 public CstVecConst _esdl__cstRand(INT, T)(INT var, ref T t)
-  if(isIntegral!INT && is(T f: RandomizableIntf) && is(T == class)) {
-    return new CstVecConst(var, isVarSigned!INT);
+  if((isIntegral!INT || isBitVector!INT) &&
+     is(T f: RandomizableIntf) && is(T == class)) {
+    ulong val = var;
+    return new CstVecConst(val, isVarSigned!INT);
   }
 
 public CstVecPrim _esdl__cstRand(string VAR, T)(ref T t)
@@ -2009,11 +2012,11 @@ public CstVecPrim _esdl__cstRand(string VAR, size_t I,
     return _esdl__cstRand(t.tupleof[I], t);
   }
   else {
-    auto cstVecPrim = t._cstRands[RI];
+    auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim is null) {
       cstVecPrim = new CstVecRand(t.tupleof[I].stringof, t.tupleof[I],
 				  signed, bitcount, true);
-      t._cstRands[RI] = cstVecPrim;
+      t._esdl__cstEng._cstRands[RI] = cstVecPrim;
     }
     return cstVecPrim;
   }
@@ -2049,11 +2052,11 @@ public CstVecPrim _esdl__cstRandElem(string VAR, size_t I,
 				     signed, bitcount, false);
   }
   else {
-    auto cstVecPrim = t._cstRands[RI];
+    auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim is null) {
       cstVecPrim = new CstVecRand(t.tupleof[I].stringof, t.tupleof[I],
 				  signed, bitcount, true);
-      t._cstRands[RI] = cstVecPrim;
+      t._esdl__cstEng._cstRands[RI] = cstVecPrim;
     }
   }
   return cstVecPrim;
@@ -2081,22 +2084,22 @@ public CstVecPrim _esdl__cstRandArrLength(string VAR, size_t I,
   else static if(isDynamicArray!L) { // @rand!N form
       enum RLENGTH = findRandArrayAttr!(I, t);
       static assert(RLENGTH != -1);
-      auto cstVecPrim = t._cstRands[RI];
+      auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
       if(cstVecPrim is null) {
 	cstVecPrim = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
 				       false, 32, true, signed, bitcount, true);
-	t._cstRands[RI] = cstVecPrim;
+	t._esdl__cstEng._cstRands[RI] = cstVecPrim;
       }
       return cstVecPrim;
     }
   else static if(isStaticArray!L) { // @rand with static array
       enum ISRAND = findRandElemAttr!(I, t);
       static assert(ISRAND !is -1);
-      auto cstVecPrim = t._cstRands[RI];
+      auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
       if(cstVecPrim is null) {
 	cstVecPrim = new CstVecRandArr(t.tupleof[I].stringof, t.tupleof[I].length,
 				       false, 32, false, signed, bitcount, true);
-	t._cstRands[RI] = cstVecPrim;
+	t._esdl__cstEng._cstRands[RI] = cstVecPrim;
       }
       return cstVecPrim;
     }
@@ -2123,7 +2126,7 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
     return _esdl__cstRand(t.tupleof[I].length, t);
   }
   else {
-    auto cstVecPrim = t._cstRands[RI];
+    auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     auto cstVecRandArr = cast(CstVecRandArr) cstVecPrim;
     if(cstVecRandArr is null && cstVecPrim !is null) {
       assert(false, "Non-array CstVecPrim for an Array");
@@ -2134,7 +2137,7 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
       if(cstVecRandArr is null) {
 	cstVecRandArr = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
 				       false, 32, true, signed, bitcount, true);
-	t._cstRands[RI] = cstVecRandArr;
+	t._esdl__cstEng._cstRands[RI] = cstVecRandArr;
       }
     }
     else static if(isStaticArray!L) { // @rand with static array
@@ -2144,7 +2147,7 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
 	if(cstVecRandArr is null) {
 	  cstVecRandArr = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
 					 false, 32, false, signed, bitcount, true);
-	  t._cstRands[RI] = cstVecRandArr;
+	  t._esdl__cstEng._cstRands[RI] = cstVecRandArr;
 	}
       }
       else static assert("Can not use .length with non-arrays");
