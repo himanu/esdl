@@ -248,7 +248,7 @@ public class ConstraintEngine {
     _cstRands.length = 0;
     _domains.length = 0;
     // GC.collect();
-    // _buddy._delete();
+    _buddy.destroyBuddy();
   }
 
   public void markCstStageLoops(CstBddExpr expr) {
@@ -435,7 +435,7 @@ public class ConstraintEngine {
 
     BDD solveBDD = _buddy.one();
     foreach(expr; exprs) {
-      solveBDD &= expr.getBDD(stage, _buddy);
+      solveBDD = solveBDD & expr.getBDD(stage, _buddy);
     }
 
     // The idea is that we apply the max length constraint only if
@@ -609,7 +609,10 @@ class Randomizable: RandomizableIntf
 }
 
 T _new(T, Args...) (Args args) {
-  version(EMPLACE) {
+  version(NO_EMPLACE) {
+    T obj = new T(args);
+  }
+  else {
     import std.stdio, std.conv, core.memory;
     size_t objSize = __traits(classInstanceSize, T);
     void* tmp = GC.malloc(objSize);
@@ -617,16 +620,7 @@ T _new(T, Args...) (Args args) {
     void[] mem = tmp[0..objSize];
     T obj = emplace!(T, Args)(mem, args);
   }
-  else {
-    T obj = new T(args);
-  }
   return obj;
-}
-
-void _delete(T)(T obj) {
-  import core.memory;
-  clear(obj);
-  GC.free(cast(void*)obj);
 }
 
 // I is the index within the class
@@ -708,7 +702,7 @@ void _esdl__initLengthCst(size_t I=0, size_t RI=0, T) (T t, ref BDD solveBDD,
     enum RLENGTH = findRandArrayAttr!(I, t);
     auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim !is null && cstVecPrim.stage() == stage) {
-      solveBDD &= cstVecPrim.getBDD(stage, solveBDD.root()).
+      solveBDD = solveBDD & cstVecPrim.getBDD(stage, solveBDD.root()).
 	lte(_esdl__cstRand(RLENGTH, t).getBDD(stage, solveBDD.root()));
     }
   }
@@ -795,7 +789,15 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 		  v = rgen.gen!(ElementType!L);
 		}
 		else {
-		  v = cast(ElementType!L) elemVal.value;
+		  alias ElementType!L R;
+		  static if(isBitVector!R) {
+		    import esdl.data.bvec;
+		    bvec!64 bval = elemVal.value;
+		    v = cast(ElementType!L) bval;
+		  }
+		  else {
+		    v = cast(R) elemVal.value;
+		  }
 		}
 	      }
 	    }
@@ -2019,7 +2021,7 @@ public CstVecPrim _esdl__cstRand(string VAR, size_t I,
   else {
     auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim is null) {
-      cstVecPrim = new CstVecRand(t.tupleof[I].stringof, t.tupleof[I],
+      cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
 				  signed, bitcount, true);
       t._esdl__cstEng._cstRands[RI] = cstVecPrim;
     }
@@ -2053,13 +2055,13 @@ public CstVecPrim _esdl__cstRandElem(string VAR, size_t I,
 		       "are allowed in constraint expressions");
 
   static if(findRandElemAttr!(I, t) == -1) {
-    auto cstVecPrim = new CstVecRand(t.tupleof[I].stringof, t.tupleof[I],
+    auto cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
 				     signed, bitcount, false);
   }
   else {
     auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim is null) {
-      cstVecPrim = new CstVecRand(t.tupleof[I].stringof, t.tupleof[I],
+      cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
 				  signed, bitcount, true);
       t._esdl__cstEng._cstRands[RI] = cstVecPrim;
     }
@@ -2162,11 +2164,11 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
 	auto init = (ElementType!(typeof(t.tupleof[I]))).init;
 	if(i < t.tupleof[I].length) {
 	  cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
-					    t.tupleof[I][i], signed, bitcount, true);
+					    cast(long) t.tupleof[I][i], signed, bitcount, true);
 	}
 	else {
 	  cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
-					    init, signed, bitcount, true);
+					    cast(long) init, signed, bitcount, true);
 	}
       }
     }
