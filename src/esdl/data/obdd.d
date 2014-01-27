@@ -361,12 +361,12 @@ struct BDD
 
   public bool isZero()
   {
-    return _index is bddFalse;
+    return _index == bddFalse;
   }
 
   public bool isOne()
   {
-    return _index is bddTrue;
+    return _index == bddTrue;
   }
 
   public int var()
@@ -411,7 +411,7 @@ struct BDD
 
   public bool opEquals(BDD rhs)
   {
-    return(this._index is rhs._index);
+    return(this._index == rhs._index);
   }
 
   public final BDD lth(BDD other)
@@ -870,7 +870,7 @@ struct BDD
     //   return null;
     fn = fv.length;
 
-    if(fn is 0) return fv;
+    if(fn == 0) return fv;
 
     version(BDDD_FIX2)
       {
@@ -883,7 +883,7 @@ struct BDD
 	      {
 		for(i = 0; i < fn && !found; i++)
 		  {
-		    if(ivar[m] is fv[i])
+		    if(ivar[m] == fv[i])
 		      {
 			varset ~= n;
 			found = true;
@@ -901,7 +901,7 @@ struct BDD
 	    {
 	      for(i = 0; i < fn && !found; i++)
 		{
-		  if(ivar[m] is fv[i])
+		  if(ivar[m] == fv[i])
 		    {
 		      num++;
 		      found = true;
@@ -922,7 +922,7 @@ struct BDD
 	    {
 	      for(i = 0; i < fn && !found; i++)
 		{
-		  if(ivar[m] is fv[i])
+		  if(ivar[m] == fv[i])
 		    {
 		      varset[num++] = n;
 		      found = true;
@@ -1066,7 +1066,7 @@ struct BDD
 			  int[BDD] map)
   {
     int ri = map[this];
-    if((this in map) is null)
+    if((this in map) == null)
       {
 	ri = ++current;
 	map[this.dup()] = ri;
@@ -1083,7 +1083,7 @@ struct BDD
     bdd h = this.high();
     int li = map[l];
 
-    if((l in map) is null)
+    if((l in map) == null)
       {
 	li = ++current;
 	map[l] = li;
@@ -1165,7 +1165,7 @@ struct BDD
 
   public bool equals(BDD that)
   {
-    bool b = this._index is that._index;
+    bool b = this._index == that._index;
     return b;
   }
 
@@ -1176,7 +1176,7 @@ struct BDD
 
   public string toString()
   {
-    if(_index < 2) return _index is 0 ? "F" : "T";
+    if(_index < 2) return _index == 0 ? "F" : "T";
     byte[] set = new byte[](root.varNum());
     // StringBuffer sb = new StringBuffer();
     string sb;
@@ -1199,7 +1199,7 @@ struct BDD
 	      {
 		if(!first) sb ~= ", ";
 		first = false;
-		sb ~= text(root.level2Var(n), ':', set[n] is 2 ? '1' : '0');
+		sb ~= text(root.level2Var(n), ':', set[n] == 2 ? '1' : '0');
 	      }
 	  }
 	sb ~= '>';
@@ -1225,7 +1225,7 @@ struct BDD
     byte[][] res;
     if(_index < 2)
       {
-	if(_index is 0)
+	if(_index == 0)
 	  {
 	    assert(false, "Constraints do not converge");
 	  }
@@ -1330,9 +1330,9 @@ struct BDD
 		    int ok=1;
 
 		    for (int i=0 ; i<binsize && ok ; i++)
-		      if (set[vars[i]] is 1  &&  ((m >> i) & 1) != 0)
+		      if (set[vars[i]] == 1  &&  ((m >> i) & 1) != 0)
 			ok = 0;
-		      else if (set[vars[i]] is 2  && ((m >> i) & 1) != 1)
+		      else if (set[vars[i]] == 2  && ((m >> i) & 1) != 1)
 			ok = 0;
 
 		    if (ok)
@@ -1793,7 +1793,7 @@ class Buddy
       foreach(ref entry; this.table)
 	{
 	  int a = entry.a;
-	  if(a >= 0 && buddy.LOW(a) is INVALID_BDD)
+	  if(a >= 0 && buddy.LOW(a) == INVALID_BDD)
 	    {
 	      entry.a = -1;
 	    }
@@ -1807,8 +1807,8 @@ class Buddy
 	{
 	  int a = entry.a;
 	  if(a < 0) continue;
-	  if(buddy.LOW(a) is INVALID_BDD ||
-	     buddy.LOW(entry.res) is INVALID_BDD)
+	  if(buddy.LOW(a) == INVALID_BDD ||
+	     buddy.LOW(entry.res) == INVALID_BDD)
 	    {
 	      entry.a = -1;
 	    }
@@ -1822,9 +1822,9 @@ class Buddy
 	{
 	  int a = entry.a;
 	  if(a < 0) continue;
-	  if(buddy.LOW(a) is INVALID_BDD ||
-	     (entry.b != 0 && buddy.LOW(entry.b) is INVALID_BDD) ||
-	     buddy.LOW(entry.res) is INVALID_BDD)
+	  if(buddy.LOW(a) == INVALID_BDD ||
+	     (entry.b != 0 && buddy.LOW(entry.b) == INVALID_BDD) ||
+	     buddy.LOW(entry.res) == INVALID_BDD)
 	    {
 	      entry.a = -1;
 	    }
@@ -1838,10 +1838,10 @@ class Buddy
 	{
 	  int a = entry.a;
 	  if(a < 0) continue;
-	  if(buddy.LOW(a) is -1 ||
-	     buddy.LOW(entry.b) is INVALID_BDD ||
-	     buddy.LOW(entry.c) is INVALID_BDD ||
-	     buddy.LOW(entry.res) is INVALID_BDD)
+	  if(buddy.LOW(a) == -1 ||
+	     buddy.LOW(entry.b) == INVALID_BDD ||
+	     buddy.LOW(entry.c) == INVALID_BDD ||
+	     buddy.LOW(entry.res) == INVALID_BDD)
 	    {
 	      entry.a = -1;
 	    }
@@ -2006,17 +2006,17 @@ class Buddy
 
   static bool ISZERO(int r)
   {
-    return r is bddFalse;
+    return r == bddFalse;
   }
 
   static bool ISONE(int r)
   {
-    return r is bddTrue;
+    return r == bddTrue;
   }
 
   static bool ISCONST(int r)
   {
-    //return r is bddFalse || r is bddTrue;
+    //return r == bddFalse || r == bddTrue;
     return r < 2;
   }
 
@@ -2026,7 +2026,7 @@ class Buddy
       bdd_error(BddError.BDD_RUNNING);
     else if(r < 0 || r >= _nodeSize)
       bdd_error(BddError.BDD_ILLBDD);
-    else if(r >= 2 && LOW(r) is INVALID_BDD)
+    else if(r >= 2 && LOW(r) == INVALID_BDD)
       bdd_error(BddError.BDD_ILLBDD);
   }
 
@@ -2137,11 +2137,11 @@ class Buddy
 
   final bool INVARSET(int a)
   {
-    return(quantvarset[a] is quantvarsetID); /* unsigned check */
+    return(quantvarset[a] == quantvarsetID); /* unsigned check */
   }
   final bool INSVARSET(int a)
   {
-    return abs(quantvarset[a]) is quantvarsetID; /* signed check */
+    return abs(quantvarset[a]) == quantvarsetID; /* signed check */
   }
 
 
@@ -2158,15 +2158,15 @@ class Buddy
       try {
 	_refStackTop = 0;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = not_rec(r);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = bddFalse;
 	  /* avoid warning about res being uninitialized */
@@ -2182,14 +2182,14 @@ class Buddy
   {
     int res;
 
-    if(r is 0)
+    if(r == 0)
       return bddTrue;
-    if(r is 1)
+    if(r == 1)
       return bddFalse;
 
     BddCacheData* entry = _applyCache.lookup(NOTHASH(r));
 
-    if((*entry).a is r && (*entry).c is BddOp.NOT)
+    if((*entry).a == r && (*entry).c == BddOp.NOT)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
@@ -2226,16 +2226,16 @@ class Buddy
       try {
 	_refStackTop = 0;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = ite_rec(f, g, h);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -2251,19 +2251,19 @@ class Buddy
   {
     int res;
 
-    if(f is 1)
+    if(f == 1)
       return g;
-    if(f is 0)
+    if(f == 0)
       return h;
-    if(g is h)
+    if(g == h)
       return g;
-    if(g is 1 && h is 0)
+    if(g == 1 && h == 0)
       return f;
-    if(g is 0 && h is 1)
+    if(g == 0 && h == 1)
       return not_rec(f);
 
     BddCacheData* entry = _iteCache.lookup(ITEHASH(f, g, h));
-    if((*entry).a is f &&(*entry).b is g &&(*entry).c is h)
+    if((*entry).a == f &&(*entry).b == g &&(*entry).c == h)
       {
 	debug(CACHESTATS)
 	  {
@@ -2276,9 +2276,9 @@ class Buddy
 	_cacheStats.opMiss++;
       }
 
-    if(LEVEL(f) is LEVEL(g))
+    if(LEVEL(f) == LEVEL(g))
       {
-	if(LEVEL(f) is LEVEL(h))
+	if(LEVEL(f) == LEVEL(h))
 	  {
 	    PUSHREF(ite_rec(LOW(f), LOW(g), LOW(h)));
 	    PUSHREF(ite_rec(HIGH(f), HIGH(g), HIGH(h)));
@@ -2295,7 +2295,7 @@ class Buddy
 	}
       } else if(LEVEL(f) < LEVEL(g))
       {
-	if(LEVEL(f) is LEVEL(h))
+	if(LEVEL(f) == LEVEL(h))
 	  {
 	    PUSHREF(ite_rec(LOW(f), g, LOW(h)));
 	    PUSHREF(ite_rec(HIGH(f), g, HIGH(h)));
@@ -2311,7 +2311,7 @@ class Buddy
 	  res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
 	}
       } else /* f > g */ {
-      if(LEVEL(g) is LEVEL(h))
+      if(LEVEL(g) == LEVEL(h))
 	{
 	  PUSHREF(ite_rec(f, LOW(g), LOW(h)));
 	  PUSHREF(ite_rec(f, HIGH(g), HIGH(h)));
@@ -2355,16 +2355,16 @@ class Buddy
 	replacelast = pair.last;
 	replaceid =(pair.id << 2) | CACHEID_REPLACE;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = replace_rec(r);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -2384,7 +2384,7 @@ class Buddy
       return r;
 
     BddCacheData* entry = _reaplceCache.lookup(REPLACEHASH(r));
-    if((*entry).a is r &&(*entry).c is replaceid)
+    if((*entry).a == r &&(*entry).c == replaceid)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
@@ -2412,13 +2412,13 @@ class Buddy
     if(level < LEVEL(l) && level < LEVEL(r))
       return bdd_makenode(level, l, r);
 
-    if(level is LEVEL(l) || level is LEVEL(r))
+    if(level == LEVEL(l) || level == LEVEL(r))
       {
 	bdd_error(BddError.BDD_REPLACE);
 	return 0;
       }
 
-    if(LEVEL(l) is LEVEL(r))
+    if(LEVEL(l) == LEVEL(r))
       {
 	PUSHREF(bdd_correctify(level, LOW(l), LOW(r)));
 	PUSHREF(bdd_correctify(level, HIGH(l), HIGH(r)));
@@ -2460,16 +2460,16 @@ class Buddy
 	_refStackTop = 0;
 	applyop = op;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = apply_rec(l, r);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -2496,47 +2496,47 @@ class Buddy
     switch(applyop)
       {
       case BddOp.AND:
-	if(l is r)
+	if(l == r)
 	  return l;
-	if(l is 0  || r is 0)
+	if(l == 0  || r == 0)
 	  return 0;
-	if(l is 1)
+	if(l == 1)
 	  return r;
-	if(r is 1)
+	if(r == 1)
 	  return l;
 	break;
       case BddOp.OR:
-	if(l is r)
+	if(l == r)
 	  return l;
-	if(l is 1  ||  r is 1)
+	if(l == 1  ||  r == 1)
 	  return 1;
-	if(l is 0)
+	if(l == 0)
 	  return r;
-	if(r is 0)
+	if(r == 0)
 	  return l;
 	break;
       case BddOp.XOR :
-	if(l is r)
+	if(l == r)
 	  return 0;
-	if(l is 0)
+	if(l == 0)
 	  return r;
-	if(r is 0)
+	if(r == 0)
 	  return l;
 	break;
       case BddOp.NAND :
-	if(l is 0 || r is 0)
+	if(l == 0 || r == 0)
 	  return 1;
 	break;
       case BddOp.NOR :
-	if(l is 1 || r is 1)
+	if(l == 1 || r == 1)
 	  return 0;
 	break;
       case BddOp.IMP :
-	if(l is 0)
+	if(l == 0)
 	  return 1;
-	if(l is 1)
+	if(l == 1)
 	  return r;
-	if(r is 1)
+	if(r == 1)
 	  return 1;
 	break;
       default:
@@ -2551,7 +2551,7 @@ class Buddy
     else {
       BddCacheData* entry = _applyCache.lookup(APPLYHASH(l, r, applyop));
 
-      if((*entry).a is l &&(*entry).b is r &&(*entry).c is applyop)
+      if((*entry).a == l &&(*entry).b == r &&(*entry).c == applyop)
 	{
 	  debug(CACHESTATS) {_cacheStats.opHit++;}
 	  // cache++;
@@ -2560,7 +2560,7 @@ class Buddy
       // debug(CACHESTATS)
       // {_cacheStats.opMiss++;}
 
-      if(LEVEL(l) is LEVEL(r))
+      if(LEVEL(l) == LEVEL(r))
 	{
 	  _refStack[_refStackTop++] =
 	    apply_rec(LOW(l), LOW(r));
@@ -2604,24 +2604,24 @@ class Buddy
   {
     int res;
 
-    if(l is r)
+    if(l == r)
       return l;
-    if(l is 0 || r is 0)
+    if(l == 0 || r == 0)
       return 0;
-    if(l is 1)
+    if(l == 1)
       return r;
-    if(r is 1)
+    if(r == 1)
       return l;
     BddCacheData* entry = _applyCache.lookup(APPLYHASH(l, r, BddOp.AND));
 
-    if((*entry).a is l &&(*entry).b is r &&(*entry).c is BddOp.AND)
+    if((*entry).a == l &&(*entry).b == r &&(*entry).c == BddOp.AND)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
       }
     debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-    if(LEVEL(l) is LEVEL(r))
+    if(LEVEL(l) == LEVEL(r))
       {
 	PUSHREF(and_rec(LOW(l), LOW(r)));
 	PUSHREF(and_rec(HIGH(l), HIGH(r)));
@@ -2650,24 +2650,24 @@ class Buddy
   {
     int res;
 
-    if(l is r)
+    if(l == r)
       return l;
-    if(l is 1 || r is 1)
+    if(l == 1 || r == 1)
       return 1;
-    if(l is 0)
+    if(l == 0)
       return r;
-    if(r is 0)
+    if(r == 0)
       return l;
     BddCacheData* entry = _applyCache.lookup(APPLYHASH(l, r, BddOp.OR));
 
-    if((*entry).a is l &&(*entry).b is r &&(*entry).c is BddOp.OR)
+    if((*entry).a == l &&(*entry).b == r &&(*entry).c == BddOp.OR)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
       }
     debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-    if(LEVEL(l) is LEVEL(r))
+    if(LEVEL(l) == LEVEL(r))
       {
 	PUSHREF(or_rec(LOW(l), LOW(r)));
 	PUSHREF(or_rec(HIGH(l), HIGH(r)));
@@ -2697,13 +2697,13 @@ class Buddy
   {
     int res;
 
-    if(l is 0 || r is 0)
+    if(l == 0 || r == 0)
       return 0;
-    if(l is r)
+    if(l == r)
       return quant_rec(l);
-    if(l is 1)
+    if(l == 1)
       return quant_rec(r);
-    if(r is 1)
+    if(r == 1)
       return quant_rec(l);
 
     int LEVEL_l = LEVEL(l);
@@ -2715,14 +2715,14 @@ class Buddy
 	applyop = BddOp.OR;
       } else {
       BddCacheData* entry = _appexCache.lookup(APPEXHASH(l, r, BddOp.AND));
-      if((*entry).a is l &&(*entry).b is r &&(*entry).c is appexid)
+      if((*entry).a == l &&(*entry).b == r &&(*entry).c == appexid)
 	{
 	  debug(CACHESTATS) {_cacheStats.opHit++;}
 	  return(*entry).res;
 	}
       debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-      if(LEVEL_l is LEVEL_r)
+      if(LEVEL_l == LEVEL_r)
 	{
 	  PUSHREF(relprod_rec(LOW(l), LOW(r)));
 	  PUSHREF(relprod_rec(HIGH(l), HIGH(r)));
@@ -2797,16 +2797,16 @@ class Buddy
 	appexid =(var << 5) |(appexop << 1); /* FIXME: range! */
 	quantid =(appexid << 3) | CACHEID_APPEX;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = appquant_rec(l, r);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; //  again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -2828,7 +2828,7 @@ class Buddy
 
     quantvarsetID++;
 
-    if(quantvarsetID is int.max)
+    if(quantvarsetID == int.max)
       {
 	for(int i = 0; i < _varNum; ++i)
 	  quantvarset[i] = 0;
@@ -2855,7 +2855,7 @@ class Buddy
 
     quantvarsetID++;
 
-    if(quantvarsetID is int.max / 2)
+    if(quantvarsetID == int.max / 2)
       {
 	for(int i = 0; i < _varNum; ++i)
 	  quantvarset[i] = 0;
@@ -2865,7 +2865,7 @@ class Buddy
     quantlast = 0;
     for(n = r; n > 1;)
       {
-	if(LOW(n) is 0)
+	if(LOW(n) == 0)
 	  {
 	    quantvarset[LEVEL(n)] = quantvarsetID;
 	    n = HIGH(n);
@@ -2889,39 +2889,39 @@ class Buddy
     switch(appexop)
       {
       case BddOp.AND:
-	if (l is 0  ||  r is 0)
+	if (l == 0  ||  r == 0)
 	  return 0;
-	if (l is r)
+	if (l == r)
 	  return quant_rec(l);
-	if (l is 1)
+	if (l == 1)
 	  return quant_rec(r);
-	if (r is 1)
+	if (r == 1)
 	  return quant_rec(l);
 	break;
       case BddOp.OR :
-	if(l is 1 || r is 1)
+	if(l == 1 || r == 1)
 	  return 1;
-	if(l is r)
+	if(l == r)
 	  return quant_rec(l);
-	if(l is 0)
+	if(l == 0)
 	  return quant_rec(r);
-	if(r is 0)
+	if(r == 0)
 	  return quant_rec(l);
 	break;
       case BddOp.XOR :
-	if(l is r)
+	if(l == r)
 	  return 0;
-	if(l is 0)
+	if(l == 0)
 	  return quant_rec(r);
-	if(r is 0)
+	if(r == 0)
 	  return quant_rec(l);
 	break;
       case BddOp.NAND :
-	if(l is 0 || r is 0)
+	if(l == 0 || r == 0)
 	  return 1;
 	break;
       case BddOp.NOR :
-	if(l is 1 || r is 1)
+	if(l == 1 || r == 1)
 	  return 0;
 	break;
       default:
@@ -2941,7 +2941,7 @@ class Buddy
       }
     else {
       BddCacheData* entry = _appexCache.lookup(APPEXHASH(l, r, appexop));
-      if((*entry).a is l &&(*entry).b is r &&(*entry).c is appexid)
+      if((*entry).a == l &&(*entry).b == r &&(*entry).c == appexid)
 	{
 	  debug(CACHESTATS) {_cacheStats.opHit++;}
 	  return(*entry).res;
@@ -2949,7 +2949,7 @@ class Buddy
       debug(CACHESTATS) {_cacheStats.opMiss++;}
 
       int lev;
-      if(LEVEL(l) is LEVEL(r))
+      if(LEVEL(l) == LEVEL(r))
 	{
 	  PUSHREF(appquant_rec(LOW(l), LOW(r)));
 	  PUSHREF(appquant_rec(HIGH(l), HIGH(r)));
@@ -3009,7 +3009,7 @@ class Buddy
 	applyop = oldop;
       } else {
       BddCacheData* entry = _appexCache.lookup(APPEXHASH(l, r, appexop));
-      if((*entry).a is l &&(*entry).b is r &&(*entry).c is appexid)
+      if((*entry).a == l &&(*entry).b == r &&(*entry).c == appexid)
 	{
 	  debug(CACHESTATS) {_cacheStats.opHit++;}
 	  return(*entry).res;
@@ -3017,9 +3017,9 @@ class Buddy
       debug(CACHESTATS) {_cacheStats.opMiss++;}
 
       int lev;
-      if(LEVEL_l is LEVEL_r)
+      if(LEVEL_l == LEVEL_r)
 	{
-	  if(LEVEL_l is LEVEL_var)
+	  if(LEVEL_l == LEVEL_var)
 	    {
 	      lev = -1;
 	      var = HIGH(var);
@@ -3031,7 +3031,7 @@ class Buddy
 	  lev = LEVEL_l;
 	} else if(LEVEL_l < LEVEL_r)
 	{
-	  if(LEVEL_l is LEVEL_var)
+	  if(LEVEL_l == LEVEL_var)
 	    {
 	      lev = -1;
 	      var = HIGH(var);
@@ -3041,7 +3041,7 @@ class Buddy
 	  PUSHREF(appuni_rec(LOW(l), r, var));
 	  PUSHREF(appuni_rec(HIGH(l), r, var));
 	} else {
-	if(LEVEL_r is LEVEL_var)
+	if(LEVEL_r == LEVEL_var)
 	  {
 	    lev = -1;
 	    var = HIGH(var);
@@ -3051,7 +3051,7 @@ class Buddy
 	PUSHREF(appuni_rec(l, LOW(r), var));
 	PUSHREF(appuni_rec(l, HIGH(r), var));
       }
-      if(lev is -1)
+      if(lev == -1)
 	res = apply_rec(READREF(2), READREF(1));
       else
 	res = bdd_makenode(lev, READREF(2), READREF(1));
@@ -3084,14 +3084,14 @@ class Buddy
       return r;
 
     BddCacheData* entry = _quantCache.lookup(QUANTHASH(r));
-    if((*entry).a is r &&(*entry).c is quantid)
+    if((*entry).a == r &&(*entry).c == quantid)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
       }
     debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-    if(LEVEL_r is LEVEL_q)
+    if(LEVEL_r == LEVEL_q)
       {
 	PUSHREF(unique_rec(LOW(r), HIGH(q)));
 	PUSHREF(unique_rec(HIGH(r), HIGH(q)));
@@ -3118,7 +3118,7 @@ class Buddy
       return r;
 
     BddCacheData* entry = _quantCache.lookup(QUANTHASH(r));
-    if((*entry).a is r &&(*entry).c is quantid)
+    if((*entry).a == r &&(*entry).c == quantid)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
@@ -3160,16 +3160,16 @@ class Buddy
 	_refStackTop = 0;
 	miscid = CACHEID_CONSTRAIN;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = constrain_rec(f, c);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -3185,28 +3185,28 @@ class Buddy
   {
     int res;
 
-    if(c is 1)
+    if(c == 1)
       return f;
     if(f < 2)
       return f;
-    if(c is f)
+    if(c == f)
       return BDDONE;
-    if(c is 0)
+    if(c == 0)
       return BDDZERO;
 
     BddCacheData* entry = _miscCache.lookup(CONSTRAINHASH(f, c));
-    if((*entry).a is f &&(*entry).b is c &&(*entry).c is miscid)
+    if((*entry).a == f &&(*entry).b == c &&(*entry).c == miscid)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
       }
     debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-    if(LEVEL(f) is LEVEL(c))
+    if(LEVEL(f) == LEVEL(c))
       {
-	if(LOW(c) is 0)
+	if(LOW(c) == 0)
 	  res = constrain_rec(HIGH(f), HIGH(c));
-	else if(HIGH(c) is 0)
+	else if(HIGH(c) == 0)
 	  res = constrain_rec(LOW(f), LOW(c));
 	else {
 	  PUSHREF(constrain_rec(LOW(f), LOW(c)));
@@ -3221,9 +3221,9 @@ class Buddy
 	res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
 	POPREF(2);
       } else {
-      if(LOW(c) is 0)
+      if(LOW(c) == 0)
 	res = constrain_rec(f, HIGH(c));
-      else if(HIGH(c) is 0)
+      else if(HIGH(c) == 0)
 	res = constrain_rec(f, LOW(c));
       else {
 	PUSHREF(constrain_rec(f, LOW(c)));
@@ -3264,16 +3264,16 @@ class Buddy
 	  composelevel = _var2Level[var];
 	  replaceid =(composelevel << 2) | CACHEID_COMPOSE;
 
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_disable_reorder();
 	  res = compose_rec(f, g);
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_enable_reorder();
 	} catch(ReorderException x)
 	  {
 	    bdd_checkreorder();
 
-	    if(--firstReorder is 0)
+	    if(--firstReorder == 0)
 	      continue; // again;
 	    res = BDDZERO;
 	    /* avoid warning about res being uninitialized */
@@ -3293,7 +3293,7 @@ class Buddy
       return f;
 
     BddCacheData* entry = _reaplceCache.lookup(COMPOSEHASH(f, g));
-    if((*entry).a is f &&(*entry).b is g &&(*entry).c is replaceid)
+    if((*entry).a == f &&(*entry).b == g &&(*entry).c == replaceid)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
@@ -3302,7 +3302,7 @@ class Buddy
 
     if(LEVEL(f) < composelevel)
       {
-	if(LEVEL(f) is LEVEL(g))
+	if(LEVEL(f) == LEVEL(g))
 	  {
 	    PUSHREF(compose_rec(LOW(f), LOW(g)));
 	    PUSHREF(compose_rec(HIGH(f), HIGH(g)));
@@ -3319,7 +3319,7 @@ class Buddy
 	}
 	POPREF(2);
       } else
-      /*if(LEVEL(f) is composelevel) changed 2-nov-98 */ {
+      /*if(LEVEL(f) == composelevel) changed 2-nov-98 */ {
       res = ite_rec(g, HIGH(f), LOW(f));
     }
 
@@ -3350,16 +3350,16 @@ class Buddy
 	replaceid =(pair.id << 2) | CACHEID_VECCOMPOSE;
 	replacelast = pair.last;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = veccompose_rec(f);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -3379,7 +3379,7 @@ class Buddy
       return f;
 
     BddCacheData* entry = _reaplceCache.lookup(VECCOMPOSEHASH(f));
-    if((*entry).a is f &&(*entry).c is replaceid)
+    if((*entry).a == f &&(*entry).c == replaceid)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
@@ -3422,16 +3422,16 @@ class Buddy
 	  quantid =(var << 3) | CACHEID_EXIST; /* FIXME: range */
 	  applyop = BddOp.OR;
 
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_disable_reorder();
 	  res = quant_rec(r);
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_enable_reorder();
 	} catch(ReorderException x)
 	  {
 	    bdd_checkreorder();
 
-	    if(--firstReorder is 0)
+	    if(--firstReorder == 0)
 	      continue; //  again;
 	    res = BDDZERO;
 	    /* avoid warning about res being uninitialized */
@@ -3466,16 +3466,16 @@ class Buddy
 	quantid =(var << 3) | CACHEID_FORALL;
 	applyop = BddOp.AND;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = quant_rec(r);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; //  again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -3508,16 +3508,16 @@ class Buddy
 	quantid =(var << 3) | CACHEID_UNIQUE;
 	applyop = BddOp.XOR;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = unique_rec(r, var);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -3550,16 +3550,16 @@ class Buddy
 	_refStackTop = 0;
 	miscid =(var << 3) | CACHEID_RESTRICT;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = restrict_rec(r);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -3624,16 +3624,16 @@ class Buddy
 	_refStackTop = 0;
 	applyop = BddOp.OR;
 
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = simplify_rec(f, d);
-	if(firstReorder is 0)
+	if(firstReorder == 0)
 	  bdd_enable_reorder();
       } catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
-	  if(--firstReorder is 0)
+	  if(--firstReorder == 0)
 	    continue; // again;
 	  res = BDDZERO;
 	  /* avoid warning about res being uninitialized */
@@ -3649,27 +3649,27 @@ class Buddy
   {
     int res;
 
-    if(d is 1 || f < 2)
+    if(d == 1 || f < 2)
       return f;
-    if(d is f)
+    if(d == f)
       return BDDONE;
-    if(d is 0)
+    if(d == 0)
       return BDDZERO;
 
     BddCacheData* entry = _applyCache.lookup(APPLYHASH(f, d, BddOp.SIMPLIFY));
 
-    if((*entry).a is f &&(*entry).b is d &&(*entry).c is BddOp.SIMPLIFY)
+    if((*entry).a == f &&(*entry).b == d &&(*entry).c == BddOp.SIMPLIFY)
       {
 	debug(CACHESTATS) {_cacheStats.opHit++;}
 	return(*entry).res;
       }
     debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-    if(LEVEL(f) is LEVEL(d))
+    if(LEVEL(f) == LEVEL(d))
       {
-	if(LOW(d) is 0)
+	if(LOW(d) == 0)
 	  res = simplify_rec(HIGH(f), HIGH(d));
-	else if(HIGH(d) is 0)
+	else if(HIGH(d) == 0)
 	  res = simplify_rec(LOW(f), LOW(d));
 	else {
 	  PUSHREF(simplify_rec(LOW(f), LOW(d)));
@@ -3724,7 +3724,7 @@ class Buddy
      * - and instead of reading the whole array afterwards, we just
      *   look from 'min' to 'max' used BDD variables.
      */
-    if(supportID is 0x0FFFFFFF)
+    if(supportID == 0x0FFFFFFF)
       {
 	/* We probably don't get here -- but let's just be sure */
 	for(int i = 0; i < _varNum; ++i)
@@ -3741,7 +3741,7 @@ class Buddy
     bdd_disable_reorder();
 
     for(n = supportMax; n >= supportMin; --n)
-      if(supportSet[n] is supportID)
+      if(supportSet[n] == supportID)
 	{
 	  int tmp;
 	  addRef(res);
@@ -3761,7 +3761,7 @@ class Buddy
     if(r < 2)
       return;
 
-    if(MARKED(r) || LOW(r) is INVALID_BDD)
+    if(MARKED(r) || LOW(r) == INVALID_BDD)
       return;
 
     support[LEVEL(r)] = supportID;
@@ -3808,16 +3808,16 @@ class Buddy
 	  appexid =(var << 5) |(appexop << 1) | 1; /* FIXME: range! */
 	  quantid =(appexid << 3) | CACHEID_APPAL;
 
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_disable_reorder();
 	  res = appquant_rec(l, r);
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_enable_reorder();
 	} catch(ReorderException x)
 	  {
 	    bdd_checkreorder();
 
-	    if(--firstReorder is 0)
+	    if(--firstReorder == 0)
 	      continue; // again;
 	    res = BDDZERO;
 	    /* avoid warning about res being uninitialized */
@@ -3863,15 +3863,15 @@ class Buddy
 	  appexid =(var << 5) |(appexop << 1) | 1; /* FIXME: range! */
 	  quantid =(appexid << 3) | CACHEID_APPUN;
 
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_disable_reorder();
 	  res = appuni_rec(l, r, var);
-	  if(firstReorder is 0)
+	  if(firstReorder == 0)
 	    bdd_enable_reorder();
 	} catch(ReorderException x)
 	  {
 	    bdd_checkreorder();
-	    if(--firstReorder is 0)
+	    if(--firstReorder == 0)
 	      continue; // again;
 	    res = BDDZERO;
 	    /* avoid warning about res being uninitialized */
@@ -3907,7 +3907,7 @@ class Buddy
     if(r < 2)
       return r;
 
-    if(LOW(r) is 0)
+    if(LOW(r) == 0)
       {
 	int res = satone_rec(HIGH(r));
 	int m = bdd_makenode(LEVEL(r), BDDZERO, res);
@@ -3928,7 +3928,7 @@ class Buddy
     int res;
 
     CHECKa(r, bddFalse);
-    if(r is 0)
+    if(r == 0)
       return r;
     if(pol > 1)
       {
@@ -3955,7 +3955,7 @@ class Buddy
 
     if(LEVEL(r) < LEVEL(var))
       {
-	if(LOW(r) is 0)
+	if(LOW(r) == 0)
 	  {
 	    int res = satoneset_rec(HIGH(r), var);
 	    int m = bdd_makenode(LEVEL(r), BDDZERO, res);
@@ -3971,7 +3971,7 @@ class Buddy
       } else if(LEVEL(var) < LEVEL(r))
       {
 	int res = satoneset_rec(r, HIGH(var));
-	if(satPolarity is BDDONE)
+	if(satPolarity == BDDONE)
 	  {
 	    int m = bdd_makenode(LEVEL(var), BDDZERO, res);
 	    PUSHREF(m);
@@ -3981,8 +3981,8 @@ class Buddy
 	  PUSHREF(m);
 	  return m;
 	}
-      } else /* LEVEL(r) is LEVEL(var) */ {
-      if(LOW(r) is 0)
+      } else /* LEVEL(r) == LEVEL(var) */ {
+      if(LOW(r) == 0)
 	{
 	  int res = satoneset_rec(HIGH(r), HIGH(var));
 	  int m = bdd_makenode(LEVEL(r), BDDZERO, res);
@@ -4006,7 +4006,7 @@ class Buddy
     // int v;
 
     CHECKa(r, bddFalse);
-    if(r is 0)
+    if(r == 0)
       return 0;
 
     bdd_disable_reorder();
@@ -4065,7 +4065,7 @@ class Buddy
     int v;
 
     CHECKa(r, bddFalse);
-    if(r is 0)
+    if(r == 0)
       return 0;
 
     bdd_disable_reorder();
@@ -4234,13 +4234,13 @@ class Buddy
   {
     double size;
 
-    if(r is 0)
+    if(r == 0)
       return 0.0;
-    if(r is 1)
+    if(r == 1)
       return 1.0;
 
     BddCacheData* entry = _countCache.lookup(PATHCOUHASH(r));
-    if((*entry).a is r &&(*entry).c is miscid)
+    if((*entry).a == r &&(*entry).c == miscid)
       return(*entry).dres;
 
     size = bdd_pathcount_rec(LOW(r)) + bdd_pathcount_rec(HIGH(r));
@@ -4275,13 +4275,13 @@ class Buddy
 
   double bdd_log2pathcount_rec(int r)
   {
-    if(r is 0)
+    if(r == 0)
       return log2(0.0);		// -inf
-    if(r is 1)
+    if(r == 1)
       return log2(1.0);		// 0
 
     BddCacheData* entry = _log2countCache.lookup(LOG2PATHCOUHASH(r));
-    if((*entry).a is r &&(*entry).c is miscid)
+    if((*entry).a == r &&(*entry).c == miscid)
       return(*entry).dres;
 
     auto size = log2add(bdd_log2pathcount_rec(LOW(r)),
@@ -4315,17 +4315,17 @@ class Buddy
 
   void allsat_rec(int r, byte[][] result)
   {
-    if(r is 1)
+    if(r == 1)
       {
 	byte[] b = allsatProfile[0.._varNum].dup;
 	result ~= b;
 	return;
       }
 
-    if(r is 0)
+    if(r == 0)
       return;
 
-    if(!LOW(r) is 0)
+    if(!LOW(r) == 0)
       {
 	int v;
 
@@ -4339,7 +4339,7 @@ class Buddy
 	allsat_rec(LOW(r), result);
       }
 
-    if(!HIGH(r) is 0)
+    if(!HIGH(r) == 0)
       {
 	int v;
 
@@ -4409,7 +4409,7 @@ class Buddy
     double unused = _varNum;
     int n;
 
-    if(varset < 2 || r is 0) /* empty set */
+    if(varset < 2 || r == 0) /* empty set */
       return 0.0;
 
     for(n = varset; n > 1; n = HIGH(n))
@@ -4458,7 +4458,7 @@ class Buddy
       return log2(root);
 
     BddCacheData* entry = _log2countCache.lookup(LOG2SATCOUHASH(root));
-    if((*entry).a is root &&(*entry).c is miscid)
+    if((*entry).a == root &&(*entry).c == miscid)
       return(*entry).dres;
 
     auto llr = LEVEL(LOW(root)) - LEVEL(root) - 1;
@@ -4482,7 +4482,7 @@ class Buddy
       return root;
 
     BddCacheData* entry = _countCache.lookup(SATCOUHASH(root));
-    if((*entry).a is root &&(*entry).c is miscid)
+    if((*entry).a == root &&(*entry).c == miscid)
       return(*entry).dres;
 
     size = 0;
@@ -4508,7 +4508,7 @@ class Buddy
     int n;
     long c2, c1 = clock();
 
-    if(gbc_enabled is true) 
+    if(gbc_enabled == true) 
       {
       //if(gbc_handler != NULL)
 	// {
@@ -4578,13 +4578,13 @@ class Buddy
 
   int addRef(int root)
   {
-    if(root is INVALID_BDD)
+    if(root == INVALID_BDD)
       bdd_error(BddError.BDD_BREAK); /* distinctive */
     if(root < 2 || !isRunning())
       return root;
     if(root >= _nodeSize)
       return bdd_error(BddError.BDD_ILLBDD);
-    if(LOW(root) is INVALID_BDD)
+    if(LOW(root) == INVALID_BDD)
       return bdd_error(BddError.BDD_ILLBDD);
 
     INCREF(root);
@@ -4594,13 +4594,13 @@ class Buddy
 
   int delRef(int root)
   {
-    if(root is INVALID_BDD)
+    if(root == INVALID_BDD)
       bdd_error(BddError.BDD_BREAK); /* distinctive */
     if(root < 2 || !isRunning())
       return root;
     if(root >= _nodeSize)
       return bdd_error(BddError.BDD_ILLBDD);
-    if(LOW(root) is INVALID_BDD)
+    if(LOW(root) == INVALID_BDD)
       return bdd_error(BddError.BDD_ILLBDD);
 
     /* if the following line is present, fails there much earlier */
@@ -4618,7 +4618,7 @@ class Buddy
     if(i < 2)
       return;
 
-    if(MARKED(i) || LOW(i) is INVALID_BDD)
+    if(MARKED(i) || LOW(i) == INVALID_BDD)
       return;
 
     SETMARK(i);
@@ -4633,7 +4633,7 @@ class Buddy
     if(i < 2)
       return;
 
-    if(MARKED(i) || LOW(i) is INVALID_BDD)
+    if(MARKED(i) || LOW(i) == INVALID_BDD)
       return;
 
     SETMARK(i);
@@ -4649,7 +4649,7 @@ class Buddy
     if(i < 2)
       return;
 
-    if(!MARKED(i) || LOW(i) is INVALID_BDD)
+    if(!MARKED(i) || LOW(i) == INVALID_BDD)
       return;
     UNMARK(i);
 
@@ -4666,7 +4666,7 @@ class Buddy
     debug(CACHESTATS) {_cacheStats.uniqueAccess++;}
 
     /* check whether childs are equal */
-    if(low is high)
+    if(low == high)
       return low;
 
     /* Try to find an existing node of this kind */
@@ -4675,8 +4675,8 @@ class Buddy
 
     while(res != 0)
       {
-	if(LEVEL(res) is level
-	   && LOW(res) is low && HIGH(res) is high)
+	if(LEVEL(res) == level
+	   && LOW(res) == low && HIGH(res) == high)
 	  {
 	    debug(CACHESTATS) {_cacheStats.uniqueHit++;}
 	    return res;
@@ -4690,7 +4690,7 @@ class Buddy
     debug(CACHESTATS) {_cacheStats.uniqueMiss++;}
 
     /* Any free _nodes to use ? */
-    if(_freePos is 0)
+    if(_freePos == 0)
       {
 	if(_errorCond != 0)
 	  return 0;
@@ -4711,7 +4711,7 @@ class Buddy
 	  }
 
 	/* Panic if that is not possible */
-	if(_freePos is 0)
+	if(_freePos == 0)
 	  {
 	    bdd_error(BddError.BDD_NODENUM);
 	    _errorCond = abs(BddError.BDD_NODENUM);
@@ -5233,7 +5233,7 @@ class Buddy
 	p.result[level] = p.result[level + 1];
 	p.result[level + 1] = tmp;
 
-	if(p.last is level)
+	if(p.last == level)
 	  p.last++;
       }
   }
@@ -5285,9 +5285,9 @@ class Buddy
 
   bool bdd_reorder_ready()
   {
-    if((bddreordermethod is ReorderMethod.NONE)
+    if((bddreordermethod == ReorderMethod.NONE)
        ||(vartree is null)
-       ||(bddreordertimes is 0)
+       ||(bddreordertimes == 0)
        ||(reorderdisabled != 0))
       return false;
     return true;
@@ -5455,7 +5455,7 @@ class Buddy
 
     for(i = from + 1, j = to - 1; i + 1 != j;)
       {
-	if(target[i] is mid)
+	if(target[i] == mid)
 	  {
 	    target[i] = target[i + 1];
 	    target[i + 1] = mid;
@@ -5498,7 +5498,7 @@ class Buddy
 	  {
 	    blockdown(dis.prev);
 	    dis = dis.next;
-	  } else if(first is dis)
+	  } else if(first == dis)
 	  first = dis.prev;
 
 	if(_verbose > 1)
@@ -6059,7 +6059,7 @@ class Buddy
 	    {
 	      blockdown(dis.prev);
 	      dis = dis.next;
-	    } else if(first is dis)
+	    } else if(first == dis)
 	    first = dis.prev;
 	  if(_verbose > 1)
 	    {
@@ -6088,7 +6088,7 @@ class Buddy
 
   int bdd_reorder_gain()
   {
-    if(usednum_before is 0)
+    if(usednum_before == 0)
       return 0;
 
     return(100 *(usednum_before - usednum_after)) / usednum_before;
@@ -6163,7 +6163,7 @@ class Buddy
 
   int bdd_setmaxnodenum(int size)
   {
-    if(size > _nodeSize || size is 0)
+    if(size > _nodeSize || size == 0)
       {
 	int old = _maxNodeSize;
 	_maxNodeSize = size;
@@ -6227,7 +6227,7 @@ class Buddy
 
     if(r <= 0)
       return bdd_error(BddError.BDD_RANGE);
-    if(_nodeSize is 0)
+    if(_nodeSize == 0)
       return old;
 
     cacheratio = r;
@@ -6328,7 +6328,7 @@ class Buddy
 
     if(num < _varNum)
       return bdd_error(BddError.BDD_DECVNUM);
-    if(num is _varNum)
+    if(num == _varNum)
       return 0;
 
     _varSet.length = num * 2;
@@ -6640,7 +6640,7 @@ class Buddy
   {
     if(var < 0 || var >= _varNum)
       return bdd_error(BddError.BDD_VAR);
-    if(_var2Level[var] is 0)
+    if(_var2Level[var] == 0)
       return 0;
     return reorder_vardown(_level2Var[_var2Level[var] - 1]);
   }
@@ -6832,14 +6832,14 @@ class Buddy
 	int f00, f01, f10, f11;
 
 	/* Find the cofactors for the new _nodes */
-	if(VARr(f0) is var1)
+	if(VARr(f0) == var1)
 	  {
 	    f00 = LOW(f0);
 	    f01 = HIGH(f0);
 	  } else
 	  f00 = f01 = f0;
 
-	if(VARr(f1) is var1)
+	if(VARr(f1) == var1)
 	  {
 	    f10 = LOW(f1);
 	    f11 = HIGH(f1);
@@ -6950,14 +6950,14 @@ class Buddy
 	int f00, f01, f10, f11, hash;
 
 	/* Find the cofactors for the new _nodes */
-	if(VARr(f0) is var1)
+	if(VARr(f0) == var1)
 	  {
 	    f00 = LOW(f0);
 	    f01 = HIGH(f0);
 	  } else
 	  f00 = f01 = f0;
 
-	if(VARr(f1) is var1)
+	if(VARr(f1) == var1)
 	  {
 	    f10 = LOW(f1);
 	    f11 = HIGH(f1);
@@ -7012,7 +7012,7 @@ class Buddy
        there is no need to add reference *recursively* */
 
     /* check whether childs are equal */
-    if(low is high)
+    if(low == high)
       {
 	INCREF(low);
 	return low;
@@ -7024,7 +7024,7 @@ class Buddy
 
     while(res != 0)
       {
-	if(LOW(res) is low && HIGH(res) is high)
+	if(LOW(res) == low && HIGH(res) == high)
 	  {
 	    debug(CACHESTATS) {_cacheStats.uniqueHit++;}
 	    INCREF(res);
@@ -7039,7 +7039,7 @@ class Buddy
     debug(CACHESTATS) {_cacheStats.uniqueMiss++;}
 
     /* Any free _nodes to use ? */
-    if(_freePos is 0)
+    if(_freePos == 0)
       {
 	if(_errorCond != 0)
 	  return 0;
@@ -7052,7 +7052,7 @@ class Buddy
 	resizedInMakenode = true;
 
 	/* Panic if that is not possible */
-	if(_freePos is 0)
+	if(_freePos == 0)
 	  {
 	    bdd_error(BddError.BDD_NODENUM);
 	    _errorCond = abs(BddError.BDD_NODENUM);
@@ -7118,9 +7118,9 @@ class Buddy
   {
     for(int n = 2; n < _nodeSize; n++)
       {
-	if(LOW(n) is INVALID_BDD) continue;
+	if(LOW(n) == INVALID_BDD) continue;
 	int lev = LEVEL(n);
-	if(lev <= levToInsert || lev is _varNum-1)
+	if(lev <= levToInsert || lev == _varNum-1)
 	  {
 	    // Stays the same.
 	    continue;
@@ -7139,14 +7139,14 @@ class Buddy
 	    r2 = r;
 	    r = NEXT(r);
 	  }
-	if(r is 0)
+	if(r == 0)
 	  {
 	    // Cannot find node in the hash chain ?!
 	    throw new BddException("Internal Error");
 	  }
 	// Remove from this hash chain.
 	int NEXT_r = NEXT(r);
-	if(r2 is 0)
+	if(r2 == 0)
 	  {
 	    SETHASH(hash, NEXT_r);
 	  } else {
@@ -7167,9 +7167,9 @@ class Buddy
   {
     for(int n = 2; n < _nodeSize; n++)
       {
-	if(LOW(n) is INVALID_BDD) continue;
+	if(LOW(n) == INVALID_BDD) continue;
 	int lev = LEVEL(n);
-	if(lev != levToInsert || lev is _varNum-1)
+	if(lev != levToInsert || lev == _varNum-1)
 	  {
 	    // Stays the same.
 	    continue;
@@ -7199,14 +7199,14 @@ class Buddy
 	    r2 = r;
 	    r = NEXT(r);
 	  }
-	if(r is 0)
+	if(r == 0)
 	  {
 	    // Cannot find node in the hash chain ?!
 	    throw new BddException("Internal Error");
 	  }
 	// Remove from this hash chain.
 	int NEXT_r = NEXT(r);
-	if(r2 is 0)
+	if(r2 == 0)
 	  {
 	    SETHASH(hash, NEXT_r);
 	  } else {
@@ -7539,7 +7539,7 @@ class Buddy
       return bdd_error(BddError.BDD_VARBLK);
 
     /* Don't bother swapping x with x */
-    if(v1 is v2)
+    if(v1 == v2)
       return 0;
 
     /* Make sure the variable exists */
@@ -7632,7 +7632,7 @@ class Buddy
   //   vnum = Integer.parseInt(readNext(ifile));
 
   //   // Check for constant true / false
-  //   if(lh_nodenum is 0 && vnum is 0)
+  //   if(lh_nodenum == 0 && vnum == 0)
   // {
   //     root = Integer.parseInt(readNext(ifile));
   //     return root;
@@ -7727,7 +7727,7 @@ class Buddy
     while(hash != -1 && lh_table[hash].key != key)
       hash = lh_table[hash].next;
 
-    if(hash is -1)
+    if(hash == -1)
       return -1;
     return lh_table[hash].data;
   }
@@ -7860,7 +7860,7 @@ class Buddy
       }
 
     /* Check for identity */
-    if(first is t.first && last is t.last)
+    if(first == t.first && last == t.last)
       return t;
 
     /* Before this section -> insert */
@@ -8090,7 +8090,7 @@ class Buddy
     int num = cast(int) domainSizes.length;
 
     /* Build _domain table */
-    if(_domain.length is 0) /* First time */ {
+    if(_domain.length == 0) /* First time */ {
       _domain.length = num;
     } else /* Allocated before */ {
       if(fdvarnum + num > _domain.length)
@@ -8387,7 +8387,7 @@ class Buddy
 				    this.varNum(), ",",
 				    that.varNum()));
 
-      if(value is 0L)
+      if(value == 0L)
 	{
 	  bdd result = one();
 	  int n;
@@ -8506,7 +8506,7 @@ class Buddy
 		v.andWith(nithVar(ivar[n]));
 	      }
 	      long mask =((cast(long) 1) << n) - 1;
-	      if(((lo &(1 << n)) is 0) &&
+	      if(((lo &(1 << n)) == 0) &&
 		 (lo | mask) <= hi)
 		{
 		  lo =(lo | mask) + 1;
@@ -8541,7 +8541,7 @@ class Buddy
 	  binsize++;
 	  calcsize = calcsize << 1;
 	}
-      if(ivar.length is binsize) return binsize;
+      if(ivar.length == binsize) return binsize;
 
       // int[] new_ivar = new int[binsize];
       // System.arraycopy(ivar, 0, new_ivar, 0, ivar.length);
@@ -8668,10 +8668,10 @@ class Buddy
 	  {
 	    for(int j=0; ; ++j)
 	      {
-		if(j is nDomains)
+		if(j == nDomains)
 		  throw new BddException("bad domain: " ~ sd);
 		d = getDomain(j);
-		if(d.getName() is sd) break;
+		if(d.getName() == sd) break;
 	      }
 	    if(done[d.getIndex()])
 	      throw new BddException("duplicate domain: " ~ sd);
@@ -8776,7 +8776,7 @@ class Buddy
       long aval = abs(val);
       for(uint _bits=1; _bits != 64; ++_bits)
 	if((1L << _bits) > aval) {
-	  if(aval is val) return _bits; // positive numbers
+	  if(aval == val) return _bits; // positive numbers
 	  else return _bits + 1; // neg numbers need another bit for sign
 	}
       return 64;
@@ -8967,7 +8967,7 @@ class Buddy
       for(n = 0; n < minnum; n++)
 	dst.bitvec[n] = bitvec[n].dup();
       for(uint m = n; m < bitnum; m++)
-	if(this._signed is false)
+	if(this._signed == false)
 	  dst.bitvec[m] = zero();
 	else			// extend sign
 	  dst.bitvec[m] = bitvec[n-1].dup();
@@ -9212,7 +9212,7 @@ class Buddy
     public override BddVec mul(long c)
     {
       BddVec next = buildVec(size, false);
-      if(c is 0) return next;	// base case
+      if(c == 0) return next;	// base case
 
       for(size_t n=1 ; n < size ; n++)
 	next.bitvec[n] = bitvec[n-1];
@@ -9497,7 +9497,7 @@ class Buddy
     {
       bdd p = equalP ? one() : zero();
 
-      if(this.size is 0  ||  that.size is 0)
+      if(this.size == 0  ||  that.size == 0)
 	return zero;
 
       // if(this.size != that.size)
@@ -9577,7 +9577,7 @@ class Buddy
     {
       bdd p = one;
 
-      if(this.size is 0  ||  r.size is 0)
+      if(this.size == 0  ||  r.size == 0)
 	return zero;
 
       // if(this.size != r.size)
@@ -9796,7 +9796,7 @@ class Buddy
 	  {
 	    foreach(int i, ref c; gc_callbacks)
 	      {
-		if(c is cb)
+		if(c == cb)
 		  {
 		    gc_callbacks[i] = gc_callbacks[$-1];
 		    gc_callbacks.length -= 1;
@@ -9808,7 +9808,7 @@ class Buddy
 	  {
 	    foreach(int i, ref c; reorder_callbacks)
 	      {
-		if(c is cb)
+		if(c == cb)
 		  {
 		    reorder_callbacks[i] = reorder_callbacks[$-1];
 		    reorder_callbacks.length -= 1;
@@ -9820,7 +9820,7 @@ class Buddy
 	  {
 	    foreach(int i, ref c; resize_callbacks)
 	      {
-		if(c is cb)
+		if(c == cb)
 		  {
 		    resize_callbacks[i] = resize_callbacks[$-1];
 		    resize_callbacks.length -= 1;
@@ -9834,7 +9834,7 @@ class Buddy
 
   protected void gbc_handler(bool pre, GCStats s)
   {
-    if(gc_callbacks.length is 0)
+    if(gc_callbacks.length == 0)
       {
 	bdd_default_gbchandler(pre, s);
       } else {
@@ -9921,7 +9921,7 @@ class Buddy
 
     public int gain()
     {
-      if(usednum_before is 0)
+      if(usednum_before == 0)
 	return 0;
 
       return(100 *(usednum_before - usednum_after)) / usednum_before;
@@ -10029,7 +10029,7 @@ private ulong mulmod(ulong a, ulong b, ulong c) {
 // {
 //   uint b;
 
-//   if (src is 0)
+//   if (src == 0)
 //     return 0;
   
 //   for (b=(uint.sizeof *8)-1 ; b>0 ; --b)
@@ -10056,7 +10056,7 @@ private bool isWitness(uint witness, uint src)
       d = cast(uint) mulmod(d, d, src);
       // writeln("d: ", d, " i: ", i);
     
-      if (d is 1  &&  x != 1  &&  x != src-1)
+      if (d == 1  &&  x != 1  &&  x != src-1)
 	return true;
     
       if (bitIsSet(src-1, i))
@@ -10090,7 +10090,7 @@ private bool isMillerRabinPrime(uint src)
 }
 
 // want to return a false if the arguments are equal
-private bool hasFactor(uint n, uint m) {return n != m && n % m is 0;}
+private bool hasFactor(uint n, uint m) {return n != m && n % m == 0;}
 
 private bool hasEasyFactors(uint src)
 {
