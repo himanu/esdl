@@ -791,6 +791,8 @@ struct BDD
 
   public BDD randSatOne(double rand, double[uint] dist)
   {
+    // import std.stdio;
+    // writeln(rand);
     return makeBdd(root.bdd_randsatone(rand, dist, _index));
   }
 
@@ -2109,7 +2111,15 @@ class Buddy
   {
     return r;
   }
+  static final int LOG2SATCOUHASH(int r)
+  {
+    return r;
+  }
   static final int PATHCOUHASH(int r)
+  {
+    return r;
+  }
+  static final int LOG2PATHCOUHASH(int r)
   {
     return r;
   }
@@ -3990,6 +4000,8 @@ class Buddy
 
   int bdd_randsatone(double rnd, ref double[uint] dist, int r)
   {
+    // import std.stdio;
+    // writeln(rnd, dist);
     int res;
     // int v;
 
@@ -4240,6 +4252,48 @@ class Buddy
     return size;
   }
 
+  double bdd_log2pathcount(int r)
+  {
+    CHECK(r);
+
+    miscid = CACHEID_LOG2PATHCOU;
+
+    _log2countCache.initIfNull(_cacheSize);
+
+    return bdd_log2pathcount_rec(r);
+  }
+
+  double log2add(double a, double b) {
+    // well, suppose that x >= y, and that we are using the natural base:
+    // log(x + y) = log(x * (1 + y/x)) = log(x) + log(1 + y/x)
+    // y/x = exp(log(y/x)) = exp(log(y) - log(x))
+    // log(x + y) = log(x) + log(1 + exp(log(y) - log(x)))
+    auto x = max(a, b);
+    auto y = min(a, b);
+    return (x + log2(1 + (2.00 ^^ (y - x))));
+  }
+
+  double bdd_log2pathcount_rec(int r)
+  {
+    if(r is 0)
+      return log2(0.0);		// -inf
+    if(r is 1)
+      return log2(1.0);		// 0
+
+    BddCacheData* entry = _log2countCache.lookup(LOG2PATHCOUHASH(r));
+    if((*entry).a is r &&(*entry).c is miscid)
+      return(*entry).dres;
+
+    auto size = log2add(bdd_log2pathcount_rec(LOW(r)),
+		   bdd_log2pathcount_rec(HIGH(r)));
+
+    (*entry).a = r;
+    (*entry).c = miscid;
+    (*entry).dres = size;
+
+    return size;
+  }
+
   void bdd_allsat(int r, byte[][] result)
   {
     int v;
@@ -4303,8 +4357,32 @@ class Buddy
   void bdd_satdist(int r, ref double[uint] dist)
   {
     // make sure that bdd_satcount has already initialized the sizes
-    bdd_satcount(r);
+    version(NOLOG2) {
+      bdd_satcount(r);
+    }
+    else {
+      bdd_log2satcount(r);
+    }
     satdist_rec(r, dist);
+  }
+
+  double bdd_log2satcount(int r)
+  {
+    double size = 1;
+
+    CHECK(r);
+
+    _log2countCache.initIfNull(_cacheSize);
+
+    miscid = CACHEID_LOG2SATCOU;
+    size = LEVEL(r);
+
+    // import std.stdio;
+    // double s = satcount_rec(r);
+    // writeln("s is: ", s);
+    // writeln("level of r is: ", LEVEL(r));
+
+    return size + log2satcount_rec(r);
   }
 
   double bdd_satcount(int r)
@@ -4316,7 +4394,7 @@ class Buddy
     _countCache.initIfNull(_cacheSize);
 
     miscid = CACHEID_SATCOU;
-    size = cast(double)(2 ^^ LEVEL(r));
+    size = 2.0 ^^ LEVEL(r);
 
     // import std.stdio;
     // double s = satcount_rec(r);
@@ -4337,7 +4415,7 @@ class Buddy
     for(n = varset; n > 1; n = HIGH(n))
       unused--;
 
-    unused = bdd_satcount(r) / cast(double)(2 ^^ unused);
+    unused = bdd_satcount(r) / cast(double)(2.00 ^^ unused);
 
     return unused >= 1.0 ? unused : 1.0;
   }
@@ -4348,17 +4426,52 @@ class Buddy
 
     if(root in dist) return;
 
-    double lCount = (2.0 ^^ (LEVEL(LOW(root)) - LEVEL(root) - 1)) *
-      satcount_rec(LOW(root));
-    double hCount = (2.0 ^^ (LEVEL(HIGH(root)) - LEVEL(root) - 1)) *
-      satcount_rec(HIGH(root));
+    version(NOLOG2) {
+      double lCount = (2.0 ^^ (LEVEL(LOW(root)) - LEVEL(root) - 1)) *
+	satcount_rec(LOW(root));
+      double hCount = (2.0 ^^ (LEVEL(HIGH(root)) - LEVEL(root) - 1)) *
+	satcount_rec(HIGH(root));
 
-    double limit = lCount/(hCount + lCount);
+      double limit = lCount/(lCount + hCount);
+      // import std.stdio;
+      // writeln("lCount: ", lCount, " hCount: ", hCount, " limit: ", limit);
+    }
+    else {
+      auto log2l = log2satcount_rec(LOW(root)) + LEVEL(LOW(root)) - LEVEL(root) - 1;
+      auto log2h = log2satcount_rec(HIGH(root)) + LEVEL(HIGH(root)) - LEVEL(root) - 1;
+
+      auto limit = 1.0 / (1.0 + 2.0 ^^ (log2h - log2l));
+      // import std.stdio;
+      // writeln("log2l: ", log2l, " log2h: ", log2h, " limit: ", limit);
+    }      
 
     dist[root] = limit;
 
     satdist_rec(LOW(root), dist);
     satdist_rec(HIGH(root), dist);
+  }
+
+
+  double log2satcount_rec(int root)
+  {
+    if(root < 2)
+      return log2(root);
+
+    BddCacheData* entry = _log2countCache.lookup(LOG2SATCOUHASH(root));
+    if((*entry).a is root &&(*entry).c is miscid)
+      return(*entry).dres;
+
+    auto llr = LEVEL(LOW(root)) - LEVEL(root) - 1;
+    auto lhr = LEVEL(HIGH(root)) - LEVEL(root) - 1;
+
+    auto size = log2add(llr + log2satcount_rec(LOW(root)),
+			lhr + log2satcount_rec(HIGH(root)));
+
+    (*entry).a = root;
+    (*entry).c = miscid;
+    (*entry).dres = size;
+
+    return size;
   }
 
   double satcount_rec(int root)
@@ -4375,11 +4488,11 @@ class Buddy
     size = 0;
     s = 1;
 
-    s *= 2 ^^(LEVEL(LOW(root)) - LEVEL(root) - 1);
+    s *= 2.0 ^^(LEVEL(LOW(root)) - LEVEL(root) - 1);
     size += s * satcount_rec(LOW(root));
 
     s = 1;
-    s *= 2 ^^(LEVEL(HIGH(root)) - LEVEL(root) - 1);
+    s *= 2.0 ^^(LEVEL(HIGH(root)) - LEVEL(root) - 1);
     size += s * satcount_rec(HIGH(root));
 
     (*entry).a = root;
@@ -4753,6 +4866,8 @@ class Buddy
   enum int CACHEID_SATCOU = 0x2;
   enum int CACHEID_SATCOULN = 0x3;
   enum int CACHEID_PATHCOU = 0x4;
+  enum int CACHEID_LOG2PATHCOU = 0x5;
+  enum int CACHEID_LOG2SATCOU = 0x5;
 
   /* Hash value modifiers for replace/compose */
   enum int CACHEID_REPLACE = 0x0;
@@ -4808,6 +4923,7 @@ class Buddy
   BddCache _reaplceCache; /* Cache for replace results */
   BddCache _miscCache; /* Cache for other results */
   BddCache _countCache; /* Cache for count results */
+  BddCache _log2countCache; /* Cache for count results */
   int cacheratio;
   int satPolarity;
   int firstReorder;
@@ -4828,6 +4944,7 @@ class Buddy
 	_reaplceCache.init(cachesize);
 	_miscCache.init(cachesize);
 	_countCache.init(cachesize);
+	_log2countCache.init(cachesize);
       }
 
     quantvarsetID = 0;
@@ -4847,6 +4964,7 @@ class Buddy
     _reaplceCache.done();
     _miscCache.done();
     _countCache.done();
+    _log2countCache.done();
 
     supportSet.length = 0;
   }
@@ -4860,6 +4978,7 @@ class Buddy
     _reaplceCache.reset();
     _miscCache.reset();
     _countCache.reset();
+    _log2countCache.reset();
   }
 
   void bdd_operator_clean()
@@ -4871,6 +4990,7 @@ class Buddy
     _reaplceCache.clean_ab(this);
     _miscCache.clean_ab(this);
     _countCache.clean_d(this);
+    _log2countCache.clean_d(this);
   }
 
   void bdd_operator_varresize()
@@ -4883,6 +5003,7 @@ class Buddy
     quantvarsetID = 0;
 
     _countCache.reset();
+    _log2countCache.reset();
   }
 
   public int setCacheSize(int newcachesize)
@@ -4895,6 +5016,7 @@ class Buddy
     _reaplceCache.resize(newcachesize);
     _miscCache.resize(newcachesize);
     _countCache.resize(newcachesize);
+    _log2countCache.resize(newcachesize);
     return old;
   }
 
@@ -4911,6 +5033,7 @@ class Buddy
 	_reaplceCache.resize(newcachesize);
 	_miscCache.resize(newcachesize);
 	_countCache.resize(newcachesize);
+	_log2countCache.resize(newcachesize);
       }
   }
 
@@ -9542,6 +9665,7 @@ class Buddy
     INSTANCE._reaplceCache = this._reaplceCache.copy();
     INSTANCE._miscCache = this._miscCache.copy();
     INSTANCE._countCache = this._countCache.copy();
+    INSTANCE._log2countCache = this._log2countCache.copy();
     // TODO: potential difference here(!)
     INSTANCE._verbose = this._verbose;
     INSTANCE._cacheStats.copyFrom(this._cacheStats);
