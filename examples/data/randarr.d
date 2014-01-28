@@ -9,38 +9,50 @@ import esdl.data.rand;
 import esdl.data.obdd;
 import esdl.data.bvec;
 
-class Bar: Randomizable
+class Foo: Randomizable
 {
-  @rand!16 byte[] foo;
+  mixin(randomization());
+  @rand!8 byte[] foo;
+  @rand ubyte baz = 12;
+  void display() {}
+}
+
+class Bar: Foo
+{
+  mixin(randomization());
+  // @rand!8 byte[] foo;
   @rand byte[8] bar;
 
-  @rand ubyte baz = 12;
 
-  void display() {
+  override void display() {
     writeln("foo: ", foo);
     writeln("bar: ", bar);
     writeln("baz: ", baz);
   }
 
   Constraint! q{
-    foo.length > 7;
+    foo.length > 2;
     baz < 16;
   } cstFooLength;
 
   Constraint! q{
-    // foreach(i, f; foo) {
-    //   f < 64;
-    //   f > 16;
-    // }
+    foreach(i, f; foo) {
+      f < 64;
+      f > 16;
+    }
+    
+    foreach(i, f; bar) {
+      f <= i;
+      f >= 0;
+    }
   } cstFoo;
 
 }
 
 void main()
 {
-  auto foo = new Bar;
-  for (size_t i=0; i!=32; ++i)
-    {
+  Foo foo = new Bar;
+  for (size_t i=0; i!=16; ++i) {
       foo.randomize();
       foo.display();
     }
