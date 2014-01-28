@@ -573,8 +573,31 @@ private template _esdl__randIndexof(string var, int index=0) {
 
 interface RandomizableIntf
 {
+  static final string randomization() {
+    enum string _esdl__vRand =
+      q{
+      alias typeof(this) _esdl__RandType;
+      override public _esdl__RandType _esdl__typeID() {
+	return null;
+      }
+      override public bool _esdl__virtualRandomize() {
+	return _esdl__randomize!_esdl__RandType(this);
+      }
+    };
+    return _esdl__vRand;
+  }
+
   static final string _esdl__randomizable() {
     return q{
+
+      alias typeof(this) _esdl__RandType;
+      public _esdl__RandType _esdl__typeID() {
+	return null;
+      }
+
+      public bool _esdl__virtualRandomize() {
+	return _esdl__randomize!_esdl__RandType(this);
+      }
 
       public ConstraintEngine _esdl__cstEng;
       public uint _esdl__randSeed;
@@ -685,7 +708,7 @@ void _esdl__initLengthCsts(size_t I=0, size_t CI=0, size_t RI=0, T)(T t, ref BDD
 		   && is(B[0] : RandomizableIntf)
 		   && is(B[0] == class)) {
 	B[0] b = t;
-	_esdl__initLengthCsts!(0, CI) (b, solveBDD, stage);
+	_esdl__initLengthCsts!(0, CI, RI) (b, solveBDD, stage);
       }
   }
 
@@ -749,6 +772,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 	  else {
 	    t.tupleof[I].length = vecVal.value;
 	  }
+	  assert(vecVal !is null);
 	  foreach(idx, ref v; t.tupleof[I]) {
 	    import std.range;
 	    auto elemVal = vecVal[idx];
@@ -904,6 +928,17 @@ template isVarSigned(L) {
 public bool randomize(T) (ref T t)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
+    static if(is(typeof(t._esdl__typeID()) == T)) {
+      return t._esdl__virtualRandomize();
+    }
+    else {
+      return _esdl__randomize(t);
+    }
+  }
+
+public bool _esdl__randomize(T) (ref T t)
+  if(is(T v: RandomizableIntf) &&
+     is(T == class)) {
     import std.exception;
     import std.conv;
 
@@ -919,18 +954,15 @@ public bool randomize(T) (ref T t)
 
     auto values = t._esdl__cstEng._cstRands;
 
-    foreach(rnd; t._esdl__cstEng._cstRands) {
+    foreach(rnd; values) {
       if(rnd !is null) {
 	// stages would be assigned again from scratch
 	rnd.reset();
-	
 	// FIXME -- Perhaps some other fields too need to be reinitialized
       }
     }
 
     t._esdl__cstEng.solve();
-
-    values = t._esdl__cstEng._cstRands;
 
     _esdl__setRands(t, values, t._esdl__cstEng._rgen);
 
@@ -1946,7 +1978,7 @@ if(is(T unused: RandomizableIntf) && is(T == class)) {
       return F!(VAR, I, CI, RI)(t);
     }
     else {
-      static if(findRandAttr!(I, t) != -1) {
+      static if(findRandAttr!(I, t)) {
 	return _esdl__randNamedApply!(VAR, F, I+1, CI+1, RI+1) (t);
       }
       else {
@@ -2085,11 +2117,11 @@ public CstVecPrim _esdl__cstRandArrLength(string VAR, size_t I,
   else static if(isBitVector!E)  uint bitcount = E.SIZE;
 
 
-  if(findRandAttr!(I, t) == -1) { // no @rand attr
+  if(! findRandAttr!(I, t)) { // no @rand attr
     return _esdl__cstRand(t.tupleof[I].length, t);
   }
   else static if(isDynamicArray!L) { // @rand!N form
-      enum RLENGTH = findRandArrayAttr!(I, t);
+      enum size_t RLENGTH = findRandArrayAttr!(I, t);
       static assert(RLENGTH != -1);
       auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
       if(cstVecPrim is null) {
@@ -2100,11 +2132,11 @@ public CstVecPrim _esdl__cstRandArrLength(string VAR, size_t I,
       return cstVecPrim;
     }
   else static if(isStaticArray!L) { // @rand with static array
-      enum ISRAND = findRandElemAttr!(I, t);
-      static assert(ISRAND !is -1);
+      static assert(findRandElemAttr!(I, t) != -1);
       auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
+      size_t RLENGTH = t.tupleof[I].length;
       if(cstVecPrim is null) {
-	cstVecPrim = new CstVecRandArr(t.tupleof[I].stringof, t.tupleof[I].length,
+	cstVecPrim = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
 				       false, 32, false, signed, bitcount, true);
 	t._esdl__cstEng._cstRands[RI] = cstVecPrim;
       }
@@ -2129,7 +2161,7 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
   else static if(isBitVector!E)  uint bitcount = E.SIZE;
 
 
-  if(findRandAttr!(I, t) == -1) { // no @rand attr
+  if(! findRandAttr!(I, t)) { // no @rand attr
     return _esdl__cstRand(t.tupleof[I].length, t);
   }
   else {
@@ -2148,8 +2180,7 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
       }
     }
     else static if(isStaticArray!L) { // @rand with static array
-	enum ISRAND = findRandElemAttr!(I, t);
-	static assert(ISRAND !is -1);
+	static assert(findRandElemAttr!(I, t) != -1);
 	size_t RLENGTH = t.tupleof[I].length;
 	if(cstVecRandArr is null) {
 	  cstVecRandArr = new CstVecRandArr(t.tupleof[I].stringof, RLENGTH,
