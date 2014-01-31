@@ -772,15 +772,13 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 	  else {
 	    t.tupleof[I].length = vecVal.value;
 	  }
-	  assert(vecVal !is null);
 	  foreach(idx, ref v; t.tupleof[I]) {
 	    import std.range;
-	    auto elemVal = vecVal[idx];
-	    if(elemVal is null) {
+	    if(vecVal is null || vecVal[idx] is null) {
 	      v = rgen.gen!(ElementType!L);
 	    }
 	    else {
-	      v = cast(ElementType!L) elemVal.value;
+	      v = cast(ElementType!L) vecVal[idx].value;
 	    }
 	  }
 	  // t.tupleof[I] = rgen.gen!L;
@@ -928,6 +926,11 @@ template isVarSigned(L) {
 public bool randomize(T) (ref T t)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
+    // The idea is that if the end-user has used the randomization
+    // mixin then _esdl__RandType would be already available as an
+    // alias and we can use virtual randomize method in such an
+    // eventuality.
+    // static if(is(typeof(t._esdl__RandType) == T)) {
     static if(is(typeof(t._esdl__typeID()) == T)) {
       return t._esdl__virtualRandomize();
     }

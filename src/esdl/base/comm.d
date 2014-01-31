@@ -149,8 +149,66 @@ string declareWait(IF, string E, string CHANNEL)() {
 
   // Special case of Signals
   static if(is(IF unused == SignalOutIF!T, T)) {
+    import std.traits: isAssignable, isIntegral;
+    import esdl.data.bvec: isBitVector;
+    
     public void opAssign(T val) {
       this._portObj.channel.write(val);
+    }
+
+    public void opAssign(V) (V val)
+      if(isAssignable!(V, T) &&
+	 !is(T == V) &&
+	 !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
+	this._portObj.channel.write(cast(T) val);
+      }
+
+    static if(isBitVector!T) {
+      static if(T.SIZE >= 1) {
+	public void opAssign(bool val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 8 && T.ISSIGNED) {
+	public void opAssign(byte val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 8 && !T.ISSIGNED) {
+	public void opAssign(ubyte val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 16 && T.ISSIGNED) {
+	public void opAssign(short val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 16 && !T.ISSIGNED) {
+	public void opAssign(ushort val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 32 && T.ISSIGNED) {
+	public void opAssign(int val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 32 && !T.ISSIGNED) {
+	public void opAssign(uint val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 64 && T.ISSIGNED) {
+	public void opAssign(long val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
+      static if(T.SIZE >= 64 && !T.ISSIGNED) {
+	public void opAssign(ulong val) {
+	  this._portObj.channel.write(cast(T) val);
+	}
+      }
     }
 
     S to(S)() if(is(S == string)) {
@@ -1388,6 +1446,61 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     this.write(val);
   }
 
+  public void opAssign(V) (V val)
+    if(isAssignable!(V, T) &&
+       !is(T == V) &&
+       !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
+      this.write(cast(T) val);
+    }
+
+  static if(isBitVector!T) {
+    static if(T.SIZE >= 1) {
+      public void opAssign(bool val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 8 && T.ISSIGNED) {
+      public void opAssign(byte val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 8 && !T.ISSIGNED) {
+      public void opAssign(ubyte val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 16 && T.ISSIGNED) {
+      public void opAssign(short val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 16 && !T.ISSIGNED) {
+      public void opAssign(ushort val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 32 && T.ISSIGNED) {
+      public void opAssign(int val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 32 && !T.ISSIGNED) {
+      public void opAssign(uint val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 64 && T.ISSIGNED) {
+      public void opAssign(long val) {
+	this.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 64 && !T.ISSIGNED) {
+      public void opAssign(ulong val) {
+	this.write(cast(T) val);
+      }
+    }
+  }
+
   void registerPort(BasePort p) {
     static if(MULTI_DRIVER == false) {
       if(cast(PortObj!(SignalWriteIF!T)) p) {
@@ -1621,7 +1734,6 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
   alias _esdl__obj this;
 
-  // Disallow Signal assignment
   private auto opAssign(S)(S e)
     if(is(S unused: SignalObj!(T, M), bool M))
   {
@@ -1630,6 +1742,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     return ret;
   }
 
+  // Disallow Signal assignment
   // @disable private this(this);
 
   public void opAssign()(T val) {

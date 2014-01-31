@@ -20,7 +20,6 @@ class Foo: Randomizable
 class Bar: Foo
 {
   mixin(randomization());
-  // @rand!8 byte[] foo;
   @rand byte[8] bar;
 
 
@@ -49,8 +48,7 @@ class Bar: Foo
 
 }
 
-void main()
-{
+void main() {
   Foo foo = new Bar;
   for (size_t i=0; i!=16; ++i) {
       foo.randomize();
