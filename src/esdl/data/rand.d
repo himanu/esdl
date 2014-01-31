@@ -577,9 +577,7 @@ interface RandomizableIntf
     enum string _esdl__vRand =
       q{
       alias typeof(this) _esdl__RandType;
-      override public _esdl__RandType _esdl__typeID() {
-	return null;
-      }
+
       override public bool _esdl__virtualRandomize() {
 	return _esdl__randomize!_esdl__RandType(this);
       }
@@ -591,10 +589,6 @@ interface RandomizableIntf
     return q{
 
       alias typeof(this) _esdl__RandType;
-      public _esdl__RandType _esdl__typeID() {
-	return null;
-      }
-
       public bool _esdl__virtualRandomize() {
 	return _esdl__randomize!_esdl__RandType(this);
       }
@@ -928,7 +922,11 @@ template isVarSigned(L) {
 public bool randomize(T) (ref T t)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
-    static if(is(typeof(t._esdl__typeID()) == T)) {
+    // The idea is that if the end-user has used the randomization
+    // mixin then _esdl__RandType would be already available as an
+    // alias and we can use virtual randomize method in such an
+    // eventuality.
+    static if(is(typeof(t._esdl__RandType) == T)) {
       return t._esdl__virtualRandomize();
     }
     else {
