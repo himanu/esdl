@@ -48,7 +48,7 @@
 
 module esdl.data.cstx;
 
-enum Token: byte
+enum OpToken: byte
   {   NONE = 0,
       ADD,
       SUB,
@@ -65,7 +65,7 @@ enum Token: byte
       IMP,			// Implication operator
       AND,
       OR,
-      END,			// End of statement, semicolon
+      // END,			// End of statement, semicolon
       // VAR,			// An identifier or a literal
       // IF,			// A keyword, if, else, or foreach
       // ELSE,
@@ -73,59 +73,33 @@ enum Token: byte
       // RPL,			// A mapped variable
       }
       
-    
-
-enum Tokens: string
-  {   ADD = "+",
-      SUB = "-",
-      MUL = "*",
-      DIV = "/",
-      LSH = "<<",
-      RSH = ">>",
-      EQU = "==",
-      GTE = ">=",
-      LTE = "<=",
-      NEQ = "!=",
-      GTH = ">",
-      LTH = "<",
-      IMP = "=>", 		// Implication operator
-      AND = "&&",
-      OR  = "||",
-      LCMTS = "//",		// Line comment start
-      BCMTS = "/*",		// block comment start
-      NCMTS = "/+", 		// nested comment start
-      LCMTE = "/n",		// line comment end
-      BCMTE = "*/",		// block comment end
-      NCMTE = "+/",		// nested comment end
-      }
-
-Token parseOperator(string CST, ref size_t cursor) {
-  Token tok = Token.NONE;
+OpToken parseOperator(string CST, ref size_t cursor) {
+  OpToken tok = OpToken.NONE;
   if(cursor < CST.length - 1) {
-    if(CST[cursor] == '<' && CST[cursor+1] == '<') tok = Token.LSH;
-    if(CST[cursor] == '>' && CST[cursor+1] == '>') tok = Token.RSH;
-    if(CST[cursor] == '=' && CST[cursor+1] == '=') tok = Token.EQU;
-    if(CST[cursor] == '>' && CST[cursor+1] == '=') tok = Token.GTE;
-    if(CST[cursor] == '<' && CST[cursor+1] == '=') tok = Token.LTE;
-    if(CST[cursor] == '!' && CST[cursor+1] == '=') tok = Token.NEQ;
-    if(CST[cursor] == '&' && CST[cursor+1] == '&') tok = Token.AND;
-    if(CST[cursor] == '|' && CST[cursor+1] == '|') tok = Token.OR;
-    if(CST[cursor] == '=' && CST[cursor+1] == '>') tok = Token.IMP;
+    if(CST[cursor] == '<' && CST[cursor+1] == '<') tok = OpToken.LSH;
+    if(CST[cursor] == '>' && CST[cursor+1] == '>') tok = OpToken.RSH;
+    if(CST[cursor] == '=' && CST[cursor+1] == '=') tok = OpToken.EQU;
+    if(CST[cursor] == '>' && CST[cursor+1] == '=') tok = OpToken.GTE;
+    if(CST[cursor] == '<' && CST[cursor+1] == '=') tok = OpToken.LTE;
+    if(CST[cursor] == '!' && CST[cursor+1] == '=') tok = OpToken.NEQ;
+    if(CST[cursor] == '&' && CST[cursor+1] == '&') tok = OpToken.AND;
+    if(CST[cursor] == '|' && CST[cursor+1] == '|') tok = OpToken.OR;
+    if(CST[cursor] == '=' && CST[cursor+1] == '>') tok = OpToken.IMP;
   }
-  if(tok !is Token.NONE) {
+  if(tok !is OpToken.NONE) {
     cursor += 2;
     return tok;
   }
   if(cursor < CST.length) {
-    if(CST[cursor] == '+') tok = Token.ADD;
-    if(CST[cursor] == '-') tok = Token.SUB;
-    if(CST[cursor] == '*') tok = Token.MUL;
-    if(CST[cursor] == '/') tok = Token.DIV;
-    if(CST[cursor] == '<') tok = Token.LTH;
-    if(CST[cursor] == '>') tok = Token.GTH;
-    if(CST[cursor] == ';') tok = Token.END;
+    if(CST[cursor] == '+') tok = OpToken.ADD;
+    if(CST[cursor] == '-') tok = OpToken.SUB;
+    if(CST[cursor] == '*') tok = OpToken.MUL;
+    if(CST[cursor] == '/') tok = OpToken.DIV;
+    if(CST[cursor] == '<') tok = OpToken.LTH;
+    if(CST[cursor] == '>') tok = OpToken.GTH;
+    // if(CST[cursor] == ';') tok = OpToken.END;
   }
-  if(tok !is Token.NONE) {
+  if(tok !is OpToken.NONE) {
     cursor += 1;
     return tok;
   }
@@ -133,6 +107,7 @@ Token parseOperator(string CST, ref size_t cursor) {
 }
 
 void errorToken(string CST, ref size_t cursor) {
+  import std.conv;
   size_t start = cursor;
   while(cursor < CST.length) {
     char c = CST[cursor];
@@ -144,7 +119,8 @@ void errorToken(string CST, ref size_t cursor) {
   if(cursor == start) {
     assert(false, "EOF while parsing!");
   }
-  assert(false, "Unrecognized token: " ~ "'" ~ CST[start..cursor] ~ "'");
+  assert(false, "Unrecognized token: " ~ "'" ~
+	 CST[start..cursor] ~ "' -- at: " ~ cursor.to!string);
 }
 
 size_t parseIdentifier(string CST, ref size_t cursor) {
@@ -492,6 +468,17 @@ void translateForeach(in string CST, char[] buffer, ref size_t srcCursor,
   string array;
   size_t srcTag;
   
+  srcTag = srcCursor;
+  parseSpace(CST, srcCursor);
+  dstCursor = fill(CST[srcTag..srcCursor],
+		   buffer, dstCursor);
+
+  srcTag = srcCursor;
+  parseIdentifier(CST, srcCursor);
+  if(CST[srcTag..srcCursor] != "foreach") {
+    assert(false, "Not a FOREACH block: " ~ CST[srcTag..srcCursor]);
+  }
+    
   parseSpace(CST, srcCursor);
   if(CST[srcCursor] != '(') {
     errorToken(CST, srcCursor);
@@ -586,8 +573,44 @@ void translateForeach(in string CST, char[] buffer, ref size_t srcCursor,
   
 }
 
-void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
-		    ref size_t dstCursor, xVar[] varMap = []) {
+enum StmtToken: byte
+  {   STMT    = 0,
+      FOREACH = 1,
+      IFCOND  = 2,
+      ELSE    = 3,
+      ENDCST    = 4,		// end of text
+      BLOCK   = 5,
+      ENDBLOCK= 6,
+     // ANYTHING ELSE COMES HERE
+      
+      ERROR,
+  }
+
+// Just return whether the next statement is a normal statement
+// FOREACH or IFCOND etc
+StmtToken nextStmtToken(in string CST, size_t srcCursor) {
+  parseSpace(CST, srcCursor);
+  if(srcCursor == CST.length) return StmtToken.ENDCST;
+  size_t srcTag = srcCursor;
+  parseLeftSpace(CST, srcCursor);
+  // if a left parenthesis has been found at the beginning it can only
+  // be a normal statement
+  if(srcCursor > srcTag) return StmtToken.STMT;
+  if(parseIdentifier(CST, srcCursor) > 0) {
+    if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
+    if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
+    if(CST[srcTag..srcCursor] == "else") return StmtToken.ELSE;
+    // not a keyword
+    return StmtToken.STMT;
+  }
+  if(CST[srcCursor] is '{') return StmtToken.BLOCK;
+  if(CST[srcCursor] is '}') return StmtToken.ENDBLOCK;
+   return StmtToken.ERROR;
+}
+
+
+void translateExpr(in string CST, char[] buffer, ref size_t srcCursor,
+		   ref size_t dstCursor, xVar[] varMap = []) {
   bool cmpRHS;
   bool andRHS;
   bool orRHS;
@@ -595,12 +618,10 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 
   size_t srcTag = 0;
 
-  size_t cmpDstAnchor = 0;
-  size_t andDstAnchor = 0;
-  size_t orDstAnchor  = 0;
-  size_t impDstAnchor = 0;
-
-  bool newStatement = true;
+  size_t cmpDstAnchor = dstCursor++;
+  size_t andDstAnchor = dstCursor++;
+  size_t orDstAnchor  = dstCursor++;
+  size_t impDstAnchor = dstCursor++;
 
   while(srcCursor < CST.length) {
     srcTag = srcCursor;
@@ -610,40 +631,13 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 
     if(srcCursor == CST.length) break;
 
-    // countExp += 1;
-
-    srcTag = srcCursor;
-    parseSpace(CST, srcCursor);
-
-    dstCursor = fill(CST[srcTag..srcCursor],
-		     buffer, dstCursor);
     srcTag = srcCursor;
     // Parse any left braces now
     parseLeftSpace(CST, srcCursor);
-    auto leftBrace = CST[srcTag..srcCursor];
+    dstCursor = fill(CST[srcTag..srcCursor], buffer, dstCursor);
+
     srcTag = srcCursor;
-    
     if(parseIdentifier(CST, srcCursor) > 0) {
-      if(CST[srcTag..srcCursor] == "foreach") {
-	if(leftBrace.length !is 0) {
-	  assert(false, "Illegal left brace before foreach");
-	}
-	translateForeach(CST, buffer, srcCursor,
-			 dstCursor, varMap);
-	continue;
-      }
-
-      if(newStatement is true) {
-	dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
-	cmpDstAnchor = dstCursor++;
-	andDstAnchor = dstCursor++;
-	orDstAnchor  = dstCursor++;
-	impDstAnchor = dstCursor++;
-	newStatement = false;
-      }
-
-      dstCursor = fill(leftBrace, buffer, dstCursor);
-      
       int idx = idMatch(CST[srcTag..srcCursor], varMap);
       if(idx == -1) {
 	dstCursor = fill("_esdl__cstRand!q{", buffer, dstCursor);
@@ -656,16 +650,6 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
       }
     }
     else if(parseLiteral(CST, srcCursor) > 0) {
-      if(newStatement is true) {
-	dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
-	cmpDstAnchor = dstCursor++;
-	andDstAnchor = dstCursor++;
-	orDstAnchor  = dstCursor++;
-	impDstAnchor = dstCursor++;
-	newStatement = false;
-      }
-
-      dstCursor = fill(leftBrace, buffer, dstCursor);
       dstCursor = fill("_esdl__cstRand(", buffer, dstCursor);
       dstCursor = fill(CST[srcTag..srcCursor],
 		       buffer, dstCursor);
@@ -681,13 +665,13 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 		     buffer, dstCursor);
 
     srcTag = srcCursor;
-    Token opToken = parseOperator(CST, srcCursor);
+    OpToken opToken = parseOperator(CST, srcCursor);
 
     final switch(opToken) {
-    case Token.NONE:
-      errorToken(CST, srcCursor);
-      break;
-    case Token.END:
+    case OpToken.NONE:
+      //   errorToken(CST, srcCursor);
+      //   break;
+      // case OpToken.END:
       if(cmpRHS is true) {
 	dstCursor = fill(")", buffer, dstCursor);
 	cmpRHS = false;
@@ -704,10 +688,9 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
 	dstCursor = fill(")", buffer, dstCursor);
 	impRHS = false;
       }
-      dstCursor = fill(";\n", buffer, dstCursor);
-      newStatement = true;
-      break;
-    case Token.IMP:
+      return;
+      // break;
+    case OpToken.IMP:
       if(cmpRHS is true) {
 	dstCursor = fill(")", buffer, dstCursor);
 	cmpRHS = false;
@@ -727,7 +710,7 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
       orDstAnchor  = dstCursor++;
       impRHS = true;
       break;
-    case Token.OR:		// take care of cmp/and
+    case OpToken.OR:		// take care of cmp/and
       if(cmpRHS is true) {
 	dstCursor = fill(")", buffer, dstCursor);
 	cmpRHS = false;
@@ -744,7 +727,7 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
       cmpDstAnchor = dstCursor++;
       andDstAnchor = dstCursor++;
       break;
-    case Token.AND:		// take care of cmp
+    case OpToken.AND:		// take care of cmp
       if(cmpRHS is true) {
 	dstCursor = fill(")", buffer, dstCursor);
 	cmpRHS = false;
@@ -756,75 +739,118 @@ void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
       dstCursor = fill(") & (", buffer, dstCursor);
       cmpDstAnchor = dstCursor++;
       break;
-    case Token.EQU:
+    case OpToken.EQU:
       fill("(", buffer, cmpDstAnchor);
       cmpRHS = true;
       dstCursor = fill(").equ (", buffer, dstCursor);
       break;
-    case Token.NEQ:
+    case OpToken.NEQ:
       fill("(", buffer, cmpDstAnchor);
       cmpRHS = true;
       dstCursor = fill(").neq (", buffer, dstCursor);
       break;
-    case Token.LTE:
+    case OpToken.LTE:
       fill("(", buffer, cmpDstAnchor);
       cmpRHS = true;
       dstCursor = fill(").lte (", buffer, dstCursor);
       break;
-    case Token.GTE:
+    case OpToken.GTE:
       fill("(", buffer, cmpDstAnchor);
       cmpRHS = true;
       dstCursor = fill(").gte (", buffer, dstCursor);
       break;
-    case Token.LTH:
+    case OpToken.LTH:
       fill("(", buffer, cmpDstAnchor);
       cmpRHS = true;
       dstCursor = fill(").lth (", buffer, dstCursor);
       break;
-    case Token.GTH:
+    case OpToken.GTH:
       fill("(", buffer, cmpDstAnchor);
       cmpRHS = true;
       dstCursor = fill(").gth (", buffer, dstCursor);
       break;
-    case Token.ADD:
+    case OpToken.ADD:
       dstCursor = fill("+", buffer, dstCursor);
       break;
-    case Token.SUB:
+    case OpToken.SUB:
       dstCursor = fill("-", buffer, dstCursor);
       break;
-    case Token.MUL:
+    case OpToken.MUL:
       dstCursor = fill("*", buffer, dstCursor);
       break;
-    case Token.DIV:
+    case OpToken.DIV:
       dstCursor = fill("/", buffer, dstCursor);
       break;
-    case Token.LSH:
+    case OpToken.LSH:
       dstCursor = fill("<<", buffer, dstCursor);
       break;
-    case Token.RSH:
+    case OpToken.RSH:
       dstCursor = fill(">>", buffer, dstCursor);
       break;
     }
+  }
+}
 
+// translate the expression and also consume the semicolon thereafter
+void translateStmt(in string CST, char[] buffer, ref size_t srcCursor,
+		   ref size_t dstCursor, xVar[] varMap = []) {
+  dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
+  
+  translateExpr(CST, buffer, srcCursor, dstCursor, varMap);
+
+  auto srcTag = srcCursor;
+  parseSpace(CST, srcCursor);
+
+  dstCursor = fill(CST[srcTag..srcCursor],
+		   buffer, dstCursor);
+  if(CST[srcCursor++] !is ';') {
+    assert(false, "Error: -- ';' missing at end of statement");
+  }
+  dstCursor = fill(";\n", buffer, dstCursor);
+
+}
+
+void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
+		       ref size_t dstCursor, xVar[] varMap = []) {
+  size_t srcTag = 0;
+ loop:
+  while(srcCursor < CST.length) {
+    import std.conv: to;
+    
     srcTag = srcCursor;
     parseSpace(CST, srcCursor);
-
     dstCursor = fill(CST[srcTag..srcCursor],
 		     buffer, dstCursor);
 
-    // if not the main block, look for curly braces to end the block
-    if(srcCursor != CST.length
-       && varMap.length != 0
-       ) {
-      if(CST[srcCursor] == '}') {
-	srcCursor++;
-	break;
-      }
+    StmtToken stmtToken = nextStmtToken(CST, srcCursor);
+
+    final switch(stmtToken) {
+    case StmtToken.ENDCST:
+      fill("\n  return cstExpr;\n}\n", buffer, dstCursor);
+      break loop;
+    case StmtToken.ENDBLOCK:
+      dstCursor = fill("\n    // END OF BLOCK \n", buffer, dstCursor);
+      srcCursor++;		// skip the end of block brace '}'
+      break loop;
+   case StmtToken.FOREACH:
+      translateForeach(CST, buffer, srcCursor, dstCursor, varMap);
+      continue loop;
+    case StmtToken.IFCOND:
+      translateForeach(CST, buffer, srcCursor, dstCursor, varMap);
+      continue loop;
+    case StmtToken.ELSE:
+      translateForeach(CST, buffer, srcCursor, dstCursor, varMap);
+      continue loop;
+    case StmtToken.ERROR:
+      assert(false, "Unidentified symbol in constraints at: " ~
+	     srcCursor.to!string);
+    case StmtToken.BLOCK:
+      assert(false, "Unidentified symbol in constraints");
+    case StmtToken.STMT:
+      translateStmt(CST, buffer, srcCursor, dstCursor, varMap);
     }
-
   }
-
-  fill("\n  return cstExpr;\n}\n", buffer, dstCursor);
+    
 }
 
 
