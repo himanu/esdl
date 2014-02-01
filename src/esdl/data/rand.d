@@ -2031,6 +2031,14 @@ public CstVecPrim _esdl__cstRand(string VAR, T)(ref T t)
     }
     else static if(VAR[IDX] == '[') {
 	// hmmmm
+	// limitation -- the index expression can not have random
+	// variable references. Expression consitiing of loop variable
+	// and constants should be fine.
+	// We should never be required to call getBDD on this
+	// expression -- only evaluate.
+	// --
+	// It makes all the sense to parse this indenxing part in the
+	// cstx module itself.
       }
 }
 

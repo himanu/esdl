@@ -104,26 +104,6 @@ abstract class BddVec
     return _bitvec;
   }
 
-  public BDD opIndex(size_t n) {
-    return _bitvec[n];
-  }
-
-  public BDD[] opSlice(size_t i, size_t j) {
-    return _bitvec[i..j];
-  }
-
-  public void opIndexAssign(BDD b, size_t n) {
-    _bitvec[n] = b;
-  }
-
-  public void opSliceAssign(BDD[] other, size_t i, size_t j) {
-    _bitvec[i..j] = other;
-  }
-
-  public size_t opDollar() {
-    return _bitvec.length;
-  }
-  
   public @property size_t size()
   {
     return _bitvec.length;
@@ -173,6 +153,7 @@ abstract class BddVec
 	    return this.div(rhs);
 	  }
       }
+
   final public BddVec opBinary_r(string op)(long rhs)
     if(op == "<<" || op == ">>" || op == "*" || op == "/")
       {
@@ -286,6 +267,13 @@ abstract class BddVec
   public BDD gte(BddVec r);
   public BDD neq(BddVec r);
   public BddVec divmod(long c, bool which);
+  public size_t opDollar() {
+    return _bitvec.length;
+  }
+  
+  public BDD opIndex(size_t n);
+  public BddVec opSlice(size_t i, size_t j);
+
 }
 
 // only addref
@@ -574,7 +562,7 @@ struct BDD
 
     for(size_t n = 0 ; n < b.size ; ++n)
       {
-	res[n] = this.ite(b[n], c[n]);
+	res.bitvec[n] = this.ite(b.bitvec[n], c.bitvec[n]);
       }
 
     return res;
@@ -8346,7 +8334,7 @@ class Buddy
       int n;
       for(n = 0; n < x.size(); n++)
 	{
-	  bdd b = x[n].biimp(z[n]);
+	  bdd b = x.bitvec[n].biimp(z.bitvec[n]);
 	  result = result.and(b);
 	}
       for( ; n < max(this.varNum(), that.varNum()); n++)
@@ -8778,7 +8766,7 @@ class Buddy
     public override void initialize(uint offset, uint step)
     {
       for(int n=0 ; n < size ; n++)
-	this[n] = ithVar(offset+n*step);
+	this.bitvec[n] = ithVar(offset+n*step);
     }
 
     public override void initialize(BddDomain d)
@@ -8789,7 +8777,7 @@ class Buddy
     public override void initialize(int[] var)
     {
       for(int n = 0 ; n < size ; n++)
-	this[n] = ithVar(var[n]);
+	this.bitvec[n] = ithVar(var[n]);
     }
 
     public override BddVec dup()
@@ -8801,7 +8789,7 @@ class Buddy
     {
       BddVec dst = createVec(size);
       dst._signed = this._signed;
-      dst[0..$] = this[0..$];
+      dst.bitvec[0..$] = this.bitvec[0..$];
 
       // for(int n = 0; n < size; n++)
       // 	dst[n] = this[n].dup();
@@ -8815,8 +8803,8 @@ class Buddy
       else
 	{
 	  BddVec dst = createVec(size+1, true);
-	  dst[0..$-1] = this[0..$];
-	  dst[$-1] = zero();
+	  dst.bitvec[0..$-1] = this.bitvec[0..$];
+	  dst.bitvec[$-1] = zero();
 	  return dst;
 	}
     }
@@ -8827,12 +8815,12 @@ class Buddy
       ulong minnum = min(bitnum, size);
       uint n;
       for(n = 0; n < minnum; n++)
-	dst[n] = this[n].dup();
+	dst.bitvec[n] = this.bitvec[n].dup();
       for(uint m = n; m < bitnum; m++)
 	if(this._signed == false)
-	  dst[m] = zero();
+	  dst.bitvec[m] = zero();
 	else			// extend sign
-	  dst[m] = this[n-1].dup();
+	  dst.bitvec[m] = this.bitvec[n-1].dup();
       return dst;
     }
 
@@ -8850,9 +8838,9 @@ class Buddy
       long val = 0;
 
       for(size_t n = size - 1; n >= 0; n--)
-	if(this[n].isOne())
+	if(this.bitvec[n].isOne())
 	  val =(val << 1) | 1;
-	else if(this[n].isZero())
+	else if(this.bitvec[n].isZero())
 	  val = val << 1;
 	else
 	  return 0;
@@ -8887,13 +8875,13 @@ class Buddy
 
       BddVec res = createVec(maxsize, _signed);
       for(size_t n=0 ; n < minsize ; n++)
-	res[n] = this[n].apply(that[n], op);
+	res.bitvec[n] = this.bitvec[n].apply(that.bitvec[n], op);
 
       for(size_t n=minsize ; n < size ; n++)
-	res[n] = this[n].apply(zero(), op);
+	res.bitvec[n] = this.bitvec[n].apply(zero(), op);
 
       for(size_t n=minsize ; n < that.size ; n++)
-	res[n] = zero.apply(that[n], op);
+	res.bitvec[n] = zero.apply(that.bitvec[n], op);
 
       return res;
     }
@@ -8902,7 +8890,7 @@ class Buddy
     {
       BddVec res = createVec(size);
       for(int n=0 ; n < size ; n++)
-	res[n] = this[n].not();
+	res.bitvec[n] = this.bitvec[n].not();
       return res;
     }
 
@@ -8925,13 +8913,13 @@ class Buddy
       for(size_t n = 0; n < minsize; n++)
 	{
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = a[n] ^ b[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = a.bitvec[n] ^ b.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a[n] | b[n];
+	  bdd c1 = a.bitvec[n] | b.bitvec[n];
 	  c1 = c1 & c;
-	  bdd c2 = a[n] & b[n];
+	  bdd c2 = a.bitvec[n] & b.bitvec[n];
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8940,16 +8928,16 @@ class Buddy
       for(size_t n = minsize; n < a.size; n++)
 	{
 	  // sign extend
-	  bdd ext = b.signed ? b[$-1] : zero();
+	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
 
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = a[n] ^ ext;
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = a.bitvec[n] ^ ext;
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a[n] | ext;
+	  bdd c1 = a.bitvec[n] | ext;
 	  c1 = c1 & c;
-	  bdd c2 = a[n] & ext;
+	  bdd c2 = a.bitvec[n] & ext;
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8958,29 +8946,29 @@ class Buddy
       for(size_t n = minsize; n < b.size; n++)
 	{
 	  // sign extend
-	  bdd ext = a.signed ? a[$-1] : zero();
+	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
 
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = ext ^ b[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = ext ^ b.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = ext | b[n];
+	  bdd c1 = ext | b.bitvec[n];
 	  c1 = c1 & c;
-	  bdd c2 = ext & b[n];
+	  bdd c2 = ext & b.bitvec[n];
 	  c2 = c2 | c1;
 	  c = c2;
 	}
 
       if(a.signed)
 	{
-	  c = a[$-1].ite(c.not(), c);
+	  c = a.bitvec[$-1].ite(c.not(), c);
 	}
       if(b.signed)
 	{
-	  c = b[$-1].ite(c.not(), c);
+	  c = b.bitvec[$-1].ite(c.not(), c);
 	}
-      res[$-1] = c;
+      res.bitvec[$-1] = c;
 
       // if(a.signed && b.signed)
       // 	{
@@ -9021,13 +9009,13 @@ class Buddy
       for(int n = 0; n < minsize; n++)
 	{
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = this[n] ^ that[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = this.bitvec[n] ^ that.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that[n] | c;
-	  bdd tmp2 = this[n].lth(tmp1);
-	  tmp1 = this[n] & that[n];
+	  bdd tmp1 = that.bitvec[n] | c;
+	  bdd tmp2 = this.bitvec[n].lth(tmp1);
+	  tmp1 = this.bitvec[n] & that.bitvec[n];
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
 	  c = tmp1;
@@ -9037,15 +9025,15 @@ class Buddy
       for(size_t n = minsize; n < size; n++)
 	{
 	  // sign extend
-	  bdd ext = that.signed ? that[$-1] : zero();
+	  bdd ext = that.signed ? that.bitvec[$-1] : zero();
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = this[n] ^ ext;
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = this.bitvec[n] ^ ext;
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
 	  bdd tmp1 = ext | c;
-	  bdd tmp2 = this[n].lth(tmp1);
-	  tmp1 = this[n] & ext;
+	  bdd tmp2 = this.bitvec[n].lth(tmp1);
+	  tmp1 = this.bitvec[n] & ext;
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
 	  c = tmp1;
@@ -9054,20 +9042,20 @@ class Buddy
       for(size_t n = minsize; n < that.size; n++)
 	{
 	  // sign extend
-	  bdd ext = signed ? this[$-1] : zero();
+	  bdd ext = signed ? this.bitvec[$-1] : zero();
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = ext ^ that[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = ext ^ that.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that[n] | c;
+	  bdd tmp1 = that.bitvec[n] | c;
 	  bdd tmp2 = ext.lth(tmp1);
-	  tmp1 = ext & that[n];
+	  tmp1 = ext & that.bitvec[n];
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
 	  c = tmp1;
 	}
-      res[$-1] = c;
+      res.bitvec[$-1] = c;
       return res;
     }
 
@@ -9077,7 +9065,7 @@ class Buddy
       if(c == 0) return next;	// base case
 
       for(size_t n=1 ; n < size ; n++)
-	next[n] = this[n-1];
+	next.bitvec[n] = this.bitvec[n-1];
 
       BddVec rest = next.mul(c >> 1);
 
@@ -9101,19 +9089,19 @@ class Buddy
 
       BddVec leftshift = leftshifttmp.coerce(bitnum);
 
-      foreach(ref r; rhs[0..$])
+      foreach(ref r; rhs.bitvec[0..$])
 	{
 	  BddVec added = result.add(leftshift);
 	  for(size_t m=0; m < bitnum; ++m)
 	    {
-	      bdd tmpres = r.ite(added[m], result[m]);
-	      result[m] = tmpres;
+	      bdd tmpres = r.ite(added.bitvec[m], result.bitvec[m]);
+	      result.bitvec[m] = tmpres;
 	    }
 	  for(size_t m = bitnum-1; m >= 1; --m)
 	    {
-	      leftshift[m] = leftshift[m-1];
+	      leftshift.bitvec[m] = leftshift.bitvec[m-1];
 	    }
-	  leftshift[0] = zero();
+	  leftshift.bitvec[0] = zero();
 	}
       return result;
     }
@@ -9127,11 +9115,11 @@ class Buddy
       BddVec sub = buildVec(divisor.size, false);
 
       for(size_t n = 0; n < divisor.size; n++)
-	sub[n] = isSmaller.ite(divisor[n], zero[n]);
+	sub.bitvec[n] = isSmaller.ite(divisor.bitvec[n], zero.bitvec[n]);
 
       BddVec tmp = remainder.sub(sub);
       BddVec newRemainder =
-	tmp.shl(1, result[divisor.size - 1]);
+	tmp.shl(1, result.bitvec[divisor.size - 1]);
 
       if(step > 1)
 	div_rec(divisor, newRemainder, newResult, step - 1);
@@ -9156,7 +9144,7 @@ class Buddy
 	{
 	  BddVec divisor = buildVec(size, c);
 	  BddVec tmp = buildVec(size, false);
-	  BddVec tmpremainder = tmp.shl(1, this[$-1]);
+	  BddVec tmpremainder = tmp.shl(1, this.bitvec[$-1]);
 	  BddVec result = this.shl(1, zero());
 	  BddVec remainder;
 
@@ -9202,17 +9190,17 @@ class Buddy
 
 	  for(size_t m = 0; m < bitnum; ++m)
 	    {
-	      bdd remtmp = divLteRem.ite(remSubDiv[m], rem[m]);
-	      rem[m] = remtmp;
+	      bdd remtmp = divLteRem.ite(remSubDiv.bitvec[m], rem.bitvec[m]);
+	      rem.bitvec[m] = remtmp;
 	    }
 
 	  if(n > 0)
-	    res[rhs.size - n] = divLteRem;
+	    res.bitvec[rhs.size - n] = divLteRem;
 
 	  /* Shift 'div' one bit right */
 	  for(size_t m = 0 ; m < bitnum-1 ; ++m)
-	    div[m] = div[m+1];
-	  div[bitnum-1] = zero();
+	    div.bitvec[m] = div.bitvec[m+1];
+	  div.bitvec[bitnum-1] = zero();
 	}
 
 
@@ -9239,10 +9227,10 @@ class Buddy
 
       size_t n;
       for(n = 0; n < minnum; n++)
-	res[n] = c.dup();
+	res.bitvec[n] = c.dup();
 
       for(n = minnum; n < size; n++)
-	res[n] = this[n-pos].dup();
+	res.bitvec[n] = this.bitvec[n-pos].dup();
 
       return res;
     }
@@ -9263,12 +9251,12 @@ class Buddy
 	    {
 	      /* Set the m'th new location to be the(m+n)'th old location */
 	      if(m  >= n)
-		tmp1 = rEquN.and(this[m-n]);
+		tmp1 = rEquN.and(this.bitvec[m-n]);
 	      else
 		tmp1 = rEquN.and(c);
-	      tmp2 = res[m].or(tmp1);
+	      tmp2 = res.bitvec[m].or(tmp1);
 
-	      res[m] = tmp2;
+	      res.bitvec[m] = tmp2;
 	    }
 
 	}
@@ -9280,9 +9268,9 @@ class Buddy
 
       for(size_t m = 0; m < this.size; ++m)
 	{
-	  tmp2 = res[m].or(tmp1);
+	  tmp2 = res.bitvec[m].or(tmp1);
 
-	  res[m] = tmp2;
+	  res.bitvec[m] = tmp2;
 	}
 
       return res;
@@ -9298,10 +9286,10 @@ class Buddy
       BddVec res = buildVec(size, false);
 
       for(size_t n=maxnum; n < size; ++n)
-	res[n] = c.dup();
+	res.bitvec[n] = c.dup();
 
       for(size_t n = 0; n < maxnum; ++n)
-	res[n] = this[n+pos].dup();
+	res.bitvec[n] = this.bitvec[n+pos].dup();
 
       return res;
     }
@@ -9322,11 +9310,11 @@ class Buddy
 	    {
 	      /* Set the m'th new location to be the(m+n)'th old location */
 	      if(m+n <= 2)
-		tmp1 = rEquN.and(this[m+n]);
+		tmp1 = rEquN.and(this.bitvec[m+n]);
 	      else
 		tmp1 = rEquN.and(c);
-	      tmp2 = res[m].or(tmp1);
-	      res[m] = tmp2;
+	      tmp2 = res.bitvec[m].or(tmp1);
+	      res.bitvec[m] = tmp2;
 	    }
 
 	}
@@ -9338,8 +9326,8 @@ class Buddy
 
       for(size_t m = 0; m < this.size; ++m)
 	{
-	  tmp2 = res[m].or(tmp1);
-	  res[m] = tmp2;
+	  tmp2 = res.bitvec[m].or(tmp1);
+	  res.bitvec[m] = tmp2;
 	}
 
       return res;
@@ -9377,8 +9365,8 @@ class Buddy
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = a[n].lth(b[n]);
-	  bdd tmp2 = a[n].biimp(b[n]);
+	  bdd tmp1 = a.bitvec[n].lth(b.bitvec[n]);
+	  bdd tmp2 = a.bitvec[n].biimp(b.bitvec[n]);
 	  bdd tmp3 = tmp2 & p;
 	  bdd tmp4 = tmp1 | tmp3;
 	  p = tmp4;
@@ -9388,13 +9376,13 @@ class Buddy
       for(size_t n=minsize; n < a.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = b.signed ? b[$-1] : zero();
+	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
 
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = a[n].lth(ext);
-	  bdd tmp2 = a[n].biimp(ext);
+	  bdd tmp1 = a.bitvec[n].lth(ext);
+	  bdd tmp2 = a.bitvec[n].biimp(ext);
 	  bdd tmp3 = tmp2 & p;
 	  bdd tmp4 = tmp1 | tmp3;
 	  p = tmp4;
@@ -9404,19 +9392,19 @@ class Buddy
       for(size_t n=minsize; n < b.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = a.signed ? a[$-1] : zero();
+	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = ext.lth(b[n]);
-	  bdd tmp2 = ext.biimp(b[n]);
+	  bdd tmp1 = ext.lth(b.bitvec[n]);
+	  bdd tmp2 = ext.biimp(b.bitvec[n]);
 	  bdd tmp3 = tmp2 & p;
 	  bdd tmp4 = tmp1 | tmp3;
 	  p = tmp4;
 	}
 
-      p = (a[$-1] & (b[$-1].not())).ite(one(), p);
-      p = ((a[$-1].not()) & b[$-1]).ite(zero(), p);
+      p = (a.bitvec[$-1] & (b.bitvec[$-1].not())).ite(one(), p);
+      p = ((a.bitvec[$-1].not()) & b.bitvec[$-1]).ite(zero(), p);
       // if both this and that are either signed or unsigned, what we
       // have done till now is sufficient
 
@@ -9451,23 +9439,23 @@ class Buddy
 
       for(size_t n=0; n < minsize; ++n)
 	{
-	  p = p & this[n].biimp(r[n]);
+	  p = p & this.bitvec[n].biimp(r.bitvec[n]);
 	}
 
       // this.size > r.size
       for(size_t n=minsize; n < size; ++n)
 	{
 	  // sign extend
-	  bdd ext = r.signed ? r[$-1] : zero();
-	  p = p & this[n].biimp(ext);
+	  bdd ext = r.signed ? r.bitvec[$-1] : zero();
+	  p = p & this.bitvec[n].biimp(ext);
 	}
 
       // this.size > r.size
       for(size_t n=minsize; n < r.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = signed ? this[$-1] : zero();
-	  p = p & ext.biimp(r[n]);
+	  bdd ext = signed ? this.bitvec[$-1] : zero();
+	  p = p & ext.biimp(r.bitvec[n]);
 	}
       return p;
     }
@@ -9499,7 +9487,7 @@ class Buddy
 	throw new BddException();
       BddVec divisor = buildVec(cast(int) size, c);
       BddVec tmp = buildVec(cast(int) size, false);
-      BddVec tmpremainder = tmp.shl(1, this[size-1]);
+      BddVec tmpremainder = tmp.shl(1, this.bitvec[size-1]);
       BddVec result = this.shl(1, zero());
 
       BddVec remainder;
@@ -9515,6 +9503,21 @@ class Buddy
       }
     }
 
+    public override BddVec opSlice(size_t i, size_t j) {
+      if(i >= j) throw new BddException();
+      if(i >= bitvec.length) throw new BddException();
+      if(j > bitvec.length) throw new BddException();
+      BddVec res = buildVec(cast (int) (j - i), false);
+      for(size_t n = 0; n < j - 1; ++n) {
+	res.bitvec[n] = this.bitvec[n+i].dup();
+      }
+      return res;
+    }
+
+    public override BDD opIndex(size_t i) {
+      if(i >= bitvec.length) throw new BddException();
+      return bitvec[i].dup;
+    }
   }
 
   public Buddy cloneBuddy()
