@@ -50,6 +50,28 @@ module esdl.data.cstx;
 
 struct ConstraintParser {
 
+  immutable string CST;
+  bool bufferSet = false;
+
+  char[] outBuffer;
+  size_t outCursor = 0;
+  size_t srcCursor = 0;
+  
+  xVar[] varMap = [];
+
+  void setupBuffer() {
+    outBuffer.length = outCursor;
+    outCursor = 0;
+    srcCursor = 0;
+    varMap.length = 0;
+    bufferSet = true;
+  }
+  
+  this(string CST) {
+    this.CST = CST;
+  }
+
+
   enum OpToken: byte
     {   NONE = 0,
 	ADD,
@@ -75,104 +97,104 @@ struct ConstraintParser {
 	// RPL,			// A mapped variable
 	}
       
-  OpToken parseOperator(string CST, ref size_t cursor) {
+  OpToken parseOperator() {
     OpToken tok = OpToken.NONE;
-    if(cursor < CST.length - 1) {
-      if(CST[cursor] == '<' && CST[cursor+1] == '<') tok = OpToken.LSH;
-      if(CST[cursor] == '>' && CST[cursor+1] == '>') tok = OpToken.RSH;
-      if(CST[cursor] == '=' && CST[cursor+1] == '=') tok = OpToken.EQU;
-      if(CST[cursor] == '>' && CST[cursor+1] == '=') tok = OpToken.GTE;
-      if(CST[cursor] == '<' && CST[cursor+1] == '=') tok = OpToken.LTE;
-      if(CST[cursor] == '!' && CST[cursor+1] == '=') tok = OpToken.NEQ;
-      if(CST[cursor] == '&' && CST[cursor+1] == '&') tok = OpToken.AND;
-      if(CST[cursor] == '|' && CST[cursor+1] == '|') tok = OpToken.OR;
-      if(CST[cursor] == '-' && CST[cursor+1] == '>') tok = OpToken.IMP;
+    if(srcCursor < CST.length - 1) {
+      if(CST[srcCursor] == '<' && CST[srcCursor+1] == '<') tok = OpToken.LSH;
+      if(CST[srcCursor] == '>' && CST[srcCursor+1] == '>') tok = OpToken.RSH;
+      if(CST[srcCursor] == '=' && CST[srcCursor+1] == '=') tok = OpToken.EQU;
+      if(CST[srcCursor] == '>' && CST[srcCursor+1] == '=') tok = OpToken.GTE;
+      if(CST[srcCursor] == '<' && CST[srcCursor+1] == '=') tok = OpToken.LTE;
+      if(CST[srcCursor] == '!' && CST[srcCursor+1] == '=') tok = OpToken.NEQ;
+      if(CST[srcCursor] == '&' && CST[srcCursor+1] == '&') tok = OpToken.AND;
+      if(CST[srcCursor] == '|' && CST[srcCursor+1] == '|') tok = OpToken.OR;
+      if(CST[srcCursor] == '-' && CST[srcCursor+1] == '>') tok = OpToken.IMP;
     }
     if(tok !is OpToken.NONE) {
-      cursor += 2;
+      srcCursor += 2;
       return tok;
     }
-    if(cursor < CST.length) {
-      if(CST[cursor] == '+') tok = OpToken.ADD;
-      if(CST[cursor] == '-') tok = OpToken.SUB;
-      if(CST[cursor] == '*') tok = OpToken.MUL;
-      if(CST[cursor] == '/') tok = OpToken.DIV;
-      if(CST[cursor] == '<') tok = OpToken.LTH;
-      if(CST[cursor] == '>') tok = OpToken.GTH;
-      // if(CST[cursor] == ';') tok = OpToken.END;
+    if(srcCursor < CST.length) {
+      if(CST[srcCursor] == '+') tok = OpToken.ADD;
+      if(CST[srcCursor] == '-') tok = OpToken.SUB;
+      if(CST[srcCursor] == '*') tok = OpToken.MUL;
+      if(CST[srcCursor] == '/') tok = OpToken.DIV;
+      if(CST[srcCursor] == '<') tok = OpToken.LTH;
+      if(CST[srcCursor] == '>') tok = OpToken.GTH;
+      // if(CST[srcCursor] == ';') tok = OpToken.END;
     }
     if(tok !is OpToken.NONE) {
-      cursor += 1;
+      srcCursor += 1;
       return tok;
     }
     return tok;			// None
   }
 
-  void errorToken(string CST, ref size_t cursor) {
+  void errorToken() {
     import std.conv;
-    size_t start = cursor;
-    while(cursor < CST.length) {
-      char c = CST[cursor];
+    size_t start = srcCursor;
+    while(srcCursor < CST.length) {
+      char c = CST[srcCursor];
       if(c !is ' ' && c !is '\n' && c !is '\t' && c !is '\r' && c !is '\f') {
-	++cursor;
+	++srcCursor;
       }
       else break;
     }
-    if(cursor == start) {
+    if(srcCursor == start) {
       assert(false, "EOF while parsing!");
     }
     assert(false, "Unrecognized token: " ~ "'" ~
-	   CST[start..cursor] ~ "' -- at: " ~ cursor.to!string);
+	   CST[start..srcCursor] ~ "' -- at: " ~ srcCursor.to!string);
   }
 
-  size_t parseIdentifier(string CST, ref size_t cursor) {
-    size_t start = cursor;
-    if(cursor < CST.length) {
-      char c = CST[cursor];
+  size_t parseIdentifier() {
+    size_t start = srcCursor;
+    if(srcCursor < CST.length) {
+      char c = CST[srcCursor];
       if((c >= 'A' && c <= 'Z') ||
 	 (c >= 'a' && c <= 'z') ||
 	 (c == '_')) {
-	++cursor;
+	++srcCursor;
       }
       else {
-	return 0;
+	return start;
       }
     }
-    while(cursor < CST.length) {
-      char c = CST[cursor];
+    while(srcCursor < CST.length) {
+      char c = CST[srcCursor];
       if((c >= 'A' && c <= 'Z') ||
 	 (c >= 'a' && c <= 'z') ||
 	 (c >= '0' && c <= '9') ||
 	 (c == '_' || c == '.')) {
-	++cursor;
+	++srcCursor;
       }
       else {
 	break;
       }
     }
-    return cursor - start;
+    return start;
   }
 
-  size_t parseLineComment(in string CST, ref size_t cursor) {
-    size_t start = cursor;
-    if(cursor >= CST.length - 2 ||
-       CST[cursor] != '/' || CST[cursor+1] != '/') return 0;
+  size_t parseLineComment() {
+    size_t start = srcCursor;
+    if(srcCursor >= CST.length - 2 ||
+       CST[srcCursor] != '/' || CST[srcCursor+1] != '/') return 0;
     else {
-      cursor += 2;
-      while(cursor < CST.length) {
-	if(CST[cursor] == '\n') {
+      srcCursor += 2;
+      while(srcCursor < CST.length) {
+	if(CST[srcCursor] == '\n') {
 	  break;
 	}
 	else {
-	  if(cursor == CST.length) {
+	  if(srcCursor == CST.length) {
 	    // commment unterminated
 	    assert(false, "Line comment not terminated");
 	  }
 	}
-	cursor += 1;
+	srcCursor += 1;
       }
-      cursor += 1;
-      return cursor - start;
+      srcCursor += 1;
+      return srcCursor - start;
     }
   }
 
@@ -182,26 +204,26 @@ struct ConstraintParser {
     assert(curs == 12);
   }
 
-  size_t parseBlockComment(in string CST, ref size_t cursor) {
-    size_t start = cursor;
-    if(cursor >= CST.length - 2 ||
-       CST[cursor] != '/' || CST[cursor+1] != '*') return 0;
+  size_t parseBlockComment() {
+    size_t start = srcCursor;
+    if(srcCursor >= CST.length - 2 ||
+       CST[srcCursor] != '/' || CST[srcCursor+1] != '*') return 0;
     else {
-      cursor += 2;
-      while(cursor < CST.length - 1) {
-	if(CST[cursor] == '*' && CST[cursor+1] == '/') {
+      srcCursor += 2;
+      while(srcCursor < CST.length - 1) {
+	if(CST[srcCursor] == '*' && CST[srcCursor+1] == '/') {
 	  break;
 	}
 	else {
-	  if(cursor == CST.length - 1) {
+	  if(srcCursor == CST.length - 1) {
 	    // commment unterminated
 	    assert(false, "Block comment not terminated");
 	  }
 	}
-	cursor += 1;
+	srcCursor += 1;
       }
-      cursor += 2;
-      return cursor - start;
+      srcCursor += 2;
+      return srcCursor - start;
     }
   }
 
@@ -211,35 +233,35 @@ struct ConstraintParser {
     assert(curs == 16);
   }
 
-  size_t parseNestedComment(in string CST, ref size_t cursor) {
+  size_t parseNestedComment() {
     size_t nesting = 0;
-    size_t start = cursor;
-    if(cursor >= CST.length - 2 ||
-       CST[cursor] != '/' || CST[cursor+1] != '+') return 0;
+    size_t start = srcCursor;
+    if(srcCursor >= CST.length - 2 ||
+       CST[srcCursor] != '/' || CST[srcCursor+1] != '+') return 0;
     else {
-      cursor += 2;
-      while(cursor < CST.length - 1) {
-	if(CST[cursor] == '/' && CST[cursor+1] == '+') {
+      srcCursor += 2;
+      while(srcCursor < CST.length - 1) {
+	if(CST[srcCursor] == '/' && CST[srcCursor+1] == '+') {
 	  nesting += 1;
-	  cursor += 1;
+	  srcCursor += 1;
 	}
-	else if(CST[cursor] == '+' && CST[cursor+1] == '/') {
+	else if(CST[srcCursor] == '+' && CST[srcCursor+1] == '/') {
 	  if(nesting == 0) {
 	    break;
 	  }
 	  else {
 	    nesting -= 1;
-	    cursor += 1;
+	    srcCursor += 1;
 	  }
 	}
-	cursor += 1;
-	if(cursor >= CST.length - 1) {
+	srcCursor += 1;
+	if(srcCursor >= CST.length - 1) {
 	  // commment unterminated
 	  assert(false, "Block comment not terminated");
 	}
       }
-      cursor += 2;
-      return cursor - start;
+      srcCursor += 2;
+      return srcCursor - start;
     }
   }
 
@@ -249,66 +271,66 @@ struct ConstraintParser {
     assert(curs == 25);
   }
 
-  size_t parseLiteral(in string CST, ref size_t cursor) {
-    size_t start = cursor;
-    while(cursor < CST.length) {
-      char c = CST[cursor];
+  size_t parseLiteral() {
+    size_t start = srcCursor;
+    while(srcCursor < CST.length) {
+      char c = CST[srcCursor];
       if((c >= '0' && c <= '9') ||
 	 (c == '_')) {
-	++cursor;
+	++srcCursor;
       }
       else {
 	break;
       }
     }
     // Look for long/short specifier
-    while(cursor < CST.length) {
-      char c = CST[cursor];
+    while(srcCursor < CST.length) {
+      char c = CST[srcCursor];
       if(c == 'L' || c == 'S' ||  c == 'U') {
-	++cursor;
+	++srcCursor;
       }
       else {
 	break;
       }
     }
-    return cursor - start;
+    return srcCursor - start;
   }
 
   unittest {
     size_t curs = 4;
-    assert(parseIdentifier("Foo Bar;", curs) == 3);
+    assert(parseIdentifier("Foo Bar;", curs) == 0);
     assert(curs == 7);
   }
 
 
-  size_t parseWhiteSpace(in string CST, ref size_t cursor) {
-    auto start = cursor;
-    while(cursor < CST.length) {
-      auto c = CST[cursor];
+  size_t parseWhiteSpace() {
+    auto start = srcCursor;
+    while(srcCursor < CST.length) {
+      auto c = CST[srcCursor];
       // eat up whitespaces
       if(c is ' ' || c is '\n' || c is '\t' || c is '\r' || c is '\f') {
-	++cursor;
+	++srcCursor;
 	continue;
       }
       else {
 	break;
       }
     }
-    return cursor - start;
+    return srcCursor - start;
   }
 
-  size_t parseLeftSpace(in string CST, ref size_t cursor) {
-    auto start = cursor;
-    while(cursor < CST.length) {
-      if(parseWhiteSpace(CST, cursor) ||
-	 parseLineComment(CST, cursor) ||
-	 parseBlockComment(CST, cursor) ||
-	 parseNestedComment(CST, cursor)) {
+  size_t parseLeftSpace() {
+    auto start = srcCursor;
+    while(srcCursor < CST.length) {
+      if(parseWhiteSpace() ||
+	 parseLineComment() ||
+	 parseBlockComment() ||
+	 parseNestedComment()) {
 	continue;
       }
       else {
-	if(cursor < CST.length && CST[cursor] == '(') {
-	  ++cursor;
+	if(srcCursor < CST.length && CST[srcCursor] == '(') {
+	  ++srcCursor;
 	  continue;
 	}
 	else {
@@ -316,21 +338,21 @@ struct ConstraintParser {
 	}
       }
     }
-    return cursor - start;
+    return srcCursor - start;
   }
 
-  size_t parseRightSpace(in string CST, ref size_t cursor) {
-    auto start = cursor;
-    while(cursor < CST.length) {
-      if(parseWhiteSpace(CST, cursor) ||
-	 parseLineComment(CST, cursor) ||
-	 parseBlockComment(CST, cursor) ||
-	 parseNestedComment(CST, cursor)) {
+  size_t parseRightSpace() {
+    auto start = srcCursor;
+    while(srcCursor < CST.length) {
+      if(parseWhiteSpace() ||
+	 parseLineComment() ||
+	 parseBlockComment() ||
+	 parseNestedComment()) {
 	continue;
       }
       else {
-	if(cursor < CST.length && CST[cursor] == ')') {
-	  ++cursor;
+	if(srcCursor < CST.length && CST[srcCursor] == ')') {
+	  ++srcCursor;
 	  continue;
 	}
 	else {
@@ -338,23 +360,23 @@ struct ConstraintParser {
 	}
       }
     }
-    return cursor - start;
+    return srcCursor - start;
   }
 
-  size_t parseSpace(in string CST, ref size_t cursor) {
-    auto start = cursor;
-    while(cursor < CST.length) {
-      if(parseWhiteSpace(CST, cursor) ||
-	 parseLineComment(CST, cursor) ||
-	 parseBlockComment(CST, cursor) ||
-	 parseNestedComment(CST, cursor)) {
+  size_t parseSpace() {
+    auto start = srcCursor;
+    while(srcCursor < CST.length) {
+      if(parseWhiteSpace() ||
+	 parseLineComment() ||
+	 parseBlockComment() ||
+	 parseNestedComment()) {
 	continue;
       }
       else {
 	break;
       }
     }
-    return cursor - start;
+    return srcCursor - start;
   }
 
   unittest {
@@ -363,94 +385,40 @@ struct ConstraintParser {
     assert(curs == 11);
   }
 
-  void calculateSize(in string CST, out size_t size1, out size_t size2) {
-    // size_t cursor = 0;
-    // size_t countVar = 0;
-    // size_t countCmp = 0;
-    // size_t countLOp = 0;
-    // size_t countExp = 0;
-    // parseLeftSpace(CST, cursor);
-    // while(cursor < CST.length) {
-    //   countExp += 1;
-    //   if(parseIdentifier(CST, cursor) == 0 &&
-    //      parseLiteral(CST, cursor) == 0) {
-    //     errorToken(CST, cursor);
-    //   }
-    //   else countVar += 1;
-    //   parseRightSpace(CST, cursor);
-    //   Token opToken = parseOperator(CST, cursor);
-    //   if(opToken is Token.NONE) {
-    //     errorToken(CST, cursor);
-    //   }
-    //   else if(opToken == Token.EQU || opToken == Token.NEQ ||
-    // 	    opToken == Token.LTE || opToken == Token.GTE ||
-    // 	    opToken == Token.LTH || opToken == Token.GTH) {
-    //     countCmp += 1;
-    //   }
-    //   else if(opToken == Token.IMP || opToken == Token.AND ||
-    // 	    opToken == Token.OR  || opToken == Token.END) {
-    //     countLOp += 1;
-    //   }
-    //   if(cursor != CST.length
-    //      // && varMap.length != 0
-    //      ) {
-    //     if(CST[cursor] == '}') {
-    // 	cursor++;
-    // 	break;
-    //     }
-    //   }
-    //   parseLeftSpace(CST, cursor);
-    // }
-    // debug(CSTSPACE) {
-    //   import std.stdio;
-    //   writeln("countVar:", countVar, " countExp:", countExp,
-    // 	    " countCmp:", countCmp, " countLOp:", countLOp,
-    // 	    " length:", CST.length);
-    // }
-    // size1 = countVar*32 + CST.length + 64;
-    // size2 = countVar*28 + countExp*4 + countCmp*8 + countLOp*8 + CST.length + 128;
-    size1 = 1000;
-    size2 = 1000;
-  }
-
-  unittest {
-    // assert(calculateSize("FOO;") == 100);
-    // assert(calculateSize("FOO > BAR;") == 146);
-  }
-
-  size_t fill(in string source, char[] target, size_t cursor = 0) {
-    foreach(i, c; source) {
-      target[cursor+i] = c;
+  size_t fill(in string source) {
+    size_t start = outCursor;
+    if(bufferSet) {
+      foreach(i, c; source) {
+	outBuffer[outCursor+i] = c;
+      }
     }
-    return cursor + source.length;
+    outCursor += source.length;
+    return start;
   }
 
-  char[] translate(in string CST) {
-    char[] buffer;
-
-    size_t size1, size2;
-    size_t srcCursor = 0;
-    size_t dstCursor = 0;
-
-
-    calculateSize(CST, size1, size2);
-
-    buffer.length = size1 + 2 * size2;
-
-    foreach(ref char c; buffer) {
-      c = ' ';
-    }
-
-    dstCursor = fill("\noverride public CstBlock getCstExpr() {"
-		     "\n  auto cstExpr = new CstBlock;\n",
-		     buffer, dstCursor);
-
-    translateBlock(CST, buffer, srcCursor, dstCursor);
-
-    return buffer;
+  void place(in char c, size_t cursor = 0) {
+    if(bufferSet) outBuffer[cursor] = c;
   }
 
-  int idMatch(string id, xVar[] varMap) {
+  char[] translate() {
+
+    fill("override public CstBlock getCstExpr() {"
+	 "\n  auto cstExpr = new CstBlock;\n");
+
+    translateBlock();
+
+    setupBuffer();
+
+    fill("override public CstBlock getCstExpr() {"
+	 "\n  auto cstExpr = new CstBlock;\n");
+
+    translateBlock();
+
+    
+    return outBuffer;
+  }
+
+  int idMatch(string id) {
     foreach(int i, var; varMap) {
       if(var.varName == id) return i;
     }
@@ -463,91 +431,88 @@ struct ConstraintParser {
     string xLat;
   }
 
-  void translateForeach(in string CST, char[] buffer, ref size_t srcCursor,
-			ref size_t dstCursor, xVar[] varMap = []) {
+  void translateForeach() {
     string index;
     string elem;
     string array;
     size_t srcTag;
   
     srcTag = srcCursor;
-    parseSpace(CST, srcCursor);
-    dstCursor = fill(CST[srcTag..srcCursor],
-		     buffer, dstCursor);
+    parseSpace();
+    fill(CST[srcTag..srcCursor]);
 
-    srcTag = srcCursor;
-    parseIdentifier(CST, srcCursor);
+    srcTag = parseIdentifier();
     if(CST[srcTag..srcCursor] != "foreach") {
-      assert(false, "Not a FOREACH block: " ~ CST[srcTag..srcCursor]);
+      import std.conv: to;
+      assert(false, "Not a FOREACH block at: " ~ srcTag.to!string);
     }
     
-    parseSpace(CST, srcCursor);
+    parseSpace();
     if(CST[srcCursor] != '(') {
-      errorToken(CST, srcCursor);
+      errorToken();
     }
     ++srcCursor;
-    parseSpace(CST, srcCursor);
-
-    srcTag = srcCursor;
+    parseSpace();
 
     // Parse the index
-    if(parseIdentifier(CST, srcCursor) > 0) {
+    srcTag = parseIdentifier();
+    if(srcCursor > srcTag) {
       // FIXME -- check if the variable names do not shadow earlier
       // names in the table
       index = CST[srcTag..srcCursor];
-      parseSpace(CST, srcCursor);
+      parseSpace();
       if(CST[srcCursor] == ';') {
 	elem = index;
 	index = "";
       }
       else if(CST[srcCursor] != ',') {
-	errorToken(CST, srcCursor);
+	errorToken();
       }
       ++srcCursor;
-      parseSpace(CST, srcCursor);
+      parseSpace();
     }
     else {
-      errorToken(CST, srcCursor);
+      errorToken();
     }
   
     // Parse elem
     if(elem.length is 0) {
-      srcTag = srcCursor;
-      if(parseIdentifier(CST, srcCursor) > 0) {
+      srcTag = parseIdentifier();
+      if(srcCursor > srcTag) {
 	// FIXME -- check if the variable names do not shadow earlier
 	// names in the table
 	elem = CST[srcTag..srcCursor];
-	parseSpace(CST, srcCursor);
+	parseSpace();
 	if(CST[srcCursor] != ';') {
-	  errorToken(CST, srcCursor);
+	  errorToken();
 	}
 	++srcCursor;
-	parseSpace(CST, srcCursor);
+	parseSpace();
       }
       else {
-	errorToken(CST, srcCursor);
+	errorToken();
       }
     }
 
     // Parse array
-    srcTag = srcCursor;
-    if(parseIdentifier(CST, srcCursor) > 0) {
+    srcTag = parseIdentifier();
+    if(srcCursor > srcTag) {
       // FIXME -- check if the variable names do not shadow earlier
       // names in the table
       array = CST[srcTag..srcCursor];
-      parseSpace(CST, srcCursor);
+      parseSpace();
       if(CST[srcCursor] != ')') {
-	errorToken(CST, srcCursor);
+	errorToken();
       }
       ++srcCursor;
-      parseSpace(CST, srcCursor);
+      parseSpace();
     }
     else {
-      errorToken(CST, srcCursor);
+      errorToken();
     }
 
     if(CST[srcCursor] != '{') {
-      errorToken(CST, srcCursor);
+      errorToken();
     }
     ++srcCursor;
 
@@ -564,7 +529,7 @@ struct ConstraintParser {
     x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
     varMap ~= x;
 
-    translateBlock(CST, buffer, srcCursor, dstCursor, varMap);
+    translateBlock();
 
     if(index.length != 0) {
       varMap = varMap[0..$-2];
@@ -590,15 +555,18 @@ struct ConstraintParser {
 
   // Just return whether the next statement is a normal statement
   // FOREACH or IFCOND etc
-  StmtToken nextStmtToken(in string CST, size_t srcCursor) {
-    parseSpace(CST, srcCursor);
+  StmtToken nextStmtToken() {
+    auto savedCursor = srcCursor;
+    scope(exit) srcCursor = savedCursor; // restore
+    parseSpace();
     if(srcCursor == CST.length) return StmtToken.ENDCST;
     size_t srcTag = srcCursor;
-    parseLeftSpace(CST, srcCursor);
+    parseLeftSpace();
     // if a left parenthesis has been found at the beginning it can only
     // be a normal statement
     if(srcCursor > srcTag) return StmtToken.STMT;
-    if(parseIdentifier(CST, srcCursor) > 0) {
+    srcTag = parseIdentifier();
+    if(srcCursor > srcTag) {
       if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
       if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
       if(CST[srcTag..srcCursor] == "else") return StmtToken.ELSE;
@@ -611,8 +579,7 @@ struct ConstraintParser {
   }
 
 
-  void translateExpr(in string CST, char[] buffer, ref size_t srcCursor,
-		     ref size_t dstCursor, xVar[] varMap = []) {
+  void translateExpr() {
     bool cmpRHS;
     bool andRHS;
     bool orRHS;
@@ -620,228 +587,220 @@ struct ConstraintParser {
 
     size_t srcTag = 0;
 
-    size_t cmpDstAnchor = dstCursor++;
-    size_t andDstAnchor = dstCursor++;
-    size_t orDstAnchor  = dstCursor++;
-    size_t impDstAnchor = dstCursor++;
+    size_t cmpDstAnchor = fill(" ");
+    size_t andDstAnchor = fill(" ");
+    size_t orDstAnchor  = fill(" ");
+    size_t impDstAnchor = fill(" ");
 
     while(srcCursor < CST.length) {
       srcTag = srcCursor;
-      parseSpace(CST, srcCursor);
-      dstCursor = fill(CST[srcTag..srcCursor],
-		       buffer, dstCursor);
+      parseSpace();
+      fill(CST[srcTag..srcCursor]);
 
       if(srcCursor == CST.length) break;
 
       srcTag = srcCursor;
       // Parse any left braces now
-      parseLeftSpace(CST, srcCursor);
-      dstCursor = fill(CST[srcTag..srcCursor], buffer, dstCursor);
+      parseLeftSpace();
+      fill(CST[srcTag..srcCursor]);
 
-      srcTag = srcCursor;
-      if(parseIdentifier(CST, srcCursor) > 0) {
-	int idx = idMatch(CST[srcTag..srcCursor], varMap);
+      srcTag = parseIdentifier();
+      if(srcCursor > srcTag) {
+	int idx = idMatch(CST[srcTag..srcCursor]);
 	if(idx == -1) {
-	  dstCursor = fill("_esdl__cstRand!q{", buffer, dstCursor);
-	  dstCursor = fill(CST[srcTag..srcCursor],
-			   buffer, dstCursor);
-	  dstCursor = fill("}(_outer)", buffer, dstCursor);
+	  fill("_esdl__cstRand!q{");
+	  fill(CST[srcTag..srcCursor]);
+	  fill("}(_outer)");
 	}
 	else {
-	  dstCursor = fill(varMap[idx].xLat, buffer, dstCursor);
+	  fill(varMap[idx].xLat);
 	}
       }
-      else if(parseLiteral(CST, srcCursor) > 0) {
-	dstCursor = fill("_esdl__cstRand(", buffer, dstCursor);
-	dstCursor = fill(CST[srcTag..srcCursor],
-			 buffer, dstCursor);
-	dstCursor = fill(", _outer)", buffer, dstCursor);
+      else if(parseLiteral() > 0) {
+	fill("_esdl__cstRand(");
+	fill(CST[srcTag..srcCursor]);
+	fill(", _outer)");
       }
       else {
-	errorToken(CST, srcCursor);
+	errorToken();
       }
 
       srcTag = srcCursor;
-      parseRightSpace(CST, srcCursor);
-      dstCursor = fill(CST[srcTag..srcCursor],
-		       buffer, dstCursor);
+      parseRightSpace();
+      fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
-      OpToken opToken = parseOperator(CST, srcCursor);
+      OpToken opToken = parseOperator();
 
       final switch(opToken) {
       case OpToken.NONE:
-	//   errorToken(CST, srcCursor);
+	//   errorToken();
 	//   break;
 	// case OpToken.END:
 	if(cmpRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  cmpRHS = false;
 	}
 	if(andRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  andRHS = false;
 	}
 	if(orRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  orRHS = false;
 	}
 	if(impRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  impRHS = false;
 	}
 	return;
 	// break;
       case OpToken.IMP:
 	if(cmpRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  cmpRHS = false;
 	}
 	if(andRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  andRHS = false;
 	}
 	if(orRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  orRHS = false;
 	}
-	fill("(", buffer, impDstAnchor);
-	dstCursor = fill(").imp (", buffer, dstCursor);
-	cmpDstAnchor = dstCursor++;
-	andDstAnchor = dstCursor++;
-	orDstAnchor  = dstCursor++;
+	place('(', impDstAnchor);
+	fill(").imp (");
+	cmpDstAnchor = fill(" ");
+	andDstAnchor = fill(" ");
+	orDstAnchor  = fill(" ");
 	impRHS = true;
 	break;
       case OpToken.OR:		// take care of cmp/and
 	if(cmpRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  cmpRHS = false;
 	}
 	if(andRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  andRHS = false;
 	}
 	if(orRHS !is true) {
-	  fill("(", buffer, orDstAnchor);
+	  place('(', orDstAnchor);
 	  orRHS = true;
 	}
-	dstCursor = fill(") | (", buffer, dstCursor);
-	cmpDstAnchor = dstCursor++;
-	andDstAnchor = dstCursor++;
+	fill(") | (");
+	cmpDstAnchor = fill(" ");
+	andDstAnchor = fill(" ");
 	break;
       case OpToken.AND:		// take care of cmp
 	if(cmpRHS is true) {
-	  dstCursor = fill(")", buffer, dstCursor);
+	  fill(")");
 	  cmpRHS = false;
 	}
 	if(andRHS !is true) {
-	  fill("(", buffer, andDstAnchor);
+	  place('(', andDstAnchor);
 	  andRHS = true;
 	}
-	dstCursor = fill(") & (", buffer, dstCursor);
-	cmpDstAnchor = dstCursor++;
+	fill(") & (");
+	cmpDstAnchor = fill(" ");
 	break;
       case OpToken.EQU:
-	fill("(", buffer, cmpDstAnchor);
+	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	dstCursor = fill(").equ (", buffer, dstCursor);
+	fill(").equ (");
 	break;
       case OpToken.NEQ:
-	fill("(", buffer, cmpDstAnchor);
+	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	dstCursor = fill(").neq (", buffer, dstCursor);
+	fill(").neq (");
 	break;
       case OpToken.LTE:
-	fill("(", buffer, cmpDstAnchor);
+	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	dstCursor = fill(").lte (", buffer, dstCursor);
+	fill(").lte (");
 	break;
       case OpToken.GTE:
-	fill("(", buffer, cmpDstAnchor);
+	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	dstCursor = fill(").gte (", buffer, dstCursor);
+	fill(").gte (");
 	break;
       case OpToken.LTH:
-	fill("(", buffer, cmpDstAnchor);
+	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	dstCursor = fill(").lth (", buffer, dstCursor);
+	fill(").lth (");
 	break;
       case OpToken.GTH:
-	fill("(", buffer, cmpDstAnchor);
+	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	dstCursor = fill(").gth (", buffer, dstCursor);
+	fill(").gth (");
 	break;
       case OpToken.ADD:
-	dstCursor = fill("+", buffer, dstCursor);
+	fill("+");
 	break;
       case OpToken.SUB:
-	dstCursor = fill("-", buffer, dstCursor);
+	fill("-");
 	break;
       case OpToken.MUL:
-	dstCursor = fill("*", buffer, dstCursor);
+	fill("*");
 	break;
       case OpToken.DIV:
-	dstCursor = fill("/", buffer, dstCursor);
+	fill("/");
 	break;
       case OpToken.LSH:
-	dstCursor = fill("<<", buffer, dstCursor);
+	fill("<<");
 	break;
       case OpToken.RSH:
-	dstCursor = fill(">>", buffer, dstCursor);
+	fill(">>");
 	break;
       }
     }
   }
 
   // translate the expression and also consume the semicolon thereafter
-  void translateStmt(in string CST, char[] buffer, ref size_t srcCursor,
-		     ref size_t dstCursor, xVar[] varMap = []) {
-    dstCursor = fill("  cstExpr ~= ", buffer, dstCursor);
+  void translateStmt() {
+    fill("  cstExpr ~= ");
   
-    translateExpr(CST, buffer, srcCursor, dstCursor, varMap);
+    translateExpr();
 
     auto srcTag = srcCursor;
-    parseSpace(CST, srcCursor);
+    parseSpace();
 
-    dstCursor = fill(CST[srcTag..srcCursor],
-		     buffer, dstCursor);
+    fill(CST[srcTag..srcCursor]);
     if(CST[srcCursor++] !is ';') {
       assert(false, "Error: -- ';' missing at end of statement");
     }
-    dstCursor = fill(";\n", buffer, dstCursor);
+    fill(";\n");
 
   }
 
-  void translateBlock(in string CST, char[] buffer, ref size_t srcCursor,
-		      ref size_t dstCursor, xVar[] varMap = []) {
+  void translateBlock() {
     size_t srcTag = 0;
   loop:
     while(srcCursor < CST.length) {
       import std.conv: to;
     
       srcTag = srcCursor;
-      parseSpace(CST, srcCursor);
-      dstCursor = fill(CST[srcTag..srcCursor],
-		       buffer, dstCursor);
+      parseSpace();
+      fill(CST[srcTag..srcCursor]);
 
-      StmtToken stmtToken = nextStmtToken(CST, srcCursor);
+      StmtToken stmtToken = nextStmtToken();
 
       final switch(stmtToken) {
       case StmtToken.ENDCST:
-	fill("\n  return cstExpr;\n}\n", buffer, dstCursor);
+	fill("\n  return cstExpr;\n}\n");
 	break loop;
       case StmtToken.ENDBLOCK:
-	dstCursor = fill("\n    // END OF BLOCK \n", buffer, dstCursor);
+	fill("\n    // END OF BLOCK \n");
 	srcCursor++;		// skip the end of block brace '}'
 	break loop;
       case StmtToken.FOREACH:
-	translateForeach(CST, buffer, srcCursor, dstCursor, varMap);
+	translateForeach();
 	continue loop;
       case StmtToken.IFCOND:
-	translateForeach(CST, buffer, srcCursor, dstCursor, varMap);
+	translateForeach();
 	continue loop;
       case StmtToken.ELSE:
-	translateForeach(CST, buffer, srcCursor, dstCursor, varMap);
+	translateForeach();
 	continue loop;
       case StmtToken.ERROR:
 	assert(false, "Unidentified symbol in constraints at: " ~
@@ -849,7 +808,7 @@ struct ConstraintParser {
       case StmtToken.BLOCK:
 	assert(false, "Unidentified symbol in constraints");
       case StmtToken.STMT:
-	translateStmt(CST, buffer, srcCursor, dstCursor, varMap);
+	translateStmt();
       }
     }
     
