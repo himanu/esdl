@@ -84,7 +84,7 @@ OpToken parseOperator(string CST, ref size_t cursor) {
     if(CST[cursor] == '!' && CST[cursor+1] == '=') tok = OpToken.NEQ;
     if(CST[cursor] == '&' && CST[cursor+1] == '&') tok = OpToken.AND;
     if(CST[cursor] == '|' && CST[cursor+1] == '|') tok = OpToken.OR;
-    if(CST[cursor] == '=' && CST[cursor+1] == '>') tok = OpToken.IMP;
+    if(CST[cursor] == '-' && CST[cursor+1] == '>') tok = OpToken.IMP;
   }
   if(tok !is OpToken.NONE) {
     cursor += 2;

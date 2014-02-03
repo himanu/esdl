@@ -76,6 +76,7 @@ class Bar: Foo
     bro < 80;
     sis < 24;
     pop > 40;
+    pop <= 48 -> bro == pop;
     // pop + kid3 == 24;
   } cst10;
 

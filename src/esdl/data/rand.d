@@ -199,7 +199,9 @@ class CstStage {
   // variable can be associated with only one stage
   CstVecPrim[] _randVecs;
   CstBddExpr[] _bddExprs;
+  // These are unresolved loop variables
   CstVecLoopVar[] _loopVars;
+  // These are the length variables that this stage will solve
   CstVecRandArr[] _lengthVars;
 
   public void id(uint i) {
@@ -299,11 +301,13 @@ public class ConstraintEngine {
       vec.stage = toStage;
     }
     toStage._randVecs ~= fromStage._randVecs;
+    toStage._bddExprs ~= fromStage._bddExprs;
     if(cstStages[$-1] is fromStage) {
       cstStages.length -= 1;
     }
     else {
-      cstStages[$-1] = null;
+      fromStage._randVecs.length = 0;
+      fromStage._bddExprs.length = 0;
     }
   }
 
@@ -362,7 +366,9 @@ public class ConstraintEngine {
     // everything that remains.
     
     int stageIdx=0;
-    bool allArraysResolved=false;
+
+    // This variable is true when all the array lengths have been resolved
+    bool allArrayLengthsResolved = false;
 
     while(usExprs.length > 0 || usStages.length > 0) {
       cstExprs = usExprs;
@@ -372,6 +378,21 @@ public class ConstraintEngine {
       usStages.length = 0;
 
 
+      if(! allArrayLengthsResolved) {
+	allArrayLengthsResolved = true;
+	foreach(expr; urExprs) {
+	  if(expr._lengthVars.length !is 0) {
+	    allArrayLengthsResolved = false;
+	  }
+	}
+	foreach(stage; cstStages) {
+	  if(stage._lengthVars.length !is 0) {
+	    allArrayLengthsResolved = false;
+	  }
+	}
+      }
+
+      // unroll all the unrollable expressions
       foreach(expr; cstExprs) {
 	if(expr.unrollable() is null) {
 	  urExprs ~= expr;
@@ -401,16 +422,16 @@ public class ConstraintEngine {
       foreach(stage; cstStages) {
 	if(stage !is null &&
 	   stage._randVecs.length !is 0) {
-	  if(allArraysResolved) {
+	  if(allArrayLengthsResolved) {
 	    solveStage(stage, stageIdx);
 	  }
-	  // resolve allArraysResolved
+	  // resolve allArrayLengthsResolved
 	  else {
-	    allArraysResolved = true;
+	    allArrayLengthsResolved = true;
 	    if(stage.hasLoops() is 0 &&
 	       stage._lengthVars.length !is 0) {
 	      solveStage(stage, stageIdx);
-	      allArraysResolved = false;
+	      allArrayLengthsResolved = false;
 	    }
 	    else {
 	      usStages ~= stage;
@@ -1680,6 +1701,7 @@ abstract class CstBddExpr
     return _lengthVars;
   }
 
+  // unroll recursively untill no unrolling is possible
   public CstBddExpr[] unroll() {
     CstBddExpr[] retval;
     auto loop = this.unrollable();
