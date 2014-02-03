@@ -178,7 +178,7 @@ struct ConstraintParser {
   size_t parseLineComment() {
     size_t start = srcCursor;
     if(srcCursor >= CST.length - 2 ||
-       CST[srcCursor] != '/' || CST[srcCursor+1] != '/') return 0;
+       CST[srcCursor] != '/' || CST[srcCursor+1] != '/') return start;
     else {
       srcCursor += 2;
       while(srcCursor < CST.length) {
@@ -194,7 +194,7 @@ struct ConstraintParser {
 	srcCursor += 1;
       }
       srcCursor += 1;
-      return srcCursor - start;
+      return start;
     }
   }
 
@@ -207,7 +207,7 @@ struct ConstraintParser {
   size_t parseBlockComment() {
     size_t start = srcCursor;
     if(srcCursor >= CST.length - 2 ||
-       CST[srcCursor] != '/' || CST[srcCursor+1] != '*') return 0;
+       CST[srcCursor] != '/' || CST[srcCursor+1] != '*') return start;
     else {
       srcCursor += 2;
       while(srcCursor < CST.length - 1) {
@@ -223,13 +223,13 @@ struct ConstraintParser {
 	srcCursor += 1;
       }
       srcCursor += 2;
-      return srcCursor - start;
+      return start;
     }
   }
 
   unittest {
     size_t curs = 4;
-    assert(parseBlockComment("Foo /* Bar;\n\n */", curs) == 12);
+    assert(parseBlockComment("Foo /* Bar;\n\n */", curs) == 4);
     assert(curs == 16);
   }
 
@@ -237,7 +237,7 @@ struct ConstraintParser {
     size_t nesting = 0;
     size_t start = srcCursor;
     if(srcCursor >= CST.length - 2 ||
-       CST[srcCursor] != '/' || CST[srcCursor+1] != '+') return 0;
+       CST[srcCursor] != '/' || CST[srcCursor+1] != '+') return start;
     else {
       srcCursor += 2;
       while(srcCursor < CST.length - 1) {
@@ -261,7 +261,7 @@ struct ConstraintParser {
 	}
       }
       srcCursor += 2;
-      return srcCursor - start;
+      return start;
     }
   }
 
@@ -293,7 +293,7 @@ struct ConstraintParser {
 	break;
       }
     }
-    return srcCursor - start;
+    return start;
   }
 
   unittest {
@@ -316,16 +316,20 @@ struct ConstraintParser {
 	break;
       }
     }
-    return srcCursor - start;
+    return start;
   }
 
   size_t parseLeftSpace() {
     auto start = srcCursor;
     while(srcCursor < CST.length) {
-      if(parseWhiteSpace() ||
-	 parseLineComment() ||
-	 parseBlockComment() ||
-	 parseNestedComment()) {
+      auto srcTag = srcCursor;
+
+      parseLineComment();
+      parseBlockComment();
+      parseNestedComment();
+      parseWhiteSpace();
+
+      if(srcCursor > srcTag) {
 	continue;
       }
       else {
@@ -338,16 +342,20 @@ struct ConstraintParser {
 	}
       }
     }
-    return srcCursor - start;
+    return start;
   }
 
   size_t parseRightSpace() {
     auto start = srcCursor;
     while(srcCursor < CST.length) {
-      if(parseWhiteSpace() ||
-	 parseLineComment() ||
-	 parseBlockComment() ||
-	 parseNestedComment()) {
+      auto srcTag = srcCursor;
+
+      parseLineComment();
+      parseBlockComment();
+      parseNestedComment();
+      parseWhiteSpace();
+
+      if(srcCursor > srcTag) {
 	continue;
       }
       else {
@@ -360,23 +368,27 @@ struct ConstraintParser {
 	}
       }
     }
-    return srcCursor - start;
+    return start;
   }
 
   size_t parseSpace() {
     auto start = srcCursor;
     while(srcCursor < CST.length) {
-      if(parseWhiteSpace() ||
-	 parseLineComment() ||
-	 parseBlockComment() ||
-	 parseNestedComment()) {
+      auto srcTag = srcCursor;
+
+      parseLineComment();
+      parseBlockComment();
+      parseNestedComment();
+      parseWhiteSpace();
+      
+      if(srcCursor > srcTag) {
 	continue;
       }
       else {
 	break;
       }
     }
-    return srcCursor - start;
+    return start;
   }
 
   unittest {
@@ -437,8 +449,7 @@ struct ConstraintParser {
     string array;
     size_t srcTag;
   
-    srcTag = srcCursor;
-    parseSpace();
+    srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
     srcTag = parseIdentifier();
@@ -447,12 +458,17 @@ struct ConstraintParser {
       assert(false, "Not a FOREACH block at: " ~ srcTag.to!string);
     }
     
-    parseSpace();
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
     if(CST[srcCursor] != '(') {
       errorToken();
     }
+
     ++srcCursor;
-    parseSpace();
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
 
     // Parse the index
     srcTag = parseIdentifier();
@@ -460,7 +476,10 @@ struct ConstraintParser {
       // FIXME -- check if the variable names do not shadow earlier
       // names in the table
       index = CST[srcTag..srcCursor];
-      parseSpace();
+
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+      
       if(CST[srcCursor] == ';') {
 	elem = index;
 	index = "";
@@ -469,7 +488,9 @@ struct ConstraintParser {
 	errorToken();
       }
       ++srcCursor;
-      parseSpace();
+
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
     }
     else {
       errorToken();
@@ -482,12 +503,17 @@ struct ConstraintParser {
 	// FIXME -- check if the variable names do not shadow earlier
 	// names in the table
 	elem = CST[srcTag..srcCursor];
-	parseSpace();
+
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+
 	if(CST[srcCursor] != ';') {
 	  errorToken();
 	}
 	++srcCursor;
-	parseSpace();
+
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
       }
       else {
 	errorToken();
@@ -500,12 +526,14 @@ struct ConstraintParser {
       // FIXME -- check if the variable names do not shadow earlier
       // names in the table
       array = CST[srcTag..srcCursor];
-      parseSpace();
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
       if(CST[srcCursor] != ')') {
 	errorToken();
       }
       ++srcCursor;
-      parseSpace();
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
     }
     else {
       errorToken();
@@ -558,10 +586,14 @@ struct ConstraintParser {
   StmtToken nextStmtToken() {
     auto savedCursor = srcCursor;
     scope(exit) srcCursor = savedCursor; // restore
-    parseSpace();
+
+    size_t srcTag;
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
     if(srcCursor == CST.length) return StmtToken.ENDCST;
-    size_t srcTag = srcCursor;
-    parseLeftSpace();
+    srcTag = parseLeftSpace();
     // if a left parenthesis has been found at the beginning it can only
     // be a normal statement
     if(srcCursor > srcTag) return StmtToken.STMT;
@@ -593,15 +625,13 @@ struct ConstraintParser {
     size_t impDstAnchor = fill(" ");
 
     while(srcCursor < CST.length) {
-      srcTag = srcCursor;
-      parseSpace();
+      srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
 
       if(srcCursor == CST.length) break;
 
-      srcTag = srcCursor;
       // Parse any left braces now
-      parseLeftSpace();
+      srcTag = parseLeftSpace();
       fill(CST[srcTag..srcCursor]);
 
       srcTag = parseIdentifier();
@@ -616,17 +646,19 @@ struct ConstraintParser {
 	  fill(varMap[idx].xLat);
 	}
       }
-      else if(parseLiteral() > 0) {
-	fill("_esdl__cstRand(");
-	fill(CST[srcTag..srcCursor]);
-	fill(", _outer)");
-      }
       else {
-	errorToken();
+	srcTag = parseLiteral();
+	if(srcCursor > srcTag) {
+	  fill("_esdl__cstRand(");
+	  fill(CST[srcTag..srcCursor]);
+	  fill(", _outer)");
+	}
+	else {
+	  errorToken();
+	}
       }
 
-      srcTag = srcCursor;
-      parseRightSpace();
+      srcTag = parseRightSpace();
       fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
@@ -762,10 +794,9 @@ struct ConstraintParser {
   
     translateExpr();
 
-    auto srcTag = srcCursor;
-    parseSpace();
-
+    auto srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
+
     if(CST[srcCursor++] !is ';') {
       assert(false, "Error: -- ';' missing at end of statement");
     }
@@ -779,8 +810,7 @@ struct ConstraintParser {
     while(srcCursor < CST.length) {
       import std.conv: to;
     
-      srcTag = srcCursor;
-      parseSpace();
+      srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
 
       StmtToken stmtToken = nextStmtToken();
