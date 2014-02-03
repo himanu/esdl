@@ -104,7 +104,8 @@ abstract class Constraint (string C) : _ESDL__ConstraintBase
   // Called by mixin to create functions out of parsed constraints
   static char[] constraintFoo(string CST) {
     import esdl.data.cstx;
-    return translate(CST);
+    ConstraintParser parser = ConstraintParser();
+    return parser.translate(CST);
   }
 
   debug(CONSTRAINTS) {
