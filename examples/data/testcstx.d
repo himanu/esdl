@@ -5,7 +5,7 @@ enum string CST=q{
   // ewfoewfjew
 
   foreach(i, f; foo) {
-    f < 64;
+    ((f < 64));
     f > 16;
   }
     
@@ -17,7 +17,9 @@ enum string CST=q{
 
 void main()
 {
-  auto test = translate(CST);
+  auto parser = ConstraintParser(CST);
+  auto parser2 = parser.exprParser(60);
+  auto test = parser2.translateExpr();
   import std.stdio;
   writeln(test);
 }

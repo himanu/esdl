@@ -56,6 +56,9 @@ struct ConstraintParser {
   char[] outBuffer;
   size_t outCursor = 0;
   size_t srcCursor = 0;
+  size_t srcLine   = 0;
+
+  size_t numParen  = 0;
   
   xVar[] varMap = [];
 
@@ -63,7 +66,9 @@ struct ConstraintParser {
     outBuffer.length = outCursor;
     outCursor = 0;
     srcCursor = 0;
-    varMap.length = 0;
+    if(varMap.length !is 0) {
+      assert(false, "varMap has not been unrolled completely");
+    }
     bufferSet = true;
   }
   
@@ -71,7 +76,11 @@ struct ConstraintParser {
     this.CST = CST;
   }
 
-
+  ConstraintParser exprParser(size_t cursor) {
+    ConstraintParser dup = ConstraintParser(CST[cursor..$]);
+    return dup;
+  }
+  
   enum OpToken: byte
     {   NONE = 0,
 	ADD,
@@ -89,12 +98,6 @@ struct ConstraintParser {
 	IMP,			// Implication operator
 	AND,
 	OR,
-	// END,			// End of statement, semicolon
-	// VAR,			// An identifier or a literal
-	// IF,			// A keyword, if, else, or foreach
-	// ELSE,
-	// FOREACH,
-	// RPL,			// A mapped variable
 	}
       
   OpToken parseOperator() {
@@ -308,6 +311,7 @@ struct ConstraintParser {
     while(srcCursor < CST.length) {
       auto c = CST[srcCursor];
       // eat up whitespaces
+      if(c is '\n') ++srcLine;
       if(c is ' ' || c is '\n' || c is '\t' || c is '\r' || c is '\f') {
 	++srcCursor;
 	continue;
@@ -319,7 +323,7 @@ struct ConstraintParser {
     return start;
   }
 
-  size_t parseLeftSpace() {
+  size_t parseLeftParens() {
     auto start = srcCursor;
     while(srcCursor < CST.length) {
       auto srcTag = srcCursor;
@@ -334,6 +338,7 @@ struct ConstraintParser {
       }
       else {
 	if(srcCursor < CST.length && CST[srcCursor] == '(') {
+	  ++numParen;
 	  ++srcCursor;
 	  continue;
 	}
@@ -345,7 +350,10 @@ struct ConstraintParser {
     return start;
   }
 
-  size_t parseRightSpace() {
+  // Parse parenthesis on the right hand side. But stop if and when
+  // the numParen has already hit zero. This is important since for if
+  // conditional we want to know where to stop parsing.
+  size_t parseRightParens() {
     auto start = srcCursor;
     while(srcCursor < CST.length) {
       auto srcTag = srcCursor;
@@ -360,6 +368,8 @@ struct ConstraintParser {
       }
       else {
 	if(srcCursor < CST.length && CST[srcCursor] == ')') {
+	  if(numParen is 0) break;
+	  --numParen;
 	  ++srcCursor;
 	  continue;
 	}
@@ -393,7 +403,7 @@ struct ConstraintParser {
 
   unittest {
     size_t curs = 0;
-    assert(parseLeftSpace("    // foo\nFoo Bar;", curs) == 11);
+    assert(parseLeftParens("    // foo\nFoo Bar;", curs) == 11);
     assert(curs == 11);
   }
 
@@ -417,16 +427,23 @@ struct ConstraintParser {
     fill("override public CstBlock getCstExpr() {"
 	 "\n  auto cstExpr = new CstBlock;\n");
 
-    translateBlock();
+    procBlock();
 
     setupBuffer();
 
     fill("override public CstBlock getCstExpr() {"
 	 "\n  auto cstExpr = new CstBlock;\n");
 
-    translateBlock();
+    procBlock();
 
     
+    return outBuffer;
+  }
+
+  char[] translateExpr() {
+    procExpr();
+    setupBuffer();
+    procExpr();
     return outBuffer;
   }
 
@@ -443,7 +460,7 @@ struct ConstraintParser {
     string xLat;
   }
 
-  void translateForeach() {
+  void procForeach() {
     string index;
     string elem;
     string array;
@@ -557,7 +574,7 @@ struct ConstraintParser {
     x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
     varMap ~= x;
 
-    translateBlock();
+    procBlock();
 
     if(index.length != 0) {
       varMap = varMap[0..$-2];
@@ -585,7 +602,11 @@ struct ConstraintParser {
   // FOREACH or IFCOND etc
   StmtToken nextStmtToken() {
     auto savedCursor = srcCursor;
-    scope(exit) srcCursor = savedCursor; // restore
+    auto savedParen  = numParen;
+    scope(exit) {
+      srcCursor = savedCursor; // restore
+      numParen  = savedParen; // restore
+    }
 
     size_t srcTag;
 
@@ -593,7 +614,7 @@ struct ConstraintParser {
     fill(CST[srcTag..srcCursor]);
 
     if(srcCursor == CST.length) return StmtToken.ENDCST;
-    srcTag = parseLeftSpace();
+    srcTag = parseLeftParens();
     // if a left parenthesis has been found at the beginning it can only
     // be a normal statement
     if(srcCursor > srcTag) return StmtToken.STMT;
@@ -611,7 +632,7 @@ struct ConstraintParser {
   }
 
 
-  void translateExpr() {
+  void procExpr() {
     bool cmpRHS;
     bool andRHS;
     bool orRHS;
@@ -631,7 +652,7 @@ struct ConstraintParser {
       if(srcCursor == CST.length) break;
 
       // Parse any left braces now
-      srcTag = parseLeftSpace();
+      srcTag = parseLeftParens();
       fill(CST[srcTag..srcCursor]);
 
       srcTag = parseIdentifier();
@@ -658,7 +679,7 @@ struct ConstraintParser {
 	}
       }
 
-      srcTag = parseRightSpace();
+      srcTag = parseRightParens();
       fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
@@ -789,10 +810,16 @@ struct ConstraintParser {
   }
 
   // translate the expression and also consume the semicolon thereafter
-  void translateStmt() {
+  void procStmt() {
     fill("  cstExpr ~= ");
   
-    translateExpr();
+    procExpr();
+
+    if(numParen !is 0) {
+      import std.conv: to;
+      assert(false, "Unbalanced parenthesis on line: " ~
+	     srcLine.to!string);
+    }
 
     auto srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
@@ -804,7 +831,7 @@ struct ConstraintParser {
 
   }
 
-  void translateBlock() {
+  void procBlock() {
     size_t srcTag = 0;
   loop:
     while(srcCursor < CST.length) {
@@ -824,13 +851,13 @@ struct ConstraintParser {
 	srcCursor++;		// skip the end of block brace '}'
 	break loop;
       case StmtToken.FOREACH:
-	translateForeach();
+	procForeach();
 	continue loop;
       case StmtToken.IFCOND:
-	translateForeach();
+	procForeach();
 	continue loop;
       case StmtToken.ELSE:
-	translateForeach();
+	procForeach();
 	continue loop;
       case StmtToken.ERROR:
 	assert(false, "Unidentified symbol in constraints at: " ~
@@ -838,7 +865,7 @@ struct ConstraintParser {
       case StmtToken.BLOCK:
 	assert(false, "Unidentified symbol in constraints");
       case StmtToken.STMT:
-	translateStmt();
+	procStmt();
       }
     }
     
