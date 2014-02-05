@@ -1752,6 +1752,9 @@ abstract class CstBddExpr
     static if(op == "|") {
       return new CstBdd2BddExpr(this, other, CstBddOp.OR);
     }
+    static if(op == ">>") {
+      return new CstBdd2BddExpr(this, other, CstBddOp.IMP);
+    }
   }
 
   public CstBdd2BddExpr imp(CstBddExpr other)
@@ -1809,7 +1812,7 @@ class CstBdd2BddExpr: CstBddExpr
     final switch(_op) {
     case CstBddOp.AND: retval = lvec &  rvec; break;
     case CstBddOp.OR:  retval = lvec |  rvec; break;
-    case CstBddOp.IMP: retval = lvec.imp(rvec); break;
+    case CstBddOp.IMP: retval = lvec >> rvec; break;
     }
     return retval;
   }

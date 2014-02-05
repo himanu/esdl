@@ -51,16 +51,20 @@ module esdl.data.cstx;
 struct ConstraintParser {
 
   immutable string CST;
-  bool bufferSet = false;
+  bool dryRun = true;
 
   char[] outBuffer;
+  string dummy;			// sometimes required in dryRun
   size_t outCursor = 0;
   size_t srcCursor = 0;
   size_t srcLine   = 0;
 
   size_t numParen  = 0;
   
-  xVar[] varMap = [];
+  VarPair[] varMap = [];
+
+  // list of if conditions that are currently active
+  Condition[] ifConds = [];
 
   void setupBuffer() {
     outBuffer.length = outCursor;
@@ -69,7 +73,7 @@ struct ConstraintParser {
     if(varMap.length !is 0) {
       assert(false, "varMap has not been unrolled completely");
     }
-    bufferSet = true;
+    dryRun = false;
   }
   
   this(string CST) {
@@ -409,7 +413,7 @@ struct ConstraintParser {
 
   size_t fill(in string source) {
     size_t start = outCursor;
-    if(bufferSet) {
+    if(! dryRun) {
       foreach(i, c; source) {
 	outBuffer[outCursor+i] = c;
       }
@@ -419,7 +423,7 @@ struct ConstraintParser {
   }
 
   void place(in char c, size_t cursor = 0) {
-    if(bufferSet) outBuffer[cursor] = c;
+    if(! dryRun) outBuffer[cursor] = c;
   }
 
   char[] translate() {
@@ -455,12 +459,23 @@ struct ConstraintParser {
   }
 
   // Variable translation map
-  struct xVar {
+  struct VarPair {
     string varName;
     string xLat;
   }
 
-  void procForeach() {
+  struct Condition {
+    bool inverse = false;
+    string _cond;
+    this(string cond) {
+      _cond = cond;
+    }
+    string cond() {
+      return _cond;
+    }
+  }
+
+  void procForeachBlock() {
     string index;
     string elem;
     string array;
@@ -563,13 +578,13 @@ struct ConstraintParser {
 
     // add index
     if(index.length != 0) {
-      xVar x;
+      VarPair x;
       x.varName = index;
       x.xLat = "_esdl__cstRandArrIndex!q{" ~ array ~ "}(_outer)";
       varMap ~= x;
     }
     
-    xVar x;
+    VarPair x;
     x.varName = elem;
     x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
     varMap ~= x;
@@ -583,6 +598,65 @@ struct ConstraintParser {
       varMap = varMap[0..$-1];
     }
   
+  }
+
+  void procIfBlock() {
+    string index;
+    string elem;
+    string array;
+    size_t srcTag;
+  
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    srcTag = parseIdentifier();
+    if(CST[srcTag..srcCursor] != "if") {
+      import std.conv: to;
+      assert(false, "Not a IF block at: " ~ srcTag.to!string);
+    }
+    
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if(CST[srcCursor] != '(') {
+      errorToken();
+    }
+
+    ++srcCursor;
+
+    fill("// IF Block: ");
+    auto outTag = outCursor;
+    procExpr();
+    
+    if(dryRun) {
+      dummy.length = outCursor-outTag;
+      Condition ifCond = dummy;
+      ifConds ~= ifCond;
+    }
+    else {
+      Condition ifCond = Condition(cast(string) outBuffer[outTag..outCursor]);
+      ifConds ~= ifCond;
+    }
+
+    fill("\n");
+    
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+    if(CST[srcCursor] != ')') {
+      errorToken();
+    }
+    ++srcCursor;
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if(CST[srcCursor] != '{') {
+      errorToken();
+    }
+    ++srcCursor;
+
+    procBlock();
+
+    ifConds = ifConds[0..$-1];
   }
 
   enum StmtToken: byte
@@ -813,7 +887,21 @@ struct ConstraintParser {
   void procStmt() {
     fill("  cstExpr ~= ");
   
-    procExpr();
+    if(ifConds.length !is 0) {
+      fill("// Conditions \n        ( ");
+      foreach(ifCond; ifConds[0..$-1]) {
+	fill(ifCond.cond);
+	fill(" &\n          ");
+      }
+      fill(ifConds[$-1].cond);
+      fill(") >> // End of Conditions\n");
+      fill("       ( ");
+      procExpr();
+      fill(")");
+    }
+    else {
+      procExpr();
+    }
 
     if(numParen !is 0) {
       import std.conv: to;
@@ -851,13 +939,13 @@ struct ConstraintParser {
 	srcCursor++;		// skip the end of block brace '}'
 	break loop;
       case StmtToken.FOREACH:
-	procForeach();
+	procForeachBlock();
 	continue loop;
       case StmtToken.IFCOND:
-	procForeach();
+	procIfBlock();
 	continue loop;
       case StmtToken.ELSE:
-	procForeach();
+	procForeachBlock();
 	continue loop;
       case StmtToken.ERROR:
 	assert(false, "Unidentified symbol in constraints at: " ~
