@@ -103,7 +103,28 @@ struct ConstraintParser {
 	AND,
 	OR,
 	}
-      
+
+  enum OpUnaryToken: byte
+    {   NONE = 0,
+	NEG,
+	INV,
+	NOT,
+	}
+  
+  OpUnaryToken parseUnaryOperator() {
+    OpUnaryToken tok = OpUnaryToken.NONE;
+    if(srcCursor < CST.length) {
+      if(CST[srcCursor] == '~') tok = OpUnaryToken.INV;
+      if(CST[srcCursor] == '!') tok = OpUnaryToken.NOT;
+      if(CST[srcCursor] == '-') tok = OpUnaryToken.NEG;
+    }
+    if(tok !is OpUnaryToken.NONE) {
+      srcCursor += 1;
+      return tok;
+    }
+    return tok;			// None
+  }
+
   OpToken parseOperator() {
     OpToken tok = OpToken.NONE;
     if(srcCursor < CST.length - 1) {
@@ -465,13 +486,19 @@ struct ConstraintParser {
   }
 
   struct Condition {
-    bool inverse = false;
+    bool _inverse = false;
     string _cond;
     this(string cond) {
       _cond = cond;
     }
     string cond() {
       return _cond;
+    }
+    void switchToElse() {
+      _inverse = true;
+    }
+    bool isInverse() {
+      return _inverse;
     }
   }
 
@@ -656,17 +683,41 @@ struct ConstraintParser {
 
     procBlock();
 
+    // In case there is an else clause
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    srcTag = parseIdentifier();
+    if(CST[srcTag..srcCursor] != "else") { // no else
+      srcCursor = srcTag;		   // revert the cursor
+      ifConds = ifConds[0..$-1];
+      return;
+    }
+    else {
+      fill("// Else \n");
+      ifConds[$-1].switchToElse();
+    
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+
+      if(CST[srcCursor] != '{') {
+    	errorToken();
+      }
+      ++srcCursor;
+
+      procBlock();
+
     ifConds = ifConds[0..$-1];
+    }
   }
 
   enum StmtToken: byte
     {   STMT    = 0,
 	FOREACH = 1,
 	IFCOND  = 2,
-	ELSE    = 3,
-	ENDCST    = 4,		// end of text
-	BLOCK   = 5,
-	ENDBLOCK= 6,
+	ENDCST  = 3,		// end of text
+	BLOCK   = 4,
+	ENDBLOCK= 5,
 	// ANYTHING ELSE COMES HERE
       
 	ERROR,
@@ -696,7 +747,6 @@ struct ConstraintParser {
     if(srcCursor > srcTag) {
       if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
       if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
-      if(CST[srcTag..srcCursor] == "else") return StmtToken.ELSE;
       // not a keyword
       return StmtToken.STMT;
     }
@@ -719,6 +769,7 @@ struct ConstraintParser {
     size_t orDstAnchor  = fill(" ");
     size_t impDstAnchor = fill(" ");
 
+  loop:
     while(srcCursor < CST.length) {
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
@@ -728,6 +779,15 @@ struct ConstraintParser {
       // Parse any left braces now
       srcTag = parseLeftParens();
       fill(CST[srcTag..srcCursor]);
+
+      // Parse any unary operators
+      auto uTok = parseUnaryOperator();
+      final switch(uTok) {
+      case OpUnaryToken.NEG: fill("-"); continue loop;
+      case OpUnaryToken.NOT: fill("*"); continue loop;
+      case OpUnaryToken.INV: fill("~"); continue loop;
+      case OpUnaryToken.NONE: break;
+      }
 
       srcTag = parseIdentifier();
       if(srcCursor > srcTag) {
@@ -890,9 +950,11 @@ struct ConstraintParser {
     if(ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
       foreach(ifCond; ifConds[0..$-1]) {
+	if(ifCond.isInverse()) fill("*");
 	fill(ifCond.cond);
 	fill(" &\n          ");
       }
+      if(ifConds[$-1].isInverse()) fill("*");
       fill(ifConds[$-1].cond);
       fill(") >> // End of Conditions\n");
       fill("       ( ");
@@ -922,7 +984,7 @@ struct ConstraintParser {
   void procBlock() {
     size_t srcTag = 0;
   loop:
-    while(srcCursor < CST.length) {
+    while(srcCursor <= CST.length) {
       import std.conv: to;
     
       srcTag = parseSpace();
@@ -932,10 +994,10 @@ struct ConstraintParser {
 
       final switch(stmtToken) {
       case StmtToken.ENDCST:
-	fill("\n  return cstExpr;\n}\n");
+	fill("  return cstExpr;\n}\n");
 	break loop;
       case StmtToken.ENDBLOCK:
-	fill("\n    // END OF BLOCK \n");
+	fill("    // END OF BLOCK \n");
 	srcCursor++;		// skip the end of block brace '}'
 	break loop;
       case StmtToken.FOREACH:
@@ -943,9 +1005,6 @@ struct ConstraintParser {
 	continue loop;
       case StmtToken.IFCOND:
 	procIfBlock();
-	continue loop;
-      case StmtToken.ELSE:
-	procForeachBlock();
 	continue loop;
       case StmtToken.ERROR:
 	assert(false, "Unidentified symbol in constraints at: " ~

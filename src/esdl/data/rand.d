@@ -1757,6 +1757,13 @@ abstract class CstBddExpr
     }
   }
 
+  public CstNotBddExpr opUnary(string op)()
+  {
+    static if(op == "*") {	// "!" in cstx is translated as "*"
+      return new CstNotBddExpr(this);
+    }
+  }
+
   public CstBdd2BddExpr imp(CstBddExpr other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.IMP);
@@ -1944,6 +1951,45 @@ class CstVec2BddExpr: CstBddExpr
 
 class CstNotBddExpr: CstBddExpr
 {
+  CstBddExpr _expr;
+
+  override public CstVecPrim[] getPrims() {
+    return _expr.getPrims();
+  }
+
+  override public CstStage[] getStages() {
+    return _expr.getStages();
+  }
+
+  override public BDD getBDD(CstStage stage, Buddy buddy) {
+    if(this.loopVars.length !is 0) {
+      assert(false,
+	     "CstBdd2BddExpr: Need to unroll the loopVars"
+	     " before attempting to solve BDD");
+    }
+    auto bdd = _expr.getBDD(stage, buddy);
+    return (~ bdd);
+  }
+
+  override public CstNotBddExpr unroll(CstVecLoopVar l, uint n) {
+    bool shouldUnroll = false;
+    foreach(loopVar; loopVars()) {
+      if(l is loopVar) {
+	shouldUnroll = true;
+	break;
+      }
+    }
+    if(! shouldUnroll) return this;
+    else {
+      return new CstNotBddExpr(_expr.unroll(l, n));
+    }
+  }
+
+  public this(CstBddExpr expr) {
+    _expr = expr;
+    _loopVars = expr.loopVars;
+    _lengthVars = expr.lengthVars;
+  }
 }
 
 class CstBlock: CstBddExpr

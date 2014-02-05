@@ -433,6 +433,13 @@ struct BDD
     return this.apply(other, BddOp.DIFF);
   }
 
+  public final BDD opUnary(string op)() {
+    static if(op == "~")
+      {
+	return this.not();
+      }
+  }
+  
   public final BDD opBinary(string op)(BDD other)
   {
     static if(op == "|")
