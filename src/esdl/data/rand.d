@@ -1322,11 +1322,26 @@ class CstVecRand: CstVecPrim
 }
 
 // T represents the type of the Enum
-class CstVecRandEnum(T): CstVecRand
-{
-  override public BDD getPrimBdd(Buddy buddy) {
-    return buddy.one();
-  }
+class CstVecRandEnum(T):
+  CstVecRand if(is(T == enum))
+  {
+    bdd _primBdd;
+    override public BDD getPrimBdd(Buddy buddy) {
+      // return this.bddvec.lte(buddy.buildVec(_maxValue));
+      import std.traits;
+      if(! _primBdd.isInitialized()) {
+	_primBdd = buddy.zero();
+	foreach(e; EnumMembers!T) {
+	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
+	}
+      }
+      return _primBdd;
+    }
+
+    public this(string name, long value, bool signed,
+		uint bitcount, bool isRand) {
+      super(name, value, signed, bitcount, isRand);
+    }
 };
 
 class CstVecRandArr: CstVecRand
@@ -1344,8 +1359,13 @@ class CstVecRandArr: CstVecRand
   size_t _maxValue = 0;
   CstVecLoopVar _loopVar;
 
+  // This bdd has the constraint on the max length of the array
+  bdd _primBdd;
   override public BDD getPrimBdd(Buddy buddy) {
-    return this.bddvec.lte(buddy.buildVec(_maxValue));
+    if(! _primBdd.isInitialized()) {
+      _primBdd = this.bddvec.lte(buddy.buildVec(_maxValue));
+    }
+    return _primBdd;
   }
 
   override public void reset() {
@@ -2093,8 +2113,14 @@ public CstVecPrim _esdl__cstRand(string VAR, size_t I,
   else {
     auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim is null) {
-      cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
-				  signed, bitcount, true);
+      static if(is(L == enum)) {
+	cstVecPrim = new CstVecRandEnum!L(t.tupleof[I].stringof, cast(long) t.tupleof[I],
+					  signed, bitcount, true);
+      }
+      else {
+	cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
+				    signed, bitcount, true);
+      }
       t._esdl__cstEng._cstRands[RI] = cstVecPrim;
     }
     return cstVecPrim;
@@ -2127,14 +2153,24 @@ public CstVecPrim _esdl__cstRandElem(string VAR, size_t I,
 		       "are allowed in constraint expressions");
 
   static if(findRandElemAttr!(I, t) == -1) {
-    auto cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
+    // no @rand attribute -- just create the cstVecPrim and return
+    auto cstVecPrim = new CstVecRand(t.tupleof[I].stringof,
+				     cast(long) t.tupleof[I],
 				     signed, bitcount, false);
   }
   else {
     auto cstVecPrim = t._esdl__cstEng._cstRands[RI];
     if(cstVecPrim is null) {
-      cstVecPrim = new CstVecRand(t.tupleof[I].stringof, cast(long) t.tupleof[I],
-				  signed, bitcount, true);
+      static if(is(E == enum)) {
+	cstVecPrim = new CstVecRandEnum!E(t.tupleof[I].stringof,
+					  cast(long) t.tupleof[I],
+					  signed, bitcount, true);
+      }
+      else {
+	cstVecPrim = new CstVecRand(t.tupleof[I].stringof,
+				    cast(long) t.tupleof[I],
+				    signed, bitcount, true);
+      }
       t._esdl__cstEng._cstRands[RI] = cstVecPrim;
     }
   }
@@ -2234,12 +2270,24 @@ public CstVecPrim _esdl__cstRandArrElem(string VAR, size_t I,
 	import std.conv: to;
 	auto init = (ElementType!(typeof(t.tupleof[I]))).init;
 	if(i < t.tupleof[I].length) {
-	  cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
-					    cast(long) t.tupleof[I][i], signed, bitcount, true);
+	  static if(is(E == enum)) {
+	    cstVecRandArr[i] = new CstVecRandEnum!L(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
+						    cast(long) t.tupleof[I][i], signed, bitcount, true);
+	  }
+	  else {
+	    cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
+					      cast(long) t.tupleof[I][i], signed, bitcount, true);
+	  }
 	}
 	else {
-	  cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
-					    cast(long) init, signed, bitcount, true);
+	  static if(is(E == enum)) {
+	    cstVecRandArr[i] = new CstVecRandEnum!L(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
+						    cast(long) init, signed, bitcount, true);
+	  }
+	  else {
+	    cstVecRandArr[i] = new CstVecRand(t.tupleof[I].stringof ~ "[" ~ i.to!string() ~ "]",
+					      cast(long) init, signed, bitcount, true);
+	  }
 	}
       }
     }

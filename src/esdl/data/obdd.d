@@ -322,6 +322,11 @@ struct BDD
 
   Buddy _root;
 
+  public bool isInitialized() {
+    if(_root is null) return false;
+    else return true;
+  }
+  
   @property public Buddy root()
   {
     return _root;

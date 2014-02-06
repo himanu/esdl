@@ -15,7 +15,13 @@ class Foo: Randomizable
 }
 
 
-
+enum AhbMode: ubyte
+  {   BURST = 0,
+      BURST_WRAP = 1,
+      SINGLE = 2,
+      IDLE = 64,
+      NONE,
+      }
 
 class Bar: Foo
 {
@@ -25,11 +31,13 @@ class Bar: Foo
   private @rand ubyte pop;
   private @rand ubyte bro;
 
+  private @rand AhbMode mode;
+  
   byte foo = 0;
 
   void display() {
     import std.stdio;
-    writeln("bro: ", bro, " pop: ", pop, " foo: ", foo);
+    writeln("bro: ", bro, " pop: ", pop, " foo: ", foo, " mode: ", mode);
   }
 
   override void pre_randomize() {
@@ -43,6 +51,7 @@ class Bar: Foo
   Constraint! q{
     pop > bro;
     pop < 8;
+    mode < 7;
     foo == 2 -> pop == 4;
     pop <= 4 -> bro == 0;
   } cst01;
