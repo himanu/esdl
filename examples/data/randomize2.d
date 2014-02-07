@@ -11,6 +11,7 @@ import esdl.data.bvec;
 
 class Foo: Randomizable
 {
+  mixin(randomization);
   @rand int roo;
 }
 
@@ -25,7 +26,7 @@ enum AhbMode: ubyte
 
 class Bar: Foo
 {
-  // mixin(_esdl__randomizable());
+   mixin(randomization);
 
   // private @rand!(16) ushort bob[];
   private @rand ubyte pop;
@@ -33,7 +34,7 @@ class Bar: Foo
 
   private @rand AhbMode mode;
   
-  byte foo = 0;
+  @rand ubyte foo;
 
   void display() {
     import std.stdio;
@@ -41,7 +42,7 @@ class Bar: Foo
   }
 
   override void pre_randomize() {
-    foo++;
+    // foo++;
   }
 
   // void post_randomize() {
@@ -51,7 +52,10 @@ class Bar: Foo
   Constraint! q{
     pop > bro;
     pop < 8;
-    mode < 7;
+    foo < 3;
+    if(mode == AhbMode.SINGLE) {
+      foo == 2;
+    }
     foo == 2 -> pop == 4;
     pop <= 4 -> bro == 0;
   } cst01;
@@ -60,7 +64,7 @@ class Bar: Foo
 void main()
 {
   auto foo = new Bar;
-  for (size_t i=0; i != 10; ++i)
+  for (size_t i=0; i != 1000; ++i)
     {
       foo.randomize();
       foo.display();

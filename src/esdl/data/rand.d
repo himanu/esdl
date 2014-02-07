@@ -594,6 +594,9 @@ interface RandomizableIntf
       override public bool _esdl__virtualRandomize() {
 	return _esdl__randomize!_esdl__RandType(this);
       }
+      auto _esdl__randEval(string NAME)() {
+	return mixin(NAME);
+      }
     };
     return _esdl__vRand;
   }
@@ -2022,8 +2025,13 @@ class CstBlock: CstBddExpr
     }
 }
 
-auto _esdl__randNamedApply(string VAR, alias F, size_t I=0,
-			   size_t CI=0, size_t RI=0, T)(T t)
+auto _esdl__randNamedApply(string VAR, alias F, T)(T t)
+  if(is(T unused: RandomizableIntf) && is(T == class)) {
+    return _esdl__randNamedApplyExec!(VAR, F, 0, 0, 0, T)(t, t);
+  }
+
+auto _esdl__randNamedApplyExec(string VAR, alias F, size_t I=0,
+			       size_t CI=0, size_t RI=0, T, U)(T t, U u)
 if(is(T unused: RandomizableIntf) && is(T == class)) {
   static if (I < t.tupleof.length) {
     static if ("t."~_esdl__randVar!VAR.prefix == t.tupleof[I].stringof) {
@@ -2031,10 +2039,10 @@ if(is(T unused: RandomizableIntf) && is(T == class)) {
     }
     else {
       static if(findRandAttr!(I, t)) {
-	return _esdl__randNamedApply!(VAR, F, I+1, CI+1, RI+1) (t);
+	return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1, RI+1) (t, u);
       }
       else {
-	return _esdl__randNamedApply!(VAR, F, I+1, CI+1, RI) (t);
+	return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1, RI) (t, u);
       }
     }
   }
@@ -2042,10 +2050,12 @@ if(is(T unused: RandomizableIntf) && is(T == class)) {
 		 && is(B[0] : RandomizableIntf)
 		 && is(B[0] == class)) {
       B[0] b = t;
-      return _esdl__randNamedApply!(VAR, F, 0, CI, RI) (b);
+      return _esdl__randNamedApplyExec!(VAR, F, 0, CI, RI) (b, u);
     }
     else {
-      static assert(false, "Can not map variable: " ~ VAR);
+      // Ok so the variable could not be mapped -- now try general
+      // evaluation in the scope of the object
+      return _esdl__cstRand(u._esdl__randEval!VAR(), u);
     }
  }
 
@@ -2065,6 +2075,7 @@ public CstVecConst _esdl__cstRand(INT, T)(INT var, ref T t)
     return new CstVecConst(val, isVarSigned!INT);
   }
 
+
 public CstVecPrim _esdl__cstRand(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
     enum IDX = _esdl__cstDelimiter(VAR);
@@ -2076,8 +2087,8 @@ public CstVecPrim _esdl__cstRand(string VAR, T)(ref T t)
 	return _esdl__randNamedApply!(LOOKUP, _esdl__cstRandArrLength)(t);
     }
     else static if(VAR[IDX] == '.') {
-      // hierarchical constraints -- not implemented yet
-    }
+	return _esdl__randNamedApply!(VAR, _esdl__cstRand)(t);
+      }
     else static if(VAR[IDX] == '[') {
 	// hmmmm
 	// limitation -- the index expression can not have random
