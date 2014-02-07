@@ -23,7 +23,7 @@ enum uint bddFalse = 0;
 
 
 enum BddOp : ubyte {
-    AND = 0,
+  AND = 0,
     XOR = 1,
     OR = 2,
     NAND = 3,
@@ -104,26 +104,6 @@ abstract class BddVec
     return _bitvec;
   }
 
-  public BDD opIndex(size_t n) {
-    return _bitvec[n];
-  }
-
-  public BDD[] opSlice(size_t i, size_t j) {
-    return _bitvec[i..j];
-  }
-
-  public void opIndexAssign(BDD b, size_t n) {
-    _bitvec[n] = b;
-  }
-
-  public void opSliceAssign(BDD[] other, size_t i, size_t j) {
-    _bitvec[i..j] = other;
-  }
-
-  public size_t opDollar() {
-    return _bitvec.length;
-  }
-  
   public @property size_t size()
   {
     return _bitvec.length;
@@ -173,6 +153,7 @@ abstract class BddVec
 	    return this.div(rhs);
 	  }
       }
+
   final public BddVec opBinary_r(string op)(long rhs)
     if(op == "<<" || op == ">>" || op == "*" || op == "/")
       {
@@ -269,7 +250,7 @@ abstract class BddVec
   public BddVec mul(long c);
   public BddVec mul(BddVec rhs);
   public void div_rec(BddVec divisor, BddVec remainder,
-	       BddVec result, long step);
+		      BddVec result, long step);
   public void replaceWith(BddVec that);
   public int div(long c, ref BddVec res, ref BddVec rem);
   public BddVec div(BddVec rhs);
@@ -286,6 +267,13 @@ abstract class BddVec
   public BDD gte(BddVec r);
   public BDD neq(BddVec r);
   public BddVec divmod(long c, bool which);
+  public size_t opDollar() {
+    return _bitvec.length;
+  }
+  
+  public BDD opIndex(size_t n);
+  public BddVec opSlice(size_t i, size_t j);
+
 }
 
 // only addref
@@ -334,6 +322,11 @@ struct BDD
 
   Buddy _root;
 
+  public bool isInitialized() {
+    if(_root is null) return false;
+    else return true;
+  }
+  
   @property public Buddy root()
   {
     return _root;
@@ -445,6 +438,13 @@ struct BDD
     return this.apply(other, BddOp.DIFF);
   }
 
+  public final BDD opUnary(string op)() {
+    static if(op == "~")
+      {
+	return this.not();
+      }
+  }
+  
   public final BDD opBinary(string op)(BDD other)
   {
     static if(op == "|")
@@ -574,7 +574,7 @@ struct BDD
 
     for(size_t n = 0 ; n < b.size ; ++n)
       {
-	res[n] = this.ite(b[n], c[n]);
+	res.bitvec[n] = this.ite(b.bitvec[n], c.bitvec[n]);
       }
 
     return res;
@@ -692,8 +692,6 @@ struct BDD
 
   public BDD randSatOne(double rand, double[uint] dist)
   {
-    // import std.stdio;
-    // writeln(rand);
     return makeBdd(root.bdd_randsatone(rand, dist, _index));
   }
 
@@ -1837,10 +1835,8 @@ class Buddy
     foreach_reverse(ref var; variables)
       {
 	bdd v;
-	if((value & 0x1) != 0)
-	  v = var.dup();
-	else
-	  v = var.not();
+	if((value & 0x1) != 0) v = var.dup();
+	else                   v = var.not();
 
 	result = result.and(v);
 	value >>= 1;
@@ -1852,14 +1848,13 @@ class Buddy
   public BDD buildCube(int value, int[] variables)
   {
     bdd result = one();
-    for(int z = 0; z < variables.length; ++z, value >>= 1)
+    foreach_reverse(ref var; variables)
       {
 	bdd v;
-	if((value & 0x1) != 0)
-	  v = ithVar(variables[$-z-1]);
-	else
-	  v = nithVar(variables[$-z-1]);
+	if((value & 0x1) != 0) v = ithVar(var);
+	else                   v = nithVar(var);
 	result = result.and(v);
+	value >>= 1;
       }
     return result;
   }
@@ -2054,14 +2049,15 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 
 	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = not_rec(r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 	  if(--firstReorder == 0)
@@ -2122,14 +2118,15 @@ class Buddy
     // again :
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 
 	if(firstReorder == 0)
 	  bdd_disable_reorder();
 	res = ite_rec(f, g, h);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -2181,50 +2178,62 @@ class Buddy
 	    PUSHREF(ite_rec(LOW(f), LOW(g), LOW(h)));
 	    PUSHREF(ite_rec(HIGH(f), HIGH(g), HIGH(h)));
 	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  } else if(LEVEL(f) < LEVEL(h))
+	  }
+	else if(LEVEL(f) < LEVEL(h))
 	  {
 	    PUSHREF(ite_rec(LOW(f), LOW(g), h));
 	    PUSHREF(ite_rec(HIGH(f), HIGH(g), h));
 	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  } else /* f > h */ {
-	  PUSHREF(ite_rec(f, g, LOW(h)));
-	  PUSHREF(ite_rec(f, g, HIGH(h)));
-	  res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
-	}
-      } else if(LEVEL(f) < LEVEL(g))
+	  }
+	else /* f > h */
+	  {
+	    PUSHREF(ite_rec(f, g, LOW(h)));
+	    PUSHREF(ite_rec(f, g, HIGH(h)));
+	    res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
+	  }
+      }
+    else if(LEVEL(f) < LEVEL(g))
       {
 	if(LEVEL(f) == LEVEL(h))
 	  {
 	    PUSHREF(ite_rec(LOW(f), g, LOW(h)));
 	    PUSHREF(ite_rec(HIGH(f), g, HIGH(h)));
 	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  } else if(LEVEL(f) < LEVEL(h))
+	  }
+	else if(LEVEL(f) < LEVEL(h))
 	  {
 	    PUSHREF(ite_rec(LOW(f), g, h));
 	    PUSHREF(ite_rec(HIGH(f), g, h));
 	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  } else /* f > h */ {
-	  PUSHREF(ite_rec(f, g, LOW(h)));
-	  PUSHREF(ite_rec(f, g, HIGH(h)));
-	  res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
-	}
-      } else /* f > g */ {
-      if(LEVEL(g) == LEVEL(h))
-	{
-	  PUSHREF(ite_rec(f, LOW(g), LOW(h)));
-	  PUSHREF(ite_rec(f, HIGH(g), HIGH(h)));
-	  res = bdd_makenode(LEVEL(g), READREF(2), READREF(1));
-	} else if(LEVEL(g) < LEVEL(h))
-	{
-	  PUSHREF(ite_rec(f, LOW(g), h));
-	  PUSHREF(ite_rec(f, HIGH(g), h));
-	  res = bdd_makenode(LEVEL(g), READREF(2), READREF(1));
-	} else /* g > h */ {
-	PUSHREF(ite_rec(f, g, LOW(h)));
-	PUSHREF(ite_rec(f, g, HIGH(h)));
-	res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
+	  }
+	else /* f > h */
+	  {
+	    PUSHREF(ite_rec(f, g, LOW(h)));
+	    PUSHREF(ite_rec(f, g, HIGH(h)));
+	    res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
+	  }
       }
-    }
+    else /* f > g */
+      {
+	if(LEVEL(g) == LEVEL(h))
+	  {
+	    PUSHREF(ite_rec(f, LOW(g), LOW(h)));
+	    PUSHREF(ite_rec(f, HIGH(g), HIGH(h)));
+	    res = bdd_makenode(LEVEL(g), READREF(2), READREF(1));
+	  }
+	else if(LEVEL(g) < LEVEL(h))
+	  {
+	    PUSHREF(ite_rec(f, LOW(g), h));
+	    PUSHREF(ite_rec(f, HIGH(g), h));
+	    res = bdd_makenode(LEVEL(g), READREF(2), READREF(1));
+	  }
+	else /* g > h */
+	  {
+	    PUSHREF(ite_rec(f, g, LOW(h)));
+	    PUSHREF(ite_rec(f, g, HIGH(h)));
+	    res = bdd_makenode(LEVEL(h), READREF(2), READREF(1));
+	  }
+      }
 
     POPREF(2);
 
@@ -2248,7 +2257,7 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 	replacepair = pair.result;
 	replacelast = pair.last;
 	replaceid =(pair.id << 2) | CACHEID_REPLACE;
@@ -2258,7 +2267,8 @@ class Buddy
 	res = replace_rec(r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -2293,8 +2303,7 @@ class Buddy
     PUSHREF(replace_rec(HIGH(r)));
 
     res = bdd_correctify(LEVEL(replacepair[LEVEL(r)]),
-			 READREF(2),
-			 READREF(1));
+			 READREF(2), READREF(1));
     POPREF(2);
 
     (*entry).a = r;
@@ -2321,16 +2330,19 @@ class Buddy
 	PUSHREF(bdd_correctify(level, LOW(l), LOW(r)));
 	PUSHREF(bdd_correctify(level, HIGH(l), HIGH(r)));
 	res = bdd_makenode(LEVEL(l), READREF(2), READREF(1));
-      } else if(LEVEL(l) < LEVEL(r))
+      }
+    else if(LEVEL(l) < LEVEL(r))
       {
 	PUSHREF(bdd_correctify(level, LOW(l), r));
 	PUSHREF(bdd_correctify(level, HIGH(l), r));
 	res = bdd_makenode(LEVEL(l), READREF(2), READREF(1));
-      } else {
-      PUSHREF(bdd_correctify(level, l, LOW(r)));
-      PUSHREF(bdd_correctify(level, l, HIGH(r)));
-      res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
-    }
+      }
+    else
+      {
+	PUSHREF(bdd_correctify(level, l, LOW(r)));
+	PUSHREF(bdd_correctify(level, l, HIGH(r)));
+	res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
+      }
     POPREF(2);
 
     return res; /* FIXME: cache ? */
@@ -2355,7 +2367,7 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 	applyop = op;
 
 	if(firstReorder == 0)
@@ -2388,8 +2400,6 @@ class Buddy
     // static uint cache = 0;
     // count++;
     // writeln("apply_rec:",l,":",r,"-",applyop,"    ",rec,"|",cache);
-    debug(VERIFY_ASSERTIONS)
-      {assert(applyop != BddOp.AND && applyop != BddOp.OR);}
 
     switch(applyop)
       {
@@ -2452,42 +2462,30 @@ class Buddy
       if((*entry).a == l &&(*entry).b == r &&(*entry).c == applyop)
 	{
 	  debug(CACHESTATS) {_cacheStats.opHit++;}
-	  // cache++;
+
 	  return(*entry).res;
 	}
-      // debug(CACHESTATS)
-      // {_cacheStats.opMiss++;}
+      debug(CACHESTATS)	{_cacheStats.opMiss++;}
 
       if(LEVEL(l) == LEVEL(r))
 	{
-	  _refStack[_refStackTop++] =
-	    apply_rec(LOW(l), LOW(r));
-	  _refStack[_refStackTop++] =
-	    apply_rec(HIGH(l), HIGH(r));
-	  res = bdd_makenode(LEVEL(l),
-			     _refStack[_refStackTop - 2],
-			     _refStack[_refStackTop - 1]);
-	} else if(LEVEL(l) < LEVEL(r))
+	  PUSHREF(apply_rec(LOW(l), LOW(r)));
+	  PUSHREF(apply_rec(HIGH(l), HIGH(r)));
+	  res = bdd_makenode(LEVEL(l), READREF(2), READREF(1));
+	}
+      else if(LEVEL(l) < LEVEL(r))
 	{
-	  _refStack[_refStackTop++] =
-	    apply_rec(LOW(l), r);
-	  _refStack[_refStackTop++] =
-	    apply_rec(HIGH(l), r);
-	  res = bdd_makenode(LEVEL(l),
-			     _refStack[_refStackTop - 2],
-			     _refStack[_refStackTop - 1]);
-	} else {
-	_refStack[_refStackTop++] =
-	  apply_rec(l, LOW(r));
-	_refStack[_refStackTop++] =
-	  apply_rec(l, HIGH(r));
-	res = bdd_makenode(LEVEL(r),
-			   _refStack[_refStackTop - 2],
-			   _refStack[_refStackTop - 1]);
+	  PUSHREF(apply_rec(LOW(l), r));
+	  PUSHREF(apply_rec(HIGH(l), r));
+	  res = bdd_makenode(LEVEL(l), READREF(2), READREF(1));
+	}
+      else {
+	PUSHREF(apply_rec(l, LOW(r)));
+	PUSHREF(apply_rec(l, HIGH(r)));
+	res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
       }
 
-      // POPREF(2);
-      _refStackTop -= 2;
+      POPREF(2);
 
       (*entry).a = l;
       (*entry).b = r;
@@ -2685,14 +2683,15 @@ class Buddy
 
     // again:
     while(true) {
-      if(varset2vartable(var) < 0)
-	return bddFalse;
       try {
-	_refStackTop = 0;
+	if(varset2vartable(var) < 0)
+	  return bddFalse;
+
+	INITREF();
 
 	applyop = BddOp.OR;
 	appexop = opr;
-	appexid =(var << 5) |(appexop << 1); /* FIXME: range! */
+	appexid =(var << 5) | (appexop << 1); /* FIXME: range! */
 	quantid =(appexid << 3) | CACHEID_APPEX;
 
 	if(firstReorder == 0)
@@ -2700,7 +2699,8 @@ class Buddy
 	res = appquant_rec(l, r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -2782,8 +2782,6 @@ class Buddy
   {
     int res;
 
-    debug(VERIFY_ASSERTIONS) {assert(appexop != BddOp.AND);}
-
     switch(appexop)
       {
       case BddOp.AND:
@@ -2823,7 +2821,7 @@ class Buddy
 	  return 0;
 	break;
       default:
-	assert(appexop != BddOp.AND && appexop != BddOp.NOT &&
+	assert(appexop != BddOp.NOT &&
 	       appexop != BddOp.SIMPLIFY);
 	break;
       }
@@ -2846,26 +2844,35 @@ class Buddy
 	}
       debug(CACHESTATS) {_cacheStats.opMiss++;}
 
-      int lev;
       if(LEVEL(l) == LEVEL(r))
 	{
 	  PUSHREF(appquant_rec(LOW(l), LOW(r)));
 	  PUSHREF(appquant_rec(HIGH(l), HIGH(r)));
-	  lev = LEVEL(l);
-	} else if(LEVEL(l) < LEVEL(r))
+	  if (INVARSET(LEVEL(l)))
+	    res = apply_rec(READREF(2), READREF(1));
+	  else
+	    res = bdd_makenode(LEVEL(l), READREF(2), READREF(1));
+	}
+
+      else if(LEVEL(l) < LEVEL(r))
 	{
 	  PUSHREF(appquant_rec(LOW(l), r));
 	  PUSHREF(appquant_rec(HIGH(l), r));
-	  lev = LEVEL(l);
-	} else {
-	PUSHREF(appquant_rec(l, LOW(r)));
-	PUSHREF(appquant_rec(l, HIGH(r)));
-	lev = LEVEL(r);
-      }
-      if(INVARSET(lev))
-	res = apply_rec(READREF(2), READREF(1));
+	  if (INVARSET(LEVEL(l)))
+	    res = apply_rec(READREF(2), READREF(1));
+	  else
+	    res = bdd_makenode(LEVEL(l), READREF(2), READREF(1));
+	  
+	}
       else
-	res = bdd_makenode(lev, READREF(2), READREF(1));
+	{
+	  PUSHREF(appquant_rec(l, LOW(r)));
+	  PUSHREF(appquant_rec(l, HIGH(r)));
+	  if (INVARSET(LEVEL(r)))
+	    res = apply_rec(READREF(2), READREF(1));
+	  else
+	    res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
+	}
 
       POPREF(2);
 
@@ -2875,136 +2882,6 @@ class Buddy
       (*entry).res = res;
     }
 
-    return res;
-  }
-
-  int appuni_rec(int l, int r, int var)
-  {
-    int res;
-
-    int LEVEL_l, LEVEL_r, LEVEL_var;
-    LEVEL_l = LEVEL(l);
-    LEVEL_r = LEVEL(r);
-    LEVEL_var = LEVEL(var);
-
-    if(LEVEL_l > LEVEL_var && LEVEL_r > LEVEL_var)
-      {
-	// Skipped a quantified node, answer is zero.
-	return BDDZERO;
-      }
-
-    if(l < 2 && r < 2)
-      res = oprres[appexop][(l << 1) | r];
-    else if(var < 2)
-      {
-	int oldop = applyop;
-	applyop = appexop;
-	switch(applyop) {
-	case BddOp.AND: res = and_rec(l, r); break;
-	case BddOp.OR: res = or_rec(l, r); break;
-	default: res = apply_rec(l, r); break;
-	}
-	applyop = oldop;
-      } else {
-      BddCacheData* entry = _appexCache.lookup(APPEXHASH(l, r, appexop));
-      if((*entry).a == l &&(*entry).b == r &&(*entry).c == appexid)
-	{
-	  debug(CACHESTATS) {_cacheStats.opHit++;}
-	  return(*entry).res;
-	}
-      debug(CACHESTATS) {_cacheStats.opMiss++;}
-
-      int lev;
-      if(LEVEL_l == LEVEL_r)
-	{
-	  if(LEVEL_l == LEVEL_var)
-	    {
-	      lev = -1;
-	      var = HIGH(var);
-	    } else {
-	    lev = LEVEL_l;
-	  }
-	  PUSHREF(appuni_rec(LOW(l), LOW(r), var));
-	  PUSHREF(appuni_rec(HIGH(l), HIGH(r), var));
-	  lev = LEVEL_l;
-	} else if(LEVEL_l < LEVEL_r)
-	{
-	  if(LEVEL_l == LEVEL_var)
-	    {
-	      lev = -1;
-	      var = HIGH(var);
-	    } else {
-	    lev = LEVEL_l;
-	  }
-	  PUSHREF(appuni_rec(LOW(l), r, var));
-	  PUSHREF(appuni_rec(HIGH(l), r, var));
-	} else {
-	if(LEVEL_r == LEVEL_var)
-	  {
-	    lev = -1;
-	    var = HIGH(var);
-	  } else {
-	  lev = LEVEL_r;
-	}
-	PUSHREF(appuni_rec(l, LOW(r), var));
-	PUSHREF(appuni_rec(l, HIGH(r), var));
-      }
-      if(lev == -1)
-	res = apply_rec(READREF(2), READREF(1));
-      else
-	res = bdd_makenode(lev, READREF(2), READREF(1));
-
-      POPREF(2);
-
-      (*entry).a = l;
-      (*entry).b = r;
-      (*entry).c = appexid;
-      (*entry).res = res;
-    }
-
-    return res;
-  }
-
-  int unique_rec(int r, int q)
-  {
-    int res;
-    int LEVEL_r, LEVEL_q;
-
-    LEVEL_r = LEVEL(r);
-    LEVEL_q = LEVEL(q);
-    if(LEVEL_r > LEVEL_q)
-      {
-	// Skipped a quantified node, answer is zero.
-	return BDDZERO;
-      }
-
-    if(r < 2 || q < 2)
-      return r;
-
-    BddCacheData* entry = _quantCache.lookup(QUANTHASH(r));
-    if((*entry).a == r &&(*entry).c == quantid)
-      {
-	debug(CACHESTATS) {_cacheStats.opHit++;}
-	return(*entry).res;
-      }
-    debug(CACHESTATS) {_cacheStats.opMiss++;}
-
-    if(LEVEL_r == LEVEL_q)
-      {
-	PUSHREF(unique_rec(LOW(r), HIGH(q)));
-	PUSHREF(unique_rec(HIGH(r), HIGH(q)));
-	res = apply_rec(READREF(2), READREF(1));
-      } else {
-      PUSHREF(unique_rec(LOW(r), q));
-      PUSHREF(unique_rec(HIGH(r), q));
-      res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
-    }
-
-    POPREF(2);
-
-    (*entry).a = r;
-    (*entry).c = quantid;
-    (*entry).res = res;
     return res;
   }
 
@@ -3055,7 +2932,7 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 	miscid = CACHEID_CONSTRAIN;
 
 	if(firstReorder == 0)
@@ -3063,7 +2940,8 @@ class Buddy
 	res = constrain_rec(f, c);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -3106,30 +2984,34 @@ class Buddy
 	  res = constrain_rec(HIGH(f), HIGH(c));
 	else if(HIGH(c) == 0)
 	  res = constrain_rec(LOW(f), LOW(c));
-	else {
-	  PUSHREF(constrain_rec(LOW(f), LOW(c)));
-	  PUSHREF(constrain_rec(HIGH(f), HIGH(c)));
-	  res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  POPREF(2);
-	}
-      } else if(LEVEL(f) < LEVEL(c))
+	else
+	  {
+	    PUSHREF(constrain_rec(LOW(f), LOW(c)));
+	    PUSHREF(constrain_rec(HIGH(f), HIGH(c)));
+	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
+	    POPREF(2);
+	  }
+      }
+    else if(LEVEL(f) < LEVEL(c))
       {
 	PUSHREF(constrain_rec(LOW(f), c));
 	PUSHREF(constrain_rec(HIGH(f), c));
 	res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
 	POPREF(2);
-      } else {
-      if(LOW(c) == 0)
-	res = constrain_rec(f, HIGH(c));
-      else if(HIGH(c) == 0)
-	res = constrain_rec(f, LOW(c));
-      else {
-	PUSHREF(constrain_rec(f, LOW(c)));
-	PUSHREF(constrain_rec(f, HIGH(c)));
-	res = bdd_makenode(LEVEL(c), READREF(2), READREF(1));
-	POPREF(2);
       }
-    }
+    else
+      {
+	if(LOW(c) == 0)
+	  res = constrain_rec(f, HIGH(c));
+	else if(HIGH(c) == 0)
+	  res = constrain_rec(f, LOW(c));
+	else {
+	  PUSHREF(constrain_rec(f, LOW(c)));
+	  PUSHREF(constrain_rec(f, HIGH(c)));
+	  res = bdd_makenode(LEVEL(c), READREF(2), READREF(1));
+	  POPREF(2);
+	}
+      }
 
     (*entry).a = f;
     (*entry).b = c;
@@ -3157,27 +3039,28 @@ class Buddy
 
     // again:
     while(true) {
-	try {
-	  _refStackTop = 0;
-	  composelevel = _var2Level[var];
-	  replaceid =(composelevel << 2) | CACHEID_COMPOSE;
+      try {
+	INITREF();
+	composelevel = _var2Level[var];
+	replaceid = (composelevel << 2) | CACHEID_COMPOSE;
 
-	  if(firstReorder == 0)
-	    bdd_disable_reorder();
-	  res = compose_rec(f, g);
-	  if(firstReorder == 0)
-	    bdd_enable_reorder();
-	} catch(ReorderException x)
-	  {
-	    bdd_checkreorder();
-
-	    if(--firstReorder == 0)
-	      continue; // again;
-	    res = BDDZERO;
-	    /* avoid warning about res being uninitialized */
-	  }
-	break;
+	if(firstReorder == 0)
+	  bdd_disable_reorder();
+	res = compose_rec(f, g);
+	if(firstReorder == 0)
+	  bdd_enable_reorder();
       }
+      catch(ReorderException x)
+	{
+	  bdd_checkreorder();
+
+	  if(--firstReorder == 0)
+	    continue; // again;
+	  res = BDDZERO;
+	  /* avoid warning about res being uninitialized */
+	}
+      break;
+    }
 
     checkresize();
     return res;
@@ -3205,21 +3088,26 @@ class Buddy
 	    PUSHREF(compose_rec(LOW(f), LOW(g)));
 	    PUSHREF(compose_rec(HIGH(f), HIGH(g)));
 	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  } else if(LEVEL(f) < LEVEL(g))
+	  }
+	else if(LEVEL(f) < LEVEL(g))
 	  {
 	    PUSHREF(compose_rec(LOW(f), g));
 	    PUSHREF(compose_rec(HIGH(f), g));
 	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  } else {
-	  PUSHREF(compose_rec(f, LOW(g)));
-	  PUSHREF(compose_rec(f, HIGH(g)));
-	  res = bdd_makenode(LEVEL(g), READREF(2), READREF(1));
-	}
+	  }
+	else
+	  {
+	    PUSHREF(compose_rec(f, LOW(g)));
+	    PUSHREF(compose_rec(f, HIGH(g)));
+	    res = bdd_makenode(LEVEL(g), READREF(2), READREF(1));
+	  }
 	POPREF(2);
-      } else
-      /*if(LEVEL(f) == composelevel) changed 2-nov-98 */ {
-      res = ite_rec(g, HIGH(f), LOW(f));
-    }
+      }
+    else
+      /*if(LEVEL(f) == composelevel) changed 2-nov-98 */
+      {
+	res = ite_rec(g, HIGH(f), LOW(f));
+      }
 
     (*entry).a = f;
     (*entry).b = g;
@@ -3243,9 +3131,9 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 	replacepair = pair.result;
-	replaceid =(pair.id << 2) | CACHEID_VECCOMPOSE;
+	replaceid = (pair.id << 2) | CACHEID_VECCOMPOSE;
 	replacelast = pair.last;
 
 	if(firstReorder == 0)
@@ -3253,7 +3141,8 @@ class Buddy
 	res = veccompose_rec(f);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -3312,30 +3201,32 @@ class Buddy
 
     // again:
     while(true) {
+      try {
 	if(varset2vartable(var) < 0)
 	  return bddFalse;
-	try {
-	  _refStackTop = 0;
 
-	  quantid =(var << 3) | CACHEID_EXIST; /* FIXME: range */
-	  applyop = BddOp.OR;
+	INITREF();
 
-	  if(firstReorder == 0)
-	    bdd_disable_reorder();
-	  res = quant_rec(r);
-	  if(firstReorder == 0)
-	    bdd_enable_reorder();
-	} catch(ReorderException x)
-	  {
-	    bdd_checkreorder();
+	quantid =(var << 3) | CACHEID_EXIST; /* FIXME: range */
+	applyop = BddOp.OR;
 
-	    if(--firstReorder == 0)
-	      continue; //  again;
-	    res = BDDZERO;
-	    /* avoid warning about res being uninitialized */
-	  }
-	break;
+	if(firstReorder == 0)
+	  bdd_disable_reorder();
+	res = quant_rec(r);
+	if(firstReorder == 0)
+	  bdd_enable_reorder();
       }
+      catch(ReorderException x)
+	{
+	  bdd_checkreorder();
+
+	  if(--firstReorder == 0)
+	    continue; //  again;
+	  res = BDDZERO;
+	  /* avoid warning about res being uninitialized */
+	}
+      break;
+    }
 
     checkresize();
     return res;
@@ -3357,10 +3248,11 @@ class Buddy
 
   again:
     while(true) {
-      if(varset2vartable(var) < 0)
-	return bddFalse;
       try {
-	_refStackTop = 0;
+	if(varset2vartable(var) < 0)
+	  return bddFalse;
+
+	INITREF();
 	quantid =(var << 3) | CACHEID_FORALL;
 	applyop = BddOp.AND;
 
@@ -3369,7 +3261,8 @@ class Buddy
 	res = quant_rec(r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -3402,16 +3295,20 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	if (varset2vartable(var) < 0)
+	  return bddFalse;
+
+	INITREF();
 	quantid =(var << 3) | CACHEID_UNIQUE;
 	applyop = BddOp.XOR;
 
 	if(firstReorder == 0)
 	  bdd_disable_reorder();
-	res = unique_rec(r, var);
+	res = quant_rec(r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -3442,10 +3339,10 @@ class Buddy
 
     // again:
     while(true) {
-      if(varset2svartable(var) < 0)
-	return bddFalse;
       try {
-	_refStackTop = 0;
+	if(varset2svartable(var) < 0)
+	  return bddFalse;
+	INITREF();
 	miscid =(var << 3) | CACHEID_RESTRICT;
 
 	if(firstReorder == 0)
@@ -3453,7 +3350,8 @@ class Buddy
 	res = restrict_rec(r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -3487,17 +3385,17 @@ class Buddy
     if(INSVARSET(LEVEL(r)))
       {
 	if(quantvarset[LEVEL(r)] > 0)
-	  {
-	    res = restrict_rec(HIGH(r));
-	  } else {
+	  res = restrict_rec(HIGH(r));
+	else
 	  res = restrict_rec(LOW(r));
-	}
-      } else {
-      PUSHREF(restrict_rec(LOW(r)));
-      PUSHREF(restrict_rec(HIGH(r)));
-      res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
-      POPREF(2);
-    }
+      }
+    else
+      {
+	PUSHREF(restrict_rec(LOW(r)));
+	PUSHREF(restrict_rec(HIGH(r)));
+	res = bdd_makenode(LEVEL(r), READREF(2), READREF(1));
+	POPREF(2);
+      }
 
     (*entry).a = r;
     (*entry).c = miscid;
@@ -3519,7 +3417,7 @@ class Buddy
     // again:
     while(true) {
       try {
-	_refStackTop = 0;
+	INITREF();
 	applyop = BddOp.OR;
 
 	if(firstReorder == 0)
@@ -3527,7 +3425,8 @@ class Buddy
 	res = simplify_rec(f, d);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -3569,23 +3468,27 @@ class Buddy
 	  res = simplify_rec(HIGH(f), HIGH(d));
 	else if(HIGH(d) == 0)
 	  res = simplify_rec(LOW(f), LOW(d));
-	else {
-	  PUSHREF(simplify_rec(LOW(f), LOW(d)));
-	  PUSHREF(simplify_rec(HIGH(f), HIGH(d)));
-	  res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
-	  POPREF(2);
-	}
-      } else if(LEVEL(f) < LEVEL(d))
+	else
+	  {
+	    PUSHREF(simplify_rec(LOW(f), LOW(d)));
+	    PUSHREF(simplify_rec(HIGH(f), HIGH(d)));
+	    res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
+	    POPREF(2);
+	  }
+      }
+    else if(LEVEL(f) < LEVEL(d))
       {
 	PUSHREF(simplify_rec(LOW(f), d));
 	PUSHREF(simplify_rec(HIGH(f), d));
 	res = bdd_makenode(LEVEL(f), READREF(2), READREF(1));
 	POPREF(2);
-      } else /* LEVEL(d) < LEVEL(f) */ {
-      PUSHREF(or_rec(LOW(d), HIGH(d))); /* Exist quant */
-      res = simplify_rec(f, READREF(1));
-      POPREF(1);
-    }
+      }
+    else /* LEVEL(d) < LEVEL(f) */
+      {
+	PUSHREF(or_rec(LOW(d), HIGH(d))); /* Exist quant */
+	res = simplify_rec(f, READREF(1));
+	POPREF(1);
+      }
 
     (*entry).a = f;
     (*entry).b = d;
@@ -3595,10 +3498,10 @@ class Buddy
     return res;
   }
 
-  static int supportSize = 0;
-
   int bdd_support(int r)
   {
+    import core.stdc.string: memset;
+    static int supportSize = 0;
     int n;
     int res = 1;
 
@@ -3611,7 +3514,7 @@ class Buddy
     if(supportSize < _varNum)
       {
 	supportSet.length = _varNum;
-	//memset(supportSet, 0, _varNum*sizeof(int));
+	memset(supportSet.ptr, 0, _varNum*int.sizeof);
 	supportSize = _varNum;
 	supportID = 0;
       }
@@ -3625,8 +3528,7 @@ class Buddy
     if(supportID == 0x0FFFFFFF)
       {
 	/* We probably don't get here -- but let's just be sure */
-	for(int i = 0; i < _varNum; ++i)
-	  supportSet[i] = 0;
+	memset(supportSet.ptr, 0, _varNum*int.sizeof);
 	supportID = 0;
       }
     ++supportID;
@@ -3695,33 +3597,35 @@ class Buddy
     _appexCache.initIfNull(_cacheSize);
     _quantCache.initIfNull(_cacheSize);
 
-  // again:
+    // again:
     while(true) {
+      try {
 	if(varset2vartable(var) < 0)
 	  return bddFalse;
-	try {
-	  _refStackTop = 0;
-	  applyop = BddOp.AND;
-	  appexop = opr;
-	  appexid =(var << 5) |(appexop << 1) | 1; /* FIXME: range! */
-	  quantid =(appexid << 3) | CACHEID_APPAL;
 
-	  if(firstReorder == 0)
-	    bdd_disable_reorder();
-	  res = appquant_rec(l, r);
-	  if(firstReorder == 0)
-	    bdd_enable_reorder();
-	} catch(ReorderException x)
-	  {
-	    bdd_checkreorder();
+	INITREF();
+	applyop = BddOp.AND;
+	appexop = opr;
+	appexid =(var << 5) | (appexop << 1) | 1; /* FIXME: range! */
+	quantid =(appexid << 3) | CACHEID_APPAL;
 
-	    if(--firstReorder == 0)
-	      continue; // again;
-	    res = BDDZERO;
-	    /* avoid warning about res being uninitialized */
-	  }
-	break;
+	if(firstReorder == 0)
+	  bdd_disable_reorder();
+	res = appquant_rec(l, r);
+	if(firstReorder == 0)
+	  bdd_enable_reorder();
       }
+      catch(ReorderException x)
+	{
+	  bdd_checkreorder();
+
+	  if(--firstReorder == 0)
+	    continue; // again;
+	  res = BDDZERO;
+	  /* avoid warning about res being uninitialized */
+	}
+      break;
+    }
 
     checkresize();
     return res;
@@ -3749,33 +3653,34 @@ class Buddy
     _appexCache.initIfNull(_cacheSize);
     _quantCache.initIfNull(_cacheSize);
 
-  // again:
+    // again:
     while(true) {
-	try {
-	  if (varset2vartable(var) < 0)
-	    return bddFalse;
+      try {
+	if (varset2vartable(var) < 0)
+	  return bddFalse;
 
-	  _refStackTop = 0;
-	  applyop = BddOp.XOR;
-	  appexop = opr;
-	  appexid =(var << 5) |(appexop << 1) | 1; /* FIXME: range! */
-	  quantid =(appexid << 3) | CACHEID_APPUN;
+	INITREF();
+	applyop = BddOp.XOR;
+	appexop = opr;
+	appexid = (var << 5) | (appexop << 1) | 1; /* FIXME: range! */
+	quantid = (appexid << 3) | CACHEID_APPUN;
 
-	  if(firstReorder == 0)
-	    bdd_disable_reorder();
-	  res = appuni_rec(l, r, var);
-	  if(firstReorder == 0)
-	    bdd_enable_reorder();
-	} catch(ReorderException x)
-	  {
-	    bdd_checkreorder();
-	    if(--firstReorder == 0)
-	      continue; // again;
-	    res = BDDZERO;
-	    /* avoid warning about res being uninitialized */
-	  }
-	break;
+	if(firstReorder == 0)
+	  bdd_disable_reorder();
+	res = appquant_rec(l, r);
+	if(firstReorder == 0)
+	  bdd_enable_reorder();
       }
+      catch(ReorderException x)
+	{
+	  bdd_checkreorder();
+	  if(--firstReorder == 0)
+	    continue; // again;
+	  res = BDDZERO;
+	  /* avoid warning about res being uninitialized */
+	}
+      break;
+    }
 
     checkresize();
     return res;
@@ -3791,7 +3696,7 @@ class Buddy
 
     bdd_disable_reorder();
 
-    _refStackTop = 0;
+    INITREF();
     res = satone_rec(r);
 
     bdd_enable_reorder();
@@ -3808,16 +3713,12 @@ class Buddy
     if(LOW(r) == 0)
       {
 	int res = satone_rec(HIGH(r));
-	int m = bdd_makenode(LEVEL(r), BDDZERO, res);
-	PUSHREF(m);
-	return m;
+	return PUSHREF(bdd_makenode(LEVEL(r), BDDZERO, res));
       }
     else
       {
 	int res = satone_rec(LOW(r));
-	int m = bdd_makenode(LEVEL(r), res, BDDZERO);
-	PUSHREF(m);
-	return m;
+	return PUSHREF(bdd_makenode(LEVEL(r), res, BDDZERO));
       }
   }
 
@@ -3836,7 +3737,7 @@ class Buddy
 
     bdd_disable_reorder();
 
-    _refStackTop = 0;
+    INITREF();
     satPolarity = pol;
     res = satoneset_rec(r, var);
 
@@ -3856,43 +3757,34 @@ class Buddy
 	if(LOW(r) == 0)
 	  {
 	    int res = satoneset_rec(HIGH(r), var);
-	    int m = bdd_makenode(LEVEL(r), BDDZERO, res);
-	    PUSHREF(m);
-	    return m;
+	    return PUSHREF(bdd_makenode(LEVEL(r), BDDZERO, res));
 	  }
 	else {
 	  int res = satoneset_rec(LOW(r), var);
-	  int m = bdd_makenode(LEVEL(r), res, BDDZERO);
-	  PUSHREF(m);
-	  return m;
+	  return PUSHREF(bdd_makenode(LEVEL(r), res, BDDZERO));
 	}
-      } else if(LEVEL(var) < LEVEL(r))
+      }
+    else if(LEVEL(var) < LEVEL(r))
       {
 	int res = satoneset_rec(r, HIGH(var));
 	if(satPolarity == BDDONE)
-	  {
-	    int m = bdd_makenode(LEVEL(var), BDDZERO, res);
-	    PUSHREF(m);
-	    return m;
-	  } else {
-	  int m = bdd_makenode(LEVEL(var), res, BDDZERO);
-	  PUSHREF(m);
-	  return m;
-	}
-      } else /* LEVEL(r) == LEVEL(var) */ {
-      if(LOW(r) == 0)
-	{
-	  int res = satoneset_rec(HIGH(r), HIGH(var));
-	  int m = bdd_makenode(LEVEL(r), BDDZERO, res);
-	  PUSHREF(m);
-	  return m;
-	} else {
-	int res = satoneset_rec(LOW(r), HIGH(var));
-	int m = bdd_makenode(LEVEL(r), res, BDDZERO);
-	PUSHREF(m);
-	return m;
+	  return PUSHREF(bdd_makenode(LEVEL(var), BDDZERO, res));
+	else
+	  return PUSHREF(bdd_makenode(LEVEL(var), res, BDDZERO));
       }
-    }
+    else /* LEVEL(r) == LEVEL(var) */
+      {
+	if(LOW(r) == 0)
+	  {
+	    int res = satoneset_rec(HIGH(r), HIGH(var));
+	    return PUSHREF(bdd_makenode(LEVEL(r), BDDZERO, res));
+	  }
+	else
+	  {
+	    int res = satoneset_rec(LOW(r), HIGH(var));
+	    return PUSHREF(bdd_makenode(LEVEL(r), res, BDDZERO));
+	  }
+      }
 
   }
 
@@ -3909,7 +3801,7 @@ class Buddy
 
     bdd_disable_reorder();
 
-    _refStackTop = 0;
+    INITREF();
     res = randsatone_rec(rnd, dist, r);
 
     bdd_enable_reorder();
@@ -3968,7 +3860,7 @@ class Buddy
 
     bdd_disable_reorder();
 
-    _refStackTop = 0;
+    INITREF();
     res = fullsatone_rec(r);
 
     for(v = LEVEL(r) - 1; v >= 0; v--)
@@ -4092,9 +3984,11 @@ class Buddy
 
   int[] bdd_varprofile(int r)
   {
+    import core.stdc.string : memset, memcpy;
     CHECK(r);
 
     int[] varprofile = new int[](_varNum);
+    memset(varprofile.ptr, 0, int.sizeof * _varNum);
 
     varprofile_rec(r, varprofile);
     bdd_unmark(r);
@@ -4183,7 +4077,7 @@ class Buddy
       return(*entry).dres;
 
     auto size = log2add(bdd_log2pathcount_rec(LOW(r)),
-		   bdd_log2pathcount_rec(HIGH(r)));
+			bdd_log2pathcount_rec(HIGH(r)));
 
     (*entry).a = r;
     (*entry).c = miscid;
@@ -4203,7 +4097,7 @@ class Buddy
     for(v = LEVEL(r) - 1; v >= 0; --v)
       allsatProfile[_level2Var[v]] = -1;
 
-    _refStackTop = 0;
+    INITREF();
 
     allsat_rec(r, result);
 
@@ -4408,7 +4302,7 @@ class Buddy
 
     if(gbc_enabled == true) 
       {
-      //if(gbc_handler != NULL)
+	//if(gbc_handler != NULL)
 	// {
 	gcstats.nodes = _nodeSize;
 	gcstats.freenodes = _freeNum;
@@ -4774,7 +4668,7 @@ class Buddy
     _errorCond = 0;
 
     debug(CACHESTATS) {//_cacheStats = new CacheStats();
-      }
+    }
 
     //bdd_gbc_hook(bdd_default_gbchandler);
     //bdd_error_hook(bdd_default_errhandler);
@@ -4920,11 +4814,13 @@ class Buddy
 
   void bdd_operator_varresize()
   {
+    import core.stdc.string : memset, memcpy;
+
     quantvarset.length = 0;
 
     quantvarset.length = _varNum;
 
-    //memset(quantvarset, 0, sizeof(int)*_varNum);
+    memset(quantvarset.ptr, 0, int.sizeof * _varNum);
     quantvarsetID = 0;
 
     _countCache.reset();
@@ -6262,7 +6158,7 @@ class Buddy
 
     _refStack.length = 0;
     _refStack.length = num * 2 + 1;
-    _refStackTop = 0;
+    INITREF();
 
     for(bdv = _varNum; _varNum < num; _varNum++)
       {
@@ -8116,8 +8012,8 @@ class Buddy
     bdd res = one();
 
     for(size_t n = 0; n < v.length; ++n) {
-	res = res.and(v[n].set());
-      }
+      res = res.and(v[n].set());
+    }
 
     return res;
   }
@@ -8346,7 +8242,7 @@ class Buddy
       int n;
       for(n = 0; n < x.size(); n++)
 	{
-	  bdd b = x[n].biimp(z[n]);
+	  bdd b = x.bitvec[n].biimp(z.bitvec[n]);
 	  result = result.and(b);
 	}
       for( ; n < max(this.varNum(), that.varNum()); n++)
@@ -8778,7 +8674,7 @@ class Buddy
     public override void initialize(uint offset, uint step)
     {
       for(int n=0 ; n < size ; n++)
-	this[n] = ithVar(offset+n*step);
+	this.bitvec[n] = ithVar(offset+n*step);
     }
 
     public override void initialize(BddDomain d)
@@ -8789,7 +8685,7 @@ class Buddy
     public override void initialize(int[] var)
     {
       for(int n = 0 ; n < size ; n++)
-	this[n] = ithVar(var[n]);
+	this.bitvec[n] = ithVar(var[n]);
     }
 
     public override BddVec dup()
@@ -8801,7 +8697,7 @@ class Buddy
     {
       BddVec dst = createVec(size);
       dst._signed = this._signed;
-      dst[0..$] = this[0..$];
+      dst.bitvec[0..$] = this.bitvec[0..$];
 
       // for(int n = 0; n < size; n++)
       // 	dst[n] = this[n].dup();
@@ -8815,8 +8711,8 @@ class Buddy
       else
 	{
 	  BddVec dst = createVec(size+1, true);
-	  dst[0..$-1] = this[0..$];
-	  dst[$-1] = zero();
+	  dst.bitvec[0..$-1] = this.bitvec[0..$];
+	  dst.bitvec[$-1] = zero();
 	  return dst;
 	}
     }
@@ -8827,12 +8723,12 @@ class Buddy
       ulong minnum = min(bitnum, size);
       uint n;
       for(n = 0; n < minnum; n++)
-	dst[n] = this[n].dup();
+	dst.bitvec[n] = this.bitvec[n].dup();
       for(uint m = n; m < bitnum; m++)
 	if(this._signed == false)
-	  dst[m] = zero();
+	  dst.bitvec[m] = zero();
 	else			// extend sign
-	  dst[m] = this[n-1].dup();
+	  dst.bitvec[m] = this.bitvec[n-1].dup();
       return dst;
     }
 
@@ -8850,9 +8746,9 @@ class Buddy
       long val = 0;
 
       for(size_t n = size - 1; n >= 0; n--)
-	if(this[n].isOne())
+	if(this.bitvec[n].isOne())
 	  val =(val << 1) | 1;
-	else if(this[n].isZero())
+	else if(this.bitvec[n].isZero())
 	  val = val << 1;
 	else
 	  return 0;
@@ -8887,13 +8783,13 @@ class Buddy
 
       BddVec res = createVec(maxsize, _signed);
       for(size_t n=0 ; n < minsize ; n++)
-	res[n] = this[n].apply(that[n], op);
+	res.bitvec[n] = this.bitvec[n].apply(that.bitvec[n], op);
 
       for(size_t n=minsize ; n < size ; n++)
-	res[n] = this[n].apply(zero(), op);
+	res.bitvec[n] = this.bitvec[n].apply(zero(), op);
 
       for(size_t n=minsize ; n < that.size ; n++)
-	res[n] = zero.apply(that[n], op);
+	res.bitvec[n] = zero.apply(that.bitvec[n], op);
 
       return res;
     }
@@ -8902,7 +8798,7 @@ class Buddy
     {
       BddVec res = createVec(size);
       for(int n=0 ; n < size ; n++)
-	res[n] = this[n].not();
+	res.bitvec[n] = this.bitvec[n].not();
       return res;
     }
 
@@ -8925,13 +8821,13 @@ class Buddy
       for(size_t n = 0; n < minsize; n++)
 	{
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = a[n] ^ b[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = a.bitvec[n] ^ b.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a[n] | b[n];
+	  bdd c1 = a.bitvec[n] | b.bitvec[n];
 	  c1 = c1 & c;
-	  bdd c2 = a[n] & b[n];
+	  bdd c2 = a.bitvec[n] & b.bitvec[n];
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8940,16 +8836,16 @@ class Buddy
       for(size_t n = minsize; n < a.size; n++)
 	{
 	  // sign extend
-	  bdd ext = b.signed ? b[$-1] : zero();
+	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
 
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = a[n] ^ ext;
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = a.bitvec[n] ^ ext;
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a[n] | ext;
+	  bdd c1 = a.bitvec[n] | ext;
 	  c1 = c1 & c;
-	  bdd c2 = a[n] & ext;
+	  bdd c2 = a.bitvec[n] & ext;
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8958,29 +8854,29 @@ class Buddy
       for(size_t n = minsize; n < b.size; n++)
 	{
 	  // sign extend
-	  bdd ext = a.signed ? a[$-1] : zero();
+	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
 
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = ext ^ b[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = ext ^ b.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = ext | b[n];
+	  bdd c1 = ext | b.bitvec[n];
 	  c1 = c1 & c;
-	  bdd c2 = ext & b[n];
+	  bdd c2 = ext & b.bitvec[n];
 	  c2 = c2 | c1;
 	  c = c2;
 	}
 
       if(a.signed)
 	{
-	  c = a[$-1].ite(c.not(), c);
+	  c = a.bitvec[$-1].ite(c.not(), c);
 	}
       if(b.signed)
 	{
-	  c = b[$-1].ite(c.not(), c);
+	  c = b.bitvec[$-1].ite(c.not(), c);
 	}
-      res[$-1] = c;
+      res.bitvec[$-1] = c;
 
       // if(a.signed && b.signed)
       // 	{
@@ -9021,13 +8917,13 @@ class Buddy
       for(int n = 0; n < minsize; n++)
 	{
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = this[n] ^ that[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = this.bitvec[n] ^ that.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that[n] | c;
-	  bdd tmp2 = this[n].lth(tmp1);
-	  tmp1 = this[n] & that[n];
+	  bdd tmp1 = that.bitvec[n] | c;
+	  bdd tmp2 = this.bitvec[n].lth(tmp1);
+	  tmp1 = this.bitvec[n] & that.bitvec[n];
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
 	  c = tmp1;
@@ -9037,15 +8933,15 @@ class Buddy
       for(size_t n = minsize; n < size; n++)
 	{
 	  // sign extend
-	  bdd ext = that.signed ? that[$-1] : zero();
+	  bdd ext = that.signed ? that.bitvec[$-1] : zero();
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = this[n] ^ ext;
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = this.bitvec[n] ^ ext;
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
 	  bdd tmp1 = ext | c;
-	  bdd tmp2 = this[n].lth(tmp1);
-	  tmp1 = this[n] & ext;
+	  bdd tmp2 = this.bitvec[n].lth(tmp1);
+	  tmp1 = this.bitvec[n] & ext;
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
 	  c = tmp1;
@@ -9054,20 +8950,20 @@ class Buddy
       for(size_t n = minsize; n < that.size; n++)
 	{
 	  // sign extend
-	  bdd ext = signed ? this[$-1] : zero();
+	  bdd ext = signed ? this.bitvec[$-1] : zero();
 	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res[n] = ext ^ that[n];
-	  res[n] = res[n] ^ c.dup();
+	  res.bitvec[n] = ext ^ that.bitvec[n];
+	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that[n] | c;
+	  bdd tmp1 = that.bitvec[n] | c;
 	  bdd tmp2 = ext.lth(tmp1);
-	  tmp1 = ext & that[n];
+	  tmp1 = ext & that.bitvec[n];
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
 	  c = tmp1;
 	}
-      res[$-1] = c;
+      res.bitvec[$-1] = c;
       return res;
     }
 
@@ -9077,7 +8973,7 @@ class Buddy
       if(c == 0) return next;	// base case
 
       for(size_t n=1 ; n < size ; n++)
-	next[n] = this[n-1];
+	next.bitvec[n] = this.bitvec[n-1];
 
       BddVec rest = next.mul(c >> 1);
 
@@ -9101,25 +8997,25 @@ class Buddy
 
       BddVec leftshift = leftshifttmp.coerce(bitnum);
 
-      foreach(ref r; rhs[0..$])
+      foreach(ref r; rhs.bitvec[0..$])
 	{
 	  BddVec added = result.add(leftshift);
 	  for(size_t m=0; m < bitnum; ++m)
 	    {
-	      bdd tmpres = r.ite(added[m], result[m]);
-	      result[m] = tmpres;
+	      bdd tmpres = r.ite(added.bitvec[m], result.bitvec[m]);
+	      result.bitvec[m] = tmpres;
 	    }
 	  for(size_t m = bitnum-1; m >= 1; --m)
 	    {
-	      leftshift[m] = leftshift[m-1];
+	      leftshift.bitvec[m] = leftshift.bitvec[m-1];
 	    }
-	  leftshift[0] = zero();
+	  leftshift.bitvec[0] = zero();
 	}
       return result;
     }
 
     public override void div_rec(BddVec divisor, BddVec remainder,
-			BddVec result, long step)
+				 BddVec result, long step)
     {
       bdd isSmaller = divisor.lte(remainder);
       BddVec newResult = result.shl(1, isSmaller);
@@ -9127,11 +9023,11 @@ class Buddy
       BddVec sub = buildVec(divisor.size, false);
 
       for(size_t n = 0; n < divisor.size; n++)
-	sub[n] = isSmaller.ite(divisor[n], zero[n]);
+	sub.bitvec[n] = isSmaller.ite(divisor.bitvec[n], zero.bitvec[n]);
 
       BddVec tmp = remainder.sub(sub);
       BddVec newRemainder =
-	tmp.shl(1, result[divisor.size - 1]);
+	tmp.shl(1, result.bitvec[divisor.size - 1]);
 
       if(step > 1)
 	div_rec(divisor, newRemainder, newResult, step - 1);
@@ -9156,7 +9052,7 @@ class Buddy
 	{
 	  BddVec divisor = buildVec(size, c);
 	  BddVec tmp = buildVec(size, false);
-	  BddVec tmpremainder = tmp.shl(1, this[$-1]);
+	  BddVec tmpremainder = tmp.shl(1, this.bitvec[$-1]);
 	  BddVec result = this.shl(1, zero());
 	  BddVec remainder;
 
@@ -9202,17 +9098,17 @@ class Buddy
 
 	  for(size_t m = 0; m < bitnum; ++m)
 	    {
-	      bdd remtmp = divLteRem.ite(remSubDiv[m], rem[m]);
-	      rem[m] = remtmp;
+	      bdd remtmp = divLteRem.ite(remSubDiv.bitvec[m], rem.bitvec[m]);
+	      rem.bitvec[m] = remtmp;
 	    }
 
 	  if(n > 0)
-	    res[rhs.size - n] = divLteRem;
+	    res.bitvec[rhs.size - n] = divLteRem;
 
 	  /* Shift 'div' one bit right */
 	  for(size_t m = 0 ; m < bitnum-1 ; ++m)
-	    div[m] = div[m+1];
-	  div[bitnum-1] = zero();
+	    div.bitvec[m] = div.bitvec[m+1];
+	  div.bitvec[bitnum-1] = zero();
 	}
 
 
@@ -9239,10 +9135,10 @@ class Buddy
 
       size_t n;
       for(n = 0; n < minnum; n++)
-	res[n] = c.dup();
+	res.bitvec[n] = c.dup();
 
       for(n = minnum; n < size; n++)
-	res[n] = this[n-pos].dup();
+	res.bitvec[n] = this.bitvec[n-pos].dup();
 
       return res;
     }
@@ -9263,12 +9159,12 @@ class Buddy
 	    {
 	      /* Set the m'th new location to be the(m+n)'th old location */
 	      if(m  >= n)
-		tmp1 = rEquN.and(this[m-n]);
+		tmp1 = rEquN.and(this.bitvec[m-n]);
 	      else
 		tmp1 = rEquN.and(c);
-	      tmp2 = res[m].or(tmp1);
+	      tmp2 = res.bitvec[m].or(tmp1);
 
-	      res[m] = tmp2;
+	      res.bitvec[m] = tmp2;
 	    }
 
 	}
@@ -9280,9 +9176,9 @@ class Buddy
 
       for(size_t m = 0; m < this.size; ++m)
 	{
-	  tmp2 = res[m].or(tmp1);
+	  tmp2 = res.bitvec[m].or(tmp1);
 
-	  res[m] = tmp2;
+	  res.bitvec[m] = tmp2;
 	}
 
       return res;
@@ -9298,10 +9194,10 @@ class Buddy
       BddVec res = buildVec(size, false);
 
       for(size_t n=maxnum; n < size; ++n)
-	res[n] = c.dup();
+	res.bitvec[n] = c.dup();
 
       for(size_t n = 0; n < maxnum; ++n)
-	res[n] = this[n+pos].dup();
+	res.bitvec[n] = this.bitvec[n+pos].dup();
 
       return res;
     }
@@ -9322,11 +9218,11 @@ class Buddy
 	    {
 	      /* Set the m'th new location to be the(m+n)'th old location */
 	      if(m+n <= 2)
-		tmp1 = rEquN.and(this[m+n]);
+		tmp1 = rEquN.and(this.bitvec[m+n]);
 	      else
 		tmp1 = rEquN.and(c);
-	      tmp2 = res[m].or(tmp1);
-	      res[m] = tmp2;
+	      tmp2 = res.bitvec[m].or(tmp1);
+	      res.bitvec[m] = tmp2;
 	    }
 
 	}
@@ -9338,8 +9234,8 @@ class Buddy
 
       for(size_t m = 0; m < this.size; ++m)
 	{
-	  tmp2 = res[m].or(tmp1);
-	  res[m] = tmp2;
+	  tmp2 = res.bitvec[m].or(tmp1);
+	  res.bitvec[m] = tmp2;
 	}
 
       return res;
@@ -9377,8 +9273,8 @@ class Buddy
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = a[n].lth(b[n]);
-	  bdd tmp2 = a[n].biimp(b[n]);
+	  bdd tmp1 = a.bitvec[n].lth(b.bitvec[n]);
+	  bdd tmp2 = a.bitvec[n].biimp(b.bitvec[n]);
 	  bdd tmp3 = tmp2 & p;
 	  bdd tmp4 = tmp1 | tmp3;
 	  p = tmp4;
@@ -9388,13 +9284,13 @@ class Buddy
       for(size_t n=minsize; n < a.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = b.signed ? b[$-1] : zero();
+	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
 
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = a[n].lth(ext);
-	  bdd tmp2 = a[n].biimp(ext);
+	  bdd tmp1 = a.bitvec[n].lth(ext);
+	  bdd tmp2 = a.bitvec[n].biimp(ext);
 	  bdd tmp3 = tmp2 & p;
 	  bdd tmp4 = tmp1 | tmp3;
 	  p = tmp4;
@@ -9404,19 +9300,19 @@ class Buddy
       for(size_t n=minsize; n < b.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = a.signed ? a[$-1] : zero();
+	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = ext.lth(b[n]);
-	  bdd tmp2 = ext.biimp(b[n]);
+	  bdd tmp1 = ext.lth(b.bitvec[n]);
+	  bdd tmp2 = ext.biimp(b.bitvec[n]);
 	  bdd tmp3 = tmp2 & p;
 	  bdd tmp4 = tmp1 | tmp3;
 	  p = tmp4;
 	}
 
-      p = (a[$-1] & (b[$-1].not())).ite(one(), p);
-      p = ((a[$-1].not()) & b[$-1]).ite(zero(), p);
+      p = (a.bitvec[$-1] & (b.bitvec[$-1].not())).ite(one(), p);
+      p = ((a.bitvec[$-1].not()) & b.bitvec[$-1]).ite(zero(), p);
       // if both this and that are either signed or unsigned, what we
       // have done till now is sufficient
 
@@ -9451,23 +9347,23 @@ class Buddy
 
       for(size_t n=0; n < minsize; ++n)
 	{
-	  p = p & this[n].biimp(r[n]);
+	  p = p & this.bitvec[n].biimp(r.bitvec[n]);
 	}
 
       // this.size > r.size
       for(size_t n=minsize; n < size; ++n)
 	{
 	  // sign extend
-	  bdd ext = r.signed ? r[$-1] : zero();
-	  p = p & this[n].biimp(ext);
+	  bdd ext = r.signed ? r.bitvec[$-1] : zero();
+	  p = p & this.bitvec[n].biimp(ext);
 	}
 
       // this.size > r.size
       for(size_t n=minsize; n < r.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = signed ? this[$-1] : zero();
-	  p = p & ext.biimp(r[n]);
+	  bdd ext = signed ? this.bitvec[$-1] : zero();
+	  p = p & ext.biimp(r.bitvec[n]);
 	}
       return p;
     }
@@ -9499,7 +9395,7 @@ class Buddy
 	throw new BddException();
       BddVec divisor = buildVec(cast(int) size, c);
       BddVec tmp = buildVec(cast(int) size, false);
-      BddVec tmpremainder = tmp.shl(1, this[size-1]);
+      BddVec tmpremainder = tmp.shl(1, this.bitvec[size-1]);
       BddVec result = this.shl(1, zero());
 
       BddVec remainder;
@@ -9515,6 +9411,21 @@ class Buddy
       }
     }
 
+    public override BddVec opSlice(size_t i, size_t j) {
+      if(i >= j) throw new BddException();
+      if(i >= bitvec.length) throw new BddException();
+      if(j > bitvec.length) throw new BddException();
+      BddVec res = buildVec(cast (int) (j - i), false);
+      for(size_t n = 0; n < j - 1; ++n) {
+	res.bitvec[n] = this.bitvec[n+i].dup();
+      }
+      return res;
+    }
+
+    public override BDD opIndex(size_t i) {
+      if(i >= bitvec.length) throw new BddException();
+      return bitvec[i].dup;
+    }
   }
 
   public Buddy cloneBuddy()
@@ -10068,15 +9979,15 @@ static immutable string[] errorstrings =
 private static class BddException: Throwable
 {
   this(string err="Unknown Exception")
-    {
-      super(err);
-    }
+  {
+    super(err);
+  }
   this(BddError err)
-    {
-      int index = -(cast(int) err);
-      assert(index >= 0);
-      super(errorstrings[index]);
-    }
+  {
+    int index = -(cast(int) err);
+    assert(index >= 0);
+    super(errorstrings[index]);
+  }
 
 }
 
@@ -10087,7 +9998,7 @@ private static class ReorderException: Throwable
    */
   enum long serialVersionUID = 3256727264505772345L;
   this()
-    {
-      super("Reorder Exception!");
-    }
+  {
+    super("Reorder Exception!");
+  }
 }
