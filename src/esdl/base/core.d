@@ -7039,14 +7039,14 @@ class EsdlSimulator: EntityIntf
 	_simDoneLock = new Semaphore(0);
 	_simTermLock = new Semaphore(0);
 
-	version(UNITHREAD) {
-	  _executor.threadCount(1);
-	  _executor.createRoutineThreads(1, 0);
-	}
-	else {
+	version(MULTICORE) {
 	  import core.cpuid: threadsPerCPU;
 	  _executor.threadCount(2*threadsPerCPU());
 	  _executor.createRoutineThreads(2*threadsPerCPU(), 0);
+	}
+	else {
+	  _executor.threadCount(1);
+	  _executor.createRoutineThreads(1, 0);
 	}
 	// We do this to make dure that all the routine threads are up
 	// and running before we attempt to create other threads. For

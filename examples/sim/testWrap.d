@@ -29,8 +29,8 @@ void main()
   // top level module
   auto theRootEntity = new RootWrap("theRootEntity");
   theRootEntity.elaborate();
-  theRootEntity.simulate(10000.nsec);
+  theRootEntity.simulate();
   // theRootEntity.terminate();
-  import std.stdio;
+  // import std.stdio;
   // writeln("All Done");
 }
