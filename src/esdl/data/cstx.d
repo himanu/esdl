@@ -193,7 +193,7 @@ struct ConstraintParser {
       if((c >= 'A' && c <= 'Z') ||
 	 (c >= 'a' && c <= 'z') ||
 	 (c >= '0' && c <= '9') ||
-	 (c == '_' || c == '.')) {
+	 c == '_') {
 	++srcCursor;
       }
       else {
@@ -202,6 +202,51 @@ struct ConstraintParser {
     }
     return start;
   }
+
+  // I do not want to use any dynamic arrays here since this all is
+  // compile time and I do not want DMD to allocate memory for this at
+  // compile time.
+
+  enum MaxHierDepth = 20;
+
+  int[MaxHierDepth * 2] parseIdentifierChain() {
+    int[MaxHierDepth * 2] result;
+    size_t wTag;
+    size_t start = srcCursor;
+    
+    result[0] = -1;
+    
+    for (size_t i=0; i != MaxHierDepth-1; ++i) {
+      wTag = srcCursor;
+      parseSpace();
+      size_t srcTag = srcCursor;
+      parseIdentifier();
+      if(srcCursor > srcTag) {
+	fill(CST[wTag..srcTag]);
+	result[2*i] = cast(int) (srcTag - start);
+	result[2*i + 1] = cast(int) (srcCursor - start);
+      }
+      else {
+	if(i != 0) srcCursor = wTag - 1;
+	result[2*i] = -1;
+	break;
+      }
+      srcTag = srcCursor;
+      parseSpace();
+      fill(CST[srcTag..srcCursor]);
+      if(CST[srcCursor] == '.') {
+	++srcCursor;
+	continue;
+      }
+      else {
+	result[2*i + 2] = -1;
+	break;
+      }
+    }
+    return result;
+  }
+    
+    
 
   size_t parseLineComment() {
     size_t start = srcCursor;
@@ -789,16 +834,31 @@ struct ConstraintParser {
       case OpUnaryToken.NONE: break;
       }
 
-      srcTag = parseIdentifier();
-      if(srcCursor > srcTag) {
-	int idx = idMatch(CST[srcTag..srcCursor]);
-	if(idx == -1) {
-	  fill("_esdl__cstRand!q{");
-	  fill(CST[srcTag..srcCursor]);
-	  fill("}(_outer)");
+      // parse an identifier and the following '.' heirarcy if any
+      srcTag = srcCursor;
+      int[MaxHierDepth * 2] idChain = parseIdentifierChain();
+      if(idChain[0] != -1) {
+	// idMatch is applicable only if there is one element in the
+	// chain
+	if(idChain[2] == -1) {
+	  int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	  if(idx == -1) {
+	    fill("_esdl__cstRand!q{");
+	    fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	    fill("}(_outer)");
+	  }
+	  else {
+	    fill(varMap[idx].xLat);
+	  }
 	}
 	else {
-	  fill(varMap[idx].xLat);
+	  fill("_esdl__cstRand!q{");
+	  for (size_t i=0; i != MaxHierDepth-1; ++i) {
+	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
+	    if(idChain[2*i+2] == -1) break;
+	    else fill(".");
+	  }
+	  fill("}(_outer)");
 	}
       }
       else {
