@@ -721,6 +721,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
   (T t, CstVecPrim[] vecVals, ref RandGen rgen)
   if(is(T unused: RandomizableIntf) && is(T == class)) {
     import std.traits;
+    import esdl.data.bvec: toBitVec;
     static if (I < t.tupleof.length) {
       alias typeof(t.tupleof[I]) L;
       static if (isDynamicArray!L) {
@@ -743,7 +744,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 	      v = rgen.gen!(ElementType!L);
 	    }
 	    else {
-	      v = cast(ElementType!L) vecVal[idx].value;
+	      v = cast(ElementType!L) vecVal[idx].value.toBitVec;
 	    }
 	  }
 	  // t.tupleof[I] = rgen.gen!L;
@@ -779,8 +780,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 		  alias ElementType!L R;
 		  static if(isBitVector!R) {
 		    import esdl.data.bvec;
-		    bvec!64 bval = elemVal.value;
-		    v = cast(ElementType!L) bval;
+		    v = cast(ElementType!L) elemVal.value.toBitVec;
 		  }
 		  else {
 		    v = cast(R) elemVal.value;
