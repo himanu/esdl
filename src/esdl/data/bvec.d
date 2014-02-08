@@ -838,7 +838,10 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	this._from(other);
       }
 
-
+    // TBD
+    // public BitVec!N toBitVec(size_t N)() {
+    // }
+    
     // public this(V)(V other)
     //   if(isFloatingPoint!V &&
     // 	 SIZE >= V.sizeof*8) {
@@ -2352,9 +2355,18 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     //   }
     //   return result;
     // }
-
-
 }
+
+public auto toBitVec(T)(T t) if(isIntegral!T) {
+  static if(isSigned!T) {
+    alias R = BitVec!(8*T.sizeof);
+  }
+  else {
+    alias R = UBitVec!(8*T.sizeof);
+  }
+  R res = t;
+  return res;
+ }
 
 // Utility functions
 private uint multibyteDivAssign(uint [] dest, uint divisor, uint overflow) {

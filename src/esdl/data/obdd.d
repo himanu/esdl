@@ -154,24 +154,12 @@ abstract class BddVec
 	  }
       }
 
-  final public BddVec opBinary_r(string op)(long rhs)
-    if(op == "<<" || op == ">>" || op == "*" || op == "/")
+  final public BddVec opBinaryRight(string op)(long rhs)
+    if(op == "*")
       {
-	static if(op == "<<")
-	  {
-	    return this.shl(rhs, zero());
-	  }
-	static if(op == ">>")
-	  {
-	    return this.shr(rhs, zero());
-	  }
 	static if(op == "*")
 	  {
 	    return this.mul(rhs);
-	  }
-	static if(op == "/")
-	  {
-	    return this.div(rhs);
 	  }
       }
   final public BddVec opBinary(string op)(BddVec rhs)
