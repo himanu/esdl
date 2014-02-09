@@ -60,6 +60,8 @@ struct ConstraintParser {
   size_t srcLine   = 0;
 
   size_t numParen  = 0;
+
+  size_t numIndex  = 0;
   
   VarPair[] varMap = [];
 
@@ -87,6 +89,9 @@ struct ConstraintParser {
   
   enum OpToken: byte
     {   NONE = 0,
+	AND,
+	OR,
+	XOR,
 	ADD,
 	SUB,
 	MUL,
@@ -99,9 +104,11 @@ struct ConstraintParser {
 	NEQ,
 	GTH,
 	LTH,
-	IMP,			// Implication operator
-	AND,
-	OR,
+	LOGICIMP,			// Implication operator
+	LOGICAND,
+	LOGICOR,
+	INDEX,
+	SLICE,
 	}
 
   enum OpUnaryToken: byte
@@ -134,21 +141,26 @@ struct ConstraintParser {
       if(CST[srcCursor] == '>' && CST[srcCursor+1] == '=') tok = OpToken.GTE;
       if(CST[srcCursor] == '<' && CST[srcCursor+1] == '=') tok = OpToken.LTE;
       if(CST[srcCursor] == '!' && CST[srcCursor+1] == '=') tok = OpToken.NEQ;
-      if(CST[srcCursor] == '&' && CST[srcCursor+1] == '&') tok = OpToken.AND;
-      if(CST[srcCursor] == '|' && CST[srcCursor+1] == '|') tok = OpToken.OR;
-      if(CST[srcCursor] == '-' && CST[srcCursor+1] == '>') tok = OpToken.IMP;
+      if(CST[srcCursor] == '&' && CST[srcCursor+1] == '&') tok = OpToken.LOGICAND;
+      if(CST[srcCursor] == '|' && CST[srcCursor+1] == '|') tok = OpToken.LOGICOR;
+      if(CST[srcCursor] == '-' && CST[srcCursor+1] == '>') tok = OpToken.LOGICIMP;
+      if(CST[srcCursor] == '.' && CST[srcCursor+1] == '.') tok = OpToken.SLICE;
     }
     if(tok !is OpToken.NONE) {
       srcCursor += 2;
       return tok;
     }
     if(srcCursor < CST.length) {
+      if(CST[srcCursor] == '&') tok = OpToken.AND;
+      if(CST[srcCursor] == '|') tok = OpToken.OR;
+      if(CST[srcCursor] == '^') tok = OpToken.XOR;
       if(CST[srcCursor] == '+') tok = OpToken.ADD;
       if(CST[srcCursor] == '-') tok = OpToken.SUB;
       if(CST[srcCursor] == '*') tok = OpToken.MUL;
       if(CST[srcCursor] == '/') tok = OpToken.DIV;
       if(CST[srcCursor] == '<') tok = OpToken.LTH;
       if(CST[srcCursor] == '>') tok = OpToken.GTH;
+      if(CST[srcCursor] == '[') tok = OpToken.INDEX;
       // if(CST[srcCursor] == ';') tok = OpToken.END;
     }
     if(tok !is OpToken.NONE) {
@@ -443,6 +455,12 @@ struct ConstraintParser {
 	  ++srcCursor;
 	  continue;
 	}
+	if(srcCursor < CST.length && CST[srcCursor] == ']') {
+	  if(numIndex is 0) break;
+	  --numIndex;
+	  ++srcCursor;
+	  continue;
+	}	
 	else {
 	  break;
 	}
@@ -696,7 +714,7 @@ struct ConstraintParser {
 
     ++srcCursor;
 
-    fill("// IF Block: ");
+    fill("/* IF Block: ");
     auto outTag = outCursor;
     procExpr();
     
@@ -710,7 +728,7 @@ struct ConstraintParser {
       ifConds ~= ifCond;
     }
 
-    fill("\n");
+    fill("*/\n");
     
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
@@ -902,7 +920,7 @@ struct ConstraintParser {
 	}
 	return;
 	// break;
-      case OpToken.IMP:
+      case OpToken.LOGICIMP:
 	if(cmpRHS is true) {
 	  fill(")");
 	  cmpRHS = false;
@@ -916,13 +934,13 @@ struct ConstraintParser {
 	  orRHS = false;
 	}
 	place('(', impDstAnchor);
-	fill(").imp (");
+	fill(").implies(");
 	cmpDstAnchor = fill(" ");
 	andDstAnchor = fill(" ");
 	orDstAnchor  = fill(" ");
 	impRHS = true;
 	break;
-      case OpToken.OR:		// take care of cmp/and
+      case OpToken.LOGICOR:		// take care of cmp/and
 	if(cmpRHS is true) {
 	  fill(")");
 	  cmpRHS = false;
@@ -935,11 +953,11 @@ struct ConstraintParser {
 	  place('(', orDstAnchor);
 	  orRHS = true;
 	}
-	fill(") | (");
+	fill(").logicOr(");
 	cmpDstAnchor = fill(" ");
 	andDstAnchor = fill(" ");
 	break;
-      case OpToken.AND:		// take care of cmp
+      case OpToken.LOGICAND:		// take care of cmp
 	if(cmpRHS is true) {
 	  fill(")");
 	  cmpRHS = false;
@@ -948,7 +966,7 @@ struct ConstraintParser {
 	  place('(', andDstAnchor);
 	  andRHS = true;
 	}
-	fill(") & (");
+	fill(") .logicAnd(");
 	cmpDstAnchor = fill(" ");
 	break;
       case OpToken.EQU:
@@ -981,6 +999,15 @@ struct ConstraintParser {
 	cmpRHS = true;
 	fill(").gth (");
 	break;
+      case OpToken.AND:
+	fill("&");
+	break;
+      case OpToken.OR:
+	fill("|");
+	break;
+      case OpToken.XOR:
+	fill("^");
+	break;
       case OpToken.ADD:
 	fill("+");
 	break;
@@ -999,6 +1026,13 @@ struct ConstraintParser {
       case OpToken.RSH:
 	fill(">>");
 	break;
+      case OpToken.INDEX:
+	fill("[");
+	++numIndex;
+	break;
+      case OpToken.SLICE:
+	fill("..");
+	break;
       }
     }
   }
@@ -1016,7 +1050,7 @@ struct ConstraintParser {
       }
       if(ifConds[$-1].isInverse()) fill("*");
       fill(ifConds[$-1].cond);
-      fill(") >> // End of Conditions\n");
+      fill(").implies( // End of Conditions\n");
       fill("       ( ");
       procExpr();
       fill(")");
@@ -1037,8 +1071,12 @@ struct ConstraintParser {
     if(CST[srcCursor++] !is ';') {
       assert(false, "Error: -- ';' missing at end of statement");
     }
-    fill(";\n");
-
+    if(ifConds.length !is 0) {
+      fill(");\n");
+    }
+    else {
+      fill(";\n");
+    }
   }
 
   void procBlock() {

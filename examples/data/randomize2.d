@@ -52,12 +52,18 @@ class Bar: Foo
   Constraint! q{
     pop > bro;
     pop < 8;
-    foo < 3;
+    // foo < 3;
     if(mode == AhbMode.SINGLE) {
-      foo == 2;
+      foo[0..3] == 0;
     }
     foo == 2 -> pop == 4;
     pop <= 4 -> bro == 0;
+    if(foo[3..5]) {
+      bro == 5;
+    }
+    else {
+      bro == 0;
+    }
   } cst01;
 }
 
