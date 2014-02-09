@@ -1593,6 +1593,10 @@ public class NotificationObj(T): EventObj
     return notification;
   }
 
+  this(string name) {
+    this.init(name);
+  }
+
   static public Notification!T[] opIndex(size_t n) {
     Notification!T notifications[] = new Notification!T[n];
     foreach(ref notification;notifications) {
@@ -1875,6 +1879,16 @@ public class NotificationQueueObj(T): NotificationObj!T
     }
   }
 
+
+  static public NotificationQueue!T opCall() {
+    NotificationQueue!T notification;
+    notificationQueue.init();
+    return notification;
+  }
+
+  this(string name) {
+    this.init(name);
+  }
 
   public void init() {
     synchronized {
@@ -2317,6 +2331,10 @@ public class EventObj: EventAgent, NamedObj
     return event;
   }
 
+  this(string name) {
+    this.init(name);
+  }
+
   static public Event[] opIndex(size_t n) {
     Event events[] = new Event[n];
     foreach(ref event;events) {
@@ -2588,6 +2606,16 @@ public class EventQueueObj: EventObj
     }
   }
 
+
+  static public EventQueue opCall() {
+    EventQueue event;
+    event.init();
+    return event;
+  }
+
+  this(string name) {
+    this.init(name);
+  }
 
   public void init() {
     synchronized {
@@ -3268,24 +3296,159 @@ public auto observe(E)(E e)
     return e.get();
   }
 
-public void wait(E)(E e) {
+public void wait(E)(E e)
+  if(!is(E == struct) || is(E == SimTime) || is(E == Time)) {
   auto event = getEventObj(e);
   waitForEvent(event);
 }
 
-public void waitp(E)(E e) {
+public void wait(ref Event e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(Event e) {
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(ref EventQueue e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(EventQueue e) {
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(T)(ref Notification!T e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(T)(Notification!T e) {
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(T)(ref NotificationQueue!T e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(T)(NotificationQueue!T e) {
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(IF, size_t N, size_t M)(ref Port!(IF, N, M) e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(IF, size_t N, size_t M)(Port!(IF, N, M) e) {
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(T, bool M)(ref Signal!(T, M) e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(T, bool M)(Signal!(T, M) e) {
+  auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void waitp(E)(E e)
+  if(!is(E == struct) || is(E == SimTime) || is(E == Time)) {
   auto event = getEventObj(e);
   waitForEventP(event);
 }
 
-public void wait()() {
+public void waitp(ref Event e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(Event e) {
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(ref EventQueue e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(EventQueue e) {
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(T)(ref Notification!T e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(T)(Notification!T e) {
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(T)(ref NotificationQueue!T e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(T)(NotificationQueue!T e) {
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(IF, size_t N, size_t M)(ref Port!(IF, N, M) e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(IF, size_t N, size_t M)(Port!(IF, N, M) e) {
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(T, bool M)(ref Signal!(T, M) e) {
+  e.init();
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+public void waitp(T, bool M)(Signal!(T, M) e) {
+  auto event = getEventObj(e);
+  waitForEventP(event);
+}
+
+
+public void wait() {
   if(Process.self is null) {
     assert(false, "Wait can be called only from a process");
   }
   Process.self.wait();
 }
 
-public void waitp()() {
+public void waitp() {
   if(Process.self is null) {
     assert(false, "Wait can be called only from a process");
   }
