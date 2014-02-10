@@ -60,6 +60,8 @@ struct ConstraintParser {
   size_t srcLine   = 0;
 
   size_t numParen  = 0;
+
+  size_t numIndex  = 0;
   
   VarPair[] varMap = [];
 
@@ -87,6 +89,9 @@ struct ConstraintParser {
   
   enum OpToken: byte
     {   NONE = 0,
+	AND,
+	OR,
+	XOR,
 	ADD,
 	SUB,
 	MUL,
@@ -99,9 +104,11 @@ struct ConstraintParser {
 	NEQ,
 	GTH,
 	LTH,
-	IMP,			// Implication operator
-	AND,
-	OR,
+	LOGICIMP,			// Implication operator
+	LOGICAND,
+	LOGICOR,
+	INDEX,
+	SLICE,
 	}
 
   enum OpUnaryToken: byte
@@ -134,21 +141,26 @@ struct ConstraintParser {
       if(CST[srcCursor] == '>' && CST[srcCursor+1] == '=') tok = OpToken.GTE;
       if(CST[srcCursor] == '<' && CST[srcCursor+1] == '=') tok = OpToken.LTE;
       if(CST[srcCursor] == '!' && CST[srcCursor+1] == '=') tok = OpToken.NEQ;
-      if(CST[srcCursor] == '&' && CST[srcCursor+1] == '&') tok = OpToken.AND;
-      if(CST[srcCursor] == '|' && CST[srcCursor+1] == '|') tok = OpToken.OR;
-      if(CST[srcCursor] == '-' && CST[srcCursor+1] == '>') tok = OpToken.IMP;
+      if(CST[srcCursor] == '&' && CST[srcCursor+1] == '&') tok = OpToken.LOGICAND;
+      if(CST[srcCursor] == '|' && CST[srcCursor+1] == '|') tok = OpToken.LOGICOR;
+      if(CST[srcCursor] == '-' && CST[srcCursor+1] == '>') tok = OpToken.LOGICIMP;
+      if(CST[srcCursor] == '.' && CST[srcCursor+1] == '.') tok = OpToken.SLICE;
     }
     if(tok !is OpToken.NONE) {
       srcCursor += 2;
       return tok;
     }
     if(srcCursor < CST.length) {
+      if(CST[srcCursor] == '&') tok = OpToken.AND;
+      if(CST[srcCursor] == '|') tok = OpToken.OR;
+      if(CST[srcCursor] == '^') tok = OpToken.XOR;
       if(CST[srcCursor] == '+') tok = OpToken.ADD;
       if(CST[srcCursor] == '-') tok = OpToken.SUB;
       if(CST[srcCursor] == '*') tok = OpToken.MUL;
       if(CST[srcCursor] == '/') tok = OpToken.DIV;
       if(CST[srcCursor] == '<') tok = OpToken.LTH;
       if(CST[srcCursor] == '>') tok = OpToken.GTH;
+      if(CST[srcCursor] == '[') tok = OpToken.INDEX;
       // if(CST[srcCursor] == ';') tok = OpToken.END;
     }
     if(tok !is OpToken.NONE) {
@@ -193,7 +205,7 @@ struct ConstraintParser {
       if((c >= 'A' && c <= 'Z') ||
 	 (c >= 'a' && c <= 'z') ||
 	 (c >= '0' && c <= '9') ||
-	 (c == '_' || c == '.')) {
+	 c == '_') {
 	++srcCursor;
       }
       else {
@@ -202,6 +214,51 @@ struct ConstraintParser {
     }
     return start;
   }
+
+  // I do not want to use any dynamic arrays here since this all is
+  // compile time and I do not want DMD to allocate memory for this at
+  // compile time.
+
+  enum MaxHierDepth = 20;
+
+  int[MaxHierDepth * 2] parseIdentifierChain() {
+    int[MaxHierDepth * 2] result;
+    size_t wTag;
+    size_t start = srcCursor;
+    
+    result[0] = -1;
+    
+    for (size_t i=0; i != MaxHierDepth-1; ++i) {
+      wTag = srcCursor;
+      parseSpace();
+      size_t srcTag = srcCursor;
+      parseIdentifier();
+      if(srcCursor > srcTag) {
+	fill(CST[wTag..srcTag]);
+	result[2*i] = cast(int) (srcTag - start);
+	result[2*i + 1] = cast(int) (srcCursor - start);
+      }
+      else {
+	if(i != 0) srcCursor = wTag - 1;
+	result[2*i] = -1;
+	break;
+      }
+      srcTag = srcCursor;
+      parseSpace();
+      fill(CST[srcTag..srcCursor]);
+      if(CST[srcCursor] == '.') {
+	++srcCursor;
+	continue;
+      }
+      else {
+	result[2*i + 2] = -1;
+	break;
+      }
+    }
+    return result;
+  }
+    
+    
 
   size_t parseLineComment() {
     size_t start = srcCursor;
@@ -398,6 +455,12 @@ struct ConstraintParser {
 	  ++srcCursor;
 	  continue;
 	}
+	if(srcCursor < CST.length && CST[srcCursor] == ']') {
+	  if(numIndex is 0) break;
+	  --numIndex;
+	  ++srcCursor;
+	  continue;
+	}	
 	else {
 	  break;
 	}
@@ -651,7 +714,7 @@ struct ConstraintParser {
 
     ++srcCursor;
 
-    fill("// IF Block: ");
+    fill("/* IF Block: ");
     auto outTag = outCursor;
     procExpr();
     
@@ -665,7 +728,7 @@ struct ConstraintParser {
       ifConds ~= ifCond;
     }
 
-    fill("\n");
+    fill("*/\n");
     
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
@@ -789,16 +852,31 @@ struct ConstraintParser {
       case OpUnaryToken.NONE: break;
       }
 
-      srcTag = parseIdentifier();
-      if(srcCursor > srcTag) {
-	int idx = idMatch(CST[srcTag..srcCursor]);
-	if(idx == -1) {
-	  fill("_esdl__cstRand!q{");
-	  fill(CST[srcTag..srcCursor]);
-	  fill("}(_outer)");
+      // parse an identifier and the following '.' heirarcy if any
+      srcTag = srcCursor;
+      int[MaxHierDepth * 2] idChain = parseIdentifierChain();
+      if(idChain[0] != -1) {
+	// idMatch is applicable only if there is one element in the
+	// chain
+	if(idChain[2] == -1) {
+	  int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	  if(idx == -1) {
+	    fill("_esdl__cstRand!q{");
+	    fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	    fill("}(_outer)");
+	  }
+	  else {
+	    fill(varMap[idx].xLat);
+	  }
 	}
 	else {
-	  fill(varMap[idx].xLat);
+	  fill("_esdl__cstRand!q{");
+	  for (size_t i=0; i != MaxHierDepth-1; ++i) {
+	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
+	    if(idChain[2*i+2] == -1) break;
+	    else fill(".");
+	  }
+	  fill("}(_outer)");
 	}
       }
       else {
@@ -842,7 +920,7 @@ struct ConstraintParser {
 	}
 	return;
 	// break;
-      case OpToken.IMP:
+      case OpToken.LOGICIMP:
 	if(cmpRHS is true) {
 	  fill(")");
 	  cmpRHS = false;
@@ -856,13 +934,13 @@ struct ConstraintParser {
 	  orRHS = false;
 	}
 	place('(', impDstAnchor);
-	fill(").imp (");
+	fill(").implies(");
 	cmpDstAnchor = fill(" ");
 	andDstAnchor = fill(" ");
 	orDstAnchor  = fill(" ");
 	impRHS = true;
 	break;
-      case OpToken.OR:		// take care of cmp/and
+      case OpToken.LOGICOR:		// take care of cmp/and
 	if(cmpRHS is true) {
 	  fill(")");
 	  cmpRHS = false;
@@ -875,11 +953,11 @@ struct ConstraintParser {
 	  place('(', orDstAnchor);
 	  orRHS = true;
 	}
-	fill(") | (");
+	fill(").logicOr(");
 	cmpDstAnchor = fill(" ");
 	andDstAnchor = fill(" ");
 	break;
-      case OpToken.AND:		// take care of cmp
+      case OpToken.LOGICAND:		// take care of cmp
 	if(cmpRHS is true) {
 	  fill(")");
 	  cmpRHS = false;
@@ -888,7 +966,7 @@ struct ConstraintParser {
 	  place('(', andDstAnchor);
 	  andRHS = true;
 	}
-	fill(") & (");
+	fill(") .logicAnd(");
 	cmpDstAnchor = fill(" ");
 	break;
       case OpToken.EQU:
@@ -921,6 +999,15 @@ struct ConstraintParser {
 	cmpRHS = true;
 	fill(").gth (");
 	break;
+      case OpToken.AND:
+	fill("&");
+	break;
+      case OpToken.OR:
+	fill("|");
+	break;
+      case OpToken.XOR:
+	fill("^");
+	break;
       case OpToken.ADD:
 	fill("+");
 	break;
@@ -939,6 +1026,13 @@ struct ConstraintParser {
       case OpToken.RSH:
 	fill(">>");
 	break;
+      case OpToken.INDEX:
+	fill("[");
+	++numIndex;
+	break;
+      case OpToken.SLICE:
+	fill("..");
+	break;
       }
     }
   }
@@ -956,7 +1050,7 @@ struct ConstraintParser {
       }
       if(ifConds[$-1].isInverse()) fill("*");
       fill(ifConds[$-1].cond);
-      fill(") >> // End of Conditions\n");
+      fill(").implies( // End of Conditions\n");
       fill("       ( ");
       procExpr();
       fill(")");
@@ -977,8 +1071,12 @@ struct ConstraintParser {
     if(CST[srcCursor++] !is ';') {
       assert(false, "Error: -- ';' missing at end of statement");
     }
-    fill(";\n");
-
+    if(ifConds.length !is 0) {
+      fill(");\n");
+    }
+    else {
+      fill(";\n");
+    }
   }
 
   void procBlock() {

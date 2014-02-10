@@ -220,7 +220,7 @@ public class ConstraintEngine {
   public CstVecPrim[] _cstRands;
   RandGen _rgen;
   Buddy _buddy;
-  
+
   BddDomain[] _domains;
 
   this(uint seed, size_t rnum) {
@@ -259,7 +259,7 @@ public class ConstraintEngine {
       if(vec !is null) {
 	if(vec.stage() is null) {
 	  if(stage is null) {
-	    stage = new CstStage();	    
+	    stage = new CstStage();
 	    cstStages ~= stage;
 	  }
 	  vec.stage = stage;
@@ -349,7 +349,7 @@ public class ConstraintEngine {
 
     // Once we have unrolled all the LOOPS, we go ahead and resolve
     // everything that remains.
-    
+
     int stageIdx=0;
 
     // This variable is true when all the array lengths have been resolved
@@ -403,7 +403,7 @@ public class ConstraintEngine {
 	  usExprs ~= expr;
 	}
       }
-      
+
       foreach(stage; cstStages) {
 	if(stage !is null &&
 	   stage._randVecs.length !is 0) {
@@ -968,6 +968,12 @@ enum CstBinBddOp: byte
 // An abstract class that returns a vector on evaluation
 abstract class CstVecExpr
 {
+  // alias toBdd this;
+
+  public CstBddExpr toBdd() {
+    auto zero = new CstVecConst(0, true);
+    return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
+  }
 
   CstVecLoopVar[] _loopVars;
 
@@ -1024,14 +1030,20 @@ abstract class CstVecExpr
     }
   }
 
-  public CstVec2VecExpr opIndex(CstVecExpr other)
+  public CstVecExpr opIndex(CstVecExpr index)
   {
-    assert(false, "Index operation defined only for Arrays");
+    // assert(false, "Index operation defined only for Arrays");
+    return new CstVecSliceExpr(this, index);
   }
 
   public CstVecRand opIndex(size_t other)
   {
     assert(false, "Index operation defined only for Arrays");
+  }
+
+  public CstVecExpr opSlice(CstVecExpr lhs, CstVecExpr rhs)
+  {
+    return new CstVecSliceExpr(this, lhs, rhs);
   }
 
   public CstVec2BddExpr lth(CstVecExpr other) {
@@ -1056,6 +1068,43 @@ abstract class CstVecExpr
 
   public CstVec2BddExpr neq(CstVecExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.NEQ);
+  }
+
+  public CstNotBddExpr opUnary(string op)()
+  {
+    static if(op == "*") {	// "!" in cstx is translated as "*"
+      return new CstNotBddExpr(this.toBdd());
+    }
+  }
+
+  public CstBdd2BddExpr implies(CstBddExpr other)
+  {
+    return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICIMP);
+  }
+
+  public CstBdd2BddExpr implies(CstVecExpr other)
+  {
+    return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICIMP);
+  }
+
+  public CstBdd2BddExpr logicOr(CstBddExpr other)
+  {
+    return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICOR);
+  }
+
+  public CstBdd2BddExpr logicOr(CstVecExpr other)
+  {
+    return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICOR);
+  }
+
+  public CstBdd2BddExpr logicAnd(CstBddExpr other)
+  {
+    return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICAND);
+  }
+
+  public CstBdd2BddExpr logicAnd(CstVecExpr other)
+  {
+    return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICAND);
   }
 }
 
@@ -1112,7 +1161,7 @@ class CstVecLoopVar: CstVecPrim
     }
     return cast(uint) lengthVar().value;
   }
-  
+
   override CstVecLoopVar[] loopVars() {
     return [this];
   }
@@ -1391,7 +1440,7 @@ class CstVecRandArr: CstVecRand
     }
     return elems;
   }
-  
+
   override public void loopVar(CstVecLoopVar var) {
     _loopVar = loopVar;
   }
@@ -1552,7 +1601,6 @@ class CstVec2VecExpr: CstVecExpr
 
   override public CstStage[] getStages() {
     import std.exception;
-    import std.algorithm: max;
 
     enforce(_lhs.getStages.length <= 1 &&
 	    _rhs.getStages.length <= 1);
@@ -1560,6 +1608,7 @@ class CstVec2VecExpr: CstVecExpr
     if(_lhs.getStages.length is 0) return _rhs.getStages;
     else if(_rhs.getStages.length is 0) return _lhs.getStages;
     else {
+      // import std.algorithm: max;
       // Stages need to be merged
       // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
       // return [stage];
@@ -1573,7 +1622,6 @@ class CstVec2VecExpr: CstVecExpr
 	     "CstVec2VecExpr: Need to unroll the loopVars"
 	     " before attempting to solve BDD");
     }
-    BddVec vec;
 
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
@@ -1588,10 +1636,10 @@ class CstVec2VecExpr: CstVecExpr
     case CstBinVecOp.DIV: return lvec /  rvec;
     case CstBinVecOp.LSH: return lvec << rvec;
     case CstBinVecOp.RSH: return lvec >> rvec;
-    case CstBinVecOp.LOOPINDEX: return _lhs[_rhs.evaluate()].getBDD(stage, buddy);
-    case CstBinVecOp.BITINDEX: {
+    case CstBinVecOp.LOOPINDEX:
+      return _lhs[_rhs.evaluate()].getBDD(stage, buddy);
+    case CstBinVecOp.BITINDEX:
       assert(false, "BITINDEX is not implemented yet!");
-    }
     }
   }
 
@@ -1610,9 +1658,8 @@ class CstVec2VecExpr: CstVecExpr
     case CstBinVecOp.LSH: return lvec << rvec;
     case CstBinVecOp.RSH: return lvec >> rvec;
     case CstBinVecOp.LOOPINDEX: return _lhs[rvec].evaluate();
-    case CstBinVecOp.BITINDEX: {
+    case CstBinVecOp.BITINDEX:
       assert(false, "BITINDEX is not implemented yet!");
-    }
     }
   }
 
@@ -1656,14 +1703,126 @@ class CstVec2VecExpr: CstVecExpr
 
 }
 
+class CstVecSliceExpr: CstVecExpr
+{
+  CstVecExpr _vec;
+  CstVecExpr _lhs;
+  CstVecExpr _rhs;
+
+  override public CstVecPrim[] getPrims() {
+    if(_rhs is null) {
+      return _vec.getPrims() ~ _lhs.getPrims();
+    }
+    else {
+      return _vec.getPrims() ~ _lhs.getPrims() ~ _rhs.getPrims();
+    }
+  }
+
+  override public CstStage[] getStages() {
+    import std.exception;
+
+    return _vec.getStages();
+    // enforce(_vec.getStages.length <= 1 &&
+    //	    _lhs.getStages.length <= 1 &&
+    //	    _rhs.getStages.length <= 1);
+
+    // if(_lhs.getStages.length is 0) return _rhs.getStages;
+    // else if(_rhs.getStages.length is 0) return _lhs.getStages;
+    // else {
+    //   // import std.algorithm: max;
+    //   // Stages need to be merged
+    //   // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
+    //   // return [stage];
+    //   return _lhs.getStages;
+    // }
+  }
+
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    if(this.loopVars.length !is 0) {
+      assert(false,
+	     "CstVecSliceExpr: Need to unroll the loopVars"
+	     " before attempting to solve BDD");
+    }
+
+    auto vec  = _vec.getBDD(stage, buddy);
+    auto lvec = _lhs.evaluate();
+    auto rvec = lvec;
+    if(_rhs is null) {
+      rvec = lvec + 1;
+    }
+    else {
+      rvec = _rhs.evaluate();
+    }
+    return vec[lvec..rvec];
+  }
+
+  override public long evaluate() {
+    // auto vec  = _vec.evaluate();
+    // auto lvec = _lhs.evaluate();
+    // auto rvec = _rhs.evaluate();
+
+    assert(false, "Can not evaluate a CstVecSliceExpr!");
+  }
+
+  override public CstVecSliceExpr unroll(CstVecLoopVar l, uint n) {
+    bool loop = false;
+    foreach(loopVar; loopVars()) {
+      if(l is loopVar) {
+	loop = true;
+	break;
+      }
+    }
+    if(! loop) return this;
+    else {
+      if(_rhs is null) {
+	return new CstVecSliceExpr(_vec.unroll(l, n), _lhs.unroll(l, n));
+      }
+      else {
+	return new CstVecSliceExpr(_vec.unroll(l, n),
+				   _lhs.unroll(l, n), _rhs.unroll(l, n));
+      }
+    }
+  }
+
+  public this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs=null) {
+    _vec = vec;
+    _lhs = lhs;
+    _rhs = rhs;
+    auto loopVars = vec.loopVars ~ lhs.loopVars;
+    if(rhs !is null) {
+      loopVars ~= rhs.loopVars;
+    }
+    foreach(loopVar; loopVars) {
+      bool add = true;
+      foreach(l; _loopVars) {
+	if(l is loopVar) add = false;
+	break;
+      }
+      if(add) _loopVars ~= loopVar;
+    }
+    auto lengthVars = vec.lengthVars ~ lhs.lengthVars;
+    if(rhs !is null) {
+      lengthVars ~= rhs.lengthVars;
+    }
+    foreach(lengthVar; lengthVars) {
+      bool add = true;
+      foreach(l; _lengthVars) {
+	if(l is lengthVar) add = false;
+	break;
+      }
+      if(add) _lengthVars ~= lengthVar;
+    }
+  }
+}
+
 class CstNotVecExpr: CstVecExpr
 {
 }
 
 enum CstBddOp: byte
-  {   AND,
-      OR ,
-      IMP,
+  {   LOGICAND,
+      LOGICOR ,
+      LOGICIMP,
       }
 
 abstract class CstBddExpr
@@ -1697,7 +1856,7 @@ abstract class CstBddExpr
     }
     return retval;
   }
-  
+
   public CstBddExpr[] unroll(CstVecLoopVar l) {
     CstBddExpr[] retval;
     if(! l.isUnrollable()) {
@@ -1717,7 +1876,7 @@ abstract class CstBddExpr
   }
 
   abstract public CstBddExpr unroll(CstVecLoopVar l, uint n);
-  
+
   abstract public CstVecPrim[] getPrims();
 
   abstract public CstStage[] getStages();
@@ -1727,13 +1886,13 @@ abstract class CstBddExpr
   public CstBdd2BddExpr opBinary(string op)(CstBddExpr other)
   {
     static if(op == "&") {
-      return new CstBdd2BddExpr(this, other, CstBddOp.AND);
+      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
     }
     static if(op == "|") {
-      return new CstBdd2BddExpr(this, other, CstBddOp.OR);
+      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
     }
     static if(op == ">>") {
-      return new CstBdd2BddExpr(this, other, CstBddOp.IMP);
+      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
     }
   }
 
@@ -1744,9 +1903,34 @@ abstract class CstBddExpr
     }
   }
 
-  public CstBdd2BddExpr imp(CstBddExpr other)
+  public CstBdd2BddExpr implies(CstBddExpr other)
   {
-    return new CstBdd2BddExpr(this, other, CstBddOp.IMP);
+    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
+  }
+
+  public CstBdd2BddExpr implies(CstVecExpr other)
+  {
+    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
+  }
+
+  public CstBdd2BddExpr logicOr(CstBddExpr other)
+  {
+    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
+  }
+
+  public CstBdd2BddExpr logicOr(CstVecExpr other)
+  {
+    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
+  }
+
+  public CstBdd2BddExpr logicAnd(CstBddExpr other)
+  {
+    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
+  }
+
+  public CstBdd2BddExpr logicAnd(CstVecExpr other)
+  {
+    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
 
 }
@@ -1797,9 +1981,9 @@ class CstBdd2BddExpr: CstBddExpr
 
     BDD retval;
     final switch(_op) {
-    case CstBddOp.AND: retval = lvec &  rvec; break;
-    case CstBddOp.OR:  retval = lvec |  rvec; break;
-    case CstBddOp.IMP: retval = lvec >> rvec; break;
+    case CstBddOp.LOGICAND: retval = lvec &  rvec; break;
+    case CstBddOp.LOGICOR:  retval = lvec |  rvec; break;
+    case CstBddOp.LOGICIMP: retval = lvec >> rvec; break;
     }
     return retval;
   }
@@ -1854,13 +2038,13 @@ class CstVec2BddExpr: CstBddExpr
 
   override public CstStage[] getStages() {
     import std.exception;
-    import std.algorithm: max;
     enforce(_lhs.getStages.length <= 1 &&
 	    _rhs.getStages.length <= 1);
 
     if(_lhs.getStages.length is 0) return _rhs.getStages;
     else if(_rhs.getStages.length is 0) return _lhs.getStages;
     else {
+      // import std.algorithm: max;
       // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
       // return [stage];
       return _lhs.getStages;
@@ -2017,12 +2201,18 @@ class CstBlock: CstBddExpr
       _exprs ~= other;
     }
 
+  public void opOpAssign(string op)(CstVecExpr other)
+    if(op == "~") {
+      _exprs ~= other.toBdd();
+    }
+
   public void opOpAssign(string op)(CstBlock other)
     if(op == "~") {
       foreach(expr; other._exprs) {
       _exprs ~= expr;
       }
     }
+
 }
 
 auto _esdl__randNamedApply(string VAR, alias F, T)(T t)
@@ -2314,7 +2504,7 @@ public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, T)(ref T t)
 public CstVecLoopVar _esdl__cstRandArrIndex(string VAR, size_t I,
 					 size_t CI, size_t RI, T)(ref T t) {
   auto lvar = _esdl__cstRandArrLength!(VAR, I, CI, RI, T)(t);
-  
+
   return lvar.makeLoopVar();
 }
 

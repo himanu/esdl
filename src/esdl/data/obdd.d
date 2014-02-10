@@ -9399,13 +9399,13 @@ class Buddy
       }
     }
 
-    public override BddVec opSlice(size_t i, size_t j) {
-      if(i >= j) throw new BddException();
-      if(i >= bitvec.length) throw new BddException();
-      if(j > bitvec.length) throw new BddException();
-      BddVec res = buildVec(cast (int) (j - i), false);
-      for(size_t n = 0; n < j - 1; ++n) {
-	res.bitvec[n] = this.bitvec[n+i].dup();
+    public override BddVec opSlice(size_t n, size_t m) {
+      if(n >= m) throw new BddException();
+      if(n >= bitvec.length) throw new BddException();
+      if(m > bitvec.length) throw new BddException();
+      BddVec res = buildVec(cast (int) (m - n), false);
+      for(size_t i = 0; i < m - n; ++i) {
+	res.bitvec[i] = this.bitvec[n+i].dup();
       }
       return res;
     }
