@@ -246,6 +246,7 @@ class CstStage {
 public class ConstraintEngine {
   // Keep a list of constraints in the class
   _ESDL__ConstraintBase cstList[];
+  _ESDL__ConstraintBase cstWith;
   // ParseTree parseList[];
   public CstVecPrim[] _cstRands;
   RandGen _rgen;
@@ -261,9 +262,10 @@ public class ConstraintEngine {
 
   ~this() {
     import core.memory: GC;
-    cstList.length = 0;
+    cstList.length   = 0;
+    cstWith          = null;
     _cstRands.length = 0;
-    _domains.length = 0;
+    _domains.length  = 0;
     // GC.collect();
     _buddy.destroyBuddy();
   }
@@ -332,6 +334,7 @@ public class ConstraintEngine {
     auto cstStmts = new CstBlock();	// start empty
 
     // take all the constraints -- even if disabled
+    // no new domains arise from cstWith
     foreach(ref _ESDL__ConstraintBase cst; cstList) {
       cstStmts ~= cst.getCstExpr();
     }
@@ -367,7 +370,10 @@ public class ConstraintEngine {
 	cstStmts ~= cst.getCstExpr();
       }
     }
-
+    if(cstWith !is null) {
+      cstStmts ~= cstWith.getCstExpr();
+    }
+    
     auto cstExprs = cstStmts._exprs;
     auto usExprs = cstExprs;	// unstaged Expressions -- all
     auto usStages = cstStages;	// unresolved stages -- all
@@ -948,7 +954,7 @@ public bool randomizeWith(string C, T, V...)(ref T t, V values)
 	new Constraint!(C, "_esdl__withCst", T, T, V.length)(t, t,
 							     "_esdl__withCst");
       withCst.withArgs(values);
-      t._esdl__cstEng.cstList ~= withCst;
+      t._esdl__cstEng.cstWith = withCst;
       return t._esdl__virtualRandomize();
     }
     else {
@@ -957,7 +963,7 @@ public bool randomizeWith(string C, T, V...)(ref T t, V values)
 	new Constraint!(C, "_esdl__withCst", T, T, V.length)(t, t,
 							     "_esdl__withCst");
       withCst.withArgs(values);
-      t._esdl__cstEng.cstList ~= withCst;
+      t._esdl__cstEng.cstWith = withCst;
       return t._esdl__randomize();
     }
   }
@@ -972,10 +978,12 @@ public bool randomize(T) (ref T t)
     // static if(is(typeof(t._esdl__RandType) == T)) {
     static if(is(typeof(t._esdl__typeID()) == T)) {
       t._esdl__virtualInitCstEng();
+      t._esdl__cstEng.cstWith = null;
       return t._esdl__virtualRandomize();
     }
     else {
       t._esdl__initCstEng();
+      t._esdl__cstEng.cstWith = null;
       return t._esdl__randomize();
     }
   }
