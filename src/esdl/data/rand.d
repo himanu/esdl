@@ -117,11 +117,41 @@ class Constraint(string C, string NAME, T, S): Constraint!C
   T _outer;
   S _outerD;
 
-  this(T t, S s, ConstraintEngine eng, string name, uint index) {
-    super(eng, name, index);
+  this(T t, S s, string name) {
+    super(t._esdl__cstEng, name, cast(uint) t._esdl__cstEng.cstList.length);
     _outer = t;
     _outerD = s;
   }
+  // This mixin writes out the bdd functions after parsing the
+  // constraint string at compile time
+  mixin(constraintFoo(C));
+}
+
+class Constraint(string C, string NAME, T, S, size_t N): Constraint!C
+{
+  T _outer;
+  S _outerD;
+
+  long[N] _withArgs;
+
+  void withArgs(V...)(V values) if(allIntengral!V) {
+    foreach(i, v; values) {
+      _withArgs[i] = v;
+    }
+  }
+
+  this(T t, S s, string name) {
+    super(t._esdl__cstEng, name, cast(uint) t._esdl__cstEng.cstList.length);
+    _outer = t;
+    _outerD = s;
+  }
+
+  public CstVecConst _esdl__cstArg(size_t VAR, T)(ref T t) {
+    static assert(VAR < N, "Can not map specified constraint with argument: @" ~
+		  VAR.stringof);
+    return _esdl__cstRand(_withArgs[VAR], t);
+  }
+  
   // This mixin writes out the bdd functions after parsing the
   // constraint string at compile time
   mixin(constraintFoo(C));
@@ -216,6 +246,7 @@ class CstStage {
 public class ConstraintEngine {
   // Keep a list of constraints in the class
   _ESDL__ConstraintBase cstList[];
+  _ESDL__ConstraintBase cstWith;
   // ParseTree parseList[];
   public CstVecPrim[] _cstRands;
   RandGen _rgen;
@@ -231,9 +262,10 @@ public class ConstraintEngine {
 
   ~this() {
     import core.memory: GC;
-    cstList.length = 0;
+    cstList.length   = 0;
+    cstWith          = null;
     _cstRands.length = 0;
-    _domains.length = 0;
+    _domains.length  = 0;
     // GC.collect();
     _buddy.destroyBuddy();
   }
@@ -302,6 +334,7 @@ public class ConstraintEngine {
     auto cstStmts = new CstBlock();	// start empty
 
     // take all the constraints -- even if disabled
+    // no new domains arise from cstWith
     foreach(ref _ESDL__ConstraintBase cst; cstList) {
       cstStmts ~= cst.getCstExpr();
     }
@@ -337,7 +370,10 @@ public class ConstraintEngine {
 	cstStmts ~= cst.getCstExpr();
       }
     }
-
+    if(cstWith !is null) {
+      cstStmts ~= cstWith.getCstExpr();
+    }
+    
     auto cstExprs = cstStmts._exprs;
     auto usExprs = cstExprs;	// unstaged Expressions -- all
     auto usStages = cstStages;	// unresolved stages -- all
@@ -591,6 +627,9 @@ interface RandomizableIntf
       override public _esdl__RandType _esdl__typeID() {
 	return null;
       }
+      override public void _esdl__virtualInitCstEng() {
+	_esdl__initCstEng!_esdl__RandType(this);
+      }
       override public bool _esdl__virtualRandomize() {
 	return _esdl__randomize!_esdl__RandType(this);
       }
@@ -609,6 +648,9 @@ interface RandomizableIntf
 	return null;
       }
 
+      public void _esdl__virtualInitCstEng() {
+	_esdl__initCstEng!_esdl__RandType(this);
+      }
       public bool _esdl__virtualRandomize() {
 	return _esdl__randomize!_esdl__RandType(this);
       }
@@ -685,8 +727,7 @@ void _esdl__initCst(size_t I=0, size_t CI=0, T, S) (T t, S s) {
   alias typeof(l) L;
   enum string NAME = chompPrefix (t.tupleof[I].stringof, "t.");
   static if (is (L f == Constraint!C, immutable (char)[] C)) {
-    l = new Constraint!(C, NAME, T, S)(t, s, t._esdl__cstEng, NAME,
-				       cast(uint) t._esdl__cstEng.cstList.length);
+    l = new Constraint!(C, NAME, T, S)(t, s, NAME);
     t._esdl__cstEng.cstList ~= l;
   }
   else {
@@ -888,6 +929,45 @@ template isVarSigned(L) {
       static assert(false, "isVarSigned: Can not determine sign of type " ~ typeid(L));
 }
 
+// FIXME add bitvectors to this template filter
+template allIntengral(V...) {
+  static if(V.length == 0) {
+    enum bool allIntengral = true;
+  }
+  else static if(isIntegral!(V[0])) {
+      enum bool allIntengral = allIntengral!(V[1..$]);
+    }
+    else enum bool allIntengral = false;
+}
+
+public bool randomizeWith(string C, T, V...)(ref T t, V values)
+  if(is(T v: RandomizableIntf) &&
+     is(T == class) && allIntengral!V) {
+    // The idea is that if the end-user has used the randomization
+    // mixin then _esdl__RandType would be already available as an
+    // alias and we can use virtual randomize method in such an
+    // eventuality.
+    // static if(is(typeof(t._esdl__RandType) == T)) {
+    static if(is(typeof(t._esdl__typeID()) == T)) {
+      t._esdl__virtualInitCstEng();
+      auto withCst =
+	new Constraint!(C, "_esdl__withCst", T, T, V.length)(t, t,
+							     "_esdl__withCst");
+      withCst.withArgs(values);
+      t._esdl__cstEng.cstWith = withCst;
+      return t._esdl__virtualRandomize();
+    }
+    else {
+      t._esdl__initCstEng();
+      auto withCst =
+	new Constraint!(C, "_esdl__withCst", T, T, V.length)(t, t,
+							     "_esdl__withCst");
+      withCst.withArgs(values);
+      t._esdl__cstEng.cstWith = withCst;
+      return t._esdl__randomize();
+    }
+  }
+
 public bool randomize(T) (ref T t)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
@@ -897,18 +977,20 @@ public bool randomize(T) (ref T t)
     // eventuality.
     // static if(is(typeof(t._esdl__RandType) == T)) {
     static if(is(typeof(t._esdl__typeID()) == T)) {
+      t._esdl__virtualInitCstEng();
+      t._esdl__cstEng.cstWith = null;
       return t._esdl__virtualRandomize();
     }
     else {
-      return _esdl__randomize(t);
+      t._esdl__initCstEng();
+      t._esdl__cstEng.cstWith = null;
+      return t._esdl__randomize();
     }
   }
 
-public bool _esdl__randomize(T) (ref T t)
+public void _esdl__initCstEng(T) (ref T t)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
-    import std.exception;
-    import std.conv;
 
     // Initialize the constraint database if not already done
     if (t._esdl__cstEng is null) {
@@ -916,6 +998,13 @@ public bool _esdl__randomize(T) (ref T t)
 					     _esdl__countRands(t));
       _esdl__initCsts(t, t);
     }
+  }
+
+public bool _esdl__randomize(T) (ref T t, _ESDL__ConstraintBase withCst = null)
+  if(is(T v: RandomizableIntf) &&
+     is(T == class)) {
+    import std.exception;
+    import std.conv;
 
     // Call the pre_randomize hook
     t.pre_randomize();

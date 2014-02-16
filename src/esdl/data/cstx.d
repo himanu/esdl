@@ -381,6 +381,25 @@ struct ConstraintParser {
     return start;
   }
 
+  size_t parseWithArg() {
+    size_t start = srcCursor;
+    if(srcCursor < CST.length &&
+       CST[srcCursor == '@']) {
+      ++srcCursor;
+    }
+    else return start;
+    while(srcCursor < CST.length) {
+      char c = CST[srcCursor];
+      if((c >= '0' && c <= '9')) {
+	++srcCursor;
+      }
+      else {
+	break;
+      }
+    }
+    return start;
+  }
+
   unittest {
     size_t curs = 4;
     assert(parseIdentifier("Foo Bar;", curs) == 0);
@@ -887,7 +906,15 @@ struct ConstraintParser {
 	  fill(", _outer)");
 	}
 	else {
-	  errorToken();
+	  srcTag = parseWithArg();
+	  if(srcCursor > srcTag) {
+	    fill("_esdl__cstArg!(");
+	    fill(CST[srcTag+1..srcCursor]);
+	    fill(") (_outer)");
+	  }
+	  else {
+	    errorToken();
+	  }
 	}
       }
 
