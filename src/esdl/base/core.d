@@ -1587,11 +1587,11 @@ public class NotificationObj(T): EventObj
   }
 
 
-  static public Notification!T opCall() {
-    Notification!T notification;
-    notification.init();
-    return notification;
-  }
+  // static public Notification!T opCall() {
+  //   Notification!T notification;
+  //   notification.init();
+  //   return notification;
+  // }
 
   this(string name) {
     this.init(name);
@@ -1880,11 +1880,11 @@ public class NotificationQueueObj(T): NotificationObj!T
   }
 
 
-  static public NotificationQueue!T opCall() {
-    NotificationQueue!T notification;
-    notificationQueue.init();
-    return notification;
-  }
+  // static public NotificationQueue!T opCall() {
+  //   NotificationQueue!T notification;
+  //   notificationQueue.init();
+  //   return notification;
+  // }
 
   this(string name) {
     this.init(name);
@@ -2325,11 +2325,11 @@ public class EventObj: EventAgent, NamedObj
     this._eventObj = e;
   }
 
-  static public Event opCall() {
-    Event event;
-    event.init();
-    return event;
-  }
+  // static public Event opCall() {
+  //   Event event;
+  //   event.init();
+  //   return event;
+  // }
 
   this(string name) {
     this.init(name);
@@ -2607,11 +2607,11 @@ public class EventQueueObj: EventObj
   }
 
 
-  static public EventQueue opCall() {
-    EventQueue event;
-    event.init();
-    return event;
-  }
+  // static public EventQueue opCall() {
+  //   EventQueue event;
+  //   event.init();
+  //   return event;
+  // }
 
   this(string name) {
     this.init(name);
