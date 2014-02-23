@@ -785,11 +785,11 @@ class MutexObj: MutexIF, NamedObj
   @disable private void opAssign(Mutex e);
   @disable private this(this);
 
-  static public Mutex opCall() {
-    Mutex mutex;
-    mutex.init();
-    return mutex;
-  }
+  // static public Mutex opCall() {
+  //   Mutex mutex;
+  //   mutex.init();
+  //   return mutex;
+  // }
 
   static public Mutex[] opIndex(size_t n) {
     Mutex mutexs[] = new Mutex[n];
@@ -864,12 +864,16 @@ class SemaphoreObj: SemaphoreIF, NamedObj
   ptrdiff_t   _value;
 
   this(ptrdiff_t n=1) {
-    _event.init(this);
-    _value = n;
+    synchronized(this) {
+      _event.init(this);
+      _value = n;
+    }
   }
 
   ptrdiff_t getValue() {
-    return _value;
+    synchronized(this) {
+      return _value;
+    }
   }
 
   void post() {
@@ -944,16 +948,22 @@ class SemaphoreObj: SemaphoreIF, NamedObj
 
   public final void init() {
     if(_semaphoreObj is null) {
-      _semaphoreObj = new SemaphoreObj;
+      synchronized(typeid(Semaphore)) {
+	if(_semaphoreObj is null) {
+	  _semaphoreObj = new SemaphoreObj;
+	}
+      }
     }
   }
 
   this(size_t n) {
-    if(_semaphoreObj is null) {
-      _semaphoreObj = new SemaphoreObj(n);
+    synchronized(typeid(Semaphore)) {
+      if(_semaphoreObj is null) {
+	_semaphoreObj = new SemaphoreObj(n);
+      }
     }
   }
-
+  
   void wait() {
     init();
     _semaphoreObj.wait();
@@ -1019,7 +1029,7 @@ interface FifoInIF(T): FifoInBIF!T, FifoInNBIF!T
 interface FifoOutNBIF(T)
 {
   alias Port!(FifoOutNBIF!T) port_t;
-  public bool nbWrite(ref T);
+  public bool nbWrite(T);
   public Event readEvent();
   public void registerPort(BasePort port);
 }
@@ -1086,60 +1096,72 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
 
  public:
   this() {
-    _readEvent.init(this);
-    _writeEvent.init(this);
-    static if(N == 0) {_buffer.length = 4;}
-    _free = _buffer.length;
+    synchronized(this) {
+      _readEvent.init(this);
+      _writeEvent.init(this);
+      static if(N == 0) {_buffer.length = 4;}
+      _free = _buffer.length;
+    }
   }
 
   // void registerPort(IF)(PortObj!IF p)
 
   void registerPort(BasePort p) {
-    if(cast(PortObj!(FifoInNBIF!T)) p ||
-       cast(PortObj!(FifoInBIF!T)) p) {
-      if(_readerp == true) {
-	assert(false, "Only one input port can be connected to Fifo");
+    synchronized(this) {
+      if(cast(PortObj!(FifoInNBIF!T)) p ||
+	 cast(PortObj!(FifoInBIF!T)) p) {
+	if(_readerp == true) {
+	  assert(false, "Only one input port can be connected to Fifo");
+	}
+	else _readerp = true;
       }
-      else _readerp = true;
-    }
-    else if(cast(PortObj!(FifoOutNBIF!T)) p ||
-	    cast(PortObj!(FifoOutBIF!T)) p) {
-      if(_writerp == true) {
-	assert(false, "Only one input port can be connected to Fifo");
+      else if(cast(PortObj!(FifoOutNBIF!T)) p ||
+	      cast(PortObj!(FifoOutBIF!T)) p) {
+	if(_writerp == true) {
+	  assert(false, "Only one input port can be connected to Fifo");
+	}
+	else _writerp = true;
       }
-      else _writerp = true;
+      else assert(false, "Incompatible port");
     }
-    else assert(false, "Incompatible port");
   }
 
   void registerPort(Port!(FifoInNBIF!T) p) {
-    if(_readerp == true)
-      assert(false, "Only one input port can be connected to Fifo");
-    else
-      _readerp = true;
+    synchronized(this) {
+      if(_readerp == true)
+	assert(false, "Only one input port can be connected to Fifo");
+      else
+	_readerp = true;
+    }
   }
-
+  
   void registerPort(port_ib_t p) {
-    if(_readerp == true)
-      assert(false, "Only one input port can be connected to Fifo");
-    else
-      _readerp = true;
+    synchronized(this) {
+      if(_readerp == true)
+	assert(false, "Only one input port can be connected to Fifo");
+      else
+	_readerp = true;
+    }
   }
 
   void registerPort(port_onb_t p) {
-    if(_writerp == true)
-      assert(false, "Only one output port can be connected to Fifo");
-    else
-      _writerp = true;
+    synchronized(this) {
+      if(_writerp == true)
+	assert(false, "Only one output port can be connected to Fifo");
+      else
+	_writerp = true;
+    }
   }
 
   void registerPort(port_ob_t p) {
-    if(_writerp == true)
-      assert(false, "Only one output port can be connected to Fifo");
-    else
-      _writerp = true;
+    synchronized(this) {
+      if(_writerp == true)
+	assert(false, "Only one output port can be connected to Fifo");
+      else
+	_writerp = true;
+    }
   }
-
+  
   size_t numFilled() {
     synchronized(this) {
       return _numReadable - _numRead;
@@ -1148,8 +1170,9 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
 
   // static if(N != 0) {
   size_t numFree() {
-    synchronized(this)
+    synchronized(this) {
       return _buffer.length - _numReadable - _numWritten;
+    }
   }
   // }
 
@@ -1249,7 +1272,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  bool nbWrite(ref T val) {
+  bool nbWrite(T val) {
     synchronized(this) {
       static if(N == 0) {
 	if(numFree() == 0) {
@@ -1268,6 +1291,8 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
+  // no need for synchronized here -- this functions is called only
+  // during scheduler phase
   override protected void update() {
     if(_numRead > 0) {
       // writeln("Notifying Read");
@@ -1317,8 +1342,12 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   @disable private this(this);
 
   public final void init() {
-    if(_fifoObj is null) {
-      _fifoObj = new FifoObj!(T, N);
+    if(this._fifoObj is null) {
+      synchronized(typeid(Fifo!(T,N))) {
+	if(_fifoObj is null) {
+	  _fifoObj = new FifoObj!(T, N);
+	}
+      }
     }
   }
 
@@ -1388,11 +1417,13 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   // }
 
   public this() {
-    static if(is(T == bool) || is(T == bit) || is(T == logic)) {
-      _posedgeEvent.init("_posedgeEvent", this);
-      _negedgeEvent.init("_negedgeEvent", this);
+    synchronized(this) {
+      static if(is(T == bool) || is(T == bit) || is(T == logic)) {
+	_posedgeEvent.init("_posedgeEvent", this);
+	_negedgeEvent.init("_negedgeEvent", this);
+      }
+      _changeEvent.init("_changeEvent", this);
     }
-    _changeEvent.init("_changeEvent", this);
   }
 
   @property override public string toString() {
@@ -1502,12 +1533,14 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   }
 
   void registerPort(BasePort p) {
-    static if(MULTI_DRIVER == false) {
-      if(cast(PortObj!(SignalWriteIF!T)) p) {
-	import std.exception;
-	enforce(! _writePortBound, "Signal " ~ this.getName ~
-		" can be bound to only a single write port");
-	_writePortBound = true;
+    synchronized(this) {
+      static if(MULTI_DRIVER == false) {
+	if(cast(PortObj!(SignalWriteIF!T)) p) {
+	  import std.exception;
+	  enforce(! _writePortBound, "Signal " ~ this.getName ~
+		  " can be bound to only a single write port");
+	  _writePortBound = true;
+	}
       }
     }
   }
@@ -1515,41 +1548,44 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   version(COSIM_VERILOG) {
 
     private void hdlPut() {
-      // for now, get the value and display it
-      s_vpi_value v;
-      v.format = vpiVectorVal;
-      static if(isBitVector!T) {
-	enum size_t NWORDS = (T.SIZE+31)/32;
-      }
-      else {
-	enum size_t NWORDS = (8*T.sizeof + 31)/32;
-      }
-      s_vpi_vecval[NWORDS+1] vector;
-
-      static if(isBitVector!T) {
-	_newVal.toVpiVecValue(vector);
-      }
-      else {
-	enum size_t size = 8 * T.sizeof;
-	// special handling for long/ulong for others simply copy
-	static if(size > 32) {
-	  vector[0].aval = cast(uint) _newVal;
-	  vector[1].aval = cast(uint) (_newVal >>> 32);
-	  vector[0].bval = 0;
-	  vector[1].bval = 0;
+      synchronized(this) {
+	// for now, get the value and display it
+	s_vpi_value v;
+	v.format = vpiVectorVal;
+	static if(isBitVector!T) {
+	  enum size_t NWORDS = (T.SIZE+31)/32;
 	}
 	else {
-	  vector[0].aval = _newVal;
-	  vector[0].bval = 0;
+	  enum size_t NWORDS = (8*T.sizeof + 31)/32;
 	}
+	s_vpi_vecval[NWORDS+1] vector;
+
+	static if(isBitVector!T) {
+	  _curVal.toVpiVecValue(vector);
+	}
+	else {
+	  enum size_t size = 8 * T.sizeof;
+	  // special handling for long/ulong for others simply copy
+	  static if(size > 32) {
+	    vector[0].aval = cast(uint) _curVal;
+	    vector[1].aval = cast(uint) (_curVal >>> 32);
+	    vector[0].bval = 0;
+	    vector[1].bval = 0;
+	  }
+	  else {
+	    vector[0].aval = _curVal;
+	    vector[0].bval = 0;
+	  }
+	}
+
+	v.value.vector = vector.ptr;
+	vpiPutValue(netHandle, &v, null, vpiNoDelay);
+
       }
-
-      v.value.vector = vector.ptr;
-      vpiPutValue(netHandle, &v, null, vpiNoDelay);
-
     }
   }
   
+  // no need for synchronized
   public override void update() {
     if(_newVal != _curVal) {
       _curVal = _newVal;
@@ -1597,17 +1633,19 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   }
 
   public void opOpAssign(string op, T)(T other) {
-    static if(op == "+")  _newVal = _curVal +  other;
-    static if(op == "-")  _newVal = _curVal -  other;
-    static if(op == "*")  _newVal = _curVal *  other;
-    static if(op == "/")  _newVal = _curVal /  other;
-    static if(op == "^^") _newVal = _curVal ^^ other;
-    static if(op == "%")  _newVal = _curVal %  other;
-    static if(op == "~")  _newVal = _curVal ~  other;
-    static if(op == "|")  _newVal = _curVal ^  other;
-    static if(op == "&")  _newVal = _curVal %  other;
-    static if(op == "^")  _newVal = _curVal ~  other;
-    this.requestUpdate();
+    synchronized(this) {
+      static if(op == "+")  _newVal = _curVal +  other;
+      static if(op == "-")  _newVal = _curVal -  other;
+      static if(op == "*")  _newVal = _curVal *  other;
+      static if(op == "/")  _newVal = _curVal /  other;
+      static if(op == "^^") _newVal = _curVal ^^ other;
+      static if(op == "%")  _newVal = _curVal %  other;
+      static if(op == "~")  _newVal = _curVal ~  other;
+      static if(op == "|")  _newVal = _curVal ^  other;
+      static if(op == "&")  _newVal = _curVal %  other;
+      static if(op == "^")  _newVal = _curVal ~  other;
+      this.requestUpdate();
+    }
   }
 
   version(COSIM_VERILOG) {
@@ -1622,33 +1660,35 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     }
 
     private void hdlGet() {
-      import std.stdio;
-      // for now, get the value and display it
-      s_vpi_value v;
-      v.format = vpiVectorVal;
-      vpiGetValue(netHandle, &v);
-      // at the time of binding we already checked that the size of
-      // the signal at the two sides match.
+      synchronized(this) {
+	import std.stdio;
+	// for now, get the value and display it
+	s_vpi_value v;
+	v.format = vpiVectorVal;
+	vpiGetValue(netHandle, &v);
+	// at the time of binding we already checked that the size of
+	// the signal at the two sides match.
 
-      static if(isBitVector!T) {
-	_newVal = v.value.vector;
-	requestUpdate(UpdateReason.VERILOG);
-      }
-      else {
-	enum size_t size = 8 * T.sizeof;
-	// special handling for long/ulong for others simply copy
-	static if(size > 32) {
-	  ulong lsw = v.value.vector[0].aval;
-	  ulong msw = v.value.vector[1].aval;
-	  lsw |= (msw << 32);
-	  _newVal = cast(T) lsw;
+	static if(isBitVector!T) {
+	  _newVal = v.value.vector;
+	  requestUpdate(UpdateReason.VERILOG);
 	}
 	else {
-	  _newVal = cast(T) v.value.vector[0].aval;
+	  enum size_t size = 8 * T.sizeof;
+	  // special handling for long/ulong for others simply copy
+	  static if(size > 32) {
+	    ulong lsw = v.value.vector[0].aval;
+	    ulong msw = v.value.vector[1].aval;
+	    lsw |= (msw << 32);
+	    _newVal = cast(T) lsw;
+	  }
+	  else {
+	    _newVal = cast(T) v.value.vector[0].aval;
+	  }
 	}
+	requestUpdate(UpdateReason.VERILOG);
+	// writeln(*(v.value.vector));
       }
-      requestUpdate(UpdateReason.VERILOG);
-      // writeln(*(v.value.vector));
     }
 
     public void hdlBind(string net) {
@@ -1754,7 +1794,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   }
 
   public final void init() {
-    synchronized {
+    synchronized(typeid(Signal!(T, MULTI_DRIVER))) {
       if(_signalObj is null) {
 	_signalObj = new SignalObj!(T, MULTI_DRIVER);
       }

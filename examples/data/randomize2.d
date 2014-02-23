@@ -64,6 +64,7 @@ class Bar: Foo
 void main()
 {
   auto foo = new Bar;
+  
   auto myMode = AhbMode.NONE;
   for (size_t i=0; i != 1000; ++i)
     {
@@ -73,9 +74,7 @@ void main()
       else {
 	myMode++;
       }
-      import std.stdio;
-      writeln("mode is: ", myMode);
-      foo.randomizeWith!q{mode == @1;}(0, myMode);
+      foo.randomizeWith!q{mode == @0;}(myMode);
       foo.display();
     }
 }
