@@ -28,7 +28,7 @@
 // that none of none of these operators chain together
 
 // Here is how we do it:
-// 
+//
 // 1. Treat all parenthesis, addition, multiplication, substraction
 // other lower level operators as whitespace. These just need to be
 // replicated in the output
@@ -62,7 +62,7 @@ struct ConstraintParser {
   size_t numParen  = 0;
 
   size_t numIndex  = 0;
-  
+
   VarPair[] varMap = [];
 
   // list of if conditions that are currently active
@@ -77,7 +77,7 @@ struct ConstraintParser {
     }
     dryRun = false;
   }
-  
+
   this(string CST) {
     this.CST = CST;
   }
@@ -86,7 +86,7 @@ struct ConstraintParser {
     ConstraintParser dup = ConstraintParser(CST[cursor..$]);
     return dup;
   }
-  
+
   enum OpToken: byte
     {   NONE = 0,
 	AND,
@@ -117,7 +117,7 @@ struct ConstraintParser {
 	INV,
 	NOT,
 	}
-  
+
   OpUnaryToken parseUnaryOperator() {
     OpUnaryToken tok = OpUnaryToken.NONE;
     if(srcCursor < CST.length) {
@@ -225,9 +225,9 @@ struct ConstraintParser {
     int[MaxHierDepth * 2] result;
     size_t wTag;
     size_t start = srcCursor;
-    
+
     result[0] = -1;
-    
+
     for (size_t i=0; i != MaxHierDepth-1; ++i) {
       wTag = srcCursor;
       parseSpace();
@@ -257,8 +257,8 @@ struct ConstraintParser {
     }
     return result;
   }
-    
-    
+
+
 
   size_t parseLineComment() {
     size_t start = srcCursor;
@@ -479,7 +479,7 @@ struct ConstraintParser {
 	  --numIndex;
 	  ++srcCursor;
 	  continue;
-	}	
+	}
 	else {
 	  break;
 	}
@@ -497,7 +497,7 @@ struct ConstraintParser {
       parseBlockComment();
       parseNestedComment();
       parseWhiteSpace();
-      
+
       if(srcCursor > srcTag) {
 	continue;
       }
@@ -543,7 +543,7 @@ struct ConstraintParser {
 
     procBlock();
 
-    
+
     return outBuffer;
   }
 
@@ -589,7 +589,7 @@ struct ConstraintParser {
     string elem;
     string array;
     size_t srcTag;
-  
+
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
@@ -598,7 +598,7 @@ struct ConstraintParser {
       import std.conv: to;
       assert(false, "Not a FOREACH block at: " ~ srcTag.to!string);
     }
-    
+
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
@@ -620,7 +620,7 @@ struct ConstraintParser {
 
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
-      
+
       if(CST[srcCursor] == ';') {
 	elem = index;
 	index = "";
@@ -636,7 +636,7 @@ struct ConstraintParser {
     else {
       errorToken();
     }
-  
+
     // Parse elem
     if(elem.length is 0) {
       srcTag = parseIdentifier();
@@ -680,11 +680,6 @@ struct ConstraintParser {
       errorToken();
     }
 
-    if(CST[srcCursor] != '{') {
-      errorToken();
-    }
-    ++srcCursor;
-
     // add index
     if(index.length != 0) {
       VarPair x;
@@ -692,13 +687,19 @@ struct ConstraintParser {
       x.xLat = "_esdl__cstRandArrIndex!q{" ~ array ~ "}(_outer)";
       varMap ~= x;
     }
-    
+
     VarPair x;
     x.varName = elem;
     x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
     varMap ~= x;
 
-    procBlock();
+    if(CST[srcCursor] is '{') {
+      ++srcCursor;
+      procBlock();
+    }
+    else {
+      procStmt();
+    }
 
     if(index.length != 0) {
       varMap = varMap[0..$-2];
@@ -706,7 +707,7 @@ struct ConstraintParser {
     else {
       varMap = varMap[0..$-1];
     }
-  
+
   }
 
   void procIfBlock() {
@@ -714,7 +715,7 @@ struct ConstraintParser {
     string elem;
     string array;
     size_t srcTag;
-  
+
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
@@ -723,7 +724,7 @@ struct ConstraintParser {
       import std.conv: to;
       assert(false, "Not a IF block at: " ~ srcTag.to!string);
     }
-    
+
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
@@ -736,7 +737,7 @@ struct ConstraintParser {
     fill("/* IF Block: ");
     auto outTag = outCursor;
     procExpr();
-    
+
     if(dryRun) {
       dummy.length = outCursor-outTag;
       Condition ifCond = dummy;
@@ -748,7 +749,7 @@ struct ConstraintParser {
     }
 
     fill("*/\n");
-    
+
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
     if(CST[srcCursor] != ')') {
@@ -758,12 +759,13 @@ struct ConstraintParser {
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
-    if(CST[srcCursor] != '{') {
-      errorToken();
+    if(CST[srcCursor] is '{') {
+      ++srcCursor;
+      procBlock();
     }
-    ++srcCursor;
-
-    procBlock();
+    else {
+      procStmt();
+    }
 
     // In case there is an else clause
     srcTag = parseSpace();
@@ -778,18 +780,19 @@ struct ConstraintParser {
     else {
       fill("// Else \n");
       ifConds[$-1].switchToElse();
-    
+
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
 
-      if(CST[srcCursor] != '{') {
-    	errorToken();
+      if(CST[srcCursor] is '{') {
+	++srcCursor;
+	procBlock();
       }
-      ++srcCursor;
+      else {
+	procStmt();
+      }
 
-      procBlock();
-
-    ifConds = ifConds[0..$-1];
+      ifConds = ifConds[0..$-1];
     }
   }
 
@@ -801,7 +804,7 @@ struct ConstraintParser {
 	BLOCK   = 4,
 	ENDBLOCK= 5,
 	// ANYTHING ELSE COMES HERE
-      
+
 	ERROR,
 	}
 
@@ -1067,7 +1070,7 @@ struct ConstraintParser {
   // translate the expression and also consume the semicolon thereafter
   void procStmt() {
     fill("  cstExpr ~= ");
-  
+
     if(ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
       foreach(ifCond; ifConds[0..$-1]) {
@@ -1111,7 +1114,7 @@ struct ConstraintParser {
   loop:
     while(srcCursor <= CST.length) {
       import std.conv: to;
-    
+
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
 
@@ -1140,7 +1143,7 @@ struct ConstraintParser {
 	procStmt();
       }
     }
-    
+
   }
 
 
@@ -1150,6 +1153,6 @@ struct ConstraintParser {
     // assert(translate("FOO > BAR || FOO == BAR;"));
     //                012345678901234567890123456789012345678901234567890123456789
     assert(translate("_num_seq <= 2 || seq_kind1 >= 2 ;  seq_kind2 <  _num_seq || seq_kind3 == 0;
-                   "));
+		   "));
   }
 }
