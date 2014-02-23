@@ -20,7 +20,7 @@ class Foo: Randomizable
 class Bar: Foo
 {
   mixin(randomization());
-  @rand byte[8] bar;
+  @rand ubyte[8] bar;
 
 
   override void display() {
@@ -35,15 +35,13 @@ class Bar: Foo
   } cstFooLength;
 
   Constraint! q{
+    foreach(i, f; bar) f <= i;
+
     foreach(i, f; foo) {
       f < 64;
       f > 16;
     }
     
-    foreach(i, f; bar) {
-      f <= i;
-      f >= 0;
-    }
   } cstFoo;
 
 }
