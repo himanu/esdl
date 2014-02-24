@@ -167,12 +167,34 @@ package interface NamedObj: EsdlObj, TimeContext
     }
 
   static public void wait(E)(E e)
-    if(! (is(E: EventObj) || is(E: EventQueueObj) || isIntegral!E))
+    if(! (is(E: EventObj) || is(E: EventQueueObj) ||
+	  isIntegral!E || is(E: SimTime) || is(E: Time)))
       {
 	auto event = getEventObj(e);
 	waitForEvent(event);
       }
 
+  static public void wait(E)(E e)
+    if(is(E: SimTime) || is(E: Time))
+      {
+	auto event = Process.self._timed;
+	event.notify(e);
+	waitForEvent(event);
+      }
+
+  static public void sleep(E)(E e)
+    if(is(E: SimTime) || is(E: Time))
+      {
+	auto event = Process.self._timed;
+	event.notify(e);
+	waitForEvent(event);
+      }
+
+  static public void sleep()() { // sleep forever
+    auto event = Process.self._timed;
+    waitForEvent(event);
+  }
+  
   static public void wait()()
   {
     auto proc = Process.self;
@@ -2005,9 +2027,9 @@ public class EventObj: EventAgent, NamedObj
     // At this point DMD's GC has a stop-the-world
     // implementation. Synchronization guards are required if the
     // implementation is changed to parallel GC thread type in future.
-    synchronized(client) {
-      client._waitingFor = this;
-    }
+    // synchronized(client) {
+    //   client._waitingFor = this;
+    // }
   }
 
   // FIXME -- save the event with the routine, so that the event is
@@ -2039,7 +2061,7 @@ public class EventObj: EventAgent, NamedObj
 
     foreach(c; _clientProcs) {
       sim._executor.addRunnableProcess(c);
-      c._waitingFor = null;
+      // c._waitingFor = null;
     }
 
     _clientProcs.length = 0;
@@ -3297,8 +3319,29 @@ public auto observe(E)(E e)
   }
 
 public void wait(E)(E e)
-  if(!is(E == struct) || is(E == SimTime) || is(E == Time)) {
+  if(!is(E == struct)) {
   auto event = getEventObj(e);
+  waitForEvent(event);
+}
+
+public void wait(E)(E e)
+  if(is(E: SimTime) || is(E: Time))
+    {
+      auto event = Process.self._timed;
+      event.notify(e);
+      waitForEvent(event);
+    }
+
+public void sleep(E)(E e)
+  if(is(E: SimTime) || is(E: Time))
+    {
+      auto event = Process.self._timed;
+      event.notify(e);
+      waitForEvent(event);
+    }
+
+public void sleep()() { // sleep forever
+  auto event = Process.self._timed;
   waitForEvent(event);
 }
 
@@ -3369,10 +3412,18 @@ public void wait(T, bool M)(Signal!(T, M) e) {
 }
 
 public void waitp(E)(E e)
-  if(!is(E == struct) || is(E == SimTime) || is(E == Time)) {
+  if(!is(E == struct)) {
   auto event = getEventObj(e);
   waitForEventP(event);
 }
+
+public void waitp(E)(E e)
+  if(is(E: SimTime) || is(E: Time))
+    {
+      auto event = Process.self._timed;
+      event.notify(e);
+      waitForEventP(event);
+    }
 
 public void waitp(ref Event e) {
   e.init();
@@ -4455,7 +4506,7 @@ class Process: SimProcess, EventClient, Procedure
 
   // When waiting for an event, this variable will have the event
   // object
-  private EventObj _waitingFor = null;
+  // private EventObj _waitingFor = null;
 
   // Return true if the event is dynamically spawned
   public bool isDynamic() {
@@ -4750,6 +4801,11 @@ class Process: SimProcess, EventClient, Procedure
     }
   }
 
+  // For all the timed-waits during the execution of the process, use
+  // this event
+  // Effectively Immutable
+  private EventObj _timed;
+
   // Triggered when a process ends execution
   private Event _ended;
 
@@ -4795,6 +4851,8 @@ class Process: SimProcess, EventClient, Procedure
       _endedRec.init(this);
       _stage = stage;
 
+      _timed = new EventObj(this);
+
       super(() {fn_wrap(fn);}, sz);
       this.setRandomSeed();
       if(Process.self || Routine.self) {
@@ -4812,6 +4870,8 @@ class Process: SimProcess, EventClient, Procedure
       _ended.init(this);
       _endedRec.init(this);
       _stage = stage;
+
+      _timed = new EventObj(this);
 
       super(() {dg_wrap(dg);}, sz);
       this.setRandomSeed();
@@ -5853,8 +5913,12 @@ final void doElab(T)(T t)
 	t.getSimulator.setPhase = Phase.PAUSE;
 	t.getSimulator._executor.resetStage();
 	t.getSimulator.elabDoneLock.notify();
-
-	writeln(">>>>>>>>>> Start of Simulation");
+	version(MULTICORE) {
+	  writeln(">>>>>>>>>> Start of Simulation (multicore enabled)");
+	}
+	else {
+	  writeln(">>>>>>>>>> Start of Simulation");
+	}
       }
     }
 

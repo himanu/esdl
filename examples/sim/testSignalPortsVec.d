@@ -54,7 +54,7 @@ class Source: Entity
     for(int i=0; i != 8; ++i)
       {
 	wait(1.nsec);
-	sigOut = cast(lvec!12) i;
+	sigOut = cast(lvec!12) i.toBitVec;
 	writefln("Just wrote: %x", i);
 	writeln("Port Value: ", sigOut);
       }
