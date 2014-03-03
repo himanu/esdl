@@ -1242,9 +1242,9 @@ struct BDD
 private void _delete(T)(T obj) {
   import core.memory;
   import std.stdio;
-  writeln("Deleting Buddy");
+  // writeln("Deleting Buddy");
   clear(obj);
-  GC.free(cast(void*)obj);
+  // GC.free(cast(void*)obj);
 }
 
 

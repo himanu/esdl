@@ -19,6 +19,7 @@ class Foo: Randomizable
 
 class Bar: Foo
 {
+  // mixin Randomization;
   mixin(randomization());
   @rand ubyte[8] bar;
 
