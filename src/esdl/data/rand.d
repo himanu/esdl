@@ -53,12 +53,13 @@ template CheckRandParams(N...) {
 
 abstract class _ESDL__ConstraintBase
 {
-  this(ConstraintEngine eng, string name, uint index) {
+  this(ConstraintEngine eng, string name, string constraint, uint index) {
     _cstEng = eng;
     _name = name;
+    _constraint = constraint;
     _index = index;
   }
-
+  immutable string _constraint;
   protected bool _enabled = true;
   protected ConstraintEngine _cstEng;
   protected string _name;
@@ -93,10 +94,10 @@ abstract class _ESDL__ConstraintBase
 abstract class Constraint (string C) : _ESDL__ConstraintBase
 {
   this(ConstraintEngine eng, string name, uint index) {
-    super(eng, name, index);
+    super(eng, name, C, index);
   }
 
-  static immutable string _constraint = C;
+  // static immutable string _constraint = C;
   // enum _parseTree = CstGrammar.parse(_constraint);
   // pragma(msg, _parseTree.capture);
 
@@ -247,6 +248,8 @@ public class ConstraintEngine {
   // Keep a list of constraints in the class
   _ESDL__ConstraintBase cstList[];
   _ESDL__ConstraintBase cstWith;
+  bool _cstWithChanged;
+  
   // ParseTree parseList[];
   public CstVecPrim[] _cstRands;
   RandGen _rgen;
@@ -264,6 +267,7 @@ public class ConstraintEngine {
     import core.memory: GC;
     cstList.length   = 0;
     cstWith          = null;
+    _cstWithChanged  = true;
     _cstRands.length = 0;
     _domains.length  = 0;
     // GC.collect();
@@ -334,9 +338,12 @@ public class ConstraintEngine {
     auto cstStmts = new CstBlock();	// start empty
 
     // take all the constraints -- even if disabled
-    // no new domains arise from cstWith
     foreach(ref _ESDL__ConstraintBase cst; cstList) {
       cstStmts ~= cst.getCstExpr();
+    }
+
+    if(cstWith !is null) {
+      cstStmts ~= cstWith.getCstExpr();
     }
 
     foreach(stmt; cstStmts._exprs) {
@@ -357,7 +364,7 @@ public class ConstraintEngine {
     // import std.stdio;
     // writeln("Solving BDD for number of contraints = ", cstList.length);
 
-    if(_domains.length is 0) {
+    if(_domains.length is 0 || _cstWithChanged is true) {
       initDomains();
     }
 
@@ -638,6 +645,24 @@ interface RandomizableIntf
       }
     };
     return _esdl__vRand;
+  }
+
+  mixin template Randomization()
+  {
+    import esdl.data.rand:_esdl__initCstEng, _esdl__randomize;
+    alias typeof(this) _esdl__RandType;
+    override public _esdl__RandType _esdl__typeID() {
+      return null;
+    }
+    override public void _esdl__virtualInitCstEng() {
+      _esdl__initCstEng!_esdl__RandType(this);
+    }
+    override public bool _esdl__virtualRandomize() {
+      return _esdl__randomize!_esdl__RandType(this);
+    }
+    auto _esdl__randEval(string NAME)() {
+      return mixin(NAME);
+    }
   }
 
   static final string _esdl__randomizable() {
@@ -950,20 +975,26 @@ public bool randomizeWith(string C, T, V...)(ref T t, V values)
     // static if(is(typeof(t._esdl__RandType) == T)) {
     static if(is(typeof(t._esdl__typeID()) == T)) {
       t._esdl__virtualInitCstEng();
-      auto withCst =
-	new Constraint!(C, "_esdl__withCst", T, T, V.length)(t, t,
-							     "_esdl__withCst");
-      withCst.withArgs(values);
-      t._esdl__cstEng.cstWith = withCst;
-      return t._esdl__virtualRandomize();
     }
     else {
       t._esdl__initCstEng();
+    }
+    if(t._esdl__cstEng.cstWith is null ||
+       t._esdl__cstEng.cstWith._constraint != C) {
       auto withCst =
-	new Constraint!(C, "_esdl__withCst", T, T, V.length)(t, t,
-							     "_esdl__withCst");
+	new Constraint!(C, "_esdl__withCst",
+			T, T, V.length)(t, t, "_esdl__withCst");
       withCst.withArgs(values);
       t._esdl__cstEng.cstWith = withCst;
+      t._esdl__cstEng._cstWithChanged = true;
+    }
+    else {
+      t._esdl__cstEng._cstWithChanged = false;
+    }
+    static if(is(typeof(t._esdl__typeID()) == T)) {
+      return t._esdl__virtualRandomize();
+    }
+    else {
       return t._esdl__randomize();
     }
   }
@@ -978,12 +1009,24 @@ public bool randomize(T) (ref T t)
     // static if(is(typeof(t._esdl__RandType) == T)) {
     static if(is(typeof(t._esdl__typeID()) == T)) {
       t._esdl__virtualInitCstEng();
-      t._esdl__cstEng.cstWith = null;
+      if(t._esdl__cstEng.cstWith !is null) {
+	t._esdl__cstEng.cstWith = null;
+	t._esdl__cstEng._cstWithChanged = true;
+      }
+      else {
+	t._esdl__cstEng._cstWithChanged = false;
+      }
       return t._esdl__virtualRandomize();
     }
     else {
       t._esdl__initCstEng();
-      t._esdl__cstEng.cstWith = null;
+      if(t._esdl__cstEng.cstWith !is null) {
+	t._esdl__cstEng.cstWith = null;
+	t._esdl__cstEng._cstWithChanged = true;
+      }
+      else {
+	t._esdl__cstEng._cstWithChanged = false;
+      }
       return t._esdl__randomize();
     }
   }
