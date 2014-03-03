@@ -1970,6 +1970,24 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	return lhs.isEqual(rhs);
       }
 
+    public bool isSame(string file = __FILE__,
+		       size_t line = __LINE__, V)(V other)
+      if(isIntegral!V || is(V == bool)) {
+	alias vec!(typeof(this), vec!V, "COMPARE") P;
+	P lhs = this;
+	P rhs = other;
+	return lhs.isLogicEqual(rhs);
+      }
+
+    public bool isSame(string file = __FILE__,
+		       size_t line = __LINE__, V)(V other)
+      if(isBitVector!V) {
+	alias vec!(typeof(this), V, "COMPARE") P;
+	P lhs = this;
+	P rhs = other;
+	return lhs.isLogicEqual(rhs);
+      }
+
     public int compare(V)(V other) // V shall have the same type as typeof(this)
       if(is(V == typeof(this))) {
 	for(size_t i=1; i!=STORESIZE; ++i) {
@@ -1990,6 +2008,21 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	  if(this._aval[$-1-i] != other._aval[$-1-i]) return false;
 	}
 	if((this._aval[$-1] & UMASK) != (other._aval[$-1] & V.UMASK)) return false;
+	return true;
+      }
+
+    public bool isLogicEqual(V)(V other)
+      if(is(V == typeof(this))) {
+	for(size_t i=1; i!=STORESIZE; ++i) {
+	  if(this._aval[$-1-i] != other._aval[$-1-i]) return false;
+	  static if(IS4STATE) {
+	    if(this._bval[$-1-i] != other._bval[$-1-i]) return false;
+	  }
+	}
+	if((this._aval[$-1] & UMASK) != (other._aval[$-1] & V.UMASK)) return false;
+	static if(IS4STATE) {
+	  if((this._bval[$-1] & UMASK) != (other._bval[$-1] & V.UMASK)) return false;
+	}
 	return true;
       }
 
