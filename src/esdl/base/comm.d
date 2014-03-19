@@ -118,11 +118,11 @@ string declareWait(IF, string E, string CHANNEL)() {
   // enum bool _thisIsPort = true;
   public PortObj!(IF,N,M) _portObj = void;
 
-  @property package ref PortObj!(IF,N,M) _esdl__objRef() {
+  package ref PortObj!(IF,N,M) _esdl__objRef() {
     return _portObj;
   }
 
-  @property public PortObj!(IF,N,M) _esdl__obj() {
+  public PortObj!(IF,N,M) _esdl__obj() {
     if(this._portObj is null) {
       synchronized(typeid(Port!(IF,N,M))) {
 	if(this._portObj is null) {
@@ -152,11 +152,11 @@ string declareWait(IF, string E, string CHANNEL)() {
     import std.traits: isAssignable, isIntegral;
     import esdl.data.bvec: isBitVector;
     
-    public void opAssign(T val) {
+    public final void opAssign(T val) {
       this._portObj.channel.write(val);
     }
 
-    public void opAssign(V) (V val)
+    public final void opAssign(V) (V val)
       if(isAssignable!(V, T) &&
 	 !is(T == V) &&
 	 !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
@@ -215,7 +215,7 @@ string declareWait(IF, string E, string CHANNEL)() {
       return this._portObj.channel.read.to!S();
     }
 
-    @property public string toString() {
+    public string toString() {
       import std.conv;
       return to!string(this._portObj.channel.read);
     }
@@ -253,17 +253,17 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
   public IF _channel = void;
 
   // disable auto instantiation of the channel during the elaboration
-  @disable @property package ref IF _esdl__objRef() {
+  @disable package ref IF _esdl__objRef() {
     return _channel;
   }
 
-  @property public IF _esdl__obj() {
+  public IF _esdl__obj() {
     return _channel;
   }
 
   alias _esdl__obj this;
 
-  public @property void _esdl__exeportIsBound() {
+  public void _esdl__exeportIsBound() {
     if(M != 0 && _channel is null) {
       writeln("Error: ExePort '" ~ this.getFullName ~
 	       "' is not bound to any channel");
@@ -279,7 +279,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
     // public Event event;
 
     // define a wait method that gets called if a user waits for this exeport
-    void wait() {
+    final void wait() {
       import esdl.base.core;
       wait(_channel.defaultEvent());
     }
@@ -301,7 +301,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
 	    is(IF unused: SignalInOutIF!S, S))
     {
       // bind method for signals
-      void bind(U)(U channel)
+      final void bind(U)(U channel)
 	if(is(U unused == Signal!(S, M), S, bool M)) {
 	  if(simPhase == Phase.BINDEXEPORTS) {
 	    import std.exception;
@@ -320,14 +320,14 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
 	  }
 	}
 
-      void opCall(U)(U channel)
+      final void opCall(U)(U channel)
 	if(is(U unused == Signal!(S, M), S, bool M)) {
 	  this.bind(channel);
 	}
     }
   else
     {
-      void bind(IF channel) {
+      final void bind(IF channel) {
 	if(simPhase == Phase.BINDEXEPORTS) {
 	  import std.exception;
 	  enforce(_channel is null, "Re-binding a exeport if not allowed: " ~
@@ -345,7 +345,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
 	}
       }
 
-      void opCall(IF channel) {
+      final void opCall(IF channel) {
 	this.bind(channel);
       }
     }
@@ -379,18 +379,18 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
     // enum bool _thisIsExePort = true;
     public ExePortObj!(IF) _exeportObj = void;
 
-    @property package ref ExePortObj!(IF) _esdl__objRef() {
+    package ref ExePortObj!(IF) _esdl__objRef() {
       return _exeportObj;
     }
 
-    @property public ExePortObj!(IF) _esdl__obj() {
+    public ExePortObj!(IF) _esdl__obj() {
       return _exeportObj;
     }
 
     alias _esdl__obj this;
     alias _esdl__obj get;
 
-    void opCall(IF channel) {
+    final void opCall(IF channel) {
       _esdl__obj.bind(channel);
     }
 
@@ -412,11 +412,11 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
 alias ExePort ExPort;
 
 public interface BasePort: NamedObj {
-  public @property void _esdl__portIsBound();
+  public void _esdl__portIsBound();
 }
 
 public interface BaseExePort: NamedObj {
-  public @property void _esdl__exeportIsBound();
+  public void _esdl__exeportIsBound();
 }
 
 // N is the number of channels that can connect
@@ -427,11 +427,11 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
   public IF _channel = void;
 
   // disable auto instatiation during the elaboration process
-  @disable @property package ref IF _esdl__objRef() {
+  @disable package ref IF _esdl__objRef() {
     return _channel;
   }
 
-  @property public IF channel() {
+  public IF channel() {
     synchronized(this) {
       return _channel;
     }
@@ -440,7 +440,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
   alias channel this;
   alias channel _esdl__obj;
 
-  public @property void _esdl__portIsBound() {
+  public void _esdl__portIsBound() {
     synchronized(this) {
       if(M != 0 && _channel is null) {
 	writeln("Error: port '" ~ this.getFullName ~
@@ -458,7 +458,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
     // public Event event;
 
     // define a wait method that gets called if a user waits for this port
-    void wait() {
+    final void wait() {
       import esdl.base.core;
       wait(channel.defaultEvent());
     }
@@ -508,7 +508,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
   else
     {
       // bind method
-      void bind(IF channel) {
+      final void bind(IF channel) {
 	if(simPhase == Phase.BINDPORTS) {
 	  import std.exception;
 	  enforce(this._channel is null, "Re-binding a port if not allowed: " ~
@@ -529,7 +529,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
       }
 
 
-      void opCall(IF channel) {
+      final void opCall(IF channel) {
 	this.bind(channel);
       }
     }
@@ -558,18 +558,18 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
 //   // points to the array index for the next bind
 //   private size_t index = 0;
 
-//   @property public size_t size() {
+//   public size_t size() {
 //     return index;
 //   }
 
 //   alias size length;
 
 //   // disable auto instatiation during the elaboration process
-//   @disable @property package ref IF _esdl__objRef() {
+//   @disable package ref IF _esdl__objRef() {
 //     return _channel;
 //   }
 
-//   @property public IF _esdl__obj() {
+//   public IF _esdl__obj() {
 //     return _channel;
 //   }
 
@@ -580,7 +580,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
 //     enforce(n < index, "Can not access port index " ~ n.to!string);
 //   }
 
-//   public @property void _esdl__portIsBound() {
+//   public void _esdl__portIsBound() {
 //     if(M != 0 && index < M) {
 //       writeln("Error: port '" ~ this.getFullName ~
 // 	       "' is not bound to sufficient number of channels");
@@ -689,7 +689,7 @@ class MutexObj: MutexIF, NamedObj
     }
   }
 
-  bool unlock() {
+  final bool unlock() {
     Process _caller = Process.self;
     synchronized(this) {
       if(_owner is _caller) {
@@ -703,7 +703,7 @@ class MutexObj: MutexIF, NamedObj
     }
   }
 
-  bool tryLock() {
+  final bool tryLock() {
     Process _caller = Process.self;
     synchronized(this) {
       if(_owner is null) {
@@ -719,7 +719,7 @@ class MutexObj: MutexIF, NamedObj
     }
   }
 
-  void lock() {
+  final void lock() {
     Process _caller = Process.self;
     while(true) {
       synchronized(this) {
@@ -738,7 +738,7 @@ class MutexObj: MutexIF, NamedObj
     }
   }
 
-  Process whoIsCalling() {
+  final Process whoIsCalling() {
     return Process.self;
     // SimThread thread =
     //   staticCast!SimThread(core.thread.Thread.getThis());
@@ -764,11 +764,11 @@ class MutexObj: MutexIF, NamedObj
   // enum bool _thisIsMutex = true;
   public MutexObj _mutexObj = void;
 
-  @property package ref MutexObj _esdl__objRef() {
+  package final ref MutexObj _esdl__objRef() {
     return _mutexObj;
   }
 
-  @property public MutexObj _esdl__obj() {
+  public final MutexObj _esdl__obj() {
     if(this._mutexObj is null) {
       synchronized(typeid(Mutex)) {
 	if(this._mutexObj is null) {
@@ -801,11 +801,11 @@ class MutexObj: MutexIF, NamedObj
     return mutexs;
   }
 
-  public void init(NamedObj parent=null) {
+  public final void init(NamedObj parent=null) {
     init(null, parent);
   }
 
-  public void init(string name, NamedObj parent=null) {
+  public final void init(string name, NamedObj parent=null) {
     synchronized {
       if(RootProcess.self !is null && parent is null) {
 	assert(false, "Must provide parent for MutexObj being "
@@ -820,15 +820,15 @@ class MutexObj: MutexIF, NamedObj
     }
   }
 
-  void lock() {
+  final void lock() {
     init();
     _mutexObj.lock();
   }
-  bool tryLock() {
+  final bool tryLock() {
     init();
     return _mutexObj.tryLock();
   }
-  bool unlock() {
+  final bool unlock() {
     init();
     return _mutexObj.unlock();
   }
@@ -870,13 +870,13 @@ class SemaphoreObj: SemaphoreIF, NamedObj
     }
   }
 
-  ptrdiff_t getValue() {
+  final ptrdiff_t getValue() {
     synchronized(this) {
       return _value;
     }
   }
 
-  void post() {
+  final void post() {
     synchronized(this) {
       ++_value;
       if(_value > 0) {
@@ -885,7 +885,7 @@ class SemaphoreObj: SemaphoreIF, NamedObj
     }
   }
 
-  bool tryWait() {
+  final bool tryWait() {
     synchronized(this) {
       if(_value > 0) {
 	--_value;
@@ -897,7 +897,7 @@ class SemaphoreObj: SemaphoreIF, NamedObj
     }
   }
 
-  void wait() {
+  final void wait() {
     while(true) {
       synchronized(this) {
 	if(_value > 0) {
@@ -925,11 +925,11 @@ class SemaphoreObj: SemaphoreIF, NamedObj
   // enum bool _thisIsSemaphore = true;
   public SemaphoreObj _semaphoreObj = void;
 
-  @property package ref SemaphoreObj _esdl__objRef() {
+  package ref SemaphoreObj _esdl__objRef() {
     return _semaphoreObj;
   }
 
-  @property public SemaphoreObj _esdl__obj() {
+  public SemaphoreObj _esdl__obj() {
     if(this._semaphoreObj is null) {
       synchronized(typeid(Semaphore)) {
 	if(this._semaphoreObj is null) {
@@ -1076,7 +1076,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   Event _writeEvent;
 
   static if(N == 0) {
-    void GrowBuffer() {
+    final void GrowBuffer() {
       synchronized(this) {
 	size_t S = _buffer.length;
 	_buffer.length *= 2;
@@ -1106,7 +1106,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
 
   // void registerPort(IF)(PortObj!IF p)
 
-  void registerPort(BasePort p) {
+  final void registerPort(BasePort p) {
     synchronized(this) {
       if(cast(PortObj!(FifoInNBIF!T)) p ||
 	 cast(PortObj!(FifoInBIF!T)) p) {
@@ -1126,7 +1126,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  void registerPort(Port!(FifoInNBIF!T) p) {
+  final void registerPort(Port!(FifoInNBIF!T) p) {
     synchronized(this) {
       if(_readerp == true)
 	assert(false, "Only one input port can be connected to Fifo");
@@ -1135,7 +1135,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
   
-  void registerPort(port_ib_t p) {
+  final void registerPort(port_ib_t p) {
     synchronized(this) {
       if(_readerp == true)
 	assert(false, "Only one input port can be connected to Fifo");
@@ -1144,7 +1144,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  void registerPort(port_onb_t p) {
+  final void registerPort(port_onb_t p) {
     synchronized(this) {
       if(_writerp == true)
 	assert(false, "Only one output port can be connected to Fifo");
@@ -1153,7 +1153,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  void registerPort(port_ob_t p) {
+  final void registerPort(port_ob_t p) {
     synchronized(this) {
       if(_writerp == true)
 	assert(false, "Only one output port can be connected to Fifo");
@@ -1162,25 +1162,25 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
   
-  size_t numFilled() {
+  final size_t numFilled() {
     synchronized(this) {
       return _numReadable - _numRead;
     }
   }
 
   // static if(N != 0) {
-  size_t numFree() {
+  final size_t numFree() {
     synchronized(this) {
       return _buffer.length - _numReadable - _numWritten;
     }
   }
   // }
 
-  Event writeEvent() {
+  final Event writeEvent() {
     return _writeEvent;
   }
 
-  Event readEvent() {
+  final Event readEvent() {
     return _readEvent;
   }
 
@@ -1193,7 +1193,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   //   _esdl__elab!0(this, _writeEvent, "_writeEvent", null);
   // }
 
-  bool readBuffer(ref T val) {
+  final bool readBuffer(ref T val) {
     synchronized(this) {
       if(_free == _buffer.length) return false;
       val = _buffer[_readIndex];
@@ -1203,7 +1203,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  bool writeBuffer(T val) {
+  final bool writeBuffer(T val) {
     synchronized(this) {
       if(_free == 0) return false;
       _buffer[_writeIndex] = val;
@@ -1213,7 +1213,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  void read(ref T val) {
+  final void read(ref T val) {
     bool _done = false;
     while(!_done) {
       if(numFilled() == 0) {
@@ -1230,13 +1230,13 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  T read() {
+  final T read() {
     T tmp;
     this.read(tmp);
     return tmp;
   }
 
-  bool nbRead(ref T val) {
+  final bool nbRead(ref T val) {
     synchronized(this) {
       if(numFilled() == 0) return false;
       _numRead++;
@@ -1246,7 +1246,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  void write(T val) {
+  final void write(T val) {
     bool _done = false;
     while(!_done) {
       static if(N == 0) {
@@ -1272,7 +1272,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
     }
   }
 
-  bool nbWrite(T val) {
+  final bool nbWrite(T val) {
     synchronized(this) {
       static if(N == 0) {
 	if(numFree() == 0) {
@@ -1293,7 +1293,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
 
   // no need for synchronized here -- this functions is called only
   // during scheduler phase
-  override protected void update() {
+  final override protected void update() {
     if(_numRead > 0) {
       // writeln("Notifying Read");
       _readEvent.notify(0);
@@ -1320,11 +1320,11 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   // enum bool _thisIsFifo = true;
   public FifoObj!(T, N) _fifoObj = void;
 
-  @property package ref FifoObj!(T, N) _esdl__objRef() {
+  package ref FifoObj!(T, N) _esdl__objRef() {
     return _fifoObj;
   }
 
-  @property public FifoObj!(T,N) _esdl__obj() {
+  public FifoObj!(T,N) _esdl__obj() {
     if(this._fifoObj is null) {
       synchronized(typeid(Fifo!(T,N))) {
 	if(this._fifoObj is null) {
@@ -1372,18 +1372,18 @@ interface SignalInIF(T)
 {
   import esdl.data.bvec;
 
-  @property public Event defaultEvent();
-  @property public bool valueChanged();
-  @property public Event event();
-  @property public T read();
+  public Event defaultEvent();
+  public bool valueChanged();
+  public Event event();
+  public T read();
 
   alias read this;
 
   static if(is(T == bit) || is(T == logic) || is(T == bool)) {
-    @property public Event posedge();
-    @property public Event negedge();
-    @property public bool valueChangedPos();
-    @property public bool valueChangedNeg();
+    public Event posedge();
+    public Event negedge();
+    public bool valueChangedPos();
+    public bool valueChangedNeg();
   }
 }
 
@@ -1426,7 +1426,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     }
   }
 
-  @property override public string toString() {
+  public final override string toString() {
     synchronized(this) {
       import std.conv;
       return to!string(_curVal);
@@ -1437,34 +1437,34 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     protected bool _writePortBound = false;
   }
 
-  Event defaultEvent() {
+  final Event defaultEvent() {
     Event e = _changeEvent;
     return e;
   }
 
-  Event event() {
+  final Event event() {
     return defaultEvent();
   }
 
-  Notification!T defaultNotification() {
+  final Notification!T defaultNotification() {
     return _changeEvent;
   }
 
-  Notification!T notification() {
+  final Notification!T notification() {
     return defaultNotification();
   }
 
-  @property public T read() {
+  public final T read() {
     synchronized(this) {
       return _curVal;
     }
   }
 
-  public bool valueChanged() {
+  public final bool valueChanged() {
     return _changeEvent.triggered();
   }
 
-  public void write(T val) {
+  public final void write(T val) {
     synchronized(this) {
       if(_curVal != val) {
 	_newVal = val;
@@ -1473,11 +1473,11 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     }
   }
 
-  public void opAssign(T val) {
+  public final void opAssign(T val) {
     this.write(val);
   }
 
-  public void opAssign(V) (V val)
+  public final void opAssign(V) (V val)
     if(isAssignable!(V, T) &&
        !is(T == V) &&
        !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
@@ -1486,53 +1486,53 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
   static if(isBitVector!T) {
     static if(T.SIZE >= 1) {
-      public void opAssign(bool val) {
+      public final void opAssign(bool val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 8 && T.ISSIGNED) {
-      public void opAssign(byte val) {
+      public final void opAssign(byte val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 8 && !T.ISSIGNED) {
-      public void opAssign(ubyte val) {
+      public final void opAssign(ubyte val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 16 && T.ISSIGNED) {
-      public void opAssign(short val) {
+      public final void opAssign(short val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 16 && !T.ISSIGNED) {
-      public void opAssign(ushort val) {
+      public final void opAssign(ushort val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 32 && T.ISSIGNED) {
-      public void opAssign(int val) {
+      public final void opAssign(int val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 32 && !T.ISSIGNED) {
-      public void opAssign(uint val) {
+      public final void opAssign(uint val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 64 && T.ISSIGNED) {
-      public void opAssign(long val) {
+      public final void opAssign(long val) {
 	this.write(cast(T) val);
       }
     }
     static if(T.SIZE >= 64 && !T.ISSIGNED) {
-      public void opAssign(ulong val) {
+      public final void opAssign(ulong val) {
 	this.write(cast(T) val);
       }
     }
   }
 
-  void registerPort(BasePort p) {
+  final void registerPort(BasePort p) {
     synchronized(this) {
       static if(MULTI_DRIVER == false) {
 	if(cast(PortObj!(SignalWriteIF!T)) p) {
@@ -1547,7 +1547,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
   version(COSIM_VERILOG) {
 
-    private void hdlPut() {
+    final private void hdlPut() {
       synchronized(this) {
 	// for now, get the value and display it
 	s_vpi_value v;
@@ -1586,7 +1586,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   }
   
   // no need for synchronized
-  public override void update() {
+  public final override void update() {
     if(_newVal != _curVal) {
       _curVal = _newVal;
       _changeEvent.post(0, _curVal);
@@ -1608,19 +1608,19 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     protected Event _posedgeEvent;
     protected Event _negedgeEvent;
 
-    bool valueChangedPos() {
+    final bool valueChangedPos() {
       return _posedgeEvent.triggered();
     }
 
-    bool valueChangedNeg() {
+    final bool valueChangedNeg() {
       return _negedgeEvent.triggered();
     }
 
-    Event posedge() {
+    final Event posedge() {
       return _posedgeEvent;
     }
 
-    Event negedge() {
+    final Event negedge() {
       return _negedgeEvent;
     }
   }
@@ -1632,7 +1632,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     }
   }
 
-  public void opOpAssign(string op, T)(T other) {
+  public final void opOpAssign(string op, T)(T other) {
     synchronized(this) {
       static if(op == "+")  _newVal = _curVal +  other;
       static if(op == "-")  _newVal = _curVal -  other;
@@ -1659,7 +1659,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
       return 0;
     }
 
-    private void hdlGet() {
+    private final void hdlGet() {
       synchronized(this) {
 	import std.stdio;
 	// for now, get the value and display it
@@ -1691,7 +1691,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
       }
     }
 
-    public void hdlBind(string net) {
+    public final void hdlBind(string net) {
       synchronized(this) {
 	if(netHandle is null) {
 	  netHandle = vpiGetHandleByName(net, null);
@@ -1744,11 +1744,11 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   // enum bool _thisIsSignal = true;
   public SignalObj!(T, MULTI_DRIVER) _signalObj = void;
 
-  @property public ref SignalObj!(T, MULTI_DRIVER) _esdl__objRef() {
+  public ref SignalObj!(T, MULTI_DRIVER) _esdl__objRef() {
     return _signalObj;
   }
 
-  @property public SignalObj!(T, MULTI_DRIVER) _esdl__obj() {
+  public SignalObj!(T, MULTI_DRIVER) _esdl__obj() {
     if(this._signalObj is null) {
       synchronized(typeid(Signal!(T, MULTI_DRIVER))) { //(this)
 	if(_signalObj is null) {
