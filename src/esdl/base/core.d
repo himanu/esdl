@@ -4532,7 +4532,7 @@ class Process: SimProcess, EventClient, Procedure
   protected final void removeProcess(Process t) {
     // trigger the _endedRec event
     t._endedRec.notify();
-    long i = -1;
+    ptrdiff_t i = -1;
     foreach(j, f; _esdl__childProcs) {
       if(f is t) {
 	i = j;
@@ -4544,7 +4544,7 @@ class Process: SimProcess, EventClient, Procedure
       writeln("Removing fork from active forks list: ",
 	      &t, "/", _esdl__childProcs.length, "/", t.getFullName());
     }
-    if(i == -1) {
+    if(i is -1) {
       assert(false, "removeProcess: Fork not found on the list ");
     }
     else {
@@ -5340,18 +5340,19 @@ class Routine: EventClient, Procedure
 
   // called only in the sched phase
   protected final void removeProcess(Process t) {
-    long i = -1;
+    ptrdiff_t i = -1;
     foreach(j, f; _esdl__childTasks) {
-      if(f == t) {
+      if(f is t) {
 	i = j;
 	break;
       }
     }
     debug(FORK) {
       import std.stdio;
-      writeln("Removing fork from active forks list: ", i, "/", _esdl__childTasks.length);
+      writeln("Removing fork from active forks list: ",
+	      i, "/", _esdl__childTasks.length);
     }
-    if(i == -1) {
+    if(i is -1) {
       assert(false, "removeProcess: Fork not found on the list ");
     }
     else {
