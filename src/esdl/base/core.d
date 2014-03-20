@@ -133,78 +133,6 @@ package interface NamedObj: EsdlObj, TimeContext
 	   "without connection to the getSimulator simulator");
   }
 
-  // get time as a number scaled to the timeScale configured in the
-  // current hierarchy
-  // public final ulong getTime() {
-  //   return getSimTime.to!long / timeScale;
-  // }
-
-  // Various flavours of the wait method. Except for the first one,
-  // the rest are static. The first flavour needs the timeScale for
-  // the current hierarchy
-  public final void wait(I)(I n)
-    if(isIntegral!I &&
-       !is(I: bool))
-      {
-	wait(SimTime(n * this.timeScale));
-      }
-
-  public static void wait()(EventObj e) {
-    waitForEvent(e);
-  }
-
-  public static void wait()(EventQueueObj e) {
-    waitForEvent(e);
-  }
-
-  public static auto observe(E)(E e)
-    if(is(E: NotificationObj!T, T) ||
-       is(E: Notification!T, T) ||
-       is(E: NotificationQueueObj!T, T) ||
-       is(E: NotificationQueue!T, T)){
-      waitForEvent(e);
-      return e.get();
-    }
-
-  public static void wait(E)(E e)
-    if(! (is(E: EventObj) || is(E: EventQueueObj) ||
-	  isIntegral!E || is(E: SimTime) || is(E: Time)))
-      {
-	auto event = getEventObj(e);
-	waitForEvent(event);
-      }
-
-  public static void wait(E)(E e)
-    if(is(E: SimTime) || is(E: Time))
-      {
-	auto event = Process.self._timed;
-	event.notify(e);
-	waitForEvent(event);
-      }
-
-  public static void sleep(E)(E e)
-    if(is(E: SimTime) || is(E: Time))
-      {
-	auto event = Process.self._timed;
-	event.notify(e);
-	waitForEvent(event);
-      }
-
-  public static void sleep()() { // sleep forever
-    auto event = Process.self._timed;
-    waitForEvent(event);
-  }
-  
-  public static void wait()()
-  {
-    auto proc = Process.self;
-    if(proc !is null) {
-      proc.wait();
-    }
-    assert(false, "wait() can only be called from inside a process");
-  }
-
-
   public static string namedMixin() {
     return q{
       static if(!__traits(compiles, _esdl__name)) {
@@ -1467,7 +1395,7 @@ public class NotificationObj(T): EventObj
   // Timed notification -- takes a ulong as an argument and
   // applies the timescale of this event
   public void post(ulong t, T data) {
-    this.post(SimTime(t*this.timeScale), data);
+    this.post(SimTime(t * getTimeScale()), data);
   }
 
   // Timed notification with Time as argument
@@ -1478,8 +1406,9 @@ public class NotificationObj(T): EventObj
   // Timed notification with simulation time steps as argument
   public void post(SimTime t, T data) {
     if (this.getTimed().notify(t)) {
-      synchronized(this)
+      synchronized(this) {
 	_data = data;
+      }
     }
   }
 
@@ -1787,7 +1716,7 @@ public class NotificationQueueObj(T): NotificationObj!T
   }
 
   public final override void post(ulong t, T data) {
-    this.post(SimTime(t*this.timeScale), data);
+    this.post(SimTime(t * getTimeScale()), data);
   }
 
   public final override void post(SimTime t, T data) {
@@ -2242,7 +2171,7 @@ public class EventObj: EventAgent, NamedObj
   // Timed notification -- takes a ulong as an argument and
   // applies the timescale of this event
   public void notify(ulong t) {
-    this.notify(SimTime(t*this.timeScale));
+    this.notify(SimTime(t * getTimeScale()));
   }
 
   // Timed notification with Time as argument
@@ -2514,7 +2443,7 @@ public class EventQueueObj: EventObj
   }
 
   public final override void notify(ulong t) {
-    this.notify(SimTime(t*this.timeScale));
+    this.notify(SimTime(t * getTimeScale));
   }
 
   public final override void notify(SimTime t) {
@@ -3320,26 +3249,37 @@ public auto observe(E)(E e)
   }
 
 public void wait(E)(E e)
-  if(!is(E == struct)) {
+  if(!is(E == struct) &&
+     !isIntegral!E) {
   auto event = getEventObj(e);
   waitForEvent(event);
 }
 
+public void wait(I)(I n)
+  if(isIntegral!I &&
+     !is(I: bool)) {
+    wait(SimTime(n * getTimeScale()));
+  }
+
 public void wait(E)(E e)
-  if(is(E: SimTime) || is(E: Time))
-    {
+  if(is(E: SimTime) || is(E: Time)) {
       auto event = Process.self._timed;
       event.notify(e);
       waitForEvent(event);
     }
 
 public void sleep(E)(E e)
-  if(is(E: SimTime) || is(E: Time))
-    {
+  if(is(E: SimTime) || is(E: Time)) {
       auto event = Process.self._timed;
       event.notify(e);
       waitForEvent(event);
     }
+
+public void sleep(I)(I n)
+  if(isIntegral!I &&
+     !is(I: bool)) {
+    wait(SimTime(n * getTimeScale()));
+  }
 
 public void sleep()() { // sleep forever
   auto event = Process.self._timed;
@@ -3517,7 +3457,7 @@ public void waitp() {
 //   }
 // }
 
-public void waitForEventP(EventObj event) {
+private void waitForEventP(EventObj event) {
   if(Process.self is null) {
     assert(false, "Wait can be called only from a process");
   }
@@ -3565,12 +3505,27 @@ public void abortForks() {
   }
 }
 
-public void nextTrigger(E)(E e) {
-  auto event = getEventObj(e);
-  nextTriggerEvent(event);
-}
+public void nextTrigger(E)(E e)
+  if(!is(E == struct) &&
+     !isIntegral!E) {
+    auto event = getEventObj(e);
+    _nextTriggerEvent(event);
+  }
 
-private void nextTriggerEvent(EventObj event) {
+public void nextTrigger(I)(I n)
+  if(isIntegral!I &&
+     !is(I: bool)) {
+    nextTrigger(SimTime(n * getTimeScale()));
+  }
+
+public void nextTrigger(E)(E e)
+  if(is(E: SimTime) || is(E: Time)) {
+      auto event = Routine.self._timed;
+      event.notify(e);
+      _nextTriggerEvent(event);
+    }
+
+private void _nextTriggerEvent(EventObj event) {
   if(Routine.self is null) {
     assert(false, "nextTrigger may be called only from a Routine");
   }
@@ -5325,6 +5280,7 @@ class Routine: EventClient, Procedure
   private EventObj _sensitiveTo = null;
   private EventObj _nextTrigger;
   private bool _dynamic = true;
+  private EventObj _timed;
 
   public final bool isDynamic() {
     synchronized(this) {
@@ -5475,6 +5431,7 @@ class Routine: EventClient, Procedure
 
   this( void function() fn ) {
     synchronized(this) {
+      _timed = new EventObj(this);
       _dg =() {fn_wrap(fn);};
     }
     this.setRandomSeed();
@@ -5486,6 +5443,7 @@ class Routine: EventClient, Procedure
 
   this( void delegate() dg ) {
     synchronized(this) {
+      _timed = new EventObj(this);
       _dg =() {dg_wrap(dg);};
     }
     this.setRandomSeed();
@@ -5751,7 +5709,6 @@ class RoutineThread: SimProcess
 
   private final void execRoutineProcess() {
     Routine routine = null;
-    _esdl__root.initRoutine();
     _esdl__root.simulator()._executor._routineThreadStartBarrier.wait();
     while(true) {
       // wait for next cycle
@@ -5764,6 +5721,7 @@ class RoutineThread: SimProcess
       routine = this._esdl__root.simulator()._executor.nextRoutine();
       while(routine !is null) {
 	Routine._self = routine;
+	_esdl__root.initRoutine();
 	routine._dg();
 	routine = this._esdl__root.simulator()._executor.nextRoutine();
       }
@@ -6839,11 +6797,13 @@ abstract class RootEntity: RootEntityIntf
   }
 
   public override void initRoutine() {
-    _rootEntity = this;
+    _esdl__rootEntity = this;
+    _esdl__timeScale = Routine.self.timeScale();
   }
 
   public override void initProcess() {
-    _rootEntity = this;
+    _esdl__rootEntity = this;
+    _esdl__timeScale = Process.self.timeScale();
   }
 
   public final override SimTime getSimTime() {
@@ -7326,14 +7286,19 @@ class EsdlSimulator: EntityIntf
   }
 }
 
-private static RootEntityIntf _rootEntity;
+private static RootEntityIntf _esdl__rootEntity;
+private static ulong _esdl__timeScale;
 
 public SimTime getSimTime() {
-  return _rootEntity.getSimTime();
+  return _esdl__rootEntity.getSimTime();
 }
 
 public RootEntityIntf getRootEntity() {
-  return _rootEntity;
+  return _esdl__rootEntity;
+}
+
+public ulong getTimeScale() {
+  return _esdl__timeScale;
 }
 
 template _esdl__attr(alias A, T)
