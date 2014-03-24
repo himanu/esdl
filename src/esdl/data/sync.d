@@ -77,11 +77,7 @@ class SyncAssoc(KEY=Object, VAL=Object)
 
   VAL get(KEY key, lazy VAL defVal) {
     synchronized(this) {
-      // a workaround for
-      // http://d.puremagic.com/issues/show_bug.cgi?id=12316
-      if(key in _assoc) return _assoc[key];
-      else return defVal;
-      // return _assoc.get(key, defVal);
+      return _assoc.get(key, defVal);
     }
   }
 

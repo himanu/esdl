@@ -125,7 +125,7 @@ package interface NamedObj: EsdlObj, TimeContext
 
   // get the simulation phase
   // Assumes that the getRoot has been set
-  public final Phase simPhase() {
+  public final SimPhase simPhase() {
     if(this.getSimulator) {
       return this.getSimulator.phase();
     }
@@ -255,26 +255,15 @@ package interface NamedObj: EsdlObj, TimeContext
 
       // a plain NamedObj does not have timeUnit, and so
       // seek the timeUnit from the parent and return it.
-      static if(!__traits(compiles, _timeUnit)) {
-	public final override byte timeUnit() {
-	  return this.getParent.timeUnit();
-	}
-      }
-
-      // ditto for timePrecision
-      static if(!__traits(compiles, _timePrecision)) {
-	public final override byte timePrecision() {
-	  return this.getParent.timePrecision();
-	}
-      }
-
-      // And timeScale
       static if(!__traits(compiles, _timeScale)) {
 	public final override ulong timeScale() {
 	  return this.getParent.timeScale();
 	}
+	// And timeUnit
+	public final override Time timeUnit() {
+	  return this.getParent.timeUnit();
+	}
       }
-
     };
   }
 }
@@ -960,7 +949,7 @@ void _esdl__endElab(T)(T t)
 // ports are bound sanely by the user.
 void _esdl__connect(T)(T t) {
   synchronized(t) {
-    // t._phase = Phase.CONFIGURE;
+    // t._phase = SimPhase.CONFIGURE;
     // static if(__traits(compiles, t.doConnect()))
     // {
     t.doConnect();
@@ -968,14 +957,14 @@ void _esdl__connect(T)(T t) {
     foreach(ref port; t.getPorts) {
       // import std.stdio: writeln;
       // writeln("Checking connectivity for port", port);
-      if(t.simPhase == Phase.BINDPORTS) {
+      if(t.simPhase == SimPhase.BINDPORTS) {
 	port._esdl__portIsBound();
       }
     }
     foreach(ref exeport; t.getExePorts) {
       // import std.stdio: writeln;
       // writeln("Checking connectivity for exeport", exeport);
-      if(t.simPhase == Phase.BINDEXEPORTS) {
+      if(t.simPhase == SimPhase.BINDEXEPORTS) {
 	exeport._esdl__exeportIsBound();
       }
     }
@@ -3786,45 +3775,29 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 
   static string configTime() {
     return q{
-      // return the least of the specified time precisions
-      // down the hierarchy
-      public final override byte findTimePrecision() {
-	synchronized(this) {
-	  static byte minPrecision(byte p1, byte p2) {
-	    if(p1 == _timePrecisionNull) return p2;
-	    if(p2 == _timePrecisionNull) return p1;
-	    return p1 < p2 ? p1 : p2;
-	  }
-	  byte precision = this.timePrecision();
-	  foreach(ref c; this._esdl__childObjs) {
-	    if(auto m = cast(EntityIntf) c) {
-	      precision = minPrecision(precision, m.findTimePrecision());
-	    }
-	  }
-	  return precision;
-	}
-      }
 
       // Fix the various time configuration parameters for an entity
       // once the time precision has been fixed
-      public final override void fixTimeParameters(byte precision) {
+      public final override void fixTimeParameters(ulong scale = 0) {
 	synchronized(this) {
-	  // this._phase = Phase.CONFIGURE;
-	  this.timePrecision(precision);
+	  // this._phase = SimPhase.CONFIGURE;
+	  if(this._timeScale is 0 && scale is 0) {
+	    import std.stdio;
+	    writeln("No default timeUnit specified; "
+		    "setting timeUnit to 1.nsec");
+	    this.timeUnit = 1.nsec;
+	  }
 
-	  this.timeUnit != _timeUnitNull ||
-	    assert(false, "fixTimeUnit: SimTime Unit is not set for " ~ getFullName);
-
-	  this.timeUnit >= this.timePrecision() ||
-	    assert(false, "SimTime Unit is less than Precision: " ~ this.getFullName);
-	  this.timeScale = 10 ^^(this.timeUnit() - this.timePrecision());
-
+	  if(this._timeScale is 0) {
+	    // if timeScale not defined, take it from the parent
+	    this._timeScale = scale;
+	  }
+	  
 	  foreach(ref c; this._esdl__childObjs) {
 	    if(TimeConfigContext m = cast(TimeConfigContext) c) {
 	      synchronized(m) {
-		if(m.timeUnit == _timeUnitNull) m.timeUnit = this.timeUnit;
-		// propagate the precision downwards
-		m.fixTimeParameters(precision);
+		// propagate the scale downwards
+		m.fixTimeParameters(this._timeScale);
 	      }
 	    }
 	  }
@@ -5782,8 +5755,9 @@ class RoutineThread: SimProcess
   }
 }
 
-enum Phase : byte
-  {   BUILD = 0,
+enum SimPhase : byte
+  {   NONE = 0,
+      BUILD,
       ELABORATE,
       CONFIGURE,
       BINDEXEPORTS,
@@ -5819,6 +5793,10 @@ void doElab(T)(T t)
       synchronized(t) {
 	import std.stdio: writeln;
 	import std.exception: enforce;
+
+	// So that getRootEntity returns a legal value even during elaboration
+	_esdl__rootEntity = t;
+	
 	// The BUILD Phase
 	// Instantiated modules and events are identified and constructed
 	// (using an explicit call to new operator) if these are not already
@@ -5830,7 +5808,7 @@ void doElab(T)(T t)
 	// modules/events is also added as part of t phase
 	// At some stage we would like to include Tasks too.
 	writeln(">>>>>>>>>> Starting Phase: ELABORATE");
-	t.getSimulator.setPhase = Phase.ELABORATE;
+	t.getSimulator.setPhase = SimPhase.ELABORATE;
 	t.doBuild();
 	t._esdl__postBuild();
 	// _esdl__elabIterSuper(t);
@@ -5844,9 +5822,14 @@ void doElab(T)(T t)
 	// information read in during the configurarion is consolidated and
 	// reflected at the EsdlSimulator level.
 	writeln(">>>>>>>>>> starting Phase: CONFIGURE");
-	t.getSimulator.setPhase = Phase.CONFIGURE;
+	t.getSimulator.setPhase = SimPhase.CONFIGURE;
 	_esdl__config(t);
-	t.fixTimeParameters(t.findTimePrecision());
+
+	// Precision is now set call _esdl__config again to fix timeScale
+	getRootEntity.timePrecisionSet = true;
+	_esdl__config(t);
+	// Propagate the timeScale to the hierarchy, whereever required
+	t.fixTimeParameters();
 	_esdl__postCfg(t);
 
 	// Each module is allowed to override the doConnect() method
@@ -5856,11 +5839,11 @@ void doElab(T)(T t)
 	// information read in during the configurarion is consolidated and
 	// reflected at the EsdlSimulator level.
 	writeln(">>>>>>>>>> Starting Phase: BIND");
-	t.getSimulator.setPhase = Phase.BINDEXEPORTS;
+	t.getSimulator.setPhase = SimPhase.BINDEXEPORTS;
 	// _esdl__connect!0(t);
 	_esdl__connect(t);
 	enforce(t._esdl__noUnboundExePorts, "Error: There are unbound exeports");
-	t.getSimulator.setPhase = Phase.BINDPORTS;
+	t.getSimulator.setPhase = SimPhase.BINDPORTS;
 	// _esdl__connect!0(t);
 	_esdl__connect(t);
 	enforce(t._esdl__noUnboundPorts, "Error: There are unbound ports");
@@ -5876,7 +5859,7 @@ void doElab(T)(T t)
 	t.getSimulator._executor.initRoutineThreads();
 	t.getSimulator._executor._routineThreadStartBarrier.wait();
 
-	t.getSimulator.setPhase = Phase.PAUSE;
+	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
 	t.getSimulator.elabDoneLock.notify();
 	version(MULTICORE) {
@@ -6480,7 +6463,7 @@ public:
   size_t insertImmediate(TimedEvent e);
   public void triggerDeltaEvents();
   public void triggerImmediateEvents();
-  public Phase triggerNextEventNotices(SimTime maxTime);
+  public SimPhase triggerNextEventNotices(SimTime maxTime);
   public SimTime simTime();
 }
 
@@ -6635,9 +6618,9 @@ class EsdlHeapScheduler : EsdlScheduler
     }
   }
 
-  public final Phase triggerNextEventNotices(SimTime maxTime) {
+  public final SimPhase triggerNextEventNotices(SimTime maxTime) {
     if(this._noticeHeap.empty()) {
-      return Phase.PAUSE;
+      return SimPhase.PAUSE;
     }
 
     EventNotice firstEvent = this._noticeHeap.front();
@@ -6648,7 +6631,7 @@ class EsdlHeapScheduler : EsdlScheduler
       this._simTime = maxTime;
       // import std.stdio: writeln;
       // writeln("Max Simulation SimTime reached, Terminating Simulation");
-      return Phase.PAUSE;
+      return SimPhase.PAUSE;
     }
 
     debug {
@@ -6683,7 +6666,7 @@ class EsdlHeapScheduler : EsdlScheduler
       writeln("Triggered Timed Events: ",
 	      numTriggered);
     }
-    return Phase.SIMULATE;
+    return SimPhase.SIMULATE;
   }
 }
 
@@ -6733,6 +6716,11 @@ interface RootEntityIntf: EntityIntf
 
   public SimTime getSimTime();
 
+  public void setTimePrecision(Time precision);
+  public Time getTimePrecision();
+  public bool timePrecisionSet();
+  public void timePrecisionSet(bool s);
+  
   final void simulate(Time simTime) {
     forkSim(simTime);
     joinSim();
@@ -6749,9 +6737,15 @@ interface RootEntityIntf: EntityIntf
     addRoot(this);
   }
   final void forkSim(Time simTime) {
+    // So that the simulation root thread too returns a legal value for
+    // getRootEntity
+    _esdl__rootEntity = this;
     getSimulator.forkSim(simTime);
   }
   final void forkSim(SimTime maxTime = MAX_SIMULATION_TIME) {
+    // So that the simulation root thread too returns a legal value for
+    // getRootEntity
+    _esdl__rootEntity = this;
     getSimulator.forkSim(maxTime);
   }
   final public void joinTerm() {
@@ -6788,6 +6782,36 @@ abstract class RootEntity: RootEntityIntf
   protected bool _esdl__noUnboundPorts = true;
   protected bool _esdl__noUnboundExePorts = true;
 
+  private Time _timingPrecision;
+  private bool _timingPrecisionSet = false;
+
+  public void setTimePrecision(Time precision) {
+    synchronized(this) {
+      if(_timingPrecision is Time.init ||
+	 _timingPrecision > precision) {
+	_timingPrecision = precision;
+      }
+    }
+  }
+
+  public Time getTimePrecision() {
+    synchronized(this) {
+      return _timingPrecision;
+    }
+  }
+
+  public bool timePrecisionSet() {
+    synchronized(this) {
+      return _timingPrecisionSet;
+    }
+  }
+
+  public void timePrecisionSet(bool s) {
+    synchronized(this) {
+      _timingPrecisionSet = s;
+    }
+  }
+
   public final override void _esdl__unboundPorts() {
     _esdl__noUnboundPorts = false;
   }
@@ -6799,11 +6823,13 @@ abstract class RootEntity: RootEntityIntf
   public override void initRoutine() {
     _esdl__rootEntity = this;
     _esdl__timeScale = Routine.self.timeScale();
+    _esdl__simPhase = SimPhase.SIMULATE;
   }
 
   public override void initProcess() {
     _esdl__rootEntity = this;
     _esdl__timeScale = Process.self.timeScale();
+    _esdl__simPhase = SimPhase.SIMULATE;
   }
 
   public final override SimTime getSimTime() {
@@ -6837,7 +6863,7 @@ class EsdlSimulator: EntityIntf
   }
 
   // Phase is defined in the SimContext interface class
-  // enum Phase : byte {BUILD, ELABORATE, CONFIGURE, BINDEXEPORTS, BINDPORTS, SIMULATE}
+  // enum SimPhase : byte {BUILD, ELABORATE, CONFIGURE, BINDEXEPORTS, BINDPORTS, SIMULATE}
   @_esdl__ignore private long _updateCount = 0;	// increments each time update happens
   @_esdl__ignore private size_t _threadCount = 1;
 
@@ -6878,16 +6904,17 @@ class EsdlSimulator: EntityIntf
 
   // private EventObj[]  _triggeredEvents;
 
-  protected Phase _phase = Phase.BUILD;
-  public final Phase phase() {
+  protected SimPhase _phase = SimPhase.BUILD;
+  public final SimPhase phase() {
     synchronized(this) {
       return this._phase;
     }
   }
 
-  public final void setPhase(Phase _phase) {
+  public final void setPhase(SimPhase _phase) {
     synchronized(this) {
       this._phase = _phase;
+      _esdl__simPhase = _phase;
     }
   }
 
@@ -6902,7 +6929,7 @@ class EsdlSimulator: EntityIntf
   public final void threadCount(size_t count) {
     synchronized(this) {
       import std.exception: enforce;
-      enforce(this._phase != Phase.SIMULATE);
+      enforce(this._phase != SimPhase.SIMULATE);
       this._threadCount = count;
     }
   }
@@ -6935,9 +6962,9 @@ class EsdlSimulator: EntityIntf
       import std.conv: to;
       // elabDoneLock.wait();
       switch(phase) {
-      case Phase.PAUSE:
+      case SimPhase.PAUSE:
 	runUntil(maxTime);
-	this.setPhase(Phase.SIMULATE);
+	this.setPhase(SimPhase.SIMULATE);
 	simStartLock.notify();
 	break;
       default:
@@ -6949,12 +6976,12 @@ class EsdlSimulator: EntityIntf
 
   final void terminate() {
     synchronized(this) {
-      if(phase !is Phase.PAUSE) {
+      if(phase !is SimPhase.PAUSE) {
 	import std.conv: to;
 	assert(false, "Asked to terminate a simulation in phase: " ~
 	       phase.to!string);
       }
-      setPhase(Phase.TERMINATED);
+      setPhase(SimPhase.TERMINATED);
       // Get the doSim move ahead
       simStartLock.notify();
       import std.stdio: writeln;
@@ -6974,7 +7001,7 @@ class EsdlSimulator: EntityIntf
   }
 
   final void runSimulation() {
-    while(this.phase == Phase.SIMULATE) {
+    while(this.phase == SimPhase.SIMULATE) {
       schedPhase = SchedPhase.IMMEDIATE;
       // bool channelUpdatePending = false;
       // tasks = this._executor.getRunnableProcs();
@@ -7040,7 +7067,7 @@ class EsdlSimulator: EntityIntf
 	  }
 	}
 	bool nextStage = false;
-	while(this.phase is Phase.SIMULATE &&
+	while(this.phase is SimPhase.SIMULATE &&
 	      _executor.runnableThreadsCount is 0 &&
 	      nextStage is false) {
 	  schedPhase = SchedPhase.TIMED;
@@ -7049,7 +7076,7 @@ class EsdlSimulator: EntityIntf
 	    writeln(" > Looking for Timed tasks/routines");
 	  }
 	  switch(_scheduler.triggerNextEventNotices(runUntil())) {
-	  case Phase.SIMULATE:
+	  case SimPhase.SIMULATE:
 	    debug(SCHEDULER) {
 	      if(_executor.runnableProcsCount) {
 		import std.stdio: writeln;
@@ -7065,15 +7092,15 @@ class EsdlSimulator: EntityIntf
 	      }
 	    }
 	    break;
-	  case Phase.TERMINATED:
-	    this.setPhase(Phase.TERMINATED);
+	  case SimPhase.TERMINATED:
+	    this.setPhase(SimPhase.TERMINATED);
 	    break;
-	  case Phase.PAUSE:
+	  case SimPhase.PAUSE:
 	    // import std.stdio: writeln;
 	    // writeln("No Events in the Scheduler, Terminating Simulation");
 	    // FIXME -- make it depend on whether this simulator is the only actor
 	    if(checkPersistFlags()) {
-	      this.setPhase(Phase.PAUSE);
+	      this.setPhase(SimPhase.PAUSE);
 	    }
 	    else {
 	      if(_executor.incrStage()) {
@@ -7081,7 +7108,7 @@ class EsdlSimulator: EntityIntf
 		nextStage = true;
 	      }
 	      else {
-		this.setPhase(Phase.PAUSE);
+		this.setPhase(SimPhase.PAUSE);
 		this.terminate();
 	      }
 	    }
@@ -7113,7 +7140,7 @@ class EsdlSimulator: EntityIntf
   }
 
   final void joinSim() {
-    if(phase is Phase.SIMULATE) {
+    if(phase is SimPhase.SIMULATE) {
       simDoneLock.wait();
     }
     else {
@@ -7262,6 +7289,9 @@ class EsdlSimulator: EntityIntf
   public final void elabRootThread(T)(T t) {
     synchronized(this) {
       _rootThread = new RootProcess({
+	  _esdl__rootEntity = t;
+	  import std.stdio;
+	  writeln("Root thread started");
 	  try {
 	    runSim(t);
 	  }
@@ -7278,9 +7308,10 @@ class EsdlSimulator: EntityIntf
   }
 
   final void runSim(T)(T t) {
+    _esdl__rootEntity = t;
     t.doElab();
     // inclrementally run simulation
-    while(this.phase !is Phase.TERMINATED) {
+    while(this.phase !is SimPhase.TERMINATED) {
       t.getSimulator.doSim();
     }
   }
@@ -7288,6 +7319,7 @@ class EsdlSimulator: EntityIntf
 
 private static RootEntityIntf _esdl__rootEntity;
 private static ulong _esdl__timeScale;
+private static SimPhase _esdl__simPhase;
 
 public SimTime getSimTime() {
   return _esdl__rootEntity.getSimTime();
@@ -7299,6 +7331,10 @@ public RootEntityIntf getRootEntity() {
 
 public ulong getTimeScale() {
   return _esdl__timeScale;
+}
+
+public SimPhase getSimPhase() {
+  return _esdl__simPhase;
 }
 
 template _esdl__attr(alias A, T)
