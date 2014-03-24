@@ -303,7 +303,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
       // bind method for signals
       final void bind(U)(U channel)
 	if(is(U unused == Signal!(S, M), S, bool M)) {
-	  if(simPhase == Phase.BINDEXEPORTS) {
+	  if(simPhase == SimPhase.BINDEXEPORTS) {
 	    import std.exception;
 	    enforce(_channel is null, "Re-binding a exeport if not allowed: " ~
 		    this.getFullName);
@@ -328,7 +328,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
   else
     {
       final void bind(IF channel) {
-	if(simPhase == Phase.BINDEXEPORTS) {
+	if(simPhase == SimPhase.BINDEXEPORTS) {
 	  import std.exception;
 	  enforce(_channel is null, "Re-binding a exeport if not allowed: " ~
 		  this.getFullName);
@@ -482,7 +482,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
       // bind method for signals
       void bind(U)(U channel)
 	if(is(U unused == Signal!(S, M), S, bool M)) {
-	if(simPhase == Phase.BINDPORTS) {
+	if(simPhase == SimPhase.BINDPORTS) {
 	  import std.exception;
 	  enforce(this._channel is null, "Re-binding a port if not allowed: " ~
 		  this.getFullName);
@@ -509,7 +509,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
     {
       // bind method
       final void bind(IF channel) {
-	if(simPhase == Phase.BINDPORTS) {
+	if(simPhase == SimPhase.BINDPORTS) {
 	  import std.exception;
 	  enforce(this._channel is null, "Re-binding a port if not allowed: " ~
 		  this.getFullName);
@@ -612,7 +612,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
 
 //   // bind method
 //   void bind(IF channel) {
-//     if(simPhase == Phase.BINDPORTS) {
+//     if(simPhase == SimPhase.BINDPORTS) {
 //       static if(N == 0) {
 // 	this._channel ~= channel;
 // 	index += 1;
@@ -675,16 +675,14 @@ class MutexObj: MutexIF, NamedObj
 
   @_esdl__ignore Process _owner;
 
+  // Fixme -- why is a parent required here
   this(NamedObj parent=null) {
     synchronized(this) {
       if(parent is null) {
 	parent = Process.self;
       }
-      if(parent is null) {
-	parent = getRootEntity();
-      }
-      _mutex = new core.sync.mutex.Mutex();
       if(parent !is null) this._esdl__parent = parent;
+      _mutex = new core.sync.mutex.Mutex();
       _event.init(this);
     }
   }

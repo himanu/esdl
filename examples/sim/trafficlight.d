@@ -14,15 +14,13 @@ class TrafficLight: Entity
   // mixin(entityMixin());
 
   enum POLES = 4;
- private:
   Event red[POLES];
   Event yellow[POLES];
   Event green[POLES];
 
   int count = 0;
 
-  override public void doConfig()
-  {
+  override void doConfig() {
     timeUnit = 1.nsec;
   }
 

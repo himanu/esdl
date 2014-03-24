@@ -36,6 +36,17 @@ public struct Time
     _unit = unit;
   }
 
+  public Time normalize() {
+    if(_unit is 0) return this;
+    if(_value % 1000 != 0) return this;
+    else {
+      Time retval;
+      retval._value = this._value / 1000;
+      retval._unit  = cast(TimeUnit) (this._unit + 3);
+      return retval.normalize();
+    }
+  }
+  
   public bool isZero() {
     if(_value is 0) return true;
     else return false;
@@ -44,14 +55,14 @@ public struct Time
   public int opCmp(Time other) {
     if(other._unit > this._unit) {
       int p = other._unit - this._unit;
-      if(other._value * 10^^p > this._value) return -1;
-      if(other._value * 10^^p < this._value) return 1;
+      if(other._value * 10L^^p > this._value) return -1;
+      if(other._value * 10L^^p < this._value) return 1;
       return 0;
     }
     else {
       int p = this._unit - other._unit;
-      if(other._value > this._value * 10^^p) return -1;
-      if(other._value < this._value * 10^^p) return 1;
+      if(other._value > this._value * 10L^^p) return -1;
+      if(other._value < this._value * 10L^^p) return 1;
       return 0;
     }
   }
@@ -59,14 +70,59 @@ public struct Time
   public bool opEquals(Time other) {
     if(other._unit > this._unit) {
       int p = other._unit - this._unit;
-      if(other._value * 10^^p == this._value) return true;
+      if(other._value * 10L^^p == this._value) return true;
       else return false;
     }
     else {
       int p = this._unit - other._unit;
-      if(other._value == this._value * 10^^p) return true;
+      if(other._value == this._value * 10L^^p) return true;
       else return false;
     }
+  }
+
+  public Time opBinary(string OP)(Time rhs) {
+    TimeUnit unit;
+    long value;
+    Time _lhs = this.normalize();
+    Time _rhs = rhs.normalize();
+    static if(OP = "+") {
+      if(_rhs._unit <= _lhs._unit) {
+	unit = _rhs._unit;
+	value = _lhs._value * 10L^^(_lhs._unit - _rhs._unit) + _rhs._value;
+      }
+      else {
+	unit = _lhs._unit;
+	value = _lhs._value + _rhs._value * 10L^^(_rhs._unit - _lhs._unit);
+      }
+      return Time(value, unit);
+    }
+    else static if(OP = "-") {
+	if(_rhs._unit <= _lhs._unit) {
+	  unit = _rhs._unit;
+	  value = _lhs._value * 10L^^(_lhs._unit - _rhs._unit) - _rhs._value;
+	}
+	else {
+	  unit = _lhs._unit;
+	  value = _lhs._value - _rhs._value * 10L^^(_rhs._unit - _lhs._unit);
+	}
+	return Time(value, unit);
+      }
+  }
+
+  public Time opBinary(string OP)(long rhs) {
+    Time _lhs = this.normalize();
+    static if(OP == "*") {
+      _lhs._value *= rhs;
+    }
+    return _lhs.normalize();
+  }
+
+  public Time opBinaryRight(string OP)(long rhs) {
+    Time _lhs = this.normalize();
+    static if(OP == "*") {
+      _lhs._value *= rhs;
+    }
+    return _lhs.normalize();
   }
 }
 
@@ -103,25 +159,17 @@ unittest {
 
 interface TimeContext
 {
-public:
-  @property abstract byte timeUnit();
-  @property abstract byte timePrecision();
-  @property abstract ulong timeScale();
+  public Time timeUnit();
+  public ulong timeScale();
 }
 
 interface TimeConfigContext: TimeContext
 {
-public:
-  private enum byte _timePrecisionNull = byte.min;
-  private enum byte _timeUnitNull = byte.min;
-  @property abstract void timeUnit(Time t);
-  @property abstract void timeUnit(byte unit);
-  @property abstract byte timeUnit();
-  @property abstract byte timePrecision();
-  @property abstract void timePrecision(Time t);
-  @property abstract void timePrecision(byte unit);
-  @property abstract ulong timeScale();
-  @property abstract void timeScale(ulong t);
+  public Time timeUnit();
+  protected void timeUnit(Time t);
+  protected void timePrecision(Time t);
+  public ulong timeScale();
+  package void timeScale(ulong t);
   public final SimTime tu(ulong val) {
     return SimTime(val*timeScale());
   }
@@ -129,72 +177,63 @@ public:
   // SimTime Time(string unit="default")(ulong val);
   // SimTime Time(double val);
   // SimTime Time(double val, TimeUnit unit);
-  public byte findTimePrecision();
-  public void fixTimeParameters(byte precision);
+  public void fixTimeParameters(ulong scale = 0);
 
   static final string timedMixin() {
     return q{
-      private enum byte _timePrecisionNull = byte.min;
-      private enum byte _timeUnitNull = byte.min;
-      private byte _timeUnit = _timeUnitNull;
-      // Since precision would be same everywhere, let it be stored only
-      // in the _esdl__setRoot(simulator).
-      protected byte _timePrecision = _timePrecisionNull;
       protected ulong _timeScale = 0;
 
-      @property override public void timeUnit(Time t) {
+      override protected void timeUnit(Time t) {
 	synchronized(this) {
-	  this._isPowerOf10(t._value) ||
-	    assert(false, "timeUnit takes only powers of 10 as arguments");
-	  (this.timeUnit == this._timeUnitNull) ||
-	    assert(false, "you can use timeUnit only once");
-	  this.timeUnit = cast(byte)(t._unit + this._log10(t._value));
-	}
-      }
-
-      @property override public byte timeUnit() {
-	synchronized(this) {
-	  return this._timeUnit;
-	}
-      }
-
-      @property override public void timeUnit(byte unit) {
-	synchronized(this) {
-	  this._timeUnit = unit;
-	}
-      }
-
-      @property override public void timePrecision(Time t) {
-	synchronized(this) {
-	  this._isPowerOf10(t._value) ||
-	    assert(false, "timePrecision takes only powers of 10 as arguments");
-	  (this._timePrecision == this._timePrecisionNull) ||
-	    assert(false, "you can use timePrecision only once");
-	  this._timePrecision = cast(byte)(t._unit + this._log10(t._value));
-	}
-      }
-
-      @property override public void timePrecision(byte u) {
-	synchronized(this) {
-	  this._timePrecision = u;
-	}
-      }
-
-      @property override public byte timePrecision() {
-	synchronized(this)
-	  {
-	    return this._timePrecision;
+	  // do not do anything in the first pass
+	  if(getRootEntity.timePrecisionSet()) {
+	    if(getSimPhase() !is SimPhase.CONFIGURE) {
+	      assert(false,
+		     "timeUnit may only be called from"
+		     " within doConfig method");
+	    }
+	    Time prec = getRootEntity.getTimePrecision.normalize();
+	    Time tuni = t.normalize();
+	    if(prec._unit > tuni._unit ||
+	       ((tuni._value * 10L^^(tuni._unit - prec._unit)) %
+	    	prec._value) !is 0) {
+	      import std.string: format;
+	      assert(false,
+	    	     format("timeUnit %s incompatible with timePrecision %s",
+	    		    tuni, prec));
+	    }
+	    _timeScale =
+	      tuni._value * (10L^^(tuni._unit - prec._unit)) / prec._value;
 	  }
+	}
       }
 
-      @property override public ulong timeScale() {
+      override protected void timePrecision(Time t) {
+	import esdl.base.core;
+	if(! getRootEntity.timePrecisionSet()) {
+	  if(getSimPhase() !is SimPhase.CONFIGURE) {
+	    assert(false,
+		   "timePrecision should only be called from"
+		   " within doConfig method");
+	  }
+	  setTimePrecision(t.normalize());
+	}
+      }
+      
+      override public Time timeUnit() {
+	synchronized(this) {
+	  return this._timeScale * getTimePrecision;
+	}
+      }
+
+      override public ulong timeScale() {
 	synchronized(this)
 	  {
 	    return this._timeScale;
 	  }
       }
 
-      @property override public void timeScale(ulong t) {
+      package void timeScale(ulong t) {
 	synchronized(this) {
 	  this._timeScale = t;
 	}
@@ -207,6 +246,7 @@ public:
 	if(n % 10L == 0) return _isPowerOf10(n/10L);
 	else return false;
       }
+      
       private static ubyte _log10(ulong n) {
 	if(n == 1) return 0;
 	else return cast(ubyte)(1 + _log10(n/10L));
@@ -258,22 +298,22 @@ struct SimTime
 
   public this(TimeConfigContext context, long val, TimeUnit unit) {
     synchronized(context) {
-      if(context.timePrecision <= unit) {
-	this._value = val * 10L ^^(unit - context.timePrecision);
+      if(getTimePrecisionOrder <= unit) {
+	this._value = val * 10L ^^(unit - getTimePrecisionOrder);
       }
       else {
-	this._value = val / 10L ^^(context.timePrecision - unit);
+	this._value = val / 10L ^^(getTimePrecisionOrder - unit);
       }
     }
   }
 
   public this(TimeConfigContext context, Time t) {
     synchronized(context) {
-      if(context.timePrecision <= t._unit) {
-	this._value = t._value * 10L ^^(t._unit - context.timePrecision);
+      if(getTimePrecisionOrder <= t._unit) {
+	this._value = t._value * 10L ^^(t._unit - getTimePrecisionOrder);
       }
       else {
-	this._value = t._value / 10L ^^(context.timePrecision - t._unit);
+	this._value = t._value / 10L ^^(getTimePrecisionOrder - t._unit);
       }
     }
   }
@@ -376,3 +416,35 @@ struct SimTime
 immutable SimTime DELTA = SimTime(0L);
 
 immutable SimTime MAX_SIMULATION_TIME = SimTime(long.max);
+
+public void setTimePrecision(Time t) {
+  _isPowerOf10(t._value) ||
+    assert(false, "timePrecision takes only powers of 10 as arguments");
+  import esdl.base.core: getRootEntity;
+  getRootEntity.setTimePrecision(t.normalize);
+}
+
+public Time getTimePrecision() {
+  import esdl.base.core: getRootEntity;
+  return getRootEntity.getTimePrecision();
+}
+
+public byte getTimePrecisionOrder() {
+  import esdl.base.core: getRootEntity;
+  auto t = getRootEntity.getTimePrecision();
+  auto retval = cast(byte)(t._unit + _log10(t._value));
+  return retval;
+}
+
+private bool _isPowerOf10(ulong n) {
+  if(n == 0) return false;
+  if(n == 1) return true;
+  if(n % 10L == 0) return _isPowerOf10(n/10L);
+  else return false;
+}
+      
+private ubyte _log10(ulong n) {
+  if(n == 1) return 0;
+  else return cast(ubyte)(1 + _log10(n/10L));
+}
+
