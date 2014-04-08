@@ -5,10 +5,11 @@
 // License:   Distributed under the Boost Software License, Version 1.0.
 //            (See accompanying file LICENSE_1_0.txt or copy at
 //            http://www.boost.org/LICENSE_1_0.txt)
-// Authors:   $(WEB digitalmars.com, Walter Bright),
-//            $(WEB erdani.org, Andrei Alexandrescu),
-//            Puneet Goel <puneet@coverify.com>
+// Authors:   Puneet Goel <puneet@coverify.com>
 //            Sumit Adhikari <adhikari@ieee.org>
+// Credit:    Some code inherited from Dlang Phobos, authored by:
+//            $(WEB digitalmars.com, Walter Bright),
+//            $(WEB erdani.org, Andrei Alexandrescu),
 
 // This file is part of esdl.
 
@@ -28,10 +29,6 @@ import core.exception;
 // required for appender
 // import std.array;
 
-// SIZE_T used as parameter int type everywhere in this module
-// I made this a separate variable since DMD was earlier broken for
-// size_t -- worked for int
-alias size_t SIZE_T;
 alias BitArray barray;
 
 version(BVEC_NOCHECK) {
@@ -147,7 +144,7 @@ private bool isStr4State(string str) {
 }
 
 // works for binary, octal and hex string literals
-private string extractBits(bool isA, SIZE_T RADIX)(string str) {
+private string extractBits(bool isA, size_t RADIX)(string str) {
   string v = removeDelimiters(str);
   string value = "";
   static if(RADIX == 2) { // binary
@@ -289,9 +286,9 @@ private string stringToBits(string value,
 }
 
 
-private SIZE_T stringBitSize(string value, SIZE_T RADIX) {
+private size_t stringBitSize(string value, size_t RADIX) {
   string v = removeDelimiters(value);
-  return cast(SIZE_T)(_log2(RADIX) * v.length);
+  return cast(size_t)(_log2(RADIX) * v.length);
 }
 
 private ubyte _log2(size_t n) {
@@ -299,7 +296,7 @@ private ubyte _log2(size_t n) {
   else return cast(ubyte)(1 + _log2(n/2));
 }
 
-private template VecParams(SIZE_T SIZE, bool S=true) {
+private template VecParams(size_t SIZE, bool S=true) {
   static if(SIZE <= 8) {
     static if(S) {
       private alias byte StoreT;
@@ -356,12 +353,12 @@ private template VecParams(SIZE_T SIZE, bool S=true) {
   }
 
   // Word Size -- bits in a word
-  private enum SIZE_T WORDSIZE = 8*StoreT.sizeof;
+  private enum size_t WORDSIZE = 8*StoreT.sizeof;
   // _aval size(in words)
-  private enum SIZE_T STORESIZE =(8*StoreT.sizeof + SIZE - 1)/(8*StoreT.sizeof);
+  private enum size_t STORESIZE =(8*StoreT.sizeof + SIZE - 1)/(8*StoreT.sizeof);
   // Word size of the Most Significant word
   // Make sure that MSWSIZE is never 0(is equal to WORDSIZE instead)
-  private enum SIZE_T MSWSIZE =((SIZE-1) % WORDSIZE) + 1;
+  private enum size_t MSWSIZE =((SIZE-1) % WORDSIZE) + 1;
   static if(MSWSIZE == WORDSIZE)	// All ones
     // Shift by WORDSIZE(word size) is erroneous
     {
@@ -392,13 +389,13 @@ template CheckVecParams(N...) {
   }
 }
 
-template VecSize(SIZE_T L=1, N...) {
+template VecSize(size_t L=1, N...) {
   static if(N.length > 0) {
     import std.traits;
-    enum SIZE_T VecSize = VecSize!(L*N[0], N[1..$]);
+    enum size_t VecSize = VecSize!(L*N[0], N[1..$]);
   }
   else {
-    enum SIZE_T VecSize = L;
+    enum size_t VecSize = L;
   }
 }
 
@@ -428,19 +425,19 @@ template vec(T, U, string OP)
   static if(T.IS4STATE || U.IS4STATE) {enum bool L = true;}
   else                                {enum bool L = false;}
   static if(OP == "|" || OP == "&" || OP == "^") {
-    static if(T.SIZE > U.SIZE)        {enum SIZE_T N = T.SIZE;}
-    else                              {enum SIZE_T N = U.SIZE;}
+    static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
+    else                              {enum size_t N = U.SIZE;}
   }
   static if(OP == "COMPARE") {	// for operands of opCmp
-    static if(T.SIZE > U.SIZE)        {enum SIZE_T N = T.SIZE;}
-    else                              {enum SIZE_T N = U.SIZE;}
+    static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
+    else                              {enum size_t N = U.SIZE;}
   }
   static if(OP == "+" || OP == "-") {
-    static if(T.SIZE > U.SIZE)        {enum SIZE_T N = T.SIZE + 1;}
-    else                              {enum SIZE_T N = U.SIZE + 1;}
+    static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE + 1;}
+    else                              {enum size_t N = U.SIZE + 1;}
   }
-  static if(OP == "*")                {enum SIZE_T N = T.SIZE + U.SIZE;}
-  static if(OP == "/")                {enum SIZE_T N = T.SIZE;}
+  static if(OP == "*")                {enum size_t N = T.SIZE + U.SIZE;}
+  static if(OP == "/")                {enum size_t N = T.SIZE;}
   static if(OP == "~") {
     alias vec!(T.ISSIGNED, L, T.SIZE + U.SIZE) vec;
   }
@@ -449,13 +446,13 @@ template vec(T, U, string OP)
   }
 }
 
-struct vec(bool S, bool L, string VAL, SIZE_T RADIX) {
-  enum SIZE_T SIZE = stringBitSize(VAL, RADIX);
+struct vec(bool S, bool L, string VAL, size_t RADIX) {
+  enum size_t SIZE = stringBitSize(VAL, RADIX);
 
   private alias VecParams!(SIZE,S).StoreT store_t;
 
-  enum SIZE_T   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
-  enum SIZE_T   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
+  enum size_t   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
+  enum size_t   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
   enum store_t UMASK      = VecParams!(SIZE,S).UMASK;
   enum store_t SMASK      = VecParams!(SIZE,S).SMASK;
   enum bool    IS4STATE   = L;
@@ -592,7 +589,7 @@ struct vec(bool S, bool L, string VAL, SIZE_T RADIX) {
       return result;
     }
 
-  static SIZE_T length() {
+  static size_t length() {
     return SIZE;
   }
 }
@@ -673,11 +670,11 @@ template ULogicVec(N...) if(CheckVecParams!N) {
 struct vec(bool S, bool L, N...) if(CheckVecParams!N)
   {
     import esdl.base.time;
-    enum SIZE_T SIZE = VecSize!(1,N);
+    enum size_t SIZE = VecSize!(1,N);
     private alias VecParams!(SIZE,S).StoreT store_t;
 
-    enum SIZE_T   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
-    enum SIZE_T   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
+    enum size_t   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
+    enum size_t   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
     enum store_t UMASK      = VecParams!(SIZE,S).UMASK;
     enum store_t SMASK      = VecParams!(SIZE,S).SMASK;
     enum bool    IS4STATE   = L;
@@ -824,7 +821,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public this(V)(V other)
       if((isBitVector!V ||
 	  is(V unused == vec!(S_, L_, _VAL, _RADIX),
-	     bool S_, bool L_, string _VAL, SIZE_T _RADIX)) &&
+	     bool S_, bool L_, string _VAL, size_t _RADIX)) &&
 	 (NO_CHECK_SIZE || SIZE >= V.SIZE)) {
 	this._from(other);
       }
@@ -1084,7 +1081,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public void opAssign(V)(V other)
       if((isBitVector!V ||
-	  is(V unused == vec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, SIZE_T _RADIX))
+	  is(V unused == vec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX))
 	 && (NO_CHECK_SIZE || SIZE >= V.SIZE)
 	 &&(IS4STATE || !V.IS4STATE)) {
 	this._from(other);
@@ -1092,7 +1089,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     private void _from(V)(V other)
       if(isBitVector!V ||
-	 is(V unused == vec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, SIZE_T _RADIX)) {
+	 is(V unused == vec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX)) {
 	static assert(NO_CHECK_SIZE || SIZE >= V.SIZE);
 	static assert(IS4STATE || !V.IS4STATE,
 		      "Can not implicitly convert LogicVec to BitVec");
@@ -1233,7 +1230,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       }
     }
 
-    V to(V, SIZE_T RADIX = 2)() if((is(V == string) ||
+    V to(V, size_t RADIX = 2)() if((is(V == string) ||
 				    is(V == char[]))
 				   &&(RADIX == 2 ||
 				      RADIX == 8 ||
@@ -1270,7 +1267,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       sink(buff);
     }
 
-    private V toCharString(V, SIZE_T RADIX)() {
+    private V toCharString(V, size_t RADIX)() {
       char[] str;
       if(STORESIZE > 1) {
 	for(size_t i = 0; i != STORESIZE-1; ++i) {
@@ -1820,7 +1817,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     done: return retval;
     }
 
-    SIZE_T length() const {
+    size_t length() const {
       return SIZE;
     }
 
@@ -2146,7 +2143,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	else
 	  enum bool _L = false;
 	// result is addition of the SIZES
-	enum SIZE_T _SIZE = SIZE + V.SIZE;
+	enum size_t _SIZE = SIZE + V.SIZE;
 
 	vec!(_S,_L,_SIZE) result = 0;
 
