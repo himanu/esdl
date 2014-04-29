@@ -112,6 +112,8 @@ package interface NamedObj: EsdlObj, TimeContext
   public string getName();
   public RootEntityIntf getRoot();
   public EsdlSimulator getSimulator();
+  // useful for removing dynamic process
+  protected void removeProcess(Process t);
 
   public final string getFullName() {
     synchronized(this) {
@@ -264,6 +266,13 @@ package interface NamedObj: EsdlObj, TimeContext
 	  return this.getParent.timeUnit();
 	}
       }
+
+      static if(__traits(isAbstractFunction, removeProcess)) {
+	override protected void removeProcess(Process t) {
+	  assert(false, "Illegal call to removeProcess");
+	}
+      }
+
     };
   }
 }
@@ -313,13 +322,15 @@ public interface HierComp: NamedObj
   // of these functions, HierComp interface implementation applies
   // these operations to immediate child processes
   public void suspend();
-  public void suspendRec();
+  public void suspendTree();
   public void disable();
-  public void disableRec();
+  public void disableTree();
   public void resume();
   public void enable();
   public void abort();
-  public void abortRec();
+  public void kill();
+  public void abortTree();
+  public void killTree();
 
   // Interface functions for enabling parallelize UDP
   public CoreSemaphore _esdl__getLockMutex();
@@ -667,15 +678,15 @@ public interface HierComp: NamedObj
 	}
       }
 
-      static if(__traits(isAbstractFunction, suspendRec)) {
+      static if(__traits(isAbstractFunction, suspendTree)) {
 	// suspend all the tasks and processes hierarchically for an
 	// entity.
-	public final void suspendRec() {
+	public final void suspendTree() {
 	  foreach(task; getChildTasks()) {
-	    task.suspendRec();
+	    task.suspendTree();
 	  }
 	  foreach(comp; getChildComps()) {
-	    comp.suspendRec();
+	    comp.suspendTree();
 	  }
 	}
       }
@@ -689,15 +700,15 @@ public interface HierComp: NamedObj
 	}
       }
 
-      static if(__traits(isAbstractFunction, disableRec)) {
+      static if(__traits(isAbstractFunction, disableTree)) {
 	// disable all tasks and processes hierarchically for an
 	// entity.
-	public final void disableRec() {
+	public final void disableTree() {
 	  foreach(task; getChildTasks()) {
-	    task.disableRec();
+	    task.disableTree();
 	  }
 	  foreach(comp; getChildComps()) {
-	    comp.disableRec();
+	    comp.disableTree();
 	  }
 	}
       }
@@ -711,14 +722,35 @@ public interface HierComp: NamedObj
 	}
       }
 
-      static if(__traits(isAbstractFunction, abortRec)) {
+      static if(__traits(isAbstractFunction, abortTree)) {
 	// abort all tasks and ptocesses thereof hierarchically
-	public final void abortRec() {
+	public final void abortTree() {
 	  foreach(task; getChildTasks()) {
-	    task.abortRec();
+	    task.abortTree();
 	  }
 	  foreach(comp; getChildComps()) {
-	    comp.abortRec();
+	    comp.abortTree();
+	  }
+	}
+      }
+
+      static if(! __traits(compiles, kill())) {
+	// kill all tasks
+	public final void kill() {
+	  foreach(task; getChildTasks()) {
+	    task.kill();
+	  }
+	}
+      }
+
+      static if(__traits(isAbstractFunction, killTree)) {
+	// kill all tasks and ptocesses thereof hierarchically
+	public final void killTree() {
+	  foreach(task; getChildTasks()) {
+	    task.killTree();
+	  }
+	  foreach(comp; getChildComps()) {
+	    comp.killTree();
 	  }
 	}
       }
@@ -2615,7 +2647,7 @@ private EventObj getEventObj(E)(ref E e) {
     }
   else static if(is(E unused: Process)) {
       // if the task is already terminated, return null
-      if(e.isTerminated) {
+      if(e.isDefunct) {
 	// return null;
 	assert(false, "getEventObj called for a terminated task");
       }
@@ -3179,7 +3211,6 @@ interface Procedure: HierComp
   public bool isDynamic();
   // helper functions to keep track of dynamic child processes
   protected void addProcess(Process t);
-  protected void removeProcess(Process t);
 
   // find out what procedure is running now
   public static Procedure self() {
@@ -3474,7 +3505,7 @@ public void waitDelta() {
 public void waitForks() {
   // get the thread this call is made from
   if(Process.self is null) {
-    assert(false, "waitRec can only be called from inside a Process");
+    assert(false, "waitForks can only be called from inside a Process");
   }
   Process[] procs = Process.self._esdl__getChildProcsHier();
   EventObj[] events;
@@ -3490,7 +3521,17 @@ public void abortForks() {
     assert(false, "abortForks can only be called from inside a Process");
   }
   foreach(t; Process.self._esdl__getChildProcs()) {
-    t.abortRec();
+    t.abortTree();
+  }
+}
+
+public void killForks() {
+  // get the thread this call is made from
+  if(Process.self is null) {
+    assert(false, "killForks can only be called from inside a Process");
+  }
+  foreach(t; Process.self._esdl__getChildProcs()) {
+    t.killTree();
   }
 }
 
@@ -3783,7 +3824,7 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 	  // this._phase = SimPhase.CONFIGURE;
 	  if(this._timeScale is 0 && scale is 0) {
 	    import std.stdio;
-	    writeln("No default timeUnit specified; "
+	    writeln("********** No default timeUnit specified; "
 		    "setting timeUnit to 1.nsec");
 	    this.timeUnit = 1.nsec;
 	  }
@@ -4178,6 +4219,10 @@ abstract class SimProcess: SimThread
     assert(false, "This function is overriden in the derived function");
   }
 
+  protected bool reqIsRec() {
+    assert(false, "This function is overriden in the derived function");
+  }
+
   private final void state(ProcState s) {
     synchronized(this /*_stateMonitor*/) {
       debug(THREAD) {
@@ -4190,7 +4235,7 @@ abstract class SimProcess: SimThread
     }
   }
 
-  private final bool isWaiting() {
+  private final bool isAlive() {
     synchronized(this /*_stateMonitor*/) {
       return(_state == ProcState.WAITING ||
 	     _state == ProcState.SUSPENDED ||
@@ -4198,80 +4243,35 @@ abstract class SimProcess: SimThread
     }
   }
 
-  private final void requestSuspension(bool REC) {
+  private final void requestSuspend() {
     synchronized(this) {
-      final switch(_state) {
-      case ProcState.STARTING:
-      case ProcState.WAITING:
+      if(_state == ProcState.STARTING ||
+	 _state == ProcState.WAITING) {
 	this._origState = this._state;
-	if(REC) {
-	  this._state = ProcState.SUSPENDED;
-	}
-	else {
-	  this._state = ProcState.SUSPENDED_REC;
-	}
-	break;
-      case ProcState.FINISHED:
-      case ProcState.EXCEPTION:
-      case ProcState.ABORTED:
-      case ProcState.ABORTED_REC:
-      case ProcState.SUSPENDED:
-      case ProcState.SUSPENDED_REC:
-      case ProcState.DISABLED:
-      case ProcState.DISABLED_REC:
-      case ProcState.TERMINATED:
+	this._state = ProcState.SUSPENDED;
+      }
+      else {
 	assert(false, "Cannot suspend a process in state " ~ _state);
-      case ProcState.RUNNING:
-	assert(false, "Impossible Thread State");
       }
     }
   }
 
-  private final void requestDisable(bool REC) {
+  private final void requestDisable() {
     synchronized(this) {
-      final switch(_state) {
-      case ProcState.STARTING:
-      case ProcState.WAITING:
+      if(_state == ProcState.STARTING ||
+	 _state == ProcState.WAITING) {
 	this._origState = this._state;
-	if(REC) {
-	  this._state = ProcState.DISABLED_REC;
-	}
-	else {
-	  this._state = ProcState.DISABLED;
-	}
-	break;
-      case ProcState.FINISHED:
-      case ProcState.EXCEPTION:
-      case ProcState.ABORTED:
-      case ProcState.ABORTED_REC:
-      case ProcState.SUSPENDED:
-      case ProcState.SUSPENDED_REC:
-      case ProcState.DISABLED:
-      case ProcState.DISABLED_REC:
-      case ProcState.TERMINATED:
+	this._state = ProcState.DISABLED;
+      }
+      else {
 	assert(false, "Cannot disable a process in state " ~ _state);
-      case ProcState.RUNNING:
-	assert(false, "Impossible Thread State");
       }
     }
   }
 
+  // returns true if the process immediately needs to start running
   private final bool requestResume() {
-    final switch(_state) {
-    case ProcState.STARTING:
-    case ProcState.WAITING:
-    case ProcState.FINISHED:
-    case ProcState.EXCEPTION:
-    case ProcState.DISABLED:
-    case ProcState.DISABLED_REC:
-    case ProcState.RUNNING:
-      assert(false, "Only suspended processes can be resumed");
-    case ProcState.ABORTED:
-    case ProcState.ABORTED_REC:
-    case ProcState.TERMINATED:
-      return false;
-    case ProcState.SUSPENDED:
-    case ProcState.SUSPENDED_REC:
+    if(_state == ProcState.SUSPENDED) {
       if(_origState == ProcState.RUNNING) {
 	_state = ProcState.WAITING;
 	return true;
@@ -4280,113 +4280,86 @@ abstract class SimProcess: SimThread
 	return false;
       }
     }
+    // ignore all the threads that are not in the SUSPENDED state
+    return false;
   }
 
   private final void requestEnable() {
-    final switch(_state) {
-    case ProcState.STARTING:
-    case ProcState.WAITING:
-    case ProcState.FINISHED:
-    case ProcState.EXCEPTION:
-    case ProcState.SUSPENDED:
-    case ProcState.SUSPENDED_REC:
-    case ProcState.RUNNING:
-      assert(false, "Only disabled processes can be enabled");
-    case ProcState.ABORTED:
-    case ProcState.ABORTED_REC:
-    case ProcState.TERMINATED:
-      return;
-    case ProcState.DISABLED:
-    case ProcState.DISABLED_REC:
-      // if(_origState == ProcState.RUNNING) {
-      //	_state = ProcState.WAITING;
-      //	return true;
-      // } else {
+    if(_state == ProcState.DISABLED) {
       _state = _origState;
       return;
-      // }
+    }
+    // ignore all other states
+    return;
+  }
+
+  // returns true if the task requires explicit termination
+  private final bool requestAbort() {
+    if(_isDefunct()) return false;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+      return false; // has not started yet -- no need to terminate
+    }
+    else {
+      _state = ProcState.ABORTED;
+      return true;  // thread needs to be terminated
+    }
+  }
+    
+  private final bool requestKill() {
+    if(_isDefunct()) return false;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+      return false;
+    }
+    else {
+      _state = ProcState.KILLED;
+      return true;
     }
   }
 
-  private final bool requestAbort(bool REC) {
+  public final bool _isActive() {
+    return (_state <= _ACTIVE);
+  }
+
+  public final bool isActive() {
     synchronized(this) {
-      final switch(_state) {
-      case ProcState.WAITING:
-      case ProcState.SUSPENDED:
-      case ProcState.SUSPENDED_REC:
-      case ProcState.DISABLED:
-      case ProcState.DISABLED_REC:
-	if(REC) {
-	  _state = ProcState.ABORTED_REC;
-	}
-	else {
-	  _state = ProcState.ABORTED;
-	}
-	return true;
-      case ProcState.STARTING:
-	if(REC) {
-	  _state = ProcState.ABORTED_REC;
-	}
-	else {
-	  _state = ProcState.ABORTED;
-	}
-	return false;
-      case ProcState.FINISHED:
-      case ProcState.EXCEPTION:
-      case ProcState.ABORTED:
-      case ProcState.ABORTED_REC:
-	return false;
-      case ProcState.RUNNING:
-      case ProcState.TERMINATED:
-	assert(false, "Impossible Thread State");
-      }
+      return (_state <= _ACTIVE);
     }
   }
 
-  private final bool requestTerminate() {
-    synchronized(this) {
-      final switch(_state) {
-      case ProcState.WAITING:
-      case ProcState.SUSPENDED:
-      case ProcState.SUSPENDED_REC:
-      case ProcState.DISABLED:
-      case ProcState.DISABLED_REC:
-	_state = ProcState.TERMINATED;
-	return true;
-      case ProcState.STARTING:
-	_state = ProcState.TERMINATED;
-	return false;
-      case ProcState.FINISHED:
-      case ProcState.EXCEPTION:
-      case ProcState.ABORTED:
-      case ProcState.ABORTED_REC:
-	return false;
-      case ProcState.TERMINATED:
-      case ProcState.RUNNING:
-	assert(false, "Impossible Thread State");
-      }
-    }
+  public final bool _isRunnable() {
+    return (_state < _DEFUNCT);
   }
 
   public final bool isRunnable() {
     synchronized(this) {
-      return (_state != ProcState.FINISHED &&
-	      _state != ProcState.TERMINATED &&
-	      _state != ProcState.ABORTED &&
-	      _state != ProcState.ABORTED_REC &&
-	      _state != ProcState.EXCEPTION);
+      return (_state < _DEFUNCT);
     }
   }
 
-  public final bool isTerminated() {
+  public final bool _isDefunct() {
+    return(_state >= _DEFUNCT);
+  }
+
+  public final bool isDefunct() {
     synchronized(this) {
-      return(_state == ProcState.FINISHED ||
-	     _state == ProcState.ABORTED ||
-	     _state == ProcState.ABORTED_REC ||
-	     _state == ProcState.EXCEPTION ||
-	     _state == ProcState.TERMINATED);
+      return(_state >= _DEFUNCT);
     }
   }
+
+  public final bool _isKilled() {
+    return(_state >= _KILLED);
+  }
+
+  public final bool isKilled() {
+    synchronized(this) {
+      return(_state >= _KILLED);
+    }
+  }
+
 
   class TermException: Throwable
   {
@@ -4457,9 +4430,9 @@ class Process: SimProcess, EventClient, Procedure
   }
 
   // remove process from the list of child processes
-  protected final void removeProcess(Process t) {
-    // trigger the _endedRec event
-    t._endedRec.notify();
+  override protected void removeProcess(Process t) {
+    // trigger the _endedTree event
+    t._endedTree.notify();
     ptrdiff_t i = -1;
     foreach(j, f; _esdl__childProcs) {
       if(f is t) {
@@ -4483,8 +4456,7 @@ class Process: SimProcess, EventClient, Procedure
     }
     if(this._dynamic && this._esdl__childProcs.length is 0 &&
        this._isZombieProc) {
-      auto parent = cast(Procedure) getParent();
-      parent.removeProcess(this);
+      getParent.removeProcess(this);
     }
   }
 
@@ -4504,7 +4476,7 @@ class Process: SimProcess, EventClient, Procedure
     if(state is ProcState.RUNNING) {
       state = ProcState.FINISHED;
     }
-    if(this.state is ProcState.ABORTED_REC ||
+    if(this.state is ProcState.KILLED ||
        this.state is ProcState.ABORTED) {
       this.getSimulator.freeLock(this, true);
     }
@@ -4520,125 +4492,71 @@ class Process: SimProcess, EventClient, Procedure
   // completed using a barrier and the barrier count has to be
   // available before we start.
   protected final bool preExecute() {
-    final switch(_state) {
-    case ProcState.STARTING:
-    case ProcState.WAITING:
+    if(_state == ProcState.STARTING ||
+       _state == ProcState.WAITING) {
       _state = ProcState.RUNNING;
       return true;
-    case ProcState.RUNNING:
-      assert(false, this.getFullName ~
-	     " Unexpected Process State -- RUNNING");
-    case ProcState.FINISHED:
-    case ProcState.ABORTED:
-    case ProcState.ABORTED_REC:
-    case ProcState.EXCEPTION:
-    case ProcState.TERMINATED:
-      return false;
-    case ProcState.SUSPENDED:
-    case ProcState.SUSPENDED_REC:
-      // _origState may have been STARTING or WAITING
-      // extra bool variable _hasStarted is used to decide that
+    }
+    if(_state == ProcState.SUSPENDED) {
       _origState = ProcState.RUNNING;
       return false;
-    case ProcState.DISABLED:
-    case ProcState.DISABLED_REC:
-      return false;
     }
+    return false;
   }
 
   protected final void execute() {
-    final switch(_state) {
-    case ProcState.RUNNING:
+    if(_state == ProcState.RUNNING) {
       if(_hasStarted) {
 	_waitLock.notify();
       }
       else {
 	super.start();
       }
-      break;
-
-      // The rest of the case switches would have been taken care of
-      // by preExecute
-    case ProcState.FINISHED:
-    case ProcState.ABORTED:
-    case ProcState.ABORTED_REC:
-    case ProcState.EXCEPTION:
-    case ProcState.TERMINATED:
-    case ProcState.DISABLED:
-    case ProcState.DISABLED_REC:
-    case ProcState.SUSPENDED:
-    case ProcState.SUSPENDED_REC:
-    case ProcState.STARTING:
-    case ProcState.WAITING:
-      assert(false, "Unexpected Process State: " ~ _state);
+      return;
     }
+    assert(false, "Unexpected Process State: " ~ _state);
   }
+  
   // make sure that a user can not directly "start" the underlying
   // thread -- somehow it seems @disable does not work alone, the
   // private tag seems to make the effect though
   @disable private final void start();
 
   final protected void abortProcess() {
-    debug {
+    if(_isRunnable()) {
+      _state = ProcState.ABORTED;
+      if(_state == ProcState.STARTING) {
+  	this.getSimulator.freeLock(this, true);
+      }
+      else {
+  	_waitLock.notify();
+      }
+    }
+    debug(PROC) {
       import std.stdio: writeln;
       writeln("Aborting thread in state:", state);
     }
-    final switch(state) {
-    case ProcState.STARTING:
-      state = ProcState.ABORTED;
-      this.getSimulator.freeLock(this, true);
-      break;
-    case ProcState.WAITING:
-    case ProcState.SUSPENDED:
-    case ProcState.SUSPENDED_REC:
-    case ProcState.DISABLED:
-    case ProcState.DISABLED_REC:
-      state = ProcState.ABORTED;
-      _waitLock.notify();
-      break;
-    case ProcState.RUNNING:
-      assert(false, "Unexpected thread state!");
-      // break;
-    case ProcState.FINISHED:
-    case ProcState.EXCEPTION:
-    case ProcState.ABORTED:
-    case ProcState.ABORTED_REC:
-    case ProcState.TERMINATED:
-      break;
-    }
   }
-
-  final protected void terminateProcess() {
-    debug {
+	
+	
+  // called at the end of simulation
+  final protected void killProcess() {
+    if(_isRunnable()) {
+      _state = ProcState.KILLED;
+      if(_state == ProcState.STARTING) {
+	this.getSimulator.freeLock(this, true);
+      }
+      else {
+	_waitLock.notify();
+      }
+    }
+    debug(PROC) {
       import std.stdio: writeln;
       writeln("Terminating thread in state:", state);
     }
-    final switch(state) {
-    case ProcState.STARTING:
-      state = ProcState.TERMINATED;
-      this.getSimulator.freeLock(this);
-      break;
-    case ProcState.WAITING:
-    case ProcState.SUSPENDED:
-    case ProcState.SUSPENDED_REC:
-    case ProcState.DISABLED:
-    case ProcState.DISABLED_REC:
-      state = ProcState.TERMINATED;
-      _waitLock.notify();
-      break;
-    case ProcState.RUNNING:
-      assert(false, "Unexpected thread state!");
-      // break;
-    case ProcState.FINISHED:
-    case ProcState.EXCEPTION:
-    case ProcState.ABORTED:
-    case ProcState.ABORTED_REC:
-    case ProcState.TERMINATED:
-      break;
-    }
   }
-
-
+	
+	
   public final void dontInitialize() {
     synchronized(this) {
       if(_state !is ProcState.STARTING) {
@@ -4740,7 +4658,7 @@ class Process: SimProcess, EventClient, Procedure
 
   // Trigger this when the process as well as all the child processes
   // have ended.
-  private Event _endedRec;
+  private Event _endedTree;
 
   // A process is marked zombie if it has completed, but can not be
   // removed from the parent process' active list since it have
@@ -4766,8 +4684,8 @@ class Process: SimProcess, EventClient, Procedure
     this._ended.wait();
   }
 
-  public final void waitRec() {
-    this._endedRec.wait();
+  public final void waitTree() {
+    this._endedTree.wait();
   }
 
   public final EventObj getEvent() {
@@ -4775,7 +4693,7 @@ class Process: SimProcess, EventClient, Procedure
   }
 
   public final EventObj getRecEvent() {
-    return _endedRec;
+    return _endedTree;
   }
 
   this(void function() fn, int stage = 0, size_t sz = 0 ) {
@@ -4784,7 +4702,7 @@ class Process: SimProcess, EventClient, Procedure
     }
     synchronized(this) {
       _ended.init(this);
-      _endedRec.init(this);
+      _endedTree.init(this);
       _stage = stage;
 
       _timed = new EventObj(this);
@@ -4804,7 +4722,7 @@ class Process: SimProcess, EventClient, Procedure
     }
     synchronized(this) {
       _ended.init(this);
-      _endedRec.init(this);
+      _endedTree.init(this);
       _stage = stage;
 
       _timed = new EventObj(this);
@@ -4934,8 +4852,7 @@ class Process: SimProcess, EventClient, Procedure
     this.getSimulator.freeLock(this);
     _waitLock.wait();
     if(this.state == ProcState.ABORTED ||
-       this.state == ProcState.ABORTED_REC ||
-       this.state == ProcState.TERMINATED) {
+       this.state == ProcState.KILLED) {
       throw new TermException();
     }
   }
@@ -4975,6 +4892,7 @@ class Process: SimProcess, EventClient, Procedure
 
   // this is looked at the time thread enters waiting state
   private ProcStateReq _reqState; // requested state
+  private bool _reqIsRec; // requested state
 
   protected final override ProcStateReq reqState() {
     synchronized(this) {
@@ -4986,15 +4904,27 @@ class Process: SimProcess, EventClient, Procedure
     }
   }
 
-  private final void reqState(ProcStateReq s) {
+  private final void reqState(ProcStateReq s, bool rec = false) {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
 	writeln(this.procID, " Requesting Thread to ", s);
       }
       _reqState = s;
+      _reqIsRec = rec;
     }
     getSimulator().reqUpdateProc(this);
+  }
+
+  protected final override bool reqIsRec() {
+    synchronized(this) {
+      debug(PROC) {
+	import std.stdio;
+	writeln(this.procID, " Thread has request that is Recursive: ",
+		_reqIsRec);
+      }
+      return _reqIsRec;
+    }
   }
 
   public final ProcState status() {
@@ -5003,50 +4933,74 @@ class Process: SimProcess, EventClient, Procedure
 
   public final void suspend() {
     synchronized(this) {
-      this.reqState(ProcStateReq.SUSPEND);
+      this.reqState(ProcStateReq.SUSPEND, false);
     }
   }
 
-  public final void suspendRec() {
+  public final void suspendTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.SUSPEND_REC);
+      this.reqState(ProcStateReq.SUSPEND, true);
     }
   }
 
   public final void disable() {
     synchronized(this) {
-      this.reqState(ProcStateReq.DISABLE);
+      this.reqState(ProcStateReq.DISABLE, false);
     }
   }
 
-  public final void disableRec() {
+  public final void disableTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.DISABLE_REC);
+      this.reqState(ProcStateReq.DISABLE, true);
     }
   }
 
 
   public final void resume() {
     synchronized(this) {
-      this.reqState(ProcStateReq.RESUME);
+      this.reqState(ProcStateReq.RESUME, false);
+    }
+  }
+
+  public final void resumeTree() {
+    synchronized(this) {
+      this.reqState(ProcStateReq.RESUME, true);
     }
   }
 
   public final void enable() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ENABLE);
+      this.reqState(ProcStateReq.ENABLE, false);
     }
   }
 
-  public final void abortRec() {
+  public final void enableTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ABORT_REC);
+      this.reqState(ProcStateReq.ENABLE, true);
     }
   }
 
   public final void abort() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ABORT);
+      this.reqState(ProcStateReq.ABORT, false);
+    }
+  }
+
+  public final void abortTree() {
+    synchronized(this) {
+      this.reqState(ProcStateReq.ABORT, true);
+    }
+  }
+
+  public final void kill() {
+    synchronized(this) {
+      this.reqState(ProcStateReq.KILL, false);
+    }
+  }
+
+  public final void killTree() {
+    synchronized(this) {
+      this.reqState(ProcStateReq.KILL, true);
     }
   }
 
@@ -5163,7 +5117,7 @@ class Fork
       if(task.isRunnable) {
 	events ~= task.getEvent();
       }
-      if(task.isTerminated) {
+      if(task.isDefunct) {
 	return;
       }
     }
@@ -5183,7 +5137,7 @@ class Fork
     waitAll(events);
   }
 
-  public final void waitRec() {
+  public final void waitTree() {
     // wait for all tasks that are not terminated
     Process[] tasks;
     foreach(task; _esdl__getChildProcs()) {
@@ -5205,9 +5159,21 @@ class Fork
     }
   }
 
-  public final void abortRec() {
+  public final void abortTree() {
     foreach(task; _esdl__getChildProcs()) {
-      task.abortRec();
+      task.abortTree();
+    }
+  }
+
+  public final void kill() {
+    foreach(task; _esdl__getChildProcs()) {
+      task.kill();
+    }
+  }
+
+  public final void killTree() {
+    foreach(task; _esdl__getChildProcs()) {
+      task.killTree();
     }
   }
 
@@ -5217,9 +5183,9 @@ class Fork
     }
   }
 
-  public final void suspendRec() {
+  public final void suspendTree() {
     foreach(task; _esdl__getChildProcs()) {
-      task.suspendRec();
+      task.suspendTree();
     }
   }
 
@@ -5235,9 +5201,9 @@ class Fork
     }
   }
 
-  public final void disableRec() {
+  public final void disableTree() {
     foreach(task; _esdl__getChildProcs()) {
-      task.disableRec();
+      task.disableTree();
     }
   }
 
@@ -5607,8 +5573,6 @@ class RootProcess: SimThread, Procedure
 
   protected final void addProcess(Process t) {}
 
-  protected final void removeProcess(Process t) {}
-
   public final Process[] getChildTasks() {
     return [];
   }
@@ -5632,35 +5596,43 @@ class RootProcess: SimThread, Procedure
     }
   }
 
+  // FIXME
+  // void kill() {}
+  
   mixin(hierMixin());
 }
 
 
 private enum ProcState: byte
-  {   STARTING,			// yet to start
-      RUNNING,			// runnning
-      WAITING,			// waiting for an event
-      SUSPENDED,		// user suspended
-      SUSPENDED_REC,		// user suspended recursively
-      DISABLED,			// user disabled
-      DISABLED_REC,		// user disabled resursively
-      ABORTED,			// user aborted
-      ABORTED_REC,		// user aborted recursively
-      FINISHED,			// naturally ended run
-      EXCEPTION,		// thread faced an exception
-      TERMINATED,		// end of simulation
+  {   STARTING = 0,		// yet to start
+      RUNNING = 1,		// runnning
+      WAITING = 2,		// waiting for an event
+      // _ACTIVE
+      
+      SUSPENDED = 3,		// user suspended
+      DISABLED = 4,		// user disabled
+
+      // _DEFUNCT
+      FINISHED = 5,		// naturally ended run
+      EXCEPTION = 6,		// thread faced an exception
+
+      // _KILLED
+      ABORTED = 7,		// user aborted
+      KILLED = 8,	// end of simulation
       }
 
+private enum _ACTIVE  = ProcState.WAITING; // <= _ACTIVE are active tasks
+private enum _DEFUNCT = ProcState.FINISHED; // >= _DEFUNCT are defunt tasks
+private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tasks
+
+
 private enum ProcStateReq: byte
-  {   SUSPEND,
-      SUSPEND_REC,
-      DISABLE,
-      DISABLE_REC,
-      ABORT,
-      ABORT_REC,
-      TERMINATE, // At the end of simulation, terminate recursively
-      ENABLE,
+  {   ENABLE,
       RESUME,
+      SUSPEND,
+      DISABLE,
+      ABORT,
+      KILL, // At the end of simulation, kill recursively
       NONE,
       }
 
@@ -5686,7 +5658,8 @@ class RoutineThread: SimProcess
     while(true) {
       // wait for next cycle
       this._waitLock.wait();
-      if(this._isTerminated()) {
+
+      if(this._hasHalted()) {
 	_esdl__root.simulator()._executor._routineThreadBarrier.wait();
 	break;
       }
@@ -5703,17 +5676,18 @@ class RoutineThread: SimProcess
     }
   }
 
-  private bool _terminate = false;
 
-  private final bool _isTerminated() {
+private bool _halted = false;
+
+  private final bool _hasHalted() {
     synchronized(this) {
-      return _terminate;
+      return _halted;
     }
   }
 
-  private final void terminate() {
+  private final void _halt() {
     synchronized(this) {
-      _terminate = true;
+      _halted = true;
     }
   }
 
@@ -5764,8 +5738,16 @@ enum SimPhase : byte
       BINDPORTS,
       SIMULATE,
       PAUSE,
-      TERMINATED
+      SIMULATION_DONE,
       }
+
+enum SimRunPhase: byte
+  {   SIMULATE,
+      SIMULATE_DONE,		// The scheduler has completed the simulation time it was asked to simulate
+      PAUSE,
+      STAGE_DONE,
+      SIMULATION_DONE,
+  }
 
 void simulateAllRoots(T)(T t)
   if(is(T == Time) || is(T == SimTime)) {
@@ -5949,6 +5931,10 @@ class EsdlExecutor: EsdlExecutorIf
     }
   }
 
+  private final void _incrMaxStage() {
+    _stageIndex = cast(int) _registeredProcs.length - 1;
+  }
+
   private final void createRoutineThreads(size_t numThreads,
 				    size_t stackSize) {
     _routineThreads.length = numThreads;
@@ -6106,58 +6092,25 @@ class EsdlExecutor: EsdlExecutorIf
     Process[] expandedList;
     foreach(proc; _purgeProcs) {
       if(proc.isDynamic()) {
-	auto parent = cast(Process) proc.getParent();
-	parent.removeProcess(proc);
+	proc.getParent.removeProcess(proc);
       }
       else {
-	// For dynamic processes _endedRec is triggered by the
+	// For dynamic processes _endedTree is triggered by the
 	// removeProcess function
-	proc._endedRec.notify();
+	proc._endedTree.notify();
       }
     }
 
     _purgeProcs.length = 0;
 
     foreach(proc; _updateProcs) {
-      final switch(proc._reqState) {
-      case ProcStateReq.SUSPEND_REC:
-      case ProcStateReq.DISABLE_REC:
-      case ProcStateReq.ABORT_REC:
-      case ProcStateReq.TERMINATE:
-	expandedList ~= proc;
+      expandedList ~= proc;
+      if(proc._reqIsRec) {
 	auto childProcs = proc._esdl__getChildProcsHier();
 	foreach(p; childProcs) {
 	  p._reqState = proc._reqState;
 	}
 	expandedList ~= childProcs;
-	break;
-      case ProcStateReq.RESUME:
-	expandedList ~= proc;
-	if(proc._state is ProcState.SUSPENDED_REC) {
-	  auto childProcs = proc._esdl__getChildProcsHier();
-	  foreach(p; childProcs) {
-	    p._reqState = proc._reqState;
-	  }
-	  expandedList ~= childProcs;
-	}
-	break;
-      case ProcStateReq.ENABLE:
-	expandedList ~= proc;
-	if(proc._state is ProcState.DISABLED_REC) {
-	  auto childProcs = proc._esdl__getChildProcsHier();
-	  foreach(p; childProcs) {
-	    p._reqState = proc._reqState;
-	  }
-	  expandedList ~= childProcs;
-	}
-	break;
-      case ProcStateReq.SUSPEND:
-      case ProcStateReq.DISABLE:
-      case ProcStateReq.ABORT:
-	expandedList ~= proc;
-	break;
-      case ProcStateReq.NONE:
-	assert(false, "Illegal request state for process");
       }
     }
 
@@ -6176,37 +6129,32 @@ class EsdlExecutor: EsdlExecutorIf
     foreach(proc; expandedList) {
       final switch(proc.reqState) {
       case ProcStateReq.RESUME:
-	if(proc.requestResume()) {
+	if(_stage == proc._stage && proc.requestResume()) {
 	  addRunnableProcess(proc);
 	}
 	break;
       case ProcStateReq.ENABLE:
-	proc.requestEnable();
+	if(_stage == proc._stage) {
+	  proc.requestEnable();
+	}
 	break;
       case ProcStateReq.SUSPEND:
-	proc.requestSuspension(false);
-	break;
-      case ProcStateReq.SUSPEND_REC:
-	proc.requestSuspension(true);
+	if(_stage == proc._stage) {
+	  proc.requestSuspend();
+	}
 	break;
       case ProcStateReq.DISABLE:
-	proc.requestDisable(false);
-	break;
-      case ProcStateReq.DISABLE_REC:
-	proc.requestDisable(true);
+	if(_stage == proc._stage) {
+	  proc.requestDisable();
+	}
 	break;
       case ProcStateReq.ABORT:
-	if(proc.requestAbort(false)) {
+	if(_stage == proc._stage && proc.requestAbort()) {
 	  _termProcs ~= proc;
 	}
 	break;
-      case ProcStateReq.ABORT_REC:
-	if(proc.requestAbort(true)) {
-	  _termProcs ~= proc;
-	}
-	break;
-      case ProcStateReq.TERMINATE:
-	if(proc.requestTerminate()) {
+      case ProcStateReq.KILL:
+	if(proc.requestKill()) {
 	  _termProcs ~= proc;
 	}
 	break;
@@ -6217,7 +6165,7 @@ class EsdlExecutor: EsdlExecutorIf
       // proc.reqState = ProcStateReq.NONE;
     }
     foreach(proc; expandedList) {
-      proc.reqState = ProcStateReq.NONE;
+      proc.reqState(ProcStateReq.NONE, false);
     }
     _updateProcs.length = 0;
     if(_termProcs.length > 0) {
@@ -6337,11 +6285,11 @@ class EsdlExecutor: EsdlExecutorIf
     _routineThreadBarrier.wait();
   }
 
-  public final void termRoutines() {
+  public final void haltRoutines() {
     import std.stdio: writeln;
     writeln(" > Shutting down all the Routine Threads ....");
     foreach(ref _routineThread; this._routineThreads) {
-      _routineThread.terminate();
+      _routineThread._halt();
       _routineThread._waitLock.notify();
     }
     _routineThreadBarrier.wait();
@@ -6418,7 +6366,7 @@ class EsdlExecutor: EsdlExecutorIf
 
   public final void terminateProcs(Process[] procs) {
     import std.algorithm: filter, count;	// filter
-    auto waitingProcs = filter!(function bool(Process t) { return t.isWaiting();})(procs);
+    auto waitingProcs = filter!(function bool(Process t) { return t.isAlive();})(procs);
 
     debug {
       import std.stdio: writeln;
@@ -6437,7 +6385,7 @@ class EsdlExecutor: EsdlExecutorIf
 	writeln("Terminating Process");
       }
       _procSemaphore.wait();
-      proc.terminateProcess();
+      proc.killProcess();
     }
     debug {
       import std.stdio: writeln;
@@ -6463,8 +6411,9 @@ public:
   size_t insertImmediate(TimedEvent e);
   public void triggerDeltaEvents();
   public void triggerImmediateEvents();
-  public SimPhase triggerNextEventNotices(SimTime maxTime);
+  public SimRunPhase triggerNextEventNotices(SimTime maxTime);
   public SimTime simTime();
+  public void reset();		// reset all the event queues
 }
 
 class EsdlHeapScheduler : EsdlScheduler
@@ -6479,7 +6428,23 @@ class EsdlHeapScheduler : EsdlScheduler
   private TimedEvent[] _immediateQueueAlt;
 
   private SimTime _simTime = SimTime(0);
+  // number of delta cycles at the current simulation time
+  private size_t  _deltaCount = 0;
 
+  public void reset() {		// reset all the event queues
+    debug(SCHEDULER) {
+      import std.stdio;
+      writeln("Resetting the scheduler");
+    }
+    _deltaQueue.length = 0;
+    _deltaQueueAlt.length = 0;
+    _immediateQueueAlt.length = 0;
+    _immediateQueue.length = 0;
+    // detach the heap and reattch with 0 Timed events
+    _noticeHeap.clear();
+    _noticeHeap.assume(_noticeQueue, 0);
+  }
+  
   final public SimTime simTime() {
     synchronized(this) {
       return _simTime;
@@ -6584,6 +6549,7 @@ class EsdlHeapScheduler : EsdlScheduler
   }
 
   public final void triggerDeltaEvents() {
+    ++_deltaCount;
     debug(SCHEDULER) {
       import std.stdio: writeln;
       writeln("There are ", this._deltaQueue.length,
@@ -6618,20 +6584,31 @@ class EsdlHeapScheduler : EsdlScheduler
     }
   }
 
-  public final SimPhase triggerNextEventNotices(SimTime maxTime) {
+  public final SimRunPhase triggerNextEventNotices(SimTime maxTime) {
+    _deltaCount = 0;
     if(this._noticeHeap.empty()) {
-      return SimPhase.PAUSE;
+      debug(SCHEDULER) {
+	import std.stdio;
+	writeln("Stage Done");
+      }
+      return SimRunPhase.STAGE_DONE;
+    }
+    else {
+      debug(SCHEDULER) {
+	import std.stdio;
+	writeln("There are timed events: ", _noticeHeap.length);
+      }
     }
 
     EventNotice firstEvent = this._noticeHeap.front();
 
     // Since the scheduler runs as a single task this
     // no synchronization guards would be needed
-    if(firstEvent.atTime >= maxTime) {
+    if(firstEvent.atTime > maxTime) {
       this._simTime = maxTime;
       // import std.stdio: writeln;
       // writeln("Max Simulation SimTime reached, Terminating Simulation");
-      return SimPhase.PAUSE;
+      return SimRunPhase.PAUSE;
     }
 
     debug {
@@ -6666,7 +6643,7 @@ class EsdlHeapScheduler : EsdlScheduler
       writeln("Triggered Timed Events: ",
 	      numTriggered);
     }
-    return SimPhase.SIMULATE;
+    return SimRunPhase.SIMULATE;
   }
 }
 
@@ -6751,8 +6728,26 @@ interface RootEntityIntf: EntityIntf
   final public void joinTerm() {
     this.getSimulator.joinTerm();
   }
+  final public void finish() {
+    this.abortTree();
+    this.getSimulator.termStage();
+    // To handle the situation where the finish call gets made during a PAUSE
+    if(simPhase() == SimPhase.PAUSE) {
+      this.simulate(0.nsec);
+    }
+  }
   final public void terminate() {
-    this.getSimulator.terminate();
+    this.killTree();
+    this.getSimulator.termSim();
+    // To handle the situation where the terminate call gets made during a PAUSE
+    if(simPhase() == SimPhase.PAUSE) {
+      this.simulate(0.nsec);
+    }
+    version(COSIM_VERILOG) {
+      // pragma(msg, "Compiling COSIM_VERILOG version!");
+      import esdl.intf.vpi;
+      vpi_control(vpiFinish, 1);
+    }
   }
 }
 
@@ -6809,6 +6804,12 @@ abstract class RootEntity: RootEntityIntf
   public void timePrecisionSet(bool s) {
     synchronized(this) {
       _timingPrecisionSet = s;
+      if(_timingPrecision == Time.init) {
+	_timingPrecision = 1.psec;
+      }
+      import std.stdio;
+      writeln(">>>>>>>>>> Timing Precision is: ",
+	      _timingPrecision.normalize());
     }
   }
 
@@ -6874,17 +6875,16 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  private SimTime _runUntil;
-
-  private final SimTime runUntil() {
+  private SimTime _runFor;
+  private final SimTime runFor() {
     synchronized(this) {
-      return _runUntil;
+      return _runFor;
     }
   }
 
-  private final void runUntil(SimTime val) {
+  private final void runFor(SimTime val) {
     synchronized(this) {
-      _runUntil = val;
+      _runFor = val;
     }
   }
 
@@ -6918,11 +6918,19 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  protected bool _terminationRequested = false;
+  protected bool _termStageRequested = false;
+  protected bool _termSimRequested = false;
 
-  public final void terminateSim() {
+  public final void termStage() {
     synchronized(this) {
-      _terminationRequested = true;
+      _termStageRequested = true;
+    }
+  }
+
+  public final void termSim() {
+    synchronized(this) {
+      _termStageRequested = true;
+      _termSimRequested = true;
     }
   }
 
@@ -6957,18 +6965,18 @@ class EsdlSimulator: EntityIntf
     this.forkSim(maxTime);
   }
 
-  final void forkSim(SimTime maxTime = MAX_SIMULATION_TIME) {
+  final void forkSim(SimTime runTime = MAX_SIMULATION_TIME) {
     synchronized(this) {
       import std.conv: to;
       // elabDoneLock.wait();
       switch(phase) {
       case SimPhase.PAUSE:
-	runUntil(maxTime);
+	runFor(runTime);
 	this.setPhase(SimPhase.SIMULATE);
-	simStartLock.notify();
+	simStepLock.notify();
 	break;
       default:
-	assert(false, "Can not start a simulatot in state: " ~ phase.to!string);
+	assert(false, "Can not start a simulator in state: " ~ phase.to!string);
       // super.join();
       }
     }
@@ -6981,26 +6989,41 @@ class EsdlSimulator: EntityIntf
 	assert(false, "Asked to terminate a simulation in phase: " ~
 	       phase.to!string);
       }
-      setPhase(SimPhase.TERMINATED);
-      // Get the doSim move ahead
-      simStartLock.notify();
+      setPhase(SimPhase.SIMULATION_DONE);
+      // Unlock stepSim
+      simStepLock.notify();
       import std.stdio: writeln;
       writeln(" > Shutting down all the active tasks ....");
       this._executor.terminateProcs(getRoot()._esdl__getChildProcsHier());
-      this._executor.termRoutines();
+      this._executor.haltRoutines();
       writeln(" > Simulation Complete....");
       simTermLock.notify();
     }
   }
 
   // always defined in the derived simulator
-  final void doSim() {
-    simStartLock.wait();
-    runSimulation();
+  final void stepSim() {
+    simStepLock.wait();
+    runSimulation(runFor());
     simDoneLock.notify();
   }
 
-  final void runSimulation() {
+  final void runSimulation(SimTime forTime) {
+    // if forTime is 0, run only a delta cycle. Else run for the given time
+    bool runDelta = false;
+    // there is still time left for the simulation to complete
+    bool timeLeft = true;
+    SimTime runUntil = forTime + _scheduler.simTime();
+    if(forTime < SimTime(0)) {
+      import std.stdio;
+      writeln("Unable to simulate for a negative time period: ", forTime);
+    }
+    if(forTime == SimTime(0)) {
+      runDelta = true;
+      timeLeft = false;
+    }
+      
+  simLoop_:
     while(this.phase == SimPhase.SIMULATE) {
       schedPhase = SchedPhase.IMMEDIATE;
       // bool channelUpdatePending = false;
@@ -7009,7 +7032,20 @@ class EsdlSimulator: EntityIntf
       // Look at all the requests for thread terminations/suspensions etc
       _executor.updateProcs();
 
+      // these could be the processes registered in the beginning of a
+      // stage or the dynamic processes that could be registered at
+      // any time during the simulation
       _executor.processRegisteredProcs();
+
+      // Reset the scheduler if termStage has been requested
+      if(_termStageRequested is true) {
+	_scheduler.reset();
+	_termStageRequested = false;
+	if(_termSimRequested is true) {
+	  _executor._incrMaxStage();
+	  _termSimRequested = false;
+	}
+      }
 
       debug(SCHEDULER) {
 	import std.stdio: writeln;
@@ -7028,110 +7064,122 @@ class EsdlSimulator: EntityIntf
 	if(_executor.runnableRoutinesCount)
 	  writeln(" > Got Immediate routines: ", _executor.runnableRoutinesCount);
       }
+      
       if(_executor.runnableThreadsCount is 0) {
-	schedPhase = SchedPhase.UPDATE;
-	// No immediate task -- update channels if required
-	// channelUpdatePending = true;
-	incrUpdateCount();
-	foreach(ref chan; this.channelUpdateReqs) {
-	  chan.update();
-	  chan.updateDone();
-	}
-	clearChannelUpdateReqs();
-	// Also reset the _triggered flag on triggered events
-	// foreach(ref e; _triggeredEvents) {
-	//   e.resetTriggered();
-	// }
-	// _triggeredEvents.length = 0;
+	if(runDelta is true || timeLeft is true) {
+	  runDelta = false;	// runDelta will trigger only one delta cycle
 
-	schedPhase = SchedPhase.DELTA;
-	debug(SCHEDULER) {
-	  import std.stdio: writeln;
-	  writeln(" > Looking for Delta tasks/routines");
-	}
-	debug(TIME) {
-	  import std.stdio: writeln;
-	  writeln(" > Incrementing Delta SimTime");
-	}
-	_scheduler.triggerDeltaEvents();
-	debug(SCHEDULER) {
-	  if(_executor.runnableProcsCount) {
-	    import std.stdio: writeln;
-	    writeln(" > Got Delta tasks: ", _executor.runnableProcsCount);
+	  schedPhase = SchedPhase.UPDATE;
+	  // No immediate task -- update channels if required
+	  // channelUpdatePending = true;
+	  incrUpdateCount();
+	  foreach(ref chan; this.channelUpdateReqs) {
+	    chan.update();
+	    chan.updateDone();
 	  }
-	}
-	debug(SCHEDULER) {
-	  if(_executor.runnableRoutinesCount) {
-	    import std.stdio: writeln;
-	    writeln(" > Got Delta routines: ", _executor.runnableRoutinesCount);
-	  }
-	}
-	bool nextStage = false;
-	while(this.phase is SimPhase.SIMULATE &&
-	      _executor.runnableThreadsCount is 0 &&
-	      nextStage is false) {
-	  schedPhase = SchedPhase.TIMED;
+	  clearChannelUpdateReqs();
+	  // Also reset the _triggered flag on triggered events
+	  // foreach(ref e; _triggeredEvents) {
+	  //   e.resetTriggered();
+	  // }
+	  // _triggeredEvents.length = 0;
+
+	  schedPhase = SchedPhase.DELTA;
 	  debug(SCHEDULER) {
 	    import std.stdio: writeln;
-	    writeln(" > Looking for Timed tasks/routines");
+	    writeln(" > Looking for Delta tasks/routines");
 	  }
-	  switch(_scheduler.triggerNextEventNotices(runUntil())) {
-	  case SimPhase.SIMULATE:
+	  debug(TIME) {
+	    import std.stdio: writeln;
+	    writeln(" > Incrementing Delta SimTime");
+	  }
+	  _scheduler.triggerDeltaEvents();
+	  debug(SCHEDULER) {
+	    if(_executor.runnableProcsCount) {
+	      import std.stdio: writeln;
+	      writeln(" > Got Delta tasks: ", _executor.runnableProcsCount);
+	    }
+	  }
+	  debug(SCHEDULER) {
+	    if(_executor.runnableRoutinesCount) {
+	      import std.stdio: writeln;
+	      writeln(" > Got Delta routines: ", _executor.runnableRoutinesCount);
+	    }
+	  }
+	  while(this.phase is SimPhase.SIMULATE &&
+		_executor.runnableThreadsCount is 0) {
+	    schedPhase = SchedPhase.TIMED;
 	    debug(SCHEDULER) {
-	      if(_executor.runnableProcsCount) {
-		import std.stdio: writeln;
-		writeln(" > Got Timed tasks: ",
-			_executor.runnableProcsCount);
+	      import std.stdio: writeln;
+	      writeln(" > Looking for Timed tasks/routines");
+	    }
+	    final switch(_scheduler.triggerNextEventNotices(runUntil)) {
+	    case SimRunPhase.SIMULATE_DONE:
+	      timeLeft = false;
+	      break;
+	    case SimRunPhase.SIMULATE:
+	      debug(SCHEDULER) {
+		if(_executor.runnableProcsCount) {
+		  import std.stdio: writeln;
+		  writeln(" > Got Timed tasks: ",
+			  _executor.runnableProcsCount);
+		}
 	      }
-	    }
-	    debug(SCHEDULER) {
-	      if(_executor.runnableRoutinesCount) {
-		import std.stdio: writeln;
-		writeln(" > Got Timed routines: ",
-			_executor.runnableRoutinesCount);
+	      debug(SCHEDULER) {
+		if(_executor.runnableRoutinesCount) {
+		  import std.stdio: writeln;
+		  writeln(" > Got Timed routines: ",
+			  _executor.runnableRoutinesCount);
+		}
 	      }
-	    }
-	    break;
-	  case SimPhase.TERMINATED:
-	    this.setPhase(SimPhase.TERMINATED);
-	    break;
-	  case SimPhase.PAUSE:
-	    // import std.stdio: writeln;
-	    // writeln("No Events in the Scheduler, Terminating Simulation");
-	    // FIXME -- make it depend on whether this simulator is the only actor
-	    if(checkPersistFlags()) {
-	      this.setPhase(SimPhase.PAUSE);
-	    }
-	    else {
-	      if(_executor.incrStage()) {
-		// Make it go back to the beginning of runSimulation
-		nextStage = true;
+	      break;
+	    case SimRunPhase.SIMULATION_DONE:
+	      this.setPhase(SimPhase.SIMULATION_DONE);
+	      break;
+	    case SimRunPhase.STAGE_DONE:
+	      if(checkPersistFlags()) {
+		this.setPhase(SimPhase.PAUSE);
 	      }
 	      else {
-		this.setPhase(SimPhase.PAUSE);
-		this.terminate();
+		if(_executor.incrStage()) {
+		  continue simLoop_;
+		}
+		else {
+		  this.setPhase(SimPhase.PAUSE);
+		  this.terminate();
+		}
 	      }
+	      break;
+	    case SimRunPhase.PAUSE:
+	      this.setPhase(SimPhase.PAUSE);
+	      break;
 	    }
-	    break;
-	  default:
-	    assert(false, "Illegal Phase!");
 	  }
+	}
+	else {
+	  this.setPhase(SimPhase.PAUSE);
 	}
       }
 
       schedPhase = SchedPhase.EXEC;
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	writeln(" > Executing tasks: ");
+	writeln(" > Executing Tasks and Routines: ", this.phase);
       }
-      if(_executor.runnableProcsCount)
+      if(_executor.runnableProcsCount) {
 	_executor.execProcs();
-      debug(SCHEDULER) {
-	import std.stdio: writeln;
-	writeln(" > Done executing tasks");
+	debug(SCHEDULER) {
+	  import std.stdio: writeln;
+	  writeln(" > Done executing tasks");
+	}
       }
-      if(_executor.runnableRoutinesCount)
+      if(_executor.runnableRoutinesCount) {
 	_executor.execRoutines();
+	debug(SCHEDULER) {
+	  import std.stdio: writeln;
+	  writeln(" > Done executing routines");
+	}
+      }
     }
   }
 
@@ -7143,7 +7191,7 @@ class EsdlSimulator: EntityIntf
     if(phase is SimPhase.SIMULATE) {
       simDoneLock.wait();
     }
-    else {
+    else if(phase !is SimPhase.SIMULATION_DONE) {
       import std.conv: to;
       assert(false, "Asked to wait on a simulation that is in phase: " ~
 	     phase.to!string);
@@ -7178,7 +7226,7 @@ class EsdlSimulator: EntityIntf
 
   import core.sync.semaphore: Semaphore;
   Semaphore _elabDoneLock;
-  Semaphore _simStartLock;
+  Semaphore _simStepLock;
   Semaphore _simDoneLock;
   Semaphore _simTermLock;
 
@@ -7186,9 +7234,9 @@ class EsdlSimulator: EntityIntf
     synchronized(this)
       return _elabDoneLock;
   }
-  public final Semaphore simStartLock() {
+  public final Semaphore simStepLock() {
     synchronized(this)
-      return _simStartLock;
+      return _simStepLock;
   }
   public final Semaphore simDoneLock() {
     synchronized(this)
@@ -7257,7 +7305,7 @@ class EsdlSimulator: EntityIntf
 
 	import core.cpuid: threadsPerCPU;
 	_elabDoneLock = new Semaphore(0);
-	_simStartLock = new Semaphore(0);
+	_simStepLock = new Semaphore(0);
 	_simDoneLock = new Semaphore(0);
 	_simTermLock = new Semaphore(0);
 
@@ -7290,10 +7338,8 @@ class EsdlSimulator: EntityIntf
     synchronized(this) {
       _rootThread = new RootProcess({
 	  _esdl__rootEntity = t;
-	  import std.stdio;
-	  writeln("Root thread started");
 	  try {
-	    runSim(t);
+	    simLoop(t);
 	  }
 	  catch(Throwable e) {
 	    import std.stdio: writeln;
@@ -7307,12 +7353,17 @@ class EsdlSimulator: EntityIntf
     this.triggerElab();
   }
 
-  final void runSim(T)(T t) {
+  // start the simulation loop and wait for an external actor to
+  // specify how much time the simulation needs to be run for. This
+  // loop is available to facillitate running the simulation in sync
+  // with other simulators till the time the simulation is explicitly
+  // terminated.
+  final void simLoop(T)(T t) {
     _esdl__rootEntity = t;
     t.doElab();
     // inclrementally run simulation
-    while(this.phase !is SimPhase.TERMINATED) {
-      t.getSimulator.doSim();
+    while(this.phase !is SimPhase.SIMULATION_DONE) {
+      t.getSimulator.stepSim();
     }
   }
 }
@@ -7381,7 +7432,7 @@ public void finish() {
     import std.stdio;
     writeln("Somebody called finish");
   }
-  getRootEntity.abortRec();
+  getRootEntity.finish();
   version(COSIM_VERILOG) {
     // pragma(msg, "Compiling COSIM_VERILOG version!");
     import esdl.intf.vpi;
