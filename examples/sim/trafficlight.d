@@ -41,10 +41,15 @@ class TrafficLight: Entity
   }
 
   void testPhase() {
+    // wait(0);
+    if(Process.self.stage == 10) {
+      wait(0);
+    }
     writeln("Stage: ", Process.self.stage);
   }
 
   void light() {
+    // lockStage();
     writeln(getSimTime);
     // wait((cast(Dummy) getParent).e);
     auto index = Process.self.taskIndices[0];
@@ -53,8 +58,8 @@ class TrafficLight: Entity
     // writeln("Time unit is: ", timeUnit());
     while(true)
       {
-	lockStage();
-	unlockStage();
+	// lockStage();
+	// unlockStage();
 	writeln(getSimTime, ": Red -> Green ", index, " -- ",
 		Process.self.getFullName());
 	yellow[index].notify(20);
@@ -68,6 +73,7 @@ class TrafficLight: Entity
 	wait(green[index]);
 	synchronized(this) {
 	  ++count;
+	  // if(count == 1) getRoot.abortTree();
 	}
       }
   }
@@ -76,6 +82,7 @@ class TrafficLight: Entity
   Task!(light, 5)  tLightTT[POLES];
   Task!(testPhase, -1)  test_1;
   Task!(testPhase, 10)  test2;
+  Task!(testPhase, 11)  test11;
   Task!(testPhase, -3)  test3;
   Task!(testPhase, -4)  test4;
   Task!(testPhase, -5)  test5;
@@ -86,7 +93,6 @@ class TrafficLight: Entity
 @parallelize
 class TrafficLightWrapper: TrafficLight {}
 
-@parallelize
 class Dummy: Entity
 {
   // Event e;
@@ -97,12 +103,12 @@ class Dummy: Entity
   // }
   // Task!(etrigger, 0) trigE;
 
-  private TrafficLightWrapper[1] traffic;
+  private TrafficLightWrapper traffic;
 }
 
 class TrafficRoot: RootEntity
 {
-  @parallelize Inst!Dummy[16] dummy;
+  @parallelize Inst!Dummy[10] dummy;
 
   this(string name) {
     super(name);
@@ -128,23 +134,30 @@ void main()
 
   // top level module
   TrafficRoot theRoot = new TrafficRoot("theRoot");
-  theRoot.forkElab();
-  theRoot.joinElab();
+  theRoot.elaborate();
+  // theRoot.waitElab();
   // theRoot.simulate(100.nsec);
-  // theRoot.joinSim();
+  // theRoot.waitSim();
   // theRoot.simulate(200.nsec);
-  // theRoot.joinSim();
+  // theRoot.waitSim();
   // theRoot.simulate(1000.nsec);
-  // theRoot.joinSim();
+  // theRoot.waitSim();
   // theRoot.simulate(2000.nsec);
-  // theRoot.joinSim();
+  // theRoot.waitSim();
 
-  theRoot.forkSim(2000.nsec);
-  theRoot.joinSim();
+  // theRoot.doSim(25.nsec);
+  // theRoot.waitSim();
+  theRoot.simulate(25.nsec);
+  // theRoot.simulate(2500.nsec);
+  // theRoot.simulate(0.nsec);
+  theRoot.finish();
+  theRoot.simulate();
+  // theRoot.terminate();
+  // theRoot.simulate(250.nsec);
 
   // for (size_t i=1; i!=20; ++i) {
-  //   theRoot.forkSim((i*100).nsec);
-  //   theRoot.joinSim();
+  //   theRoot.doSim((i*100).nsec);
+  //   theRoot.waitSim();
   // }
   // theRoot.terminate();
 }

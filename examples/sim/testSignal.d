@@ -44,7 +44,7 @@ class Foo: Entity {
 		    wait(150.nsec);
 		    import std.stdio;
 		    // waitDelta();
-		    Process.self.thisFork.abortRec();
+		    Process.self.thisFork.abortTree();
 		  },
 		  {
 		    import std.stdio;
@@ -59,7 +59,7 @@ class Foo: Entity {
 			wait(150.nsec);
 			// waitDelta();
 			// auto tt = t.getActiveTasks();
-			t.abortRec();
+			t.abortTree();
 			// wait(25.nsec);
 		      },
 		      );
@@ -67,7 +67,7 @@ class Foo: Entity {
     writeln("**** Time: ", getSimTime());
     wait(150.nsec);
     // disableFork(t);
-    t.waitRec();
+    t.waitTree();
     writeln("**** Time: ", getSimTime());
   }
 

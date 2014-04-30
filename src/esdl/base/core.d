@@ -5758,18 +5758,18 @@ void terminateAllRoots() {
   RootEntityIntf.terminateAll();
 }
 
-void forkElab(T)(T t)
+void doElab(T)(T t)
 {
   t.getSimulator.elabRootThread(t);
 }
 
 void elaborate(T)(T t)
 {
-  t.forkElab();
-  t.joinElab();
+  t.doElab();
+  t.waitElab();
 }
 
-void doElab(T)(T t)
+void execElab(T)(T t)
   if(is(T unused: RootEntityIntf))
     {
       synchronized(t) {
@@ -5843,13 +5843,13 @@ void doElab(T)(T t)
 
 	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
-	t.getSimulator.elabDoneLock.notify();
 	version(MULTICORE) {
 	  writeln(">>>>>>>>>> Start of Simulation (multicore enabled)");
 	}
 	else {
 	  writeln(">>>>>>>>>> Start of Simulation");
 	}
+	t.getSimulator.elabDoneLock.notify();
       }
     }
 
@@ -6670,12 +6670,12 @@ interface RootEntityIntf: EntityIntf
   static void forkAllRootSim(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.forkSim(t);
+	root.doSim(t);
       }
     }
   static void joinAllRootSim() {
     foreach(root; allRoots()) {
-      root.joinSim();
+      root.waitSim();
     }
   }
   static void simulateAll(T)(T t)
@@ -6699,31 +6699,31 @@ interface RootEntityIntf: EntityIntf
   public void timePrecisionSet(bool s);
   
   final void simulate(Time simTime) {
-    forkSim(simTime);
-    joinSim();
+    doSim(simTime);
+    waitSim();
   }
   final void simulate(SimTime maxTime = MAX_SIMULATION_TIME) {
-    forkSim(maxTime);
-    joinSim();
+    doSim(maxTime);
+    waitSim();
   }
-  final public void joinSim() {
-    this.getSimulator.joinSim();
+  final public void waitSim() {
+    this.getSimulator.waitSim();
   }
-  final public void joinElab() {
-    this.getSimulator.joinElab();
+  final public void waitElab() {
+    this.getSimulator.waitElab();
     addRoot(this);
   }
-  final void forkSim(Time simTime) {
+  final void doSim(Time simTime) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.forkSim(simTime);
+    getSimulator.doSim(simTime);
   }
-  final void forkSim(SimTime maxTime = MAX_SIMULATION_TIME) {
+  final void doSim(SimTime maxTime = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.forkSim(maxTime);
+    getSimulator.doSim(maxTime);
   }
   final public void joinTerm() {
     this.getSimulator.joinTerm();
@@ -6958,14 +6958,14 @@ class EsdlSimulator: EntityIntf
     rootThread.start();
   }
   // private Process[] tasks;
-  final void forkSim(Time simTime) {
+  final void doSim(Time simTime) {
     // elabDoneLock.wait();
-    // elabDoneLock.notify();		// notified so that forkSim(maxTime) gets going
+    // elabDoneLock.notify();		// notified so that doSim(maxTime) gets going
     SimTime maxTime = SimTime(this, simTime);
-    this.forkSim(maxTime);
+    this.doSim(maxTime);
   }
 
-  final void forkSim(SimTime runTime = MAX_SIMULATION_TIME) {
+  final void doSim(SimTime runTime = MAX_SIMULATION_TIME) {
     synchronized(this) {
       import std.conv: to;
       // elabDoneLock.wait();
@@ -7183,11 +7183,11 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void joinElab() {
+  final void waitElab() {
     elabDoneLock.wait();
   }
 
-  final void joinSim() {
+  final void waitSim() {
     if(phase is SimPhase.SIMULATE) {
       simDoneLock.wait();
     }
@@ -7360,7 +7360,7 @@ class EsdlSimulator: EntityIntf
   // terminated.
   final void simLoop(T)(T t) {
     _esdl__rootEntity = t;
-    t.doElab();
+    t.execElab();
     // inclrementally run simulation
     while(this.phase !is SimPhase.SIMULATION_DONE) {
       t.getSimulator.stepSim();
