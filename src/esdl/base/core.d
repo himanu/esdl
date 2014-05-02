@@ -4851,8 +4851,7 @@ class Process: SimProcess, EventClient, Procedure
     state = ProcState.WAITING;
     this.getSimulator.freeLock(this);
     _waitLock.wait();
-    if(this.state == ProcState.ABORTED ||
-       this.state == ProcState.KILLED) {
+    if(this._isKilled()) {
       throw new TermException();
     }
   }
@@ -5754,6 +5753,11 @@ void simulateAllRoots(T)(T t)
     RootEntityIntf.simulateAll(t);
   }
 
+void simulateAllRootsUpto(T)(T t)
+  if(is(T == Time) || is(T == SimTime)) {
+    RootEntityIntf.simulateAllUpto(t);
+  }
+
 void terminateAllRoots() {
   RootEntityIntf.terminateAll();
 }
@@ -6380,12 +6384,11 @@ class EsdlExecutor: EsdlExecutorIf
       _procBarrier = new Barrier(cast(uint)(count(waitingProcs) + 1));
     }
     foreach(ref proc; waitingProcs) {
+      proc.killProcess();
       debug {
 	import std.stdio: writeln;
 	writeln("Terminating Process");
       }
-      _procSemaphore.wait();
-      proc.killProcess();
     }
     debug {
       import std.stdio: writeln;
@@ -6667,21 +6670,32 @@ interface RootEntityIntf: EntityIntf
   public void initProcess();
   public void initRoutine();
 
-  static void forkAllRootSim(T)(T t)
+  static void doSimAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
 	root.doSim(t);
       }
     }
-  static void joinAllRootSim() {
+  static void doSimAllUpto(T)(T t)
+    if(is(T == Time) || is(T == SimTime)) {
+      foreach(root; allRoots()) {
+	root.doSimUpto(t);
+      }
+    }
+  static void waitSimAll() {
     foreach(root; allRoots()) {
       root.waitSim();
     }
   }
   static void simulateAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      forkAllRootSim(t);
-      joinAllRootSim();
+      doSimAll(t);
+      waitSimAll();
+    }
+  static void simulateAllUpto(T)(T t)
+    if(is(T == Time) || is(T == SimTime)) {
+      doSimAllUpto(t);
+      waitSimAll();
     }
   static void terminateAll() {
     foreach(root; allRoots()) {
@@ -6698,12 +6712,20 @@ interface RootEntityIntf: EntityIntf
   public bool timePrecisionSet();
   public void timePrecisionSet(bool s);
   
-  final void simulate(Time simTime) {
-    doSim(simTime);
+  final void simulate(Time t) {
+    doSim(t);
     waitSim();
   }
-  final void simulate(SimTime maxTime = MAX_SIMULATION_TIME) {
-    doSim(maxTime);
+  final void simulate(SimTime st = MAX_SIMULATION_TIME) {
+    doSim(st);
+    waitSim();
+  }
+  final void simulateUpto(Time t) {
+    doSimUpto(t);
+    waitSim();
+  }
+  final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
+    doSimUpto(st);
     waitSim();
   }
   final public void waitSim() {
@@ -6713,20 +6735,32 @@ interface RootEntityIntf: EntityIntf
     this.getSimulator.waitElab();
     addRoot(this);
   }
-  final void doSim(Time simTime) {
+  final void doSim(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSim(simTime);
+    getSimulator.doSim(t);
   }
-  final void doSim(SimTime maxTime = MAX_SIMULATION_TIME) {
+  final void doSim(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSim(maxTime);
+    getSimulator.doSim(st);
   }
-  final public void joinTerm() {
-    this.getSimulator.joinTerm();
+  final void doSimUpto(Time t) {
+    // So that the simulation root thread too returns a legal value for
+    // getRootEntity
+    _esdl__rootEntity = this;
+    getSimulator.doSimUpto(t);
+  }
+  final void doSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+    // So that the simulation root thread too returns a legal value for
+    // getRootEntity
+    _esdl__rootEntity = this;
+    getSimulator.doSimUpto(st);
+  }
+  final public void waitSimEnd() {
+    this.getSimulator.waitSimEnd();
   }
   final public void finish() {
     this.abortTree();
@@ -6957,12 +6991,16 @@ class EsdlSimulator: EntityIntf
   final void triggerElab() {
     rootThread.start();
   }
+
   // private Process[] tasks;
-  final void doSim(Time simTime) {
-    // elabDoneLock.wait();
-    // elabDoneLock.notify();		// notified so that doSim(maxTime) gets going
-    SimTime maxTime = SimTime(this, simTime);
-    this.doSim(maxTime);
+  final void doSim(Time t) {
+    SimTime st = SimTime(this, t);
+    this.doSim(st);
+  }
+
+  final void doSimUpto(Time t) {
+    SimTime st = SimTime(this, t);
+    this.doSimUpto(st);
   }
 
   final void doSim(SimTime runTime = MAX_SIMULATION_TIME) {
@@ -6982,6 +7020,10 @@ class EsdlSimulator: EntityIntf
     }
   }
 
+  final void doSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
+    doSim(runTime-getSimTime());
+  }
+  
   final void terminate() {
     synchronized(this) {
       if(phase !is SimPhase.PAUSE) {
@@ -7198,7 +7240,7 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void joinTerm() {
+  final void waitSimEnd() {
     simTermLock.wait();
   }
 
