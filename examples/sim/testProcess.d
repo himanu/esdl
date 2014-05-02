@@ -83,5 +83,5 @@ void main()
   Root root = new Root("root");
   root.elaborate();
   root.simulate(100000.nsec);
-  // root.terminate();
+  root.terminate();
 }

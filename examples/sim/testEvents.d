@@ -141,7 +141,5 @@ void main()
   Sim theRootEntity = new Sim("theRootEntity");
   theRootEntity.elaborate();
   theRootEntity.simulate(100.nsec);
-  // theRootEntity.terminate();
-  import std.stdio;
-  // writeln("All Done");
+  theRootEntity.terminate();
 }

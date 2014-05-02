@@ -136,7 +136,6 @@ int main()
   
   Sim theRootEntity = new Sim("theRootEntity");
   theRootEntity.elaborate();
-  theRootEntity.simulate(1000.nsec);
-  // theRootEntity.terminate();
+  theRootEntity.simulate();
   return 0;
 }
