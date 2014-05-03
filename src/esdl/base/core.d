@@ -6412,6 +6412,7 @@ public:
   void insertTimed(EventNotice e);
   size_t insertDelta(TimedEvent e);
   size_t insertImmediate(TimedEvent e);
+  public SimTime nextSimTime();
   public void triggerDeltaEvents();
   public void triggerImmediateEvents();
   public SimRunPhase triggerNextEventNotices(SimTime maxTime);
@@ -6551,6 +6552,20 @@ class EsdlHeapScheduler : EsdlScheduler
     }
   }
 
+  // make this method callable only when the simulation is paused
+  public final SimTime nextSimTime() {
+    if(this._deltaQueue.length > 0 ||
+       this._immediateQueue.length > 0) {
+      return SimTime(0);
+    }
+    else if(this._noticeHeap.empty()) {
+      return SimTime(-1);
+    }
+    else {
+      return this._noticeHeap.front().atTime();
+    }
+  }
+  
   public final void triggerDeltaEvents() {
     ++_deltaCount;
     debug(SCHEDULER) {
@@ -6711,6 +6726,11 @@ interface RootEntityIntf: EntityIntf
   public Time getTimePrecision();
   public bool timePrecisionSet();
   public void timePrecisionSet(bool s);
+
+  // This function shall return 0 if some delta event/or channel update is pending 
+  final public SimTime nextSimTime() {
+    return getSimulator.nextSimTime();
+  }
   
   final void simulate(Time t) {
     doSim(t);
@@ -6937,6 +6957,15 @@ class EsdlSimulator: EntityIntf
   }
 
   // private EventObj[]  _triggeredEvents;
+
+  public final SimTime nextSimTime() {
+    if(_channelUpdateReqs.length > 0) {
+      return SimTime(0);
+    }
+    else {
+      return _scheduler.nextSimTime();
+    }
+  }
 
   protected SimPhase _phase = SimPhase.BUILD;
   public final SimPhase phase() {

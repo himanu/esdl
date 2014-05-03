@@ -10,6 +10,8 @@
 
 module esdl.base.time;
 
+import std.math;		// needed for ^^ operation
+
 protected enum TimeUnit: byte
   {   SEC  = 0,
       MSEC = -3,
@@ -29,22 +31,31 @@ alias TimeUnit.SEC  SEC;
 public struct Time
 {
   public long _value;
-  public TimeUnit _unit;
+  public byte _unit;
 
-  public this(long value, TimeUnit unit) {
+  public this(long value, byte unit) {
     _value = value;
     _unit = unit;
   }
 
   public Time normalize() {
     if(_unit is 0) return this;
-    if(_value % 1000 != 0) return this;
-    else {
-      Time retval;
-      retval._value = this._value / 1000;
-      retval._unit  = cast(TimeUnit) (this._unit + 3);
-      return retval.normalize();
+    auto du = _unit % 3;
+    if(du != 0 || _value % 1000 == 0) {
+      long value = _value;
+      byte unit = _unit;
+      if(du != 0) {
+	if(du < 0) du += 3;
+	unit -= du;
+	value *= 10 ^^ du;
+      }
+      if(value % 1000 == 0) {
+	value /= 1000;
+	unit  = cast(byte) (unit + 3);
+      }
+      return Time(value, unit);
     }
+    else return this;
   }
   
   public bool isZero() {
@@ -123,6 +134,22 @@ public struct Time
       _lhs._value *= rhs;
     }
     return _lhs.normalize();
+  }
+
+  public S to(S)() if(is(S == string)) {
+    import std.conv: to;
+    import std.string: toLower;
+    Time t = this.normalize();
+    string value_ = t._value.to!string;
+    string unit_ = (cast(TimeUnit) t._unit).to!string;
+    if(t._unit >= -15 && t._unit <= 0) {
+      unit_ = unit_.toLower();
+    }
+    return value_ ~ "." ~ unit_;
+  }
+
+  public string toString() {
+    return this.to!string;
   }
 }
 
@@ -265,8 +292,6 @@ interface TimeConfigContext: TimeContext
   }
 
 }
-
-import std.math;
 
 struct SimTime
 {
