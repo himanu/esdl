@@ -12,16 +12,17 @@ class Foo: Entity {
   Event e1, e2;
   
   void hello() {
-    for (size_t i=0; i!=10000; ++i)
+    for (size_t i=0; i!=100000; ++i)
       {
 	// Event e0, e5;
 	// e0.init();
 	// e5.init();
 	// Event e10 = e0 | e5;
-	Event e4 = e2 | e1;
-	e1.notify(1);
+	// Event e4 = e2 | e1;
+	// e1.notify(0);
 	e2.notify(1);
-	wait(e4);
+
+	wait(e1);
 	// Event e3 = e1 | e2;
 	// Event e6 = e0 & e5;
       }
@@ -42,7 +43,7 @@ class Sim: RootEntity {
   this(string name) {
       super(name);
     }
-  Inst!Foo [1] top;
+  Inst!Foo [4] top;
   override void doBuild() {
     // srandom(0);
   }
@@ -58,8 +59,6 @@ void main()
   // top level module
   Sim theRootEntity = new Sim("theRootEntity");
   theRootEntity.elaborate();
-  theRootEntity.simulate(10000.nsec);
+  theRootEntity.simulate();
   // theRootEntity.terminate();
-  import std.stdio;
-  // writeln("All Done");
 }

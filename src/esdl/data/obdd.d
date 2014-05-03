@@ -1243,7 +1243,7 @@ private void _delete(T)(T obj) {
   import core.memory;
   import std.stdio;
   // writeln("Deleting Buddy");
-  clear(obj);
+  destroy(obj);
   // GC.free(cast(void*)obj);
 }
 

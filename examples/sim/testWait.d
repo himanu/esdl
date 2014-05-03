@@ -34,6 +34,7 @@ class Foo: Entity {
     // e0.notify();
     // wait(e0);
     import std.stdio;
+    writeln(getSimTime());
     wait(1);
   }
 

@@ -70,8 +70,6 @@ void main()
   TrafficRoot theRoot = new TrafficRoot("theRoot");
   theRoot.elaborate();
   theRoot.simulate(100.nsec);
-  // theRoot.terminate();
-  import std.stdio;
-  writeln("All Done");
+  theRoot.terminate();
 }
 
