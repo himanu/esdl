@@ -5742,7 +5742,8 @@ enum SimPhase : byte
 
 enum SimRunPhase: byte
   {   SIMULATE,
-      SIMULATE_DONE,		// The scheduler has completed the simulation time it was asked to simulate
+      SIMULATE_DONE, // The scheduler has completed the simulation
+                     // time it was asked to simulate
       PAUSE,
       STAGE_DONE,
       SIMULATION_DONE,
@@ -7259,14 +7260,7 @@ class EsdlSimulator: EntityIntf
   }
 
   final void waitSim() {
-    if(phase is SimPhase.SIMULATE) {
-      simDoneLock.wait();
-    }
-    else if(phase !is SimPhase.SIMULATION_DONE) {
-      import std.conv: to;
-      assert(false, "Asked to wait on a simulation that is in phase: " ~
-	     phase.to!string);
-    }
+    simDoneLock.wait();
   }
 
   final void waitSimEnd() {
