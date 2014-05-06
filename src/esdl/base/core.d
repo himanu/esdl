@@ -5877,7 +5877,7 @@ class EsdlExecutor: EsdlExecutorIf
   private EsdlSimulator _simulator;
   // class ProcessMonitor {}
   import core.sync.semaphore: Semaphore;
-  import core.sync.barrier: Barrier;
+  import esdl.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
   private Barrier _procBarrier;
   private Barrier _routineThreadBarrier;
@@ -5891,6 +5891,12 @@ class EsdlExecutor: EsdlExecutorIf
     synchronized(this)
       {
 	_simulator = simulator;
+	debug(BARRIER) {
+	  _procBarrier = new DebugBarrier(1);
+	}
+	else {
+	  _procBarrier = new Barrier(1);
+	}
       }
   }
 
@@ -6127,7 +6133,6 @@ class EsdlExecutor: EsdlExecutorIf
     }
 
     Process[] _termProcs;
-    Barrier _termBarrier;
 
     // first create a list of tasks that require temination
     foreach(proc; expandedList) {
@@ -6173,14 +6178,14 @@ class EsdlExecutor: EsdlExecutorIf
     }
     _updateProcs.length = 0;
     if(_termProcs.length > 0) {
-      // create a barrier and make the threads wait on that
-      _termBarrier = new Barrier(cast(uint)_termProcs.length + 1);
-      _procBarrier = _termBarrier;
+
+      _procBarrier.reset(cast(uint)_termProcs.length + 1);
+
       // right now only handles terminate requests
       foreach(proc; _termProcs) {
 	proc.terminateWaiting();
       }
-      _termBarrier.wait();
+      _procBarrier.wait();
     }
   }
 
@@ -6326,12 +6331,7 @@ class EsdlExecutor: EsdlExecutorIf
 
     this._runnableProcs.length = 0;
 
-    debug(BARRIER) {
-    _procBarrier = new DebugBarrier(cast(uint)runProcs.length + 1);
-    }
-    else {
-      _procBarrier = new Barrier(cast(uint)runProcs.length + 1);
-    }
+    _procBarrier.reset(cast(uint)runProcs.length + 1);
 
     while(runProcs.length != 0) {
       Process[] tasks = runProcs;
@@ -6377,12 +6377,7 @@ class EsdlExecutor: EsdlExecutorIf
       writeln("******* About to terminate ",
 	      count(waitingProcs), " waiting procs");
     }
-    debug(BARRIER) {
-    _procBarrier = new DebugBarrier(cast(uint)(count(waitingProcs) + 1));
-    }
-    else {
-      _procBarrier = new Barrier(cast(uint)(count(waitingProcs) + 1));
-    }
+    _procBarrier.reset(cast(uint)(count(waitingProcs) + 1));
     foreach(ref proc; waitingProcs) {
       proc.killProcess();
       debug {
@@ -6667,12 +6662,17 @@ class EsdlHeapScheduler : EsdlScheduler
 
 interface RootEntityIntf: EntityIntf
 {
+  import esdl.sync.barrier: Barrier;
   private __gshared RootEntityIntf[] _roots;
   static void addRoot(RootEntityIntf root) {
-    _roots ~= root;
+    synchronized(typeid(RootEntityIntf)) {
+      _roots ~= root;
+    }
   }
   static RootEntityIntf[] allRoots() {
-    return _roots;
+    synchronized(typeid(RootEntityIntf)) {
+      return _roots;
+    }
   }
 
   public void _esdl__unboundPorts();
