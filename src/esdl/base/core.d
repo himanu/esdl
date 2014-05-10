@@ -3783,6 +3783,28 @@ public void srandom(uint _seed) {
   }
 }
 
+class TaskT(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
+{
+  this(T t) {
+    auto dg = recreateDelegate!F(t);
+
+    static assert((ParameterTypeTuple!dg).length == 0);
+    super(dg, R, S);
+    //	{
+    //	  auto ARGS = adjustArgs!(T, A)(t);
+    //	  auto fn = delegate()
+    //	    {
+    //	      dg(ARGS.expand);
+    //	    };
+    //	  super(fn, 0);
+    //	}
+    // else
+    // {
+    // }
+  }
+
+}
+
 interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 {
 
@@ -3790,27 +3812,6 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
     return
       q{
 
-      class TaskT(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
-      {
-	this(T t) {
-	  auto dg = recreateDelegate!F(t);
-
-	  static assert((ParameterTypeTuple!dg).length == 0);
-	  super(dg, R, S);
-	  //	{
-	  //	  auto ARGS = adjustArgs!(T, A)(t);
-	  //	  auto fn = delegate()
-	  //	    {
-	  //	      dg(ARGS.expand);
-	  //	    };
-	  //	  super(fn, 0);
-	  //	}
-	  // else
-	  // {
-	  // }
-	}
-
-      }
     };
   }
 
@@ -3902,7 +3903,7 @@ template Task(alias F, int R=0, size_t S=0)
 	  // import std.functional; // used for toDelegate
 	  // import std.traits;
 
-	  l = t.new t.TaskT!(T, F, R, S)(t);
+	  l = new TaskT!(T, F, R, S)(t);
 	  // string getFuncName()
 	  // {
 	  //   return "t." ~ __traits(identifier, F);
