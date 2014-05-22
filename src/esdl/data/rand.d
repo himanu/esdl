@@ -12,7 +12,7 @@ import esdl.data.obdd;
 
 import std.ascii: whitespace;
 import std.traits: isSomeString;
-import std.traits: isIntegral;
+import std.traits: isIntegral, isBoolean;
 import esdl.data.bvec: isBitVector;
 import std.algorithm : min, max;
 import esdl.data.bstr;
@@ -190,7 +190,7 @@ struct RandGen
   }
 
   @property public T gen(T)() {
-    static if(isIntegral!T) {
+    static if(isIntegral!T || isBoolean!T) {
       T result = uniform!(T)(_gen);
       return result;
     }

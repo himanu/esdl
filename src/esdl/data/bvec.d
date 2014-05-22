@@ -49,7 +49,7 @@ template isBitVector(T) {
 
 template BitLength(T) {
   static if(isBitVector!T)      enum size_t BitLength = T.SIZE;
-  else static if(is(T == bool)) enum size_t BitLength = 1;
+  else static if(isBoolean!T)   enum size_t BitLength = 1;
     else                        enum size_t BitLength = 8 * T.sizeof;
 }
 
@@ -766,10 +766,10 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     public void setAval(V)(V t)
-      if(is(V == bool) ||
+      if(isBoolean!V ||
 	 (isIntegral!V && V.sizeof*8 <= SIZE) ||
 	 (isBitVector!V && V.SIZE <= SIZE && (! V.IS4STATE))) {
-	static if(is(V == bool)) enum bool _S = false;
+	static if(isBoolean!V) enum bool _S = false;
 	else static if(isBitVector!V) enum bool _S = V.ISSIGNED;
 	  else enum bool _S = isSigned!V;
 	vec!(_S, false, N) v = t;
@@ -780,10 +780,10 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     static if(L) {
       public void setBval(V)(V t)
-	if(is(V == bool) ||
+	if(isBoolean!V ||
 	   (isIntegral!V && V.sizeof*8 <= SIZE) ||
 	   (isBitVector!V && V.SIZE <= SIZE && (! V.IS4STATE))) {
-	  static if(is(V == bool)) enum bool _S = false;
+	  static if(isBoolean!V) enum bool _S = false;
 	  else static if(isBitVector!V) enum bool _S = V.ISSIGNED;
 	    else enum bool _S = isSigned!V;
 	  vec!(_S, false, N) v = t;
@@ -859,7 +859,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       this = ba;
     }
 
-    public this(V)(V [] bits) if(is(V == bool)) {
+    public this(V)(V [] bits) if(isBoolean!V) {
       this = bits;
     }
 
@@ -1017,7 +1017,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       }
 
     // public void opAssign(V)(V other)
-    //   if(is(V == bool))
+    //   if(isBoolean!V)
     //	{
     //	  this._from(other);
     //	}
@@ -1027,7 +1027,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     private void _from(V)(V other)
-      if(is(V == bool)) {
+      if(isBoolean!V) {
 	_aval[0] = cast(store_t) other;
 	static if(L) _bval[0] = 0;
 	static if(STORESIZE > 1) {
@@ -1153,9 +1153,9 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	    }
 	  }
 	  else {
-	    this._aval[0] = cast(StoreT) other[0].aval;
+	    this._aval[0] = cast(store_t) other[0].aval;
 	    static if(IS4STATE) {
-	      this._bval[0] = cast(StoreT) other[0].bval;
+	      this._bval[0] = cast(store_t) other[0].bval;
 	    }
 	  }
       }
@@ -1216,7 +1216,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       }
     }
 
-    public void opAssign(V)(V [] bits) if(is(V == bool)) {
+    public void opAssign(V)(V [] bits) if(isBoolean!V) {
       static if(bits.length > SIZE) {
 	writeln("Warning: truncating array of bool to fit into BitVec");
       }
@@ -1680,7 +1680,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       return ba;
     }
 
-    public V opCast(V)() if(isIntegral!V || is(V == bool)) {
+    public V opCast(V)() if(isIntegral!V || isBoolean!V) {
       static if(L) {
 	V value = cast(V)(this._aval[0] & ~this._bval[0]);
       }
@@ -1915,7 +1915,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     private void reportX(string file = __FILE__,
 			 size_t line = __LINE__, V)(V other)
-      if(isIntegral!V || is(V == bool)) {
+      if(isIntegral!V || isBoolean!V) {
 	static if(this.IS4STATE) {
 	  if(this.isX) {
 	    throw new LogicError(format("Logic value of " ~
@@ -1949,7 +1949,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public bool opEquals(string file = __FILE__,
 			 size_t line = __LINE__, V)(V other)
-      if(isIntegral!V || is(V == bool)) {
+      if(isIntegral!V || isBoolean!V) {
 	reportX!(file, line)(other);
 	alias vec!(typeof(this), vec!V, "COMPARE") P;
 	P lhs = this;
@@ -1969,7 +1969,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public bool isSame(string file = __FILE__,
 		       size_t line = __LINE__, V)(V other)
-      if(isIntegral!V || is(V == bool)) {
+      if(isIntegral!V || isBoolean!V) {
 	alias vec!(typeof(this), vec!V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
