@@ -70,6 +70,16 @@ struct parallelize
   byte _parallel;
 }
 
+struct timeUnit
+{
+  Time _unit;
+}
+
+struct timePrecision
+{
+  Time _precision;
+}
+
 // All ESDL designs are pseudo static. This basically means that any
 // ESDL model would be first elaborated and during the simulation, the
 // elaborated design will remain static. To make it possible to
@@ -255,15 +265,15 @@ package interface NamedObj: EsdlObj, TimeContext
       // immutable
 
 
-      // a plain NamedObj does not have timeUnit, and so
-      // seek the timeUnit from the parent and return it.
+      // a plain NamedObj does not have getTimeUnit, and so
+      // seek the getTimeUnit from the parent and return it.
       static if(!__traits(compiles, _timeScale)) {
-	public final override ulong timeScale() {
-	  return this.getParent.timeScale();
+	public final override ulong getTimeScale() {
+	  return this.getParent.getTimeScale();
 	}
-	// And timeUnit
-	public final override Time timeUnit() {
-	  return this.getParent.timeUnit();
+	// And getTimeUnit
+	public final override Time getTimeUnit() {
+	  return this.getParent.getTimeUnit();
 	}
       }
 
@@ -336,6 +346,25 @@ public interface HierComp: NamedObj
   public CoreSemaphore _esdl__getLockMutex();
   public void _esdl__setEntityMutex(CoreSemaphore parentLock,
 					     byte linfo, byte plinfo);
+
+  static byte _esdl__get_parallelism(L)(L l) {
+    enum int Q = _esdl__attr!(parallelize, L);
+    static if(Q is -1) {
+      enum byte par = -1; // inherit from parent
+    }
+    else {
+      static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			 parallelize)) {
+	enum byte par = byte.min;
+      }
+      else {
+	enum attr = __traits(getAttributes, L)[Q];
+	enum byte par = attr._parallel;
+      }
+    }
+    return par;
+  }
+
   static byte _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
     enum int P = _esdl__attr!(parallelize, t, I);
     enum int Q = _esdl__attr!(parallelize, L);
@@ -364,6 +393,108 @@ public interface HierComp: NamedObj
       else {
 	enum attr = __traits(getAttributes, t.tupleof[I])[P];
 	enum byte par = attr._parallel;
+      }
+    }
+    return par;
+  }
+
+  static Time _esdl__get_timeUnit(L)(L l) {
+    enum int Q = _esdl__attr!(timeUnit, L);
+    static if(Q is -1) {
+      enum Time par = 0.sec; // inherit from parent
+    }
+    else {
+      static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			 timeUnit)) {
+	static assert(false, "Must supply a Time value with @timeUnit");
+      }
+      else {
+	enum attr = __traits(getAttributes, L)[Q];
+	enum Time par = attr._unit;
+      }
+    }
+    return par;
+  }
+  
+  static Time _esdl__get_timeUnit(size_t I, T, L)(T t, ref L l) {
+    enum int P = _esdl__attr!(timeUnit, t, I);
+    enum int Q = _esdl__attr!(timeUnit, L);
+    static if(P is -1) {
+      // check if the entity definition has a timeUnit tag
+      static if(Q is -1) {
+	enum Time par = 0.sec; // inherit from parent
+      }
+      else {
+	static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			   timeUnit)) {
+	  static assert(false, "Must supply a Time value with @timeUnit");
+	}
+	else {
+	  enum attr = __traits(getAttributes, L)[Q];
+	  enum Time par = attr._unit;
+	}
+      }
+    }
+    else {
+      // first check if the attribute is just @timeUnit
+      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
+			 timeUnit)) {
+	static assert(false, "Must supply a Time value with @timeUnit");
+      }
+      else {
+	enum attr = __traits(getAttributes, t.tupleof[I])[P];
+	enum Time par = attr._unit;
+      }
+    }
+    return par;
+  }
+
+  static Time _esdl__get_timePrecision(L)(L l) {
+    enum int Q = _esdl__attr!(timePrecision, L);
+    static if(Q is -1) {
+      enum Time par = 0.sec; // inherit from parent
+    }
+    else {
+      static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			 timePrecision)) {
+	static assert(false, "Must supply a Time value with @timePrecision");
+      }
+      else {
+	enum attr = __traits(getAttributes, L)[Q];
+	enum Time par = attr._precision;
+      }
+    }
+    return par;
+  }
+  
+  static Time _esdl__get_timePrecision(size_t I, T, L)(T t, ref L l) {
+    enum int P = _esdl__attr!(timePrecision, t, I);
+    enum int Q = _esdl__attr!(timePrecision, L);
+    static if(P is -1) {
+      // check if the entity definition has a timePrecision tag
+      static if(Q is -1) {
+	enum Time par = 0.sec; // inherit from parent
+      }
+      else {
+	static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			   timePrecision)) {
+	  static assert(false, "Must supply a Time value with @timePrecision");
+	}
+	else {
+	  enum attr = __traits(getAttributes, L)[Q];
+	  enum Time par = attr._precision;
+	}
+      }
+    }
+    else {
+      // first check if the attribute is just @timePrecision
+      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
+			 timePrecision)) {
+	static assert(false, "Must supply a Time value with @timePrecision");
+      }
+      else {
+	enum attr = __traits(getAttributes, t.tupleof[I])[P];
+	enum Time par = attr._precision;
       }
     }
     return par;
@@ -832,6 +963,100 @@ public interface HierComp: NamedObj
 //   enum bool CheckEsdlTemplateParams = true;
 // }
 
+template CheckInstObj(L)
+{
+  static if(is(L == class) && is(L unused: ElabContext)) {
+    enum bool CheckInstObj = true;
+  }
+  else static if(is(L unused: Inst!Q, Q)) {
+      enum bool CheckInstObj = true;
+    }
+  else static if(isArray!L) {
+      import std.range: ElementType;
+      enum bool CheckInstObj = CheckInstObj!(ElementType!L);
+    }
+    else {
+      enum bool CheckInstObj = false;
+    }
+}
+
+void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
+  if(is(T : ElabContext) && is(T == class)) {
+    static if(I < t.tupleof.length) {
+      import std.string;
+      // ignore the ESDL that have been tagged as _esdl__ignore
+      static if(_esdl__attr!(_esdl__ignore, t, I) == -1) {
+	alias typeof(t.tupleof[I]) L;
+	static if(CheckInstObj!L) {
+	    // multidimensional arrays would need special (recursive)
+	    // handling, therefor arrays are handled by a separate
+	    // function
+	    static if(isArray!L) {
+	      _esdl__configArray!(FOO, I)(t, t.tupleof[I]);
+	    }
+	    else {
+	      // neither ignored, nor an array, so fooorate the object
+	      t.tupleof[I]._esdl__config!(FOO, I)(t, t.tupleof[I]);
+	      debug(ATTRCONFIG) {
+		// debug message for listing the fooorated objects
+		import std.stdio;
+		writeln("Fooorated " ~ typeof(t.tupleof[I]).stringof ~ " : ",
+			I, "/", t.tupleof.length);
+	      }
+	    }
+	  }
+	else {
+	  debug(ATTRCONFIG) {
+	    // debug message for listing the objects, which do not
+	    // seem to be ESDL objects
+	    import std.stdio;
+	    writeln("Ignoring " ~ typeof(t.tupleof[I]).stringof ~ " : ",
+		    I, "/", t.tupleof.length);
+	  }
+	}
+      }
+      else {
+	debug(ATTRCONFIG) {
+	  // debug message for listing the objects that have been
+	  // explicitly tagged to be ignored
+	  import std.stdio;
+	  writeln("Ignoring(@_esdl__ignore) ", t.tupleof[I].stringof ~ " : ",
+		  I, "/", t.tupleof.length);
+	}
+      }
+      // iterate through the next element in the object tuple
+      _esdl__configMems!(FOO, I+1, CI+1)(t);
+    }
+    // recurse through the objects found in the base classes
+    else static if(is(T B == super)
+		   && is(B[0] : ElabContext)
+		   && is(B[0] == class)) {
+	B[0] b = t;
+	debug(ATTRCONFIG) {
+	  // debug message for listing the base classes being
+	  // recursed
+	  import std.stdio;
+	  writeln("*** Fooorating " ~ typeof(b).stringof);
+	}
+	_esdl__configMems!(FOO, 0, CI)(b);
+      }
+  }
+
+void _esdl__configArray(FOO, size_t I, T, L)(T t, ref L l, uint[] indices=null)
+{
+  for(size_t j = 0; j < l.length; ++j) {
+    // pragma(msg, "Adding: ", typeof(l[j]));
+    static if(isArray!(typeof(l[j]))) {
+      _esdl__configArray!(FOO, I)(t, l[j],
+			 indices ~ cast(uint) j);
+    }
+    else {
+      l[j]._esdl__config!(FOO, I)(t, l[j],
+			 indices ~ cast(uint) j);
+    }
+  }
+}
+
 // Template to check during elaboration whether an instance found
 // during the hierarchy navigation is itself an ESDL Object that needs
 // to be elaborated too.
@@ -935,32 +1160,33 @@ void _esdl__elabArray(size_t I, T, L)(T t, ref L l, uint[] indices=null)
   }
 }
 
-// For timing and other configuration
-void _esdl__config(T)(T t)
-  if(is(T : ElabContext)) {
-    synchronized(t) {
-      t.doConfig();
-      foreach(child; t.getChildComps()) {
-	ElabContext hChild = cast(ElabContext) child;
-	if(hChild !is null) {
-	  _esdl__config(hChild);
-	}
-      }
-    }
-  }
 
-void _esdl__postCfg(T)(T t)
-  if(is(T : ElabContext)) {
-    synchronized(t) {
-      t._esdl__postConfig();
-      foreach(child; t.getChildComps()) {
-	ElabContext hChild = cast(ElabContext) child;
-	if(hChild !is null) {
-	  _esdl__postCfg(hChild);
-	}
-      }
-    }
-  }
+// For timing and other configuration
+// void _esdl__config(T)(T t)
+//   if(is(T : ElabContext)) {
+//     synchronized(t) {
+//       t.doConfig();
+//       foreach(child; t.getChildComps()) {
+// 	ElabContext hChild = cast(ElabContext) child;
+// 	if(hChild !is null) {
+// 	  _esdl__config(hChild);
+// 	}
+//       }
+//     }
+//   }
+
+// void _esdl__postCfg(T)(T t)
+//   if(is(T : ElabContext)) {
+//     synchronized(t) {
+//       t._esdl__postConfig();
+//       foreach(child; t.getChildComps()) {
+// 	ElabContext hChild = cast(ElabContext) child;
+// 	if(hChild !is null) {
+// 	  _esdl__postCfg(hChild);
+// 	}
+//       }
+//     }
+//   }
 
 // Hook provided for the user to call any code he wishes to just
 // before starting the simulation
@@ -1162,6 +1388,68 @@ public interface ElabContext: HierComp
 	    }
 	}
       }
+    }
+  }
+
+  static void _esdl__config(FOO, L)
+    (L l) {
+    // debug(ATTRCONFIG) {
+    //   import std.stdio;
+    //   writeln("** ElabContext: Fooorating " ~ l.tupleof[I].stringof ~ ":" ~
+    // 	      typeof(l).stringof);
+    // }
+    synchronized(l) {
+      static assert(is(L unused: ElabContext),
+		    "Only ElabContext components are allowed to instantiate "
+		    "other ElabContext components");
+      static if(is(FOO == timePrecision)) {
+	auto tpinfo = _esdl__get_timePrecision(l);
+	l._esdl__setTimePrecision(tpinfo);
+      }
+      static if(is(FOO == timeUnit)) {
+	auto tuinfo = _esdl__get_timeUnit(l);
+	l._esdl__setTimeUnit(tuinfo);
+      }
+      _esdl__configMems!(FOO)(l);
+    }
+  }
+
+  static void _esdl__config(FOO, size_t I, T, L)
+    (T t, ref L l, uint[] indices=null) {
+    debug(ATTRCONFIG) {
+      import std.stdio;
+      writeln("** ElabContext: Fooorating " ~ t.tupleof[I].stringof ~ ":" ~
+	      typeof(l).stringof);
+    }
+    synchronized(l) {
+      static assert(is(T unused: ElabContext),
+		    "Only ElabContext components are allowed to instantiate "
+		    "other ElabContext components");
+      static if(is(FOO == timePrecision)) {
+	auto tpinfo = _esdl__get_timePrecision!I(t, l);
+	l._esdl__setTimePrecision(tpinfo);
+      }
+      static if(is(FOO == timeUnit)) {
+	auto tuinfo = _esdl__get_timeUnit!I(t, l);
+	l._esdl__setTimeUnit(tuinfo);
+      }
+      _esdl__configMems!(FOO)(l);
+    }
+  }
+
+  static void _esdl__elab(L) (L l) {
+    debug(ELABORATE) {
+      import std.stdio;
+      writeln("** ElabContext: Elaborating RootEntity **");
+    }
+    synchronized(l) {
+      import core.sync.semaphore: Semaphore;
+      auto linfo = _esdl__get_parallelism(l);
+      l._esdl__setEntityMutex(null, linfo, 1);
+      l.doBuild();
+      l._esdl__postBuild();
+      _esdl__elabMems(l);
+      l._esdl__postElab();
     }
   }
 
@@ -2657,7 +2945,7 @@ private EventObj getEventObj(E)(ref E e) {
     }
   else static if(isIntegral!E) {
       // if the task is already terminated, return null
-      // wait(SimTime(n * this.timeScale));
+      // wait(SimTime(n * this.getTimeScale));
       Event event = Event();
       event.notify(e);
       return event.getEvent();
@@ -3825,9 +4113,9 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 	  // this._phase = SimPhase.CONFIGURE;
 	  if(this._timeScale is 0 && scale is 0) {
 	    import std.stdio;
-	    writeln("********** No default timeUnit specified; "
-		    "setting timeUnit to 1.nsec");
-	    this.timeUnit = 1.nsec;
+	    writeln("********** No default getTimeUnit specified; "
+		    "setting getTimeUnit to 1.nsec");
+	    this._esdl__setTimeUnit = 1.nsec;
 	  }
 
 	  if(this._timeScale is 0) {
@@ -5797,11 +6085,7 @@ void execElab(T)(T t)
 	// At some stage we would like to include Tasks too.
 	writeln(">>>>>>>>>> Starting Phase: ELABORATE");
 	t.getSimulator.setPhase = SimPhase.ELABORATE;
-	t.doBuild();
-	t._esdl__postBuild();
-	// _esdl__elabIterSuper(t);
-	_esdl__elabMems(t);
-	t._esdl__postElab();
+	t._esdl__elab(t);
 
 	// Each module is allowed to override the config() method
 	// which is declared in the Entity class. The config methods
@@ -5811,14 +6095,17 @@ void execElab(T)(T t)
 	// reflected at the EsdlSimulator level.
 	writeln(">>>>>>>>>> starting Phase: CONFIGURE");
 	t.getSimulator.setPhase = SimPhase.CONFIGURE;
-	_esdl__config(t);
+	t._esdl__config!timePrecision(t);
+	t._esdl__config!timeUnit(t);
+
+	// _esdl__config(t);
 
 	// Precision is now set call _esdl__config again to fix timeScale
-	getRootEntity.timePrecisionSet = true;
-	_esdl__config(t);
+	// getRootEntity.timePrecisionSet = true;
+	// _esdl__config(t);
 	// Propagate the timeScale to the hierarchy, whereever required
 	t.fixTimeParameters();
-	_esdl__postCfg(t);
+	// _esdl__postCfg(t);
 
 	// Each module is allowed to override the doConnect() method
 	// which is declared in the Entity class. The doConnect methods
@@ -6879,13 +7166,13 @@ abstract class RootEntity: RootEntityIntf
 
   public override void initRoutine() {
     _esdl__rootEntity = this;
-    _esdl__timeScale = Routine.self.timeScale();
+    _esdl__timeScale = Routine.self.getTimeScale();
     _esdl__simPhase = SimPhase.SIMULATE;
   }
 
   public override void initProcess() {
     _esdl__rootEntity = this;
-    _esdl__timeScale = Process.self.timeScale();
+    _esdl__timeScale = Process.self.getTimeScale();
     _esdl__simPhase = SimPhase.SIMULATE;
   }
 

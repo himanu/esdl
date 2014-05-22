@@ -186,19 +186,19 @@ unittest {
 
 interface TimeContext
 {
-  public Time timeUnit();
-  public ulong timeScale();
+  public Time getTimeUnit();
+  public ulong getTimeScale();
 }
 
 interface TimeConfigContext: TimeContext
 {
-  public Time timeUnit();
-  protected void timeUnit(Time t);
-  protected void timePrecision(Time t);
-  public ulong timeScale();
-  package void timeScale(ulong t);
+  public Time getTimeUnit();
+  protected void _esdl__setTimeUnit(Time t);
+  protected void _esdl__setTimePrecision(Time t);
+  public ulong getTimeScale();
+  package void _esdl__setTimeScale(ulong t);
   public final SimTime tu(ulong val) {
-    return SimTime(val*timeScale());
+    return SimTime(val*getTimeScale());
   }
   // SimTime Time(ulong val, TimeUnit unit);
   // SimTime Time(string unit="default")(ulong val);
@@ -210,15 +210,9 @@ interface TimeConfigContext: TimeContext
     return q{
       protected ulong _timeScale = 0;
 
-      override protected void timeUnit(Time t) {
+      override protected void _esdl__setTimeUnit(Time t) {
 	synchronized(this) {
-	  // do not do anything in the first pass
-	  if(getRootEntity.timePrecisionSet()) {
-	    if(getSimPhase() !is SimPhase.CONFIGURE) {
-	      assert(false,
-		     "timeUnit may only be called from"
-		     " within doConfig method");
-	    }
+	  if(! t.isZero()) {
 	    Time prec = getRootEntity.getTimePrecision.normalize();
 	    Time tuni = t.normalize();
 	    if(prec._unit > tuni._unit ||
@@ -226,7 +220,7 @@ interface TimeConfigContext: TimeContext
 	    	prec._value) !is 0) {
 	      import std.string: format;
 	      assert(false,
-	    	     format("timeUnit %s incompatible with timePrecision %s",
+	    	     format("setTimeUnit %s incompatible with setTimePrecision %s",
 	    		    tuni, prec));
 	    }
 	    _timeScale =
@@ -235,32 +229,34 @@ interface TimeConfigContext: TimeContext
 	}
       }
 
-      override protected void timePrecision(Time t) {
+      override protected void _esdl__setTimePrecision(Time t) {
 	import esdl.base.core;
-	if(! getRootEntity.timePrecisionSet()) {
-	  if(getSimPhase() !is SimPhase.CONFIGURE) {
-	    assert(false,
-		   "timePrecision should only be called from"
-		   " within doConfig method");
-	  }
-	  setTimePrecision(t.normalize());
+	// if(! getRootEntity.timePrecisionSet()) {
+	//   if(getSimPhase() !is SimPhase.CONFIGURE) {
+	//     assert(false,
+	// 	   "_esdl__setTimePrecision should only be called from"
+	// 	   " within doConfig method");
+	//   }
+	if(! t.isZero()) {
+	  _esdl__setTimePrecision(t.normalize());
 	}
+	// }
       }
       
-      override public Time timeUnit() {
+      override public Time getTimeUnit() {
 	synchronized(this) {
 	  return this._timeScale * getTimePrecision;
 	}
       }
 
-      override public ulong timeScale() {
+      override public ulong getTimeScale() {
 	synchronized(this)
 	  {
 	    return this._timeScale;
 	  }
       }
 
-      package void timeScale(ulong t) {
+      package void getTimeScale(ulong t) {
 	synchronized(this) {
 	  this._timeScale = t;
 	}
@@ -317,7 +313,7 @@ struct SimTime
 
   public this(TimeConfigContext context, long val) {
     synchronized(context) {
-      this._value = val * context.timeScale;
+      this._value = val * context.getTimeScale;
     }
   }
 
@@ -442,7 +438,7 @@ immutable SimTime DELTA = SimTime(0L);
 
 immutable SimTime MAX_SIMULATION_TIME = SimTime(long.max);
 
-public void setTimePrecision(Time t) {
+public void _esdl__setTimePrecision(Time t) {
   _isPowerOf10(t._value) ||
     assert(false, "timePrecision takes only powers of 10 as arguments");
   import esdl.base.core: getRootEntity;

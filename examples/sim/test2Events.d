@@ -42,6 +42,7 @@ class Foo: Entity {
   }
 }
 
+@timeUnit(100.psec)
 @parallelize
 class Sim: RootEntity {
   
