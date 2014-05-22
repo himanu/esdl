@@ -1710,12 +1710,18 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 		     "of the net" ~ net);
 	    }
 	  }
-	  else {
-	    if(size !is 8 * T.sizeof) {
-	      assert(false, "hdlBind: Signal size does not match with the size"
-		     "of the net" ~ net);
+	  else static if(isBoolean!T) {
+	      if(size !is 1) {
+		assert(false, "hdlBind: Signal size does not match with the size"
+		       "of the net" ~ net);
+	      }
 	    }
-	  }
+	    else {
+	      if(size !is 8 * T.sizeof) {
+		assert(false, "hdlBind: Signal size does not match with the size"
+		       "of the net" ~ net);
+	      }
+	    }
 
 	  import core.stdc.stdlib;
 	  auto p_cb = cast(p_cb_data)
