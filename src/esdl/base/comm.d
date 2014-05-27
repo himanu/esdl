@@ -1585,21 +1585,21 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   
   // no need for synchronized
   public final override void update() {
-    if(_newVal != _curVal) {
-      _curVal = _newVal;
-      _changeEvent.post(0, _curVal);
-      version(COSIM_VERILOG) {
-	if(_updateReason !is UpdateReason.VERILOG) {
-	  this.hdlPut();
-	}
-      }
-      static if(is(T == bool) || is(T == bit) || is(T == logic)) {
-	if(_posedgeEvent._eventObj !is null) {
-	  if(_newVal == true) _posedgeEvent.notify(0);
-	  if(_newVal == false) _negedgeEvent.notify(0);
-	}
+    // if(_newVal != _curVal) {
+    _curVal = _newVal;
+    _changeEvent.post(0, _curVal);
+    version(COSIM_VERILOG) {
+      if(this._updateReason !is UpdateReason.VERILOG) {
+	this.hdlPut();
       }
     }
+    static if(is(T == bool) || is(T == bit) || is(T == logic)) {
+      if(_posedgeEvent._eventObj !is null) {
+	if(_newVal == true) _posedgeEvent.notify(0);
+	if(_newVal == false) _negedgeEvent.notify(0);
+      }
+    }
+    // }
   }
 
   static if(is(T == bool) || is(T == bit) || is(T == logic)) {
