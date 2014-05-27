@@ -1415,7 +1415,7 @@ public interface ElabContext: HierComp
   }
 
   static void _esdl__config(FOO, size_t I, T, L)
-    (T t, ref L l, uint[] indices=null) {
+    (T t, L l, uint[] indices=null) {
     debug(ATTRCONFIG) {
       import std.stdio;
       writeln("** ElabContext: Fooorating " ~ t.tupleof[I].stringof ~ ":" ~
@@ -4060,6 +4060,16 @@ public void srandom(uint _seed) {
   static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
     l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
   }
+
+  static void _esdl__config(FOO, L) (L l) {
+    l._esdl__objRef._esdl__config(l._esdl__objRef);
+  }
+
+  static void _esdl__config(FOO, size_t I, T, L)
+    (T t, L l, uint[] indices=null) {
+    l._esdl__objRef._esdl__config!(FOO, I)(t, l._esdl__objRef, indices);
+  }
+
   static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
   {
     debug(ELABORATE) {
@@ -4275,19 +4285,32 @@ template Task(alias F, int R=0, size_t S=0)
 
 private auto recreateDelegate(alias F, T)(T _entity)
 {
-  final string getFuncName() {
-    return "_entity." ~ __traits(identifier, F);
+  // import std.traits: ReturnType, ParameterTypeTuple;
+  import std.functional: toDelegate;
+  union DelegateUnion(DG, FT)
+  {
+    DG dg;
+    alias dg this;
+    struct
+    {
+      void* ptr;
+      FT funcptr;
+    }
   }
 
-  // does not work for functions with default arguments
-  // typeof(toDelegate(&F)) dg;
-  // pragma(msg, getFuncName());
-  typeof(& mixin(getFuncName())) dg;
+  // ReturnType!F delegate(ParameterTypeTuple!F) dg;
+  alias typeof(toDelegate(&F)) DG;
+  // alias typeof(dg) DG;
+  alias typeof(&F) FT;
 
-  dg.funcptr = &F;
-  dg.ptr = cast(void *) _entity;
+  DelegateUnion!(DG, FT) du;
+  
+  // DG dg;
 
-  return dg;
+  du.funcptr = &F;
+  du.ptr = cast(void *) _entity;
+
+  return du.dg;
 }
 
 // auto adjustArgs(T, A...)(T t)

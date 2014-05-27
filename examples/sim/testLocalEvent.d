@@ -31,13 +31,10 @@ class Foo: Entity {
   Task!hello helloWorld;
   // Process!hello helloProcess;
       
-  override void doConfig() {
-    timePrecision = 10.psec;
-    timeUnit = 100.psec;
-  }
-
 }
 
+@timeUnit(100.psec)
+@timePrecision(10.psec)
 class Sim: RootEntity {
 
   this(string name) {
@@ -48,10 +45,6 @@ class Sim: RootEntity {
     // srandom(0);
   }
 
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-  }
 }
 
 void main()
