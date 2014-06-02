@@ -3402,7 +3402,24 @@ final class EventNotice
   }
 
   private TimeNoticeUnion unionTimeNext;
-  alias unionTimeNext this;
+
+  private EventNotice next() {
+    return unionTimeNext._next;
+  }
+
+  private void next(EventNotice n) {
+    unionTimeNext._next = n;
+  }
+
+  private SimTime time() {
+    return unionTimeNext._time;
+  }
+
+  private void time(SimTime t) {
+    unionTimeNext._time = t;
+  }
+
+  // alias unionTimeNext this;
 
   private TimedEvent _event;
 
@@ -3418,8 +3435,8 @@ final class EventNotice
       EventNotice f;
       if(freelist !is null) {
 	f = freelist;
-	freelist = f._next;
-	f._time = t;
+	freelist = f.next;
+	f.time = t;
 	f._event = event;
       }
       else {
@@ -3447,14 +3464,14 @@ final class EventNotice
 
   static void dealloc(EventNotice f) {
     f._event = null;
-    f._next = freelist;
+    f.next = freelist;
     freelist = f;
   }
 
   // _time is effectively immutable
   package final SimTime atTime() {
     // synchronized(this) {
-    return this._time;
+    return this.time;
     // }
   }
 
@@ -3475,7 +3492,7 @@ final class EventNotice
   // make new not callable directly -- private
   private this(SimTime t, TimedEvent event) {
     synchronized(this) {
-      this._time = t;
+      this.time = t;
       this._event = event;
     }
   }
@@ -3484,7 +3501,7 @@ final class EventNotice
     // if(rhs is null) return -1;
     // if(this is null) return 1;
     synchronized(this, rhs) {
-      return this._time.opCmp(rhs._time);
+      return this.time.opCmp(rhs.time);
     }
   }
 }
