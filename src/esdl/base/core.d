@@ -4442,13 +4442,6 @@ abstract class SimThread: Thread
     _persist.drop(getSimulator);
   }
 
-  public abstract void waitSensitiveP(EventObj event);
-  public abstract void waitSensitive(EventObj event);
-  public abstract void waitSensitiveP();
-  public abstract void waitSensitive();
-  public abstract void nextTrigger(EventObj event);
-  public abstract EventObj nextTrigger();
-
   public abstract RootEntityIntf getRoot();
   public abstract EsdlSimulator getSimulator();
 
@@ -4462,7 +4455,6 @@ abstract class SimProcess: SimThread
     synchronized(this) {
       super(fn, sz);
       _waitLock = new Semaphore(0);
-      state = ProcState.STARTING;
     }
   }
 
@@ -4470,13 +4462,7 @@ abstract class SimProcess: SimThread
     synchronized(this) {
       super(dg, sz);
       _waitLock = new Semaphore(0);
-      state = ProcState.STARTING;
     }
-  }
-
-  final void caughtException() {
-    state = ProcState.EXCEPTION;
-    // _execLock.notify();
   }
 
   static if(!__traits(compiles, _esdl__root)) {
@@ -4516,9 +4502,6 @@ abstract class SimProcess: SimThread
   // class State {};
   //  private State _stateMonitor;
 
-  private ProcState _state = ProcState.STARTING;
-  private bool _dontInit      = false;
-  private ProcState _origState;
   private bool _hasStarted = false;
 
   private final  bool hasStarted() {
@@ -4532,170 +4515,6 @@ abstract class SimProcess: SimThread
     super.start();
   }
 
-  private final ProcState state() {
-    synchronized(this /*_stateMonitor*/) {
-      debug(THREAD) {
-	import std.stdio;
-	Process t = cast(Process) this;
-	if(t !is null)
-	  writeln(t.getFullName, ": Thread is ", _state);
-      }
-      return _state;
-    }
-  }
-
-  protected ProcStateReq reqState() {
-    assert(false, "This function is overriden in the derived function");
-  }
-
-  protected bool reqIsRec() {
-    assert(false, "This function is overriden in the derived function");
-  }
-
-  private final void state(ProcState s) {
-    synchronized(this /*_stateMonitor*/) {
-      debug(THREAD) {
-	import std.stdio;
-	Process t = cast(Process) this;
-	if(t !is null)
-	  writeln(t.getFullName, ": Setting Thread to ", s);
-      }
-      _state = s;
-    }
-  }
-
-  private final bool isAlive() {
-    synchronized(this /*_stateMonitor*/) {
-      return(_state == ProcState.WAITING ||
-	     _state == ProcState.SUSPENDED ||
-	     _state == ProcState.DISABLED);
-    }
-  }
-
-  private final void requestSuspend() {
-    synchronized(this) {
-      if(_state == ProcState.STARTING ||
-	 _state == ProcState.WAITING) {
-	this._origState = this._state;
-	this._state = ProcState.SUSPENDED;
-      }
-      else {
-	assert(false, "Cannot suspend a process in state " ~ _state);
-      }
-    }
-  }
-
-  private final void requestDisable() {
-    synchronized(this) {
-      if(_state == ProcState.STARTING ||
-	 _state == ProcState.WAITING) {
-	this._origState = this._state;
-	this._state = ProcState.DISABLED;
-      }
-      else {
-	assert(false, "Cannot disable a process in state " ~ _state);
-      }
-    }
-  }
-
-  // returns true if the process immediately needs to start running
-  private final bool requestResume() {
-    if(_state == ProcState.SUSPENDED) {
-      if(_origState == ProcState.RUNNING) {
-	_state = ProcState.WAITING;
-	return true;
-      } else {
-	_state = _origState;
-	return false;
-      }
-    }
-    // ignore all the threads that are not in the SUSPENDED state
-    return false;
-  }
-
-  private final void requestEnable() {
-    if(_state == ProcState.DISABLED) {
-      _state = _origState;
-      return;
-    }
-    // ignore all other states
-    return;
-  }
-
-  // returns true if the task requires explicit termination
-  private final bool requestAbort() {
-    if(_isDefunct()) return false;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.ABORTED;
-      return false; // has not started yet -- no need to terminate
-    }
-    else {
-      _state = ProcState.ABORTED;
-      return true;  // thread needs to be terminated
-    }
-  }
-    
-  private final bool requestKill() {
-    if(_isDefunct()) return false;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.KILLED;
-      return false;
-    }
-    else {
-      _state = ProcState.KILLED;
-      return true;
-    }
-  }
-
-  public final bool _isActive() {
-    return (_state <= _ACTIVE);
-  }
-
-  public final bool isActive() {
-    synchronized(this) {
-      return (_state <= _ACTIVE);
-    }
-  }
-
-  public final bool _isRunnable() {
-    return (_state < _DEFUNCT);
-  }
-
-  public final bool isRunnable() {
-    synchronized(this) {
-      return (_state < _DEFUNCT);
-    }
-  }
-
-  public final bool _isDefunct() {
-    return(_state >= _DEFUNCT);
-  }
-
-  public final bool isDefunct() {
-    synchronized(this) {
-      return(_state >= _DEFUNCT);
-    }
-  }
-
-  public final bool _isKilled() {
-    return(_state >= _KILLED);
-  }
-
-  public final bool isKilled() {
-    synchronized(this) {
-      return(_state >= _KILLED);
-    }
-  }
-
-
-  class TermException: Throwable
-  {
-    this() {
-      super("Process Terminated");
-    }
-  }
 
 }
 
@@ -4886,6 +4705,8 @@ class Process: SimProcess, EventClient, Procedure
   }
 	
 	
+  private bool _dontInit      = false;
+
   public final void dontInitialize() {
     synchronized(this) {
       if(_state !is ProcState.STARTING) {
@@ -5037,6 +4858,7 @@ class Process: SimProcess, EventClient, Procedure
       _timed = new EventObj(this);
 
       super(() {fn_wrap(fn);}, sz);
+      state = ProcState.STARTING;
       this.setRandomSeed();
       if(Process.self || Routine.self) {
 	this._esdl__fixParent();
@@ -5057,12 +4879,25 @@ class Process: SimProcess, EventClient, Procedure
       _timed = new EventObj(this);
 
       super(() {dg_wrap(dg);}, sz);
+      state = ProcState.STARTING;
       this.setRandomSeed();
       if(Process.self || Routine.self) {
 	this._esdl__fixParent();
 	this.reqRegisterProcess(stage);
       }
     }
+  }
+
+  class TermException: Throwable
+  {
+    this() {
+      super("Process Terminated");
+    }
+  }
+
+  final void caughtException() {
+    state = ProcState.EXCEPTION;
+    // _execLock.notify();
   }
 
   private final void fn_wrap(void function() fn) {
@@ -5151,7 +4986,7 @@ class Process: SimProcess, EventClient, Procedure
     this.cleanup();
   }
 
-  public final override void waitSensitive() {
+  public final void waitSensitive() {
     EventObj event = this.sensitiveTo();
     if(event is null) {
       assert(false,
@@ -5160,7 +4995,7 @@ class Process: SimProcess, EventClient, Procedure
     this.waitSensitive(event);
   }
 
-  public final override void waitSensitiveP() {
+  public final void waitSensitiveP() {
     EventObj event = this.sensitiveTo();
     if(event is null) {
       assert(false,
@@ -5169,13 +5004,13 @@ class Process: SimProcess, EventClient, Procedure
     this.waitSensitiveP(event);
   }
 
-  public final override void waitSensitiveP(EventObj event) {
+  public final void waitSensitiveP(EventObj event) {
     if(! event.triggered) {
       waitSensitive(event);
     }
   }
 
-  public final override void waitSensitive(EventObj event) {
+  public final void waitSensitive(EventObj event) {
     event.addClientProcess(this);
     state = ProcState.WAITING;
     this.getSimulator.freeLock(this);
@@ -5222,7 +5057,7 @@ class Process: SimProcess, EventClient, Procedure
   private ProcStateReq _reqState; // requested state
   private bool _reqIsRec; // requested state
 
-  protected final override ProcStateReq reqState() {
+  protected final ProcStateReq reqState() {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5244,7 +5079,7 @@ class Process: SimProcess, EventClient, Procedure
     getSimulator().reqUpdateProc(this);
   }
 
-  protected final override bool reqIsRec() {
+  protected final bool reqIsRec() {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5332,14 +5167,6 @@ class Process: SimProcess, EventClient, Procedure
     }
   }
 
-  public final override void nextTrigger(EventObj event) {
-    assert(false, "Can not call nextTrigger from a Process");
-  }
-
-  public final override EventObj nextTrigger() {
-    assert(false, "Can not call nextTrigger from a Process");
-  }
-
   public final override Process[] getChildTasks() {
     return [];
   }
@@ -5370,6 +5197,154 @@ class Process: SimProcess, EventClient, Procedure
 
   public final override void _esdl__addChildTask(Process child) {}
   public final override void _esdl__addChildComp(HierComp child) {}
+
+  public final bool _isKilled() {
+    return(_state >= _KILLED);
+  }
+
+  public final bool isKilled() {
+    synchronized(this) {
+      return(_state >= _KILLED);
+    }
+  }
+
+  private ProcState _state = ProcState.STARTING;
+  private ProcState _origState;
+
+  private final ProcState state() {
+    synchronized(this /*_stateMonitor*/) {
+      debug(THREAD) {
+	import std.stdio;
+	writeln(getFullName, ": Thread is ", _state);
+      }
+      return _state;
+    }
+  }
+
+  private final void state(ProcState s) {
+    synchronized(this /*_stateMonitor*/) {
+      debug(THREAD) {
+	import std.stdio;
+	writeln(getFullName, ": Setting Thread to ", s);
+      }
+      _state = s;
+    }
+  }
+
+  private final bool isAlive() {
+    synchronized(this /*_stateMonitor*/) {
+      return(_state == ProcState.WAITING ||
+	     _state == ProcState.SUSPENDED ||
+	     _state == ProcState.DISABLED);
+    }
+  }
+
+  private final void requestSuspend() {
+    synchronized(this) {
+      if(_state == ProcState.STARTING ||
+	 _state == ProcState.WAITING) {
+	this._origState = this._state;
+	this._state = ProcState.SUSPENDED;
+      }
+      else {
+	assert(false, "Cannot suspend a process in state " ~ _state);
+      }
+    }
+  }
+
+  private final void requestDisable() {
+    synchronized(this) {
+      if(_state == ProcState.STARTING ||
+	 _state == ProcState.WAITING) {
+	this._origState = this._state;
+	this._state = ProcState.DISABLED;
+      }
+      else {
+	assert(false, "Cannot disable a process in state " ~ _state);
+      }
+    }
+  }
+
+  // returns true if the process immediately needs to start running
+  private final bool requestResume() {
+    if(_state == ProcState.SUSPENDED) {
+      if(_origState == ProcState.RUNNING) {
+	_state = ProcState.WAITING;
+	return true;
+      } else {
+	_state = _origState;
+	return false;
+      }
+    }
+    // ignore all the threads that are not in the SUSPENDED state
+    return false;
+  }
+
+  private final void requestEnable() {
+    if(_state == ProcState.DISABLED) {
+      _state = _origState;
+      return;
+    }
+    // ignore all other states
+    return;
+  }
+
+  // returns true if the task requires explicit termination
+  private final bool requestAbort() {
+    if(_isDefunct()) return false;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+      return false; // has not started yet -- no need to terminate
+    }
+    else {
+      _state = ProcState.ABORTED;
+      return true;  // thread needs to be terminated
+    }
+  }
+    
+  private final bool requestKill() {
+    if(_isDefunct()) return false;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+      return false;
+    }
+    else {
+      _state = ProcState.KILLED;
+      return true;
+    }
+  }
+
+  public final bool _isActive() {
+    return (_state <= _ACTIVE);
+  }
+
+  public final bool isActive() {
+    synchronized(this) {
+      return (_state <= _ACTIVE);
+    }
+  }
+
+  public final bool _isRunnable() {
+    return (_state < _DEFUNCT);
+  }
+
+  public final bool isRunnable() {
+    synchronized(this) {
+      return (_state < _DEFUNCT);
+    }
+  }
+
+  public final bool _isDefunct() {
+    return(_state >= _DEFUNCT);
+  }
+
+  public final bool isDefunct() {
+    synchronized(this) {
+      return(_state >= _DEFUNCT);
+    }
+  }
 }
 
 // A specialized class for single process forks -- this class exists
@@ -5868,25 +5843,6 @@ class RootProcess: SimThread, Procedure
     super(() {dg_wrap(dg);}, sz);
   }
 
-  public final override void waitSensitiveP(EventObj event) {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void waitSensitive(EventObj event) {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void waitSensitive() {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void waitSensitiveP() {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void nextTrigger(EventObj event) {
-    assert(false, "Can not call nextTrigger from RootProcess");
-  }
-  public final override EventObj nextTrigger() {
-    assert(false, "Can not call nextTrigger from RootProcess");
-  }
-
   @_esdl__ignore Random _randGen;
 
   protected final override ref Random randGen() {
@@ -5965,7 +5921,7 @@ private enum ProcStateReq: byte
       }
 
 
-class RoutineThread: SimProcess
+class PoolThread: SimProcess
 {
 
   static if(!__traits(compiles, _esdl__root)) {
@@ -5982,13 +5938,13 @@ class RoutineThread: SimProcess
 
   private final void execRoutineProcess() {
     Routine routine = null;
-    _esdl__root.simulator()._executor._routineThreadStartBarrier.wait();
+    _esdl__root.simulator()._executor._poolThreadStartBarrier.wait();
     while(true) {
       // wait for next cycle
       this._waitLock.wait();
 
       if(this._hasHalted()) {
-	_esdl__root.simulator()._executor._routineThreadBarrier.wait();
+	_esdl__root.simulator()._executor._poolThreadBarrier.wait();
 	break;
       }
 
@@ -5999,13 +5955,13 @@ class RoutineThread: SimProcess
 	routine._dg();
 	routine = this._esdl__root.simulator()._executor.nextRoutine();
       }
-      _esdl__root.simulator()._executor._routineThreadBarrier.wait();
+      _esdl__root.simulator()._executor._poolThreadBarrier.wait();
 
     }
   }
 
 
-private bool _halted = false;
+  private bool _halted = false;
 
   private final bool _hasHalted() {
     synchronized(this) {
@@ -6027,33 +5983,8 @@ private bool _halted = false;
     super.start();
   }
 
-  public final override EventObj nextTrigger() {
-    synchronized(this) {
-      return Routine.self.nextTrigger();
-    }
-  }
-
-  public final override void nextTrigger(EventObj event) {
-    synchronized(this) {
-      Routine.self.nextTrigger(event);
-    }
-  }
-
-  public final override void waitSensitiveP(EventObj event) {
-    assert(false, "Can not call wait from a Routine");
-  }
-  public final override void waitSensitive(EventObj event) {
-    assert(false, "Can not call wait from a Routine");
-  }
-  public final override void waitSensitive() {
-    assert(false, "Can not call wait from a Routine");
-  }
-  public final override void waitSensitiveP() {
-    assert(false, "Can not call wait from a Routine");
-  }
-
   public final override RootEntityIntf getRoot() {
-    assert(false, "getRoot not available in RoutineThread");
+    assert(false, "getRoot not available in PoolThread");
   }
 }
 
@@ -6172,7 +6103,7 @@ void execElab(T)(T t)
 	_esdl__endElab(t);
 
 	t.getSimulator._executor.initRoutineThreads();
-	t.getSimulator._executor._routineThreadStartBarrier.wait();
+	t.getSimulator._executor._poolThreadStartBarrier.wait();
 
 	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
@@ -6209,8 +6140,8 @@ class EsdlExecutor: EsdlExecutorIf
   import esdl.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
   private Barrier _procBarrier;
-  private Barrier _routineThreadBarrier;
-  private Barrier _routineThreadStartBarrier;
+  private Barrier _poolThreadBarrier;
+  private Barrier _poolThreadStartBarrier;
   // private size_t _numThreads;
   // private ProcessMonitor _monitor;
   // private Semaphore _termSemaphore;
@@ -6241,7 +6172,7 @@ class EsdlExecutor: EsdlExecutorIf
   // these routines are dontInit
   private Routine[][] _registeredRoutines;
 
-  private RoutineThread[] _routineThreads = null;
+  private PoolThread[] _poolThreads = null;
 
   private int _minStage = int.max;
   private int _stage;
@@ -6276,18 +6207,18 @@ class EsdlExecutor: EsdlExecutorIf
 
   private final void createRoutineThreads(size_t numThreads,
 				    size_t stackSize) {
-    _routineThreads.length = numThreads;
+    _poolThreads.length = numThreads;
     for(size_t i=0; i!=numThreads; ++i) {
       debug {
 	import std.stdio;
 	writeln("Creating Routine Threads: ", i);
       }
-      _routineThreads[i] = new RoutineThread(_simulator, stackSize);
+      _poolThreads[i] = new PoolThread(_simulator, stackSize);
     }
   }
 
   private final void initRoutineThreads() {
-    foreach(rt; _routineThreads) {
+    foreach(rt; _poolThreads) {
       rt.initialize();
     }
   }
@@ -6602,12 +6533,12 @@ class EsdlExecutor: EsdlExecutorIf
 	_procSemaphore = new Semaphore(cast(uint)numThreads);
       }
       debug(BARRIER) {
-	_routineThreadBarrier = new DebugBarrier(cast(uint)numThreads + 1);
-	_routineThreadStartBarrier = new DebugBarrier(cast(uint)numThreads + 1);
+	_poolThreadBarrier = new DebugBarrier(cast(uint)numThreads + 1);
+	_poolThreadStartBarrier = new DebugBarrier(cast(uint)numThreads + 1);
       }
       else {
-	_routineThreadBarrier = new Barrier(cast(uint)numThreads + 1);
-	_routineThreadStartBarrier = new Barrier(cast(uint)numThreads + 1);
+	_poolThreadBarrier = new Barrier(cast(uint)numThreads + 1);
+	_poolThreadStartBarrier = new Barrier(cast(uint)numThreads + 1);
       }
       // _termBarrier = new Barrier(// cast(uint)tasks.length +
       //			 1);
@@ -6617,20 +6548,20 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   public final void execRoutines() {
-    foreach(ref _routineThread; this._routineThreads) {
-      _routineThread._waitLock.notify();
+    foreach(ref _poolThread; this._poolThreads) {
+      _poolThread._waitLock.notify();
     }
-    _routineThreadBarrier.wait();
+    _poolThreadBarrier.wait();
   }
 
   public final void haltRoutines() {
     import std.stdio: writeln;
     writeln(" > Shutting down all the Routine Threads ....");
-    foreach(ref _routineThread; this._routineThreads) {
-      _routineThread._halt();
-      _routineThread._waitLock.notify();
+    foreach(ref _poolThread; this._poolThreads) {
+      _poolThread._halt();
+      _poolThread._waitLock.notify();
     }
-    _routineThreadBarrier.wait();
+    _poolThreadBarrier.wait();
   }
 
   public final void execProcs() {
