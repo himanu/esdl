@@ -1578,8 +1578,7 @@ interface EventAgent
   protected void trigger(EsdlSimulator sim);
   protected void addClientEvent(SimEvent client, size_t index);
   // A Process(Process or Routine) can be client to only one Event Agent
-  // protected void addClientProc(EventClient client);
-  protected void addClientProcess(Process client);
+  protected void addClientTask(Process client);
   protected void addClientRoutine(Routine client);
 }
 
@@ -2218,7 +2217,7 @@ public class EventObj: EventAgent, NamedObj
   private IndexedSimEvent[] _clientEvents;
 
   // Processes that are waiting for this event to trigger
-  private Process[] _clientProcs;
+  private Process[] _clientTasks;
   // Routines that would be triggered by this event
   private Routine[] _clientRoutines;
 
@@ -2254,9 +2253,9 @@ public class EventObj: EventAgent, NamedObj
   }
 
   // called when a process starts waiting for this event
-  protected final void addClientProcess(Process client) {
+  protected final void addClientTask(Process client) {
     synchronized(this) {
-      this._clientProcs ~= client;
+      this._clientTasks ~= client;
     }
 
     // just to make sure that the event a thread is waiting for, is
@@ -2297,12 +2296,12 @@ public class EventObj: EventAgent, NamedObj
       writeln("Event Triggered: ", this.getFullName);
     }
 
-    foreach(c; _clientProcs) {
+    foreach(c; _clientTasks) {
       sim._executor.addRunnableProcess(c);
       // c._waitingFor = null;
     }
 
-    _clientProcs.length = 0;
+    _clientTasks.length = 0;
 
     foreach(ref c; _clientRoutines) {
       sim._executor.addRunnableRoutine(c);
@@ -2446,7 +2445,7 @@ public class EventObj: EventAgent, NamedObj
     }
     synchronized(this) {
       _clientRoutines.length = 0;
-      _clientProcs.length = 0;
+      _clientTasks.length = 0;
       this.cancel();
     }
   }
@@ -4105,17 +4104,17 @@ class Task(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
 
     static assert((ParameterTypeTuple!dg).length == 0);
     super(dg, R, S);
-    //	{
-    //	  auto ARGS = adjustArgs!(T, A)(t);
-    //	  auto fn = delegate()
-    //	    {
-    //	      dg(ARGS.expand);
-    //	    };
-    //	  super(fn, 0);
-    //	}
-    // else
-    // {
-    // }
+  }
+
+}
+
+class Proc(T, alias F, int R=0, size_t S=0): Proc!(F, R, S)
+{
+  this(T t) {
+    auto dg = recreateDelegate!F(t);
+
+    static assert((ParameterTypeTuple!dg).length == 0);
+    super(dg, R, S);
   }
 
 }
@@ -4215,39 +4214,7 @@ template Task(alias F, int R=0, size_t S=0)
       static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
       {
 	synchronized(t) {
-	  // import std.functional; // used for toDelegate
-	  // import std.traits;
-
 	  l = new Task!(T, F, R, S)(t);
-	  // string getFuncName()
-	  // {
-	  //   return "t." ~ __traits(identifier, F);
-	  // }
-
-	  // import std.stdio;
-	  // writeln("New thread for: ", t.getFullName);
-	  // // does not work for functions with default arguments
-	  // // typeof(toDelegate(&F)) dg;
-	  // // pragma(msg, getFuncName());
-	  // typeof(& mixin(getFuncName())) dg;
-
-	  // dg.funcptr = &F;
-	  // dg.ptr = cast(void *)t;
-
-	  // static if((ParameterTypeTuple!dg).length > 0)
-	  //   {
-	  //     auto fun = delegate()
-	  //	 {
-	  //	   dg(ARGS);
-	  //	 };
-	  //     l = new Task!(F, A)(fun, 0);
-	  //     // l = new Process(fun, 0);
-	  //   }
-	  // else
-	  //   {
-	  //     l = new Task!(F, A)(dg, 0);
-	  //     // l = new Process(dg, 0);
-	  //   }
 	}
       }
 
@@ -4277,16 +4244,71 @@ template Task(alias F, int R=0, size_t S=0)
 	}
       }
 
-      // this()
-      //   {
-      //     static assert((ParameterTypeTuple!F).length == 0);
-      //     auto dg =
-      //       recreateDelegateFromVoidPtr!F(cast(void *) this.outer);
-      //     super(dg, _STACKSIZE);
-      //   }
+    }
+  }
+}
+
+template Proc(alias F, int R=0, size_t S=0)
+{
+  static if(__traits(compiles, F())) {
+    // pragma(msg, F.stringof);
+    class Proc: BaseProc
+    {
+      alias F _FUNCTION;
+      enum ulong _STACKSIZE = S;
+
+      this() {
+	// import std.stdio;
+	// writeln("New Dynamic Proc");
+	super(F, S);
+      }
+    }
+  }
+  else {
+    // Normally during elaboration of the tasks, this branch would be taken
+    class Proc: BaseProc
+    {
+      alias F _FUNCTION;
+      enum ulong _STACKSIZE = S;
+
+      protected this(void delegate() dg, int stage, size_t stackSize) {
+	super(dg, stage, stackSize);
+      }
+
+      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
+      {
+	synchronized(t) {
+	  l = new Proc!(T, F, R, S)(t);
+	}
+      }
+
+      static void _esdl__elab(size_t I, T, L)
+	(T t, ref L l, uint[] indices=null) {
+	debug(ELABORATE) {
+	  import std.stdio;
+	  writeln("** Proc: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+		  typeof(l).stringof);
+	}
+	l._esdl__inst!I(t, l);
+	synchronized(l) {
+	  import core.sync.semaphore: Semaphore;
+	  static if(is(T unused: ElabContext)) {
+	    t._esdl__addChildObj(l);
+	    t._esdl__addChildTask(l);
+	    t._esdl__addChildComp(l);
+	  }
+	  l._dynamic = false;
+	  l._esdl__setIndices(indices);
+	  l._esdl__nomenclate!I(t, indices);
+	  l._esdl__setRoot(t.getRoot);
+	  l._esdl__setParent(t);
+	  t._esdl__register(l);
+	  auto linfo = _esdl__get_parallelism!I(t, l);
+	  l._esdl__parLock = t._esdl__getLockMutex;
+	}
+      }
 
     }
-    // }
   }
 }
 
@@ -4420,22 +4442,7 @@ class PersistFlag
   }
 }
 
-abstract class BaseThread: Thread
-{
-  this( void function() fn, size_t sz = 0 ) {
-    super(fn, sz);
-  }
-
-  this( void delegate() dg, size_t sz = 0 ) {
-    super(dg, sz);
-  }
-
-  public abstract RootEntityIntf getRoot();
-  public abstract EsdlSimulator getSimulator();
-
-}
-
-class SimThread: BaseThread
+class SimThread: Thread
 {
   import core.sync.semaphore: Semaphore;
 
@@ -4458,20 +4465,20 @@ class SimThread: BaseThread
   }
 
 
-  protected override RootEntityIntf getRoot() {
+  protected RootEntityIntf getRoot() {
     synchronized(this) {
       return _esdl__root;
     }
   }
 
-  protected override EsdlSimulator getSimulator() {
+  protected EsdlSimulator getSimulator() {
     return getRoot().simulator();
   }
 
   // final protected void waitBarrier() {
   //   // synchronized(this)
   //   //	{
-  //   this.getSimulator.freeLock();
+  //   freeLock();
   //   // }
   // }
 
@@ -4526,6 +4533,69 @@ class SimThread: BaseThread
 // wait for an external actor to activate the simulation again.
 
 
+class BaseProc: Process
+{
+  Fiber _fiber;
+
+  this(void function() fn, int stage = 0, size_t sz = 0 ) {
+    synchronized(this) {
+      super(fn, stage, sz);
+      _fiber = new Fiber(() {fn_wrap(fn);}, sz);
+    }
+  }
+
+  this(void delegate() dg, int stage = 0, size_t sz = 0 ) {
+    synchronized(this) {
+      super(dg, stage, sz);
+      _fiber = new Fiber(() {dg_wrap(dg);}, sz);
+    }
+  }
+
+  protected final override void execute() {
+    if(_state == ProcState.RUNNING) {
+	_fiber.call();
+      return;
+    }
+    assert(false, "Unexpected Process State: " ~ _state);
+  }
+
+  protected final override void call() {
+    _fiber.call();
+  }
+
+  protected final override void yield() {
+    _fiber.yield();
+  }
+
+  final override void freeLock(bool onlyBarrier=false) {
+    // do nothing for a fiber
+  }
+
+  protected override final void requestAbort(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+    }
+    else {
+      _state = ProcState.ABORTED;
+      x._termProcs ~= this;
+    }
+  }
+
+  protected override final void requestKill(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+    }
+    else {
+      _state = ProcState.KILLED;
+      x._termProcs ~= this;
+    }
+  }
+}
+
 class BaseTask: Process
 {
   SimThread _thread;
@@ -4563,6 +4633,34 @@ class BaseTask: Process
 
   protected final override void yield() {
     _thread.yield();
+  }
+
+  final override void freeLock(bool onlyBarrier=false) {
+    this.getSimulator.freeLock(this, onlyBarrier);
+  }
+
+  protected override final void requestAbort(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+    }
+    else {
+      _state = ProcState.ABORTED;
+      x._termProcs ~= this;
+    }
+  }
+
+  protected override final void requestKill(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+    }
+    else {
+      _state = ProcState.KILLED;
+      x._termProcs ~= this;
+    }
   }
 }
 
@@ -4653,16 +4751,19 @@ abstract class Process: EventClient, Procedure
     }
   }
 
+  // depends on whether it is a fiber or a thread
+  void freeLock(bool onlyBarrier=false);
+  
   private final void cleanup() {
     if(state is ProcState.RUNNING) {
       state = ProcState.FINISHED;
     }
     if(this.state is ProcState.KILLED ||
        this.state is ProcState.ABORTED) {
-      this.getSimulator.freeLock(this, true);
+      freeLock(true);
     }
     else {
-      this.getSimulator.freeLock(this, false);
+      freeLock(false);
     }
   }
 
@@ -4741,7 +4842,7 @@ abstract class Process: EventClient, Procedure
     if(_isRunnable()) {
       _state = ProcState.ABORTED;
       if(_state == ProcState.STARTING) {
-  	this.getSimulator.freeLock(this, true);
+  	freeLock(true);
       }
       else {
   	call();
@@ -4759,7 +4860,7 @@ abstract class Process: EventClient, Procedure
     if(_isRunnable()) {
       _state = ProcState.KILLED;
       if(_state == ProcState.STARTING) {
-	this.getSimulator.freeLock(this, true);
+	freeLock(true);
       }
       else {
 	call();
@@ -4960,7 +5061,7 @@ abstract class Process: EventClient, Procedure
 	import std.stdio;
 	writeln("Process ending with exception   : ", Process.procID);
       }
-      this.getSimulator.freeLock(this);
+      freeLock();
       this.caughtException();
       throw(e);
     }
@@ -5003,7 +5104,7 @@ abstract class Process: EventClient, Procedure
 	import std.stdio;
 	writeln("Process ending with exception   : ", Process.procID);
       }
-      this.getSimulator.freeLock(this);
+      freeLock();
       this.caughtException();
       throw(e);
     }
@@ -5036,9 +5137,9 @@ abstract class Process: EventClient, Procedure
   }
 
   public final void waitSensitive(EventObj event) {
-    event.addClientProcess(this);
+    event.addClientTask(this);
     state = ProcState.WAITING;
-    this.getSimulator.freeLock(this);
+    freeLock();
     yield();
     if(this._isKilled()) {
       throw new TermException();
@@ -5315,31 +5416,9 @@ abstract class Process: EventClient, Procedure
   }
 
   // returns true if the task requires explicit termination
-  private final bool requestAbort() {
-    if(_isDefunct()) return false;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.ABORTED;
-      return false; // has not started yet -- no need to terminate
-    }
-    else {
-      _state = ProcState.ABORTED;
-      return true;  // thread needs to be terminated
-    }
-  }
+  protected void requestAbort(EsdlExecutor x);
     
-  private final bool requestKill() {
-    if(_isDefunct()) return false;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.KILLED;
-      return false;
-    }
-    else {
-      _state = ProcState.KILLED;
-      return true;
-    }
-  }
+  protected void requestKill(EsdlExecutor x);
 
   public final bool _isActive() {
     return (_state <= _ACTIVE);
@@ -5858,7 +5937,7 @@ class Channel: ChannelIF, NamedObj // Primitive Channel
 
 }
 
-class RootThread: BaseThread, Procedure
+class RootThread: Thread, Procedure
 {
   private static RootThread _self;
   public static RootThread self() {return _self;}
@@ -6202,7 +6281,7 @@ class EsdlExecutor: EsdlExecutorIf
   private Routine[] _runnableRoutines;
   // Before adding them to _runnableProcs, make a check whether
   // these tasks are dontInit
-  private Process[][] _registeredProcs;
+  private Process[][] _registeredTasks;
   private Process[] _updateProcs;
   private Process[] _purgeProcs;
 
@@ -6229,7 +6308,7 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   private final bool incrStage() {
-    if(_stageIndex == _registeredProcs.length - 1) {
+    if(_stageIndex == _registeredTasks.length - 1) {
       return false;
     }
     else {
@@ -6240,7 +6319,7 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   private final void _incrMaxStage() {
-    _stageIndex = cast(int) _registeredProcs.length - 1;
+    _stageIndex = cast(int) _registeredTasks.length - 1;
   }
 
   private final void createPoolThreads(size_t numThreads,
@@ -6288,11 +6367,11 @@ class EsdlExecutor: EsdlExecutorIf
   // private size_t _processedRoutines = 0;
 
   public final void processRegisteredProcs() {
-    foreach(ref task; _registeredProcs[_stageIndex]) {
+    foreach(ref task; _registeredTasks[_stageIndex]) {
       synchronized(task) {
 	if(task.isDontInitialize()) {
 	  EventObj event = task.sensitiveTo();
-	  event.addClientProcess(task);
+	  event.addClientTask(task);
 	}
 	else {
 	  if(task.isRunnable) {
@@ -6301,8 +6380,8 @@ class EsdlExecutor: EsdlExecutorIf
 	}
       }
     }
-    // _processedProcs = _registeredProcs.length;
-    _registeredProcs[_stageIndex].length = 0;
+    // _processedProcs = _registeredTasks.length;
+    _registeredTasks[_stageIndex].length = 0;
     foreach(ref routine; _registeredRoutines[_stageIndex]) {
       synchronized(routine) {
 	if(routine.isDontInitialize()) {
@@ -6335,20 +6414,20 @@ class EsdlExecutor: EsdlExecutorIf
 	if(_minStage is int.max) {
 	  _minStage = reqStage;
 	  _registeredRoutines.length = 1;
-	  _registeredProcs.length = 1;
+	  _registeredTasks.length = 1;
 	}
   	else if(reqStage < _minStage) {
   	  auto delta = _minStage - reqStage;
   	  _minStage = reqStage;
-  	  _registeredProcs.length += delta;
+  	  _registeredTasks.length += delta;
   	  _registeredRoutines.length += delta;
-  	  auto len = _registeredProcs.length;
+  	  auto len = _registeredTasks.length;
   	  for (size_t i=len; i!=0; --i) {
   	    if(i > delta) {
-  	      _registeredProcs[i-1] = _registeredProcs[i-1-delta];
+  	      _registeredTasks[i-1] = _registeredTasks[i-1-delta];
   	      _registeredRoutines[i-1] = _registeredRoutines[i-1-delta];
   	    } else {
-  	      _registeredProcs[i-1] = [];
+  	      _registeredTasks[i-1] = [];
   	      _registeredRoutines[i-1] = [];
   	    }
   	  }
@@ -6361,9 +6440,9 @@ class EsdlExecutor: EsdlExecutorIf
   		 " is already over: " ~ reqStage.to!string());
   	}
       }
-      if(reqStage - _minStage >= _registeredProcs.length) {
-  	auto delta = reqStage - _minStage - _registeredProcs.length + 1;
-  	_registeredProcs.length += delta;
+      if(reqStage - _minStage >= _registeredTasks.length) {
+  	auto delta = reqStage - _minStage - _registeredTasks.length + 1;
+  	_registeredTasks.length += delta;
   	_registeredRoutines.length += delta;
       }
     }
@@ -6372,7 +6451,7 @@ class EsdlExecutor: EsdlExecutorIf
   public final void reqRegisterProcess(Process task, int reqStage=0) {
     synchronized(this) {
       addPhaseIfNeeded(reqStage);
-      this._registeredProcs[reqStage-_minStage] ~= task;
+      this._registeredTasks[reqStage-_minStage] ~= task;
     }
   }
 
@@ -6394,6 +6473,8 @@ class EsdlExecutor: EsdlExecutorIf
       this._purgeProcs ~= task;
     }
   }
+
+  Process[] _termProcs;
 
   public final void updateProcs() {
     // expand the list by recursion
@@ -6430,8 +6511,6 @@ class EsdlExecutor: EsdlExecutorIf
       }
     }
 
-    Process[] _termProcs;
-
     // first create a list of tasks that require temination
     foreach(proc; expandedList) {
       final switch(proc.reqState) {
@@ -6456,14 +6535,12 @@ class EsdlExecutor: EsdlExecutorIf
 	}
 	break;
       case ProcStateReq.ABORT:
-	if(_stage == proc._stage && proc.requestAbort()) {
-	  _termProcs ~= proc;
+	if(_stage == proc._stage) {
+	  proc.requestAbort(this);
 	}
 	break;
       case ProcStateReq.KILL:
-	if(proc.requestKill()) {
-	  _termProcs ~= proc;
-	}
+	proc.requestKill(this);
 	break;
       case ProcStateReq.NONE:
 	assert(false, "Illegal Process Requested State -- NONE");
@@ -6476,6 +6553,12 @@ class EsdlExecutor: EsdlExecutorIf
     }
     _updateProcs.length = 0;
     if(_termProcs.length > 0) {
+      termProcesses();
+    }
+  }
+
+  void termProcesses() {
+    if(_termProcs.length > 0) {
 
       _procBarrier.reset(cast(uint)_termProcs.length + 1);
 
@@ -6485,6 +6568,7 @@ class EsdlExecutor: EsdlExecutorIf
       }
       _procBarrier.wait();
     }
+    _termProcs.length = 0;
   }
 
   static class DebugBarrier: Barrier
