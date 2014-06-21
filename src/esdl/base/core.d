@@ -373,7 +373,7 @@ public interface HierComp: NamedObj, ParContext
   public void killTree();
 
   // Interface functions for enabling parallelize UDP
-  public CoreSemaphore _esdl__getLockMutex();
+  public CoreSemaphore _esdl__getParLock();
   public void _esdl__setEntityMutex(CoreSemaphore parentLock,
 				    parallelize linfo, parallelize plinfo);
 
@@ -564,7 +564,7 @@ public interface HierComp: NamedObj, ParContext
 
       // Effectively immutable in the run phase since the variable is
       // set durin gthe elaboration
-      public final override CoreSemaphore _esdl__getLockMutex() {
+      public final override CoreSemaphore _esdl__getParLock() {
 	return _esdl__parLock;
       }
 
@@ -1306,7 +1306,7 @@ void _esdl__connect(T)(T t) {
 // separately(in the process/routine constructor)
 void _esdl__register(T, L)(T t, ref L l)
   if(is(T : NamedObj) && is(T == class)) {
-    static if((is(L : BaseTask)) &&(is(L == class))) {
+    static if((is(L : BaseWorker)) &&(is(L == class))) {
       synchronized(l) {
 	// Dynamic tasks get registered by the constructor --
 	// static tasks get registered during Elaboration.
@@ -1314,7 +1314,7 @@ void _esdl__register(T, L)(T t, ref L l)
       }
     }
 
-    static if((is(L : BaseFrop)) &&(is(L == class))) {
+    static if((is(L : BaseTask)) &&(is(L == class))) {
       synchronized(l) {
 	// Dynamic tasks get registered by the constructor --
 	// static tasks get registered during Elaboration.
@@ -1334,7 +1334,7 @@ void _esdl__register(T, L)(T t, ref L l)
 
 
 // void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
-//   if(is(L f : Task!(F, S), alias F, size_t S)) {
+//   if(is(L f : Worker!(F, S), alias F, size_t S)) {
 //     synchronized(t) {
 //       // import std.functional; // used for toDelegate
 //       // import std.traits;
@@ -1342,7 +1342,7 @@ void _esdl__register(T, L)(T t, ref L l)
 //       alias L._FUNCTION F;
 //       alias L._STACKSIZE S;
 
-//       l = t.new t.Task!(T, F, S)(t);
+//       l = t.new t.Worker!(T, F, S)(t);
 //       // string getFuncName()
 //       // {
 //       //   return "t." ~ __traits(identifier, F);
@@ -1364,12 +1364,12 @@ void _esdl__register(T, L)(T t, ref L l)
 //       //	 {
 //       //	   dg(ARGS);
 //       //	 };
-//       //     l = new Task!(F, A)(fun, 0);
+//       //     l = new Worker!(F, A)(fun, 0);
 //       //     // l = new Process(fun, 0);
 //       //   }
 //       // else
 //       //   {
-//       //     l = new Task!(F, A)(dg, 0);
+//       //     l = new Worker!(F, A)(dg, 0);
 //       //     // l = new Process(dg, 0);
 //       //   }
 //     }
@@ -1377,8 +1377,8 @@ void _esdl__register(T, L)(T t, ref L l)
 
 // {
 
-//   // Tasks
-//   // else static if(is(L f == Task!(T, N), immutable(char)[] T, ulong N))
+//   // Workers
+//   // else static if(is(L f == Worker!(T, N), immutable(char)[] T, ulong N))
 //   //	     {
 //   //	       synchronized(t)
 //   //		 {
@@ -1398,8 +1398,8 @@ void _esdl__register(T, L)(T t, ref L l)
 //   //		     is(L c: NamedObj) &&
 //   //		     ! is(L: RootThread))
 //   //	     {
-//   //	       // static if(is(L f == Task!(S, T), alias S, T...) ||
-//   //	       //	    is(L f == Task!(T, N), immutable(char)[] T, ulong N) ||
+//   //	       // static if(is(L f == Worker!(S, T), alias S, T...) ||
+//   //	       //	    is(L f == Worker!(T, N), immutable(char)[] T, ulong N) ||
 //   //	       //	    is(L g == Inst!E, E : ElabContext))
 //   //	       pragma(msg, "Instantiating: " ~ L.stringof);
 //   //	       if(l is null) l = new L();
@@ -1592,7 +1592,7 @@ public interface ElabContext: HierComp
       l.doBuild();
       l._esdl__postBuild();
       auto linfo = _esdl__get_parallelism!I(t, l);
-      l._esdl__setEntityMutex(t._esdl__getLockMutex, linfo,
+      l._esdl__setEntityMutex(t._esdl__getParLock, linfo,
 			      t._esdl__parInfo);
       l._esdl__setParConfig(t._esdl__parConfig, linfo,
 			    t._esdl__parInfo);
@@ -2338,9 +2338,9 @@ public class EventObj: EventAgent, NamedObj
   private IndexedSimEvent[] _clientEvents;
 
   // Processes that are waiting for this event to trigger
-  private Process[] _clientTasks;
+  private Process[] _clientWorkers;
   // Processes that are waiting for this event to trigger
-  private Process[] _clientFrops;
+  private Process[] _clientTasks;
   // Routines that would be triggered by this event
   private Routine[] _clientRoutines;
 
@@ -2378,7 +2378,7 @@ public class EventObj: EventAgent, NamedObj
   // called when a process starts waiting for this event
   protected final void addClientProc(Process client) {
     synchronized(this) {
-      this._clientTasks ~= client;
+      this._clientWorkers ~= client;
     }
 
     // just to make sure that the event a thread is waiting for, is
@@ -2419,12 +2419,12 @@ public class EventObj: EventAgent, NamedObj
       writeln("Event Triggered: ", this.getFullName);
     }
 
-    foreach(c; _clientTasks) {
+    foreach(c; _clientWorkers) {
       sim._executor.addRunnableProcess(c);
       // c._waitingFor = null;
     }
 
-    _clientTasks.length = 0;
+    _clientWorkers.length = 0;
 
     foreach(ref c; _clientRoutines) {
       sim._executor.addRunnableRoutine(c);
@@ -2568,6 +2568,7 @@ public class EventObj: EventAgent, NamedObj
     }
     synchronized(this) {
       _clientRoutines.length = 0;
+      _clientWorkers.length = 0;
       _clientTasks.length = 0;
       this.cancel();
     }
@@ -3993,6 +3994,16 @@ private void _nextTriggerEvent(EventObj event) {
   Routine.self.nextTrigger(event);
 }
 
+public Process worker(DelegateThunk dg, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWorker(dg, stage, sz);
+  return f;
+}
+
+public Process worker(FunctionThunk fn, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWorker(fn, stage, sz);
+  return f;
+}
+
 public Process process(DelegateThunk dg, int stage = 0, size_t sz = 0) {
   Process f = new BaseTask(dg, stage, sz);
   return f;
@@ -4224,7 +4235,7 @@ public void srandom(uint _seed) {
   }
 }
 
-class Task(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
+class Worker(T, alias F, int R=0, size_t S=0): Worker!(F, R, S)
 {
   this(T t) {
     auto dg = recreateDelegate!F(t);
@@ -4235,7 +4246,7 @@ class Task(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
 
 }
 
-class Frop(T, alias F, int R=0, size_t S=0): Frop!(F, R, S)
+class Task(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
 {
   this(T t) {
     auto dg = recreateDelegate!F(t);
@@ -4308,6 +4319,72 @@ class Entity: EntityIntf
 
 
 
+template Worker(alias F, int R=0, size_t S=0)
+{
+  static if(__traits(compiles, F())) {
+    // pragma(msg, F.stringof);
+    class Worker: BaseWorker
+    {
+      alias F _FUNCTION;
+      enum ulong _STACKSIZE = S;
+
+      this() {
+	// import std.stdio;
+	// writeln("New Dynamic Worker");
+	super(F, S);
+      }
+    }
+  }
+  else {
+    // Normally during elaboration of the tasks, this branch would be taken
+    class Worker: BaseWorker
+    {
+      alias F _FUNCTION;
+      enum ulong _STACKSIZE = S;
+
+      protected this(void delegate() dg, int stage, size_t stackSize) {
+	super(dg, stage, stackSize);
+      }
+
+      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
+      {
+	synchronized(t) {
+	  l = new Worker!(T, F, R, S)(t);
+	}
+      }
+
+      static void _esdl__elab(size_t I, T, L)
+	(T t, ref L l, uint[] indices=null) {
+	debug(ELABORATE) {
+	  import std.stdio;
+	  writeln("** Worker: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+		  typeof(l).stringof);
+	}
+	l._esdl__inst!I(t, l);
+	synchronized(l) {
+	  import core.sync.semaphore: Semaphore;
+	  static if(is(T unused: ElabContext)) {
+	    t._esdl__addChildObj(l);
+	    t._esdl__addChildTask(l);
+	    t._esdl__addChildComp(l);
+	  }
+	  l._dynamic = false;
+	  l._esdl__setIndices(indices);
+	  l._esdl__nomenclate!I(t, indices);
+	  l._esdl__setObjId();
+	  l._esdl__setRoot(t.getRoot);
+	  l._esdl__setParent(t);
+	  t._esdl__register(l);
+	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
+	  l._esdl__parLock = t._esdl__getParLock;
+	  l._esdl__parConfig = t._esdl__getParConfig;
+	}
+      }
+
+    }
+  }
+}
+
 template Task(alias F, int R=0, size_t S=0)
 {
   static if(__traits(compiles, F())) {
@@ -4365,73 +4442,7 @@ template Task(alias F, int R=0, size_t S=0)
 	  l._esdl__setParent(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
-	  l._esdl__parLock = t._esdl__getLockMutex;
-	  l._esdl__parConfig = t._esdl__getParConfig;
-	}
-      }
-
-    }
-  }
-}
-
-template Frop(alias F, int R=0, size_t S=0)
-{
-  static if(__traits(compiles, F())) {
-    // pragma(msg, F.stringof);
-    class Frop: BaseFrop
-    {
-      alias F _FUNCTION;
-      enum ulong _STACKSIZE = S;
-
-      this() {
-	// import std.stdio;
-	// writeln("New Dynamic Frop");
-	super(F, S);
-      }
-    }
-  }
-  else {
-    // Normally during elaboration of the tasks, this branch would be taken
-    class Frop: BaseFrop
-    {
-      alias F _FUNCTION;
-      enum ulong _STACKSIZE = S;
-
-      protected this(void delegate() dg, int stage, size_t stackSize) {
-	super(dg, stage, stackSize);
-      }
-
-      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
-      {
-	synchronized(t) {
-	  l = new Frop!(T, F, R, S)(t);
-	}
-      }
-
-      static void _esdl__elab(size_t I, T, L)
-	(T t, ref L l, uint[] indices=null) {
-	debug(ELABORATE) {
-	  import std.stdio;
-	  writeln("** Frop: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
-		  typeof(l).stringof);
-	}
-	l._esdl__inst!I(t, l);
-	synchronized(l) {
-	  import core.sync.semaphore: Semaphore;
-	  static if(is(T unused: ElabContext)) {
-	    t._esdl__addChildObj(l);
-	    t._esdl__addChildTask(l);
-	    t._esdl__addChildComp(l);
-	  }
-	  l._dynamic = false;
-	  l._esdl__setIndices(indices);
-	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
-	  l._esdl__setRoot(t.getRoot);
-	  l._esdl__setParent(t);
-	  t._esdl__register(l);
-	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
-	  l._esdl__parLock = t._esdl__getLockMutex;
+	  l._esdl__parLock = t._esdl__getParLock;
 	  l._esdl__parConfig = t._esdl__getParConfig;
 	}
       }
@@ -4502,7 +4513,7 @@ private auto recreateDelegate(alias F, T)(T _entity)
 
 // Alternative task definition using struct -- we are using
 
-// struct Task(string THUNK, size_t STACKSIZE=0L)
+// struct Worker(string THUNK, size_t STACKSIZE=0L)
 // {
 //   static immutable string _THUNK = THUNK;
 //   enum ulong _STACKSIZE = STACKSIZE;
@@ -4518,21 +4529,21 @@ private auto recreateDelegate(alias F, T)(T _entity)
 //   {
 //     synchronized {
 //       import std.exception: enforce;
-//       enforce(this._proc, "Uninitialized Task");
+//       enforce(this._proc, "Uninitialized Worker");
 //       return this._proc;
 //     }
 //   }
 
 //   alias _esdl__obj this;
 
-//   @disable void opAssign(Task);
+//   @disable void opAssign(Worker);
 //   // Allow assigning from module handle once
 //   public void opAssign(Process task)
 //   {
 //     synchronized {
 //       // Allow it only once
 //       this._proc &&
-//	assert(false, "Task re-initialization not allowed");
+//	assert(false, "Worker re-initialization not allowed");
 
 //       this._proc = task;
 //     }
@@ -4660,7 +4671,7 @@ class SimThread: Thread
 // wait for an external actor to activate the simulation again.
 
 
-class BaseFrop: Process
+class BaseTask: Process
 {
   Fiber _fiber;
 
@@ -4731,16 +4742,16 @@ class BaseFrop: Process
       x._termProcs ~= this;
     }
   }
-  public override final bool isRunnableFrop() {
+  public override final bool isRunnableTask() {
       return (_state < _DEFUNCT);
   }
-  public override final bool isRunnableTask() {
+  public override final bool isRunnableWorker() {
     return false;
   }
 
 }
 
-class BaseTask: Process
+class BaseWorker: Process
 {
   SimThread _thread;
 
@@ -4816,10 +4827,10 @@ class BaseTask: Process
       x._termProcs ~= this;
     }
   }
-  public override final bool isRunnableFrop() {
+  public override final bool isRunnableTask() {
     return false;
   }
-  public override final bool isRunnableTask() {
+  public override final bool isRunnableWorker() {
       return (_state < _DEFUNCT);
   }
 }
@@ -5101,12 +5112,13 @@ abstract class Process: EventClient, Procedure
 	Procedure _parent = Procedure.self;
 	this._esdl__setParent(_parent);
 	this._esdl__setRoot(_parent.getRoot());
-	// if(_parent._esdl__getLockMutex is null) {
+	// if(_parent._esdl__getParLock is null) {
 	//   // For the time being all the dynamic tasks would run one-at-a-time
 	//   this._esdl__parLock = new Semaphore(1);
 	// }
 	// else {
-	this._esdl__parLock = _parent._esdl__getLockMutex;
+	this._esdl__parLock = _parent._esdl__getParLock;
+	this._esdl__parConfig = _parent._esdl__getParConfig();
 	// }
       }
     }
@@ -5594,8 +5606,8 @@ abstract class Process: EventClient, Procedure
     return (_state < _DEFUNCT);
   }
 
-  public bool isRunnableFrop();
   public bool isRunnableTask();
+  public bool isRunnableWorker();
 
   public final bool isRunnable() {
     synchronized(this) {
@@ -5925,13 +5937,13 @@ class Routine: EventClient, Procedure
 	Procedure _parent = Procedure.self;
 	this._esdl__setParent(_parent);
 	this._esdl__setRoot(_parent.getRoot());
-	// if(_parent._esdl__getLockMutex is null) {
+	// if(_parent._esdl__getParLock is null) {
 	//   import core.sync.semaphore: Semaphore;
 	//   // For the time being all the dynamic tasks would run one-at-a-time
 	//   this._esdl__parLock = new Semaphore(1);
 	// }
 	// else {
-	this._esdl__parLock = _parent._esdl__getLockMutex;
+	this._esdl__parLock = _parent._esdl__getParLock;
 	// }
       }
     }
@@ -6044,7 +6056,7 @@ class Routine: EventClient, Procedure
       l._esdl__setParent(t);
       t._esdl__register(l);
       // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
-      l._esdl__parLock = t._esdl__getLockMutex;
+      l._esdl__parLock = t._esdl__getParLock;
       l._esdl__parConfig = t._esdl__getParConfig;
     }
   }
@@ -6233,14 +6245,14 @@ class PoolThread: SimThread
 	break;
       }
 
-      foreach(frop; this._esdl__root.simulator._executor._runnableFropsGroups[_poolIndex]) {
+      foreach(frop; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
 	if(frop.preExecute()) {
 	  Process._self = frop;
 	  Routine._self = null;
 	  frop.call();
 	}
       }
-      this._esdl__root.simulator._executor._runnableFropsGroups[_poolIndex].length = 0;
+      this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex].length = 0;
       // routine = this._esdl__root.simulator()._executor.nextRoutine();
       // while(routine !is null) {
       // 	Routine._self = routine;
@@ -6419,8 +6431,8 @@ interface EsdlExecutorIf
   public void reqUpdateProcess(Process task);
   public void reqPurgeProcess(Process task);
   // public ref Process[] getRunnableProcs();
+  public size_t runnableWorkersCount();
   public size_t runnableTasksCount();
-  public size_t runnableFropsCount();
   public size_t runnableThreadsCount();
   public size_t runnableRoutinesCount();
   public void processRegistered();
@@ -6454,11 +6466,11 @@ class EsdlExecutor: EsdlExecutorIf
       }
   }
 
+  private Process[] _runnableWorkers;
   private Process[] _runnableTasks;
-  private Process[] _runnableFrops;
-  private Process[][] _runnableFropsGroups;
+  private Process[][] _runnableTasksGroups;
   private Routine[] _runnableRoutines;
-  // Before adding them to _runnableTasks, make a check whether
+  // Before adding them to _runnableWorkers, make a check whether
   // these tasks are dontInit
   private Process[][] _registeredProcesses;
   private Routine[][] _registeredRoutines;
@@ -6501,7 +6513,7 @@ class EsdlExecutor: EsdlExecutorIf
   private final void createPoolThreads(size_t numThreads,
 				    size_t stackSize) {
     _poolThreads.length = numThreads;
-    _runnableFropsGroups.length = numThreads;
+    _runnableTasksGroups.length = numThreads;
     for(uint i=0; i!=numThreads; ++i) {
       debug {
 	import std.stdio;
@@ -6528,17 +6540,17 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   public final size_t runnableThreadsCount() {
-    return(_runnableTasks.length +
-	   _runnableFrops.length +
+    return(_runnableWorkers.length +
+	   _runnableTasks.length +
 	   _runnableRoutines.length);
+  }
+
+  public final size_t runnableWorkersCount() {
+    return _runnableWorkers.length;
   }
 
   public final size_t runnableTasksCount() {
     return _runnableTasks.length;
-  }
-
-  public final size_t runnableFropsCount() {
-    return _runnableFrops.length;
   }
 
   public final size_t runnableRoutinesCount() {
@@ -6556,12 +6568,12 @@ class EsdlExecutor: EsdlExecutorIf
 	  event.addClientProc(proc);
 	}
 	else {
+	  if(proc.isRunnableWorker) {
+	    this._runnableWorkers ~= proc;
+	  }
 	  if(proc.isRunnableTask) {
 	    this._runnableTasks ~= proc;
-	  }
-	  if(proc.isRunnableFrop) {
-	    this._runnableFrops ~= proc;
-	    this._runnableFropsGroups[proc._esdl__parConfig._threadPoolIndex] ~= proc;
+	    this._runnableTasksGroups[proc._esdl__parConfig._threadPoolIndex] ~= proc;
 	  }
 	}
       }
@@ -6584,13 +6596,13 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   public final void addRunnableProcess(Process p) {
-    if(p.isRunnableTask) {
-      this._runnableTasks ~= p;
+    if(p.isRunnableWorker) {
+      this._runnableWorkers ~= p;
     }
-    if(p.isRunnableFrop) {
+    if(p.isRunnableTask) {
       import std.stdio;
-      this._runnableFrops ~= p;
-      this._runnableFropsGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
+      this._runnableTasks ~= p;
+      this._runnableTasksGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
     }
   }
 
@@ -6751,10 +6763,10 @@ class EsdlExecutor: EsdlExecutorIf
   void termProcesses() {
     if(_termProcs.length > 0) {
       import std.algorithm: filter, count;	// filter
-      auto termTasks = filter!(function bool(Process t)
-			       {return t.isRunnableTask();})(_termProcs);
+      auto termWorkers = filter!(function bool(Process t)
+			       {return t.isRunnableWorker();})(_termProcs);
 
-      _procBarrier.reset(cast(uint) count(termTasks) + 1);
+      _procBarrier.reset(cast(uint) count(termWorkers) + 1);
 
       // right now only handles terminate requests
       foreach(proc; _termProcs) {
@@ -6881,21 +6893,21 @@ class EsdlExecutor: EsdlExecutorIf
     _poolThreadBarrier.wait();
   }
 
-  public final void execTasks() {
+  public final void execWorkers() {
     Process[] runProcs;
     debug(EXECUTOR) {
       import std.stdio: writeln;
       writeln("Creating a barrier of size: ",
-	      _runnableTasks.length);
+	      _runnableWorkers.length);
     }
     debug(EXECUTOR) {
       import std.stdio: writeln;
       writeln("******* About to execute ",
-	      _runnableTasks.length, " tasks");
+	      _runnableWorkers.length, " tasks");
     }
 
 
-    foreach(ref task; this._runnableTasks) {
+    foreach(ref task; this._runnableWorkers) {
       debug(EXECUTOR) {
 	import std.stdio: writeln;
 	writeln("******* About to execute ",
@@ -6906,7 +6918,7 @@ class EsdlExecutor: EsdlExecutorIf
       }
     }
 
-    this._runnableTasks.length = 0;
+    this._runnableWorkers.length = 0;
 
     _procBarrier.reset(cast(uint)runProcs.length + 1);
 
@@ -7704,8 +7716,8 @@ class EsdlSimulator: EntityIntf
       // tasks = _executor.getRunnableProcs();
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	if(_executor.runnableTasksCount)
-	  writeln(" > Got Immediate tasks: ", _executor.runnableTasksCount);
+	if(_executor.runnableWorkersCount)
+	  writeln(" > Got Immediate tasks: ", _executor.runnableWorkersCount);
       }
       debug(SCHEDULER) {
 	import std.stdio: writeln;
@@ -7743,9 +7755,9 @@ class EsdlSimulator: EntityIntf
 	  }
 	  _scheduler.triggerDeltaEvents();
 	  debug(SCHEDULER) {
-	    if(_executor.runnableTasksCount) {
+	    if(_executor.runnableWorkersCount) {
 	      import std.stdio: writeln;
-	      writeln(" > Got Delta tasks: ", _executor.runnableTasksCount);
+	      writeln(" > Got Delta tasks: ", _executor.runnableWorkersCount);
 	    }
 	  }
 	  debug(SCHEDULER) {
@@ -7767,10 +7779,10 @@ class EsdlSimulator: EntityIntf
 	      break;
 	    case SimRunPhase.SIMULATE:
 	      debug(SCHEDULER) {
-		if(_executor.runnableTasksCount) {
+		if(_executor.runnableWorkersCount) {
 		  import std.stdio: writeln;
 		  writeln(" > Got Timed tasks: ",
-			  _executor.runnableTasksCount);
+			  _executor.runnableWorkersCount);
 		}
 	      }
 	      debug(SCHEDULER) {
@@ -7812,23 +7824,23 @@ class EsdlSimulator: EntityIntf
       schedPhase = SchedPhase.EXEC;
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	writeln(" > Executing Tasks and Routines: ", this.phase);
+	writeln(" > Executing Workers and Routines: ", this.phase);
       }
-      if(_executor.runnableTasksCount) {
-	_executor.execTasks();
+      if(_executor.runnableWorkersCount) {
+	_executor.execWorkers();
 	debug(SCHEDULER) {
 	  import std.stdio: writeln;
 	  writeln(" > Done executing tasks");
 	}
       }
-      if(_executor.runnableRoutinesCount || _executor.runnableFropsCount) {
+      if(_executor.runnableRoutinesCount || _executor.runnableTasksCount) {
 	_executor.execRoutines();
 	debug(SCHEDULER) {
 	  import std.stdio: writeln;
 	  writeln(" > Done executing routines");
 	}
-	if(_executor.runnableFropsCount) {
-	  _executor._runnableFrops.length = 0;
+	if(_executor.runnableTasksCount) {
+	  _executor._runnableTasks.length = 0;
 	}
       }
     }
