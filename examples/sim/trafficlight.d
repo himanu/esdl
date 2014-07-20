@@ -8,7 +8,7 @@ import std.stdio;
 import esdl.base.core;
 import esdl.base.comm;
 
-@parallelize
+@timeUnit(1.nsec)
 class TrafficLight: Entity
 {
   // mixin(entityMixin());
@@ -17,23 +17,19 @@ class TrafficLight: Entity
   Event red[POLES];
   Event yellow[POLES];
   Event green[POLES];
-
+  long  foo[10];
   int count = 0;
 
-  override void doConfig() {
-    timeUnit = 1.nsec;
-  }
 
   void susLight() {
     wait(1000);
     import std.stdio;
-    writeln("Suspending Operations");
+    // writeln("Suspending Operations");
     foreach(l; tLightTT) {
       l.suspend;
     }
     wait(200);
-    import std.stdio;
-    writeln("Resuming Operations");
+    // writeln("Resuming Operations");
     foreach(l; tLightTT) {
       l.resume;
     }
@@ -45,12 +41,12 @@ class TrafficLight: Entity
     if(Process.self.stage == 10) {
       wait(0);
     }
-    writeln("Stage: ", Process.self.stage);
+    // writeln("Stage: ", Process.self.stage);
   }
 
   void light() {
     // lockStage();
-    writeln(getSimTime);
+    // writeln(getSimTime);
     // wait((cast(Dummy) getParent).e);
     auto index = Process.self.taskIndices[0];
     if(index != 0)
@@ -60,16 +56,34 @@ class TrafficLight: Entity
       {
 	// lockStage();
 	// unlockStage();
-	writeln(getSimTime, ": Red -> Green ", index, " -- ",
-		Process.self.getFullName());
+	// writeln(getSimTime, ": Red -> Green ", index, " -- ",
+	// 	Process.self.getFullName());
 	yellow[index].notify(20);
 	// writeln("I am here: ", index);
 	red[index].notify(25);
+	for (size_t i=0; i!=10000; ++i)
+	  {
+	    foreach (idx, ref bar; foo) {
+	      bar = idx + index;
+	    }
+	  }
 	wait(yellow[index]);
-	writeln("Green -> Yellow ", index);
+	// writeln("Green -> Yellow ", index);
+	for (size_t i=0; i!=10000; ++i)
+	  {
+	    foreach (idx, ref bar; foo) {
+	      bar = idx + index;
+	    }
+	  }
 	wait(red[index]);
-	writeln("Yellow -> Red ", index);
+	// writeln("Yellow -> Red ", index);
 	green[(index + 1)%POLES].notify();
+	for (size_t i=0; i!=10000; ++i)
+	  {
+	    foreach (idx, ref bar; foo) {
+	      bar = bar * bar;
+	    }
+	  }
 	wait(green[index]);
 	synchronized(this) {
 	  ++count;
@@ -80,17 +94,16 @@ class TrafficLight: Entity
   public int x;
   // Task!("light()",0)  tLightTT[POLES];
   Task!(light, 5)  tLightTT[POLES];
-  Task!(testPhase, -1)  test_1;
-  Task!(testPhase, 10)  test2;
-  Task!(testPhase, 11)  test11;
-  Task!(testPhase, -3)  test3;
-  Task!(testPhase, -4)  test4;
-  Task!(testPhase, -5)  test5;
+  // Task!(testPhase, -1)  test_1;
+  // Task!(testPhase, 10)  test2;
+  // Task!(testPhase, 11)  test11;
+  // Task!(testPhase, -3)  test3;
+  // Task!(testPhase, -4)  test4;
+  // Task!(testPhase, -5)  test5;
 
   Task!(susLight, 5) suspendLight;
 }
 
-@parallelize
 class TrafficLightWrapper: TrafficLight {}
 
 class Dummy: Entity
@@ -106,26 +119,16 @@ class Dummy: Entity
   private TrafficLightWrapper traffic;
 }
 
+@timeUnit(100.psec)
+@timePrecision(10.psec)
 class TrafficRoot: RootEntity
 {
-  @parallelize Inst!Dummy[10] dummy;
+  Inst!Dummy[400] dummy;
 
   this(string name) {
     super(name);
   }
 
-  override void doConfig() {
-    // writeln("Configuring TrafficLight");
-    if(this.getName == "theRoot") {
-      timeUnit = 100.psec;
-      timePrecision = 10.psec;
-      // threadCount = 4;
-    } else {
-      timeUnit = 1000.psec;
-      timePrecision = 100.psec;
-      // threadCount = 4;
-    }
-  }
 }
 
 void main()
@@ -147,11 +150,11 @@ void main()
 
   // theRoot.doSim(25.nsec);
   // theRoot.waitSim();
-  theRoot.simulateUpto(250.nsec);
+  theRoot.simulateUpto(2500.nsec);
   // theRoot.simulate(2500.nsec);
   // theRoot.simulate(0.nsec);
   theRoot.finish();
-  theRoot.simulate();
+  // theRoot.simulate();
   // theRoot.terminate();
   // theRoot.simulate(250.nsec);
 

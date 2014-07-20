@@ -23,6 +23,7 @@ public import esdl.base.comm;
 import std.traits: isArray, isIntegral;
 import std.random: Random, uniform;
 
+import esdl.sys.sched: stickToCpuCore, CPU_COUNT;
 
 alias void delegate() DelegateThunk;
 alias void function() FunctionThunk;
@@ -559,7 +560,7 @@ public interface HierComp: NamedObj, ParContext
       // This variable is set and used only during the elaboration
       // phase
       static if(!__traits(compiles, _esdl__parInfo)) {
-	parallelize _esdl__parInfo = parallelize(-1, 0); // default value
+	parallelize _esdl__parInfo = parallelize(-1, uint.max); // default value
       }
 
       // Effectively immutable in the run phase since the variable is
@@ -1409,7 +1410,7 @@ void _esdl__register(T, L)(T t, ref L l)
 
 class ParConfig
 {
-  private uint _threadPoolIndex;
+  private uint _threadPoolIndex = uint.max;
   public uint getThreadIndex() {
     return _threadPoolIndex;
   }
@@ -1531,7 +1532,7 @@ public interface ElabContext: HierComp
     (T t, L l, uint[] indices=null) {
     debug(ATTRCONFIG) {
       import std.stdio;
-      writeln("** ElabContext: Fooorating " ~ t.tupleof[I].stringof ~ ":" ~
+      writeln("** ElabContext: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
 	      typeof(l).stringof);
     }
     synchronized(l) {
@@ -1560,8 +1561,8 @@ public interface ElabContext: HierComp
       auto linfo = _esdl__get_parallelism(l);
       l.doBuild();
       l._esdl__postBuild();
-      l._esdl__setEntityMutex(null, linfo, parallelize(byte.min, 0));
-      l._esdl__setParConfig(null, linfo, parallelize(byte.min, 0));
+      l._esdl__setEntityMutex(null, linfo, parallelize(byte.min, uint.max));
+      l._esdl__setParConfig(null, linfo, parallelize(byte.min, uint.max));
       _esdl__elabMems(l);
       l._esdl__postElab();
     }
@@ -3550,27 +3551,23 @@ final class EventNotice
 
   private TimedEvent _event;
 
-  __gshared private EventNotice freelist;
-
   static EventNotice alloc(SimTime t, TimedEvent event) {
-    synchronized(typeid(EventNotice)) {
-      // assert(t > SimTime(0));
-      debug {
-	import std.stdio: writeln;
-	writeln("Creating Timed Event at time ", t.getVal);
-      }
-      EventNotice f;
-      if(freelist !is null) {
-	f = freelist;
-	freelist = f.next;
-	f.time = t;
-	f._event = event;
-      }
-      else {
-	f = new EventNotice(t, event);
-      }
-      return f;
+    // assert(t > SimTime(0));
+    debug {
+      import std.stdio: writeln;
+      writeln("Creating Timed Event at time ", t.getVal);
     }
+    EventNotice f;
+    if(SimThread.self._eventNoticeList !is null) {
+      f = SimThread.self._eventNoticeList;
+      SimThread.self._eventNoticeList = f.next;
+      f.time = t;
+      f._event = event;
+    }
+    else {
+      f = new EventNotice(t, event, SimThread.self);
+    }
+    return f;
   }
 
   // called in the single threaded schedule phase, hence no need for
@@ -3590,9 +3587,10 @@ final class EventNotice
   }
 
   static void dealloc(EventNotice f) {
+    auto simThread = f._simThread;
     f._event = null;
-    f.next = freelist;
-    freelist = f;
+    f.next = simThread._eventNoticeList;
+    simThread._eventNoticeList = f;
   }
 
   // _time is effectively immutable
@@ -3616,11 +3614,13 @@ final class EventNotice
     }
   }
 
+  private SimThread _simThread;
   // make new not callable directly -- private
-  private this(SimTime t, TimedEvent event) {
+  private this(SimTime t, TimedEvent event, SimThread simThread) {
     synchronized(this) {
       this.time = t;
       this._event = event;
+      this._simThread = simThread;
     }
   }
 
@@ -4584,16 +4584,24 @@ class SimThread: Thread
 {
   import core.sync.semaphore: Semaphore;
 
+  private static SimThread _self;
+
+  private EventNotice _eventNoticeList;
+
+  public static SimThread self() {
+    return _self;
+  }
+
   this( void function() fn, size_t sz = 0 ) {
     synchronized(this) {
-      super(fn, sz);
+      super(() {_self = this; fn();}, sz);
       _waitLock = new Semaphore(0);
     }
   }
 
   this( void delegate() dg, size_t sz = 0 ) {
     synchronized(this) {
-      super(dg, sz);
+      super({_self = this; dg();}, sz);
       _waitLock = new Semaphore(0);
     }
   }
@@ -6120,11 +6128,17 @@ class RootThread: Thread, Procedure
   public static RootThread self() {return _self;}
 
   private final void fn_wrap(void function() fn) {
+    // FIXME -- the root thread should stick to the first of the
+    // available threads
+    stickToCpuCore(0);
     _self = this;
     fn();
   }
 
   private final void dg_wrap(void delegate() dg) {
+    // FIXME -- the root thread should stick to the first of the
+    // available threads
+    stickToCpuCore(0);
     _self = this;
     dg();
   }
@@ -6234,11 +6248,15 @@ class PoolThread: SimThread
   }
 
   private final void execRoutineProcess() {
+    // First set affinity
     Routine routine = null;
     _esdl__root.simulator()._executor._poolThreadStartBarrier.wait();
+    // FIXME -- stick to the index starting from the available threads
+    stickToCpuCore(_poolIndex);
     while(true) {
       // wait for next cycle
-      this._waitLock.wait();
+      _esdl__root.simulator()._executor._poolThreadBarrier.wait();
+      // this._waitLock.wait();
 
       if(this._hasHalted()) {
 	_esdl__root.simulator()._executor._poolThreadBarrier.wait();
@@ -6312,6 +6330,15 @@ enum SimRunPhase: byte
       PAUSE,
       STAGE_DONE,
       SIMULATION_DONE,
+  }
+
+void waitAllRoots() {
+  RootEntityIntf.waitSimAll();
+}
+
+void startSimAllRoots(T)(T t)
+  if(is(T == Time) || is(T == SimTime)) {
+    RootEntityIntf.startSimAll(t);
   }
 
 void simulateAllRoots(T)(T t)
@@ -6877,9 +6904,10 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   public final void execRoutines() {
-    foreach(ref _poolThread; this._poolThreads) {
-      _poolThread._waitLock.notify();
-    }
+    _poolThreadBarrier.wait();
+    // foreach(ref _poolThread; this._poolThreads) {
+    //   _poolThread._waitLock.notify();
+    // }
     _poolThreadBarrier.wait();
   }
 
@@ -6890,6 +6918,9 @@ class EsdlExecutor: EsdlExecutorIf
       _poolThread._halt();
       _poolThread._waitLock.notify();
     }
+    // start all the threads in the pool
+    _poolThreadBarrier.wait();
+    // wait for all the threads in the pool to finish
     _poolThreadBarrier.wait();
   }
 
@@ -7274,16 +7305,16 @@ interface RootEntityIntf: EntityIntf
   public void initProcess();
   public void initRoutine();
 
-  static void doSimAll(T)(T t)
+  static void startSimAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.doSim(t);
+	root.startSim(t);
       }
     }
-  static void doSimAllUpto(T)(T t)
+  static void startSimAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.doSimUpto(t);
+	root.startSimUpto(t);
       }
     }
   static void waitSimAll() {
@@ -7293,12 +7324,12 @@ interface RootEntityIntf: EntityIntf
   }
   static void simulateAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      doSimAll(t);
+      startSimAll(t);
       waitSimAll();
     }
   static void simulateAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      doSimAllUpto(t);
+      startSimAllUpto(t);
       waitSimAll();
     }
   static void terminateAll() {
@@ -7322,19 +7353,19 @@ interface RootEntityIntf: EntityIntf
   }
   
   final void simulate(Time t) {
-    doSim(t);
+    startSim(t);
     waitSim();
   }
   final void simulate(SimTime st = MAX_SIMULATION_TIME) {
-    doSim(st);
+    startSim(st);
     waitSim();
   }
   final void simulateUpto(Time t) {
-    doSimUpto(t);
+    startSimUpto(t);
     waitSim();
   }
   final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
-    doSimUpto(st);
+    startSimUpto(st);
     waitSim();
   }
   final public void waitSim() {
@@ -7344,29 +7375,29 @@ interface RootEntityIntf: EntityIntf
     this.getSimulator.waitElab();
     addRoot(this);
   }
-  final void doSim(Time t) {
+  final void startSim(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSim(t);
+    getSimulator.startSim(t);
   }
-  final void doSim(SimTime st = MAX_SIMULATION_TIME) {
+  final void startSim(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSim(st);
+    getSimulator.startSim(st);
   }
-  final void doSimUpto(Time t) {
+  final void startSimUpto(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSimUpto(t);
+    getSimulator.startSimUpto(t);
   }
-  final void doSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+  final void startSimUpto(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSimUpto(st);
+    getSimulator.startSimUpto(st);
   }
   final public void waitSimEnd() {
     this.getSimulator.waitSimEnd();
@@ -7487,9 +7518,9 @@ class EsdlSimulator: EntityIntf
 
   enum SchedPhase: byte
   {   IMMEDIATE,
+      UPDATE,
       DELTA,
       TIMED,
-      UPDATE,
       EXEC
       }
 
@@ -7611,17 +7642,17 @@ class EsdlSimulator: EntityIntf
   }
 
   // private Process[] tasks;
-  final void doSim(Time t) {
+  final void startSim(Time t) {
     SimTime st = SimTime(this, t);
-    this.doSim(st);
+    this.startSim(st);
   }
 
-  final void doSimUpto(Time t) {
+  final void startSimUpto(Time t) {
     SimTime st = SimTime(this, t);
-    this.doSimUpto(st);
+    this.startSimUpto(st);
   }
 
-  final void doSim(SimTime runTime = MAX_SIMULATION_TIME) {
+  final void startSim(SimTime runTime = MAX_SIMULATION_TIME) {
     synchronized(this) {
       import std.conv: to;
       // elabDoneLock.wait();
@@ -7638,8 +7669,8 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void doSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
-    doSim(runTime-getSimTime());
+  final void startSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
+    startSim(runTime-getSimTime());
   }
   
   final void terminate() {
@@ -7959,7 +7990,6 @@ class EsdlSimulator: EntityIntf
 	this._scheduler = new EsdlHeapScheduler(this);
 	this._executor = new EsdlExecutor(this);
 
-	import core.cpuid: threadsPerCPU;
 	_elabDoneLock = new Semaphore(0);
 	_simStepLock = new Semaphore(0);
 	_simDoneLock = new Semaphore(0);
@@ -7967,9 +7997,10 @@ class EsdlSimulator: EntityIntf
 
 	version(MULTICORE) {
 	  import core.cpuid: threadsPerCPU;
-	  _executor.threadCount(threadsPerCPU()// -1
+	  auto count = CPU_COUNT();
+	  _executor.threadCount(count// -1
 				);
-	  _executor.createPoolThreads(threadsPerCPU()// -1
+	  _executor.createPoolThreads(count// -1
 				      , 0);
 	}
 	else {
