@@ -11,7 +11,7 @@ class Hello: Entity {
     import std.stdio: writeln;
     writeln("Hello World from: ", Process.self.getFullName());
   }
-  Frop!sayHello greet[2];
+  Worker!sayHello greet[2];
   Task!sayHello greetWorker[2];
 }
 

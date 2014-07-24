@@ -6122,8 +6122,10 @@ class Channel: ChannelIF, NamedObj // Primitive Channel
 
 }
 
-class RootThread: Thread, Procedure
+class RootThread: Procedure
 {
+  Thread _thread;
+
   private static RootThread _self;
   public static RootThread self() {return _self;}
 
@@ -6143,13 +6145,33 @@ class RootThread: Thread, Procedure
     dg();
   }
 
-  this( void function() fn, size_t sz = 0 ) {
-    super(() {fn_wrap(fn);}, sz);
+  this(void function() fn, size_t sz = 0 ) {
+    synchronized(this) {
+      if(sz is 0) {
+	_thread = new Thread(() {fn_wrap(fn);});
+      }
+      else {
+	_thread = new Thread(() {fn_wrap(fn);}, sz);
+      }
+    }
   }
 
-  this( void delegate() dg, size_t sz = 0 ) {
-    super(() {dg_wrap(dg);}, sz);
+  this(void delegate() dg, size_t sz = 0 ) {
+    synchronized(this) {
+      if(sz is 0) {
+	_thread = new Thread(() {dg_wrap(dg);});
+      }
+      else {
+	_thread = new Thread(() {dg_wrap(dg);}, sz);
+      }
+    }
   }
+
+  private final void start() {
+    // _thread is effectively immutable
+    _thread.start();
+  }
+
 
   @_esdl__ignore Random _randGen;
 
