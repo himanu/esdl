@@ -4844,7 +4844,7 @@ class BaseWorker: Process
 }
 
 
-abstract class Process: EventClient, Procedure
+abstract class Process: Procedure, EventClient
 {
   __gshared size_t _procCount;
   private size_t _procID;
@@ -4869,14 +4869,14 @@ abstract class Process: EventClient, Procedure
   // private EventObj _waitingFor = null;
 
   // Return true if the event is dynamically spawned
-  public final bool isDynamic() {
+  public override final bool isDynamic() {
     synchronized(this) {
       return _dynamic;
     }
   }
 
   // Add a newly launched process to the list
-  protected final void addProcess(Process t) {
+  protected override final void addProcess(Process t) {
     synchronized(this) {
       _esdl__childProcs ~= t;
       debug(FORK) {
