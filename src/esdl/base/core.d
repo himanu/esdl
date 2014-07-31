@@ -4838,14 +4838,16 @@ class BaseTask: Process
 
   protected final override void execute() {
     if(_state == ProcState.RUNNING) {
-	_fiber.call();
+      this.call();
       return;
     }
     assert(false, "Unexpected Process State: " ~ _state);
   }
 
   protected final override void call() {
+    Process._self = this;
     _fiber.call();
+    Process._self = null;
   }
 
   protected final override void yield() {
@@ -4925,12 +4927,14 @@ class BaseRoutine: Process
   }
 
   protected final override void call() {
+    Process._self = this;
     if(_fn !is null) {
       _fn();
     }
     if(_dg !is null) {
       _dg();
     }
+    Process._self = null;
     if(_nextTrigger is null) {
       _nextTrigger = _sensitiveTo;
     }
@@ -6200,8 +6204,7 @@ class PoolThread: SimThread
 
       foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
 	if(proc._state == ProcState.RUNNING) {
-	  Process._self = proc;
-	  proc.call();
+	  proc.execute();
 	}
       }
       _esdl__root.simulator()._executor._poolThreadBarrier.wait();

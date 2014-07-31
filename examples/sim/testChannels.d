@@ -99,7 +99,7 @@ class Foo: Entity {
     hdt.dontInitialize();
     hdt.sensitiveTo(e1);
 
-    auto hdm=new Routine(&helloDynamicRoutine);
+    auto hdm = routine(&helloDynamicRoutine);
     // hdm.dontInitialize();
     hdm.sensitiveTo(e1);
     wait(e1 & e3);
