@@ -22,6 +22,8 @@ class Bar: Entity {
   // Port!Frop frop;
 }
 
+@timePrecision(10.psec)
+@timeUnit(100.psec)
 class Foo: Entity {
   // Chan channel12;
   Inst!Bar bar;
@@ -64,23 +66,29 @@ class Foo: Entity {
     // // hdt.dontInitialize();
     // hdt.sensitiveTo(e1);
     ml.unlock();
-    Routine hdm=new Routine(&helloDynamicRoutine);
+    auto hdm=routine(&helloDynamicRoutine);
     // hdm.dontInitialize();
     hdm.sensitiveTo(e1);
+    assert(RootThread.self is null);
     writeln(getSimTime," Right before Join");
-    
-    fork
+    auto foo = fork
       (
        process({writeln("fork 0"); wait(4.nsec);}),
        process({writeln("fork 1");}),
        process({writeln("fork 2");}),
        process({writeln("fork 3"); wait(5.nsec);}),
        process({writeln("fork 4"); wait(40.nsec);})
-       ).joinAny;
+       );
+    foo.joinAny;
     writeln(getSimTime," Right after Join");
     // wait(1.nsec);
-    abortForks();
-    waitForks();
+    // abortForks();
+    writeln("After abortForks");
+    foo.wait();
+    // waitForks();
+    assert(Process.self !is null);
+    assert(RootThread.self is null);
+    writeln("After waitForks");
     writeln(getSimTime," Later after Join");
     wait(e1 & e3);
     writeln("----------------------------Hello World");
@@ -109,12 +117,12 @@ class Foo: Entity {
   // Process!hello helloProcess;
       
   override void doConfig() {
-    timePrecision = 10.psec;
-    timeUnit = 100.psec;
   }
 
 }
 
+@timeUnit(100.psec)
+@timePrecision(10.psec)
 class Sim: RootEntity {
 
   this(string name)
@@ -130,8 +138,6 @@ class Sim: RootEntity {
   }
 
   override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
   }
 }
 
