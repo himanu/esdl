@@ -174,7 +174,6 @@ package interface NamedObj: EsdlObj, TimeContext
       // Process
       private static NamedObj _esdl__getParentProc() {
 	auto p = Process.self;
-	assert(p !is null);
 	return p;
       }
 
@@ -4892,15 +4891,17 @@ class BaseTask: Process
 class BaseRoutine: Process
 {
   // Fiber _fiber;
-  EventObj _nextTrigger;
+  private EventObj _nextTrigger;
+  
+  private void function() _fn = null;
+  private void delegate() _dg = null;
   
   public override void nextTrigger(EventObj event) {
-    _nextTrigger = event;
+    synchronized(this) {
+      _nextTrigger = event;
+    }
   }
 
-  void function() _fn = null;
-  void delegate() _dg = null;
-  
   this(void function() fn, int stage = 0) {
     synchronized(this) {
       _fn = fn;
@@ -4924,7 +4925,6 @@ class BaseRoutine: Process
   }
 
   protected final override void call() {
-    _nextTrigger = null;
     if(_fn !is null) {
       _fn();
     }
@@ -4937,7 +4937,7 @@ class BaseRoutine: Process
 
     if(_nextTrigger !is null) {
       _nextTrigger.addClientProc(this);
-      state = ProcState.WAITING;
+      _nextState = ProcState.WAITING;
     }
   }
 
@@ -4946,7 +4946,7 @@ class BaseRoutine: Process
   }
 
   final override void freeLock(bool onlyBarrier=false) {
-    // do nothing for a fiber
+    // do nothing for a routine
   }
 
   protected override final void requestAbort(EsdlExecutor x) {
@@ -4981,6 +4981,10 @@ class BaseRoutine: Process
     return false;
   }
 
+  private final void preExecute() {
+    super.preExecute();
+    _nextTrigger = null;
+  }
 }
 
 
@@ -5074,8 +5078,11 @@ abstract class Process: Procedure, EventClient
   void freeLock(bool onlyBarrier=false);
   
   private final void cleanup() {
+    // cleanup gets called only when a process comes to an end
+    // as this does not happen frequently, we can freely use synchronization
+    // here
     if(state is ProcState.RUNNING) {
-      state = ProcState.FINISHED;
+      _nextState = ProcState.FINISHED;
     }
     if(this.state is ProcState.KILLED ||
        this.state is ProcState.ABORTED) {
@@ -5134,17 +5141,14 @@ abstract class Process: Procedure, EventClient
   // actually need to be run. This is done because execute is
   // completed using a barrier and the barrier count has to be
   // available before we start.
-  protected final bool preExecute() {
+  protected void preExecute() {
     if(_state == ProcState.STARTING ||
        _state == ProcState.WAITING) {
       _state = ProcState.RUNNING;
-      return true;
     }
     if(_state == ProcState.SUSPENDED) {
       _origState = ProcState.RUNNING;
-      return false;
     }
-    return false;
   }
 
   abstract protected void execute();
@@ -5156,6 +5160,13 @@ abstract class Process: Procedure, EventClient
 
   abstract protected void call();
   abstract protected void yield();
+
+  protected void postExecute() {
+    if(_nextState !is ProcState.NONE) {
+      _state = _nextState;
+      _nextState = ProcState.NONE;
+    }
+  }
 
   final protected void abortProcess() {
     if(_isRunnable()) {
@@ -5342,7 +5353,7 @@ abstract class Process: Procedure, EventClient
   }
 
   final void caughtException() {
-    state = ProcState.EXCEPTION;
+    _nextState = ProcState.EXCEPTION;
     // _execLock.notify();
   }
 
@@ -5385,7 +5396,6 @@ abstract class Process: Procedure, EventClient
       this.caughtException();
       throw(e);
     }
-    // cleanup is defined in TaskProcess
     this.cleanup();
   }
 
@@ -5428,7 +5438,6 @@ abstract class Process: Procedure, EventClient
       this.caughtException();
       throw(e);
     }
-    // cleanup is defined in TaskProcess
     this.cleanup();
   }
 
@@ -5462,7 +5471,7 @@ abstract class Process: Procedure, EventClient
 
   public final void waitSensitive(EventObj event) {
     event.addClientProc(this);
-    state = ProcState.WAITING;
+    _nextState = ProcState.WAITING;
     freeLock();
     yield();
     if(this._isKilled()) {
@@ -5504,10 +5513,14 @@ abstract class Process: Procedure, EventClient
   }
 
   // this is looked at the time thread enters waiting state
-  private ProcStateReq _reqState; // requested state
-  private bool _reqIsRec; // requested state
+  private ProcState _reqState; // requested state
+  private bool _reqIsRec; // recursive request
 
-  protected final ProcStateReq reqState() {
+  private ProcState _state = ProcState.STARTING;
+  private ProcState _origState;
+  private ProcState _nextState;	// Right after the process yields
+
+  protected final ProcState requestState() {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5517,7 +5530,15 @@ abstract class Process: Procedure, EventClient
     }
   }
 
-  private final void reqState(ProcStateReq s, bool rec = false) {
+  protected final ProcState _requestState() {
+    debug(PROC) {
+      import std.stdio;
+      writeln(this.procID, " Thread has request for ", _reqState);
+    }
+    return _reqState;
+  }
+
+  private final void requestState(ProcState s, bool rec = false) {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5526,6 +5547,16 @@ abstract class Process: Procedure, EventClient
       _reqState = s;
       _reqIsRec = rec;
     }
+    getSimulator().reqUpdateProc(this);
+  }
+
+  private final void _requestState(ProcState s, bool rec = false) {
+    debug(PROC) {
+      import std.stdio;
+      writeln(this.procID, " Requesting Thread to ", s);
+    }
+    _reqState = s;
+    _reqIsRec = rec;
     getSimulator().reqUpdateProc(this);
   }
 
@@ -5546,74 +5577,74 @@ abstract class Process: Procedure, EventClient
 
   public final void suspend() {
     synchronized(this) {
-      this.reqState(ProcStateReq.SUSPEND, false);
+      this.requestState(ProcState.SUSPENDED, false);
     }
   }
 
   public final void suspendTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.SUSPEND, true);
+      this.requestState(ProcState.SUSPENDED, true);
     }
   }
 
   public final void disable() {
     synchronized(this) {
-      this.reqState(ProcStateReq.DISABLE, false);
+      this.requestState(ProcState.DISABLED, false);
     }
   }
 
   public final void disableTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.DISABLE, true);
+      this.requestState(ProcState.DISABLED, true);
     }
   }
 
 
   public final void resume() {
     synchronized(this) {
-      this.reqState(ProcStateReq.RESUME, false);
+      this.requestState(ProcState.RESUMED, false);
     }
   }
 
   public final void resumeTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.RESUME, true);
+      this.requestState(ProcState.RESUMED, true);
     }
   }
 
   public final void enable() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ENABLE, false);
+      this.requestState(ProcState.ENABLED, false);
     }
   }
 
   public final void enableTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ENABLE, true);
+      this.requestState(ProcState.ENABLED, true);
     }
   }
 
   public final void abort() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ABORT, false);
+      this.requestState(ProcState.ABORTED, false);
     }
   }
 
   public final void abortTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ABORT, true);
+      this.requestState(ProcState.ABORTED, true);
     }
   }
 
   public final void kill() {
     synchronized(this) {
-      this.reqState(ProcStateReq.KILL, false);
+      this.requestState(ProcState.KILLED, false);
     }
   }
 
   public final void killTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.KILL, true);
+      this.requestState(ProcState.KILLED, true);
     }
   }
 
@@ -5657,9 +5688,6 @@ abstract class Process: Procedure, EventClient
       return(_state >= _KILLED);
     }
   }
-
-  private ProcState _state = ProcState.STARTING;
-  private ProcState _origState;
 
   private final ProcState state() {
     synchronized(this /*_stateMonitor*/) {
@@ -6114,33 +6142,28 @@ private enum ProcState: byte
       RUNNING = 1,		// runnning
       WAITING = 2,		// waiting for an event
       // _ACTIVE
+
+
+      RESUMED = 3,
+      ENABLED = 4,
+      // _REQUESTS
       
-      SUSPENDED = 3,		// user suspended
-      DISABLED = 4,		// user disabled
+      SUSPENDED = 5,		// user suspended
+      DISABLED = 6,		// user disabled
 
       // _DEFUNCT
-      FINISHED = 5,		// naturally ended run
-      EXCEPTION = 6,		// thread faced an exception
+      FINISHED = 7,		// naturally ended run
+      EXCEPTION = 8,		// thread faced an exception
 
       // _KILLED
-      ABORTED = 7,		// user aborted
-      KILLED = 8,	// end of simulation
+      ABORTED = 9,		// user aborted
+      KILLED = 10,	// end of simulation
+      NONE = 11,
       }
 
 private enum _ACTIVE  = ProcState.WAITING; // <= _ACTIVE are active tasks
 private enum _DEFUNCT = ProcState.FINISHED; // >= _DEFUNCT are defunt tasks
 private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tasks
-
-
-private enum ProcStateReq: byte
-  {   ENABLE,
-      RESUME,
-      SUSPEND,
-      DISABLE,
-      ABORT,
-      KILL, // At the end of simulation, kill recursively
-      NONE,
-      }
 
 
 class PoolThread: SimThread
@@ -6175,11 +6198,15 @@ class PoolThread: SimThread
 	break;
       }
 
-      foreach(frop; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
-	if(frop.preExecute()) {
-	  Process._self = frop;
-	  frop.call();
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
+	if(proc._state == ProcState.RUNNING) {
+	  Process._self = proc;
+	  proc.call();
 	}
+      }
+      _esdl__root.simulator()._executor._poolThreadBarrier.wait();
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
+	proc.postExecute();
       }
       this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex].length = 0;
       _esdl__root.simulator()._executor._poolThreadBarrier.wait();
@@ -6598,43 +6625,51 @@ class EsdlExecutor: EsdlExecutorIf
 
     // first create a list of tasks that require temination
     foreach(proc; expandedList) {
-      final switch(proc.reqState) {
-      case ProcStateReq.RESUME:
+      final switch(proc.requestState) {
+      case ProcState.STARTING:
+      case ProcState.RUNNING: assert(false);
+	break;
+      case ProcState.RESUMED:
 	if(_stage == proc._stage && proc.requestResume()) {
 	  addRunnableProcess(proc);
 	}
 	break;
-      case ProcStateReq.ENABLE:
+      case ProcState.ENABLED:
 	if(_stage == proc._stage) {
 	  proc.requestEnable();
 	}
 	break;
-      case ProcStateReq.SUSPEND:
+      case ProcState.SUSPENDED:
 	if(_stage == proc._stage) {
 	  proc.requestSuspend();
 	}
 	break;
-      case ProcStateReq.DISABLE:
+      case ProcState.DISABLED:
 	if(_stage == proc._stage) {
 	  proc.requestDisable();
 	}
 	break;
-      case ProcStateReq.ABORT:
+      case ProcState.ABORTED:
 	if(_stage == proc._stage) {
 	  proc.requestAbort(this);
 	}
 	break;
-      case ProcStateReq.KILL:
+      case ProcState.KILLED:
 	proc.requestKill(this);
 	break;
-      case ProcStateReq.NONE:
+      case ProcState.NONE:
+      case ProcState.WAITING:
+      case ProcState.FINISHED:
+      case ProcState.EXCEPTION:
 	assert(false, "Illegal Process Requested State -- NONE");
+	break;
       }
+      
       // If I uncomment the next line, I get a crash :-(
-      // proc.reqState = ProcStateReq.NONE;
+      // proc.requestState = ProcState.NONE;
     }
     foreach(proc; expandedList) {
-      proc.reqState(ProcStateReq.NONE, false);
+      proc.requestState(ProcState.NONE, false);
     }
     _updateProcs.length = 0;
     if(_termProcs.length > 0) {
@@ -6759,10 +6794,11 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   public final void execTasks() {
+    // all threads start here
     _poolThreadBarrier.wait();
-    // foreach(ref _poolThread; this._poolThreads) {
-    //   _poolThread._waitLock.notify();
-    // }
+    // wait for all threads to end
+    _poolThreadBarrier.wait();
+    // wait for postExecute() to end
     _poolThreadBarrier.wait();
   }
 
@@ -6779,7 +6815,7 @@ class EsdlExecutor: EsdlExecutorIf
     _poolThreadBarrier.wait();
   }
 
-  public final void execWorkers() {
+  public final Process[] execWorkers() {
     Process[] runProcs;
     debug(EXECUTOR) {
       import std.stdio: writeln;
@@ -6799,11 +6835,14 @@ class EsdlExecutor: EsdlExecutorIf
 	writeln("******* About to execute ",
 		task.procID, " (ID) ", task.state, "(status)");
       }
-      if(task.preExecute()) {
+      task.preExecute();
+      if(task._stage == ProcState.RUNNING) {
 	runProcs ~= task;
       }
     }
 
+    auto procs = runProcs;
+    
     this._runnableWorkers.length = 0;
 
     _procBarrier.reset(cast(uint)runProcs.length + 1);
@@ -6840,6 +6879,7 @@ class EsdlExecutor: EsdlExecutorIf
       import std.stdio: writeln;
       writeln("All tasks done with executing");
     }
+    return procs;
   }
 
 
@@ -7705,8 +7745,15 @@ class EsdlSimulator: EntityIntf
 	import std.stdio: writeln;
 	writeln(" > Executing Workers and Tasks: ", this.phase);
       }
+      // preExecute for tasks
+      foreach(group; _executor._runnableTasksGroups) {
+	foreach(proc; group) {
+	  proc.preExecute();
+	}
+      }
+      Process[] runProcs;
       if(_executor.runnableWorkersCount) {
-	_executor.execWorkers();
+	runProcs = _executor.execWorkers();
 	debug(SCHEDULER) {
 	  import std.stdio: writeln;
 	  writeln(" > Done executing workers");
@@ -7721,6 +7768,11 @@ class EsdlSimulator: EntityIntf
 	if(_executor.runnableTasksCount) {
 	  _executor._runnableTasks.length = 0;
 	}
+      }
+      // change the state of the Workers only after we are also
+      // done with the tasks
+      foreach(proc; runProcs) {
+	proc.postExecute();
       }
     }
   }
