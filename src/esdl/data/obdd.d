@@ -310,6 +310,11 @@ struct BDD
 
   Buddy _root;
 
+  const bool opEquals(ref const BDD other) {
+    return (this._index == other._index &&
+	    this._root is other._root);
+  }
+  
   public bool isInitialized() {
     if(_root is null) return false;
     else return true;

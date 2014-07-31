@@ -21,7 +21,10 @@ class Foo: Entity
 	wait(100);
 	writeln("fork 2");
       });
+    import std.stdio;
+    writeln("before wait");
     wait(0);
+    writeln("after wait");
     fork({
 	writeln("fork 4");	// should not get printed
 	wait(10);
@@ -43,18 +46,16 @@ class Foo: Entity
 
 }
 
+@timeUnit(100.psec)
+@timePrecision(10.psec)
 class Bar: RootEntity {
 
   this(string name) {
-      super(name);
-    }
+    super(name);
+  }
 
   Inst!Foo foo;
 
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-  }
 }
 
 void main()

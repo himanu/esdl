@@ -805,7 +805,7 @@ class MutexObj: MutexIF, NamedObj
 
   public final void init(string name, NamedObj parent=null) {
     synchronized {
-      if(RootProcess.self !is null && parent is null) {
+      if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for MutexObj being "
 	       "\"init\" during elaboration");
       }

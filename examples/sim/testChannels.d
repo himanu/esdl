@@ -59,6 +59,8 @@ class FropChan: Entity, Frop {
 class Bar: Entity {
 }
 
+@timePrecision(1.psec)
+@timeUnit(100.psec)
 class Foo: Entity {
   FropChan chan;
 
@@ -97,7 +99,7 @@ class Foo: Entity {
     hdt.dontInitialize();
     hdt.sensitiveTo(e1);
 
-    auto hdm=new Routine(&helloDynamicRoutine);
+    auto hdm = routine(&helloDynamicRoutine);
     // hdm.dontInitialize();
     hdm.sensitiveTo(e1);
     wait(e1 & e3);
@@ -123,11 +125,6 @@ class Foo: Entity {
 
   Task!hello helloWorld;
       
-  override void doConfig() {
-    timePrecision = 1.psec;
-    timeUnit = 100.psec;
-  }
-
   override void doBuild() {
     // printProxyEvents!Frop();
     // auto b = [ __traits(allMembers, BasePort!Frop) ];
@@ -135,6 +132,8 @@ class Foo: Entity {
   }
 }
 
+@timeUnit(100.psec)
+@timePrecision(10.psec)
 class Sim: RootEntity {
 
   Inst!(Foo) [2] top;
@@ -143,12 +142,6 @@ class Sim: RootEntity {
     {
       super(name);
     }
-
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-    // writeln("Configure the RootEntity", this.getFullName);
-  }
 }
 
 int main()

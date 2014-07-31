@@ -14,11 +14,21 @@ module esdl.intf.systemc;
 version(COSIM_SYSTEMC) {
   extern(C) byte systemc_time_resolution();
   
-  import esdl.base.core: simulateAllRoots;
+  import esdl.base.core: simulateAllRoots, startSimAllRoots, waitAllRoots;
   import esdl.base.time: Time;
+
+  extern(C) void esdlStartSimFor(long t) {
+    Time time_ = Time(t, systemc_time_resolution());
+    startSimAllRoots(time_);
+  }
 
   extern(C) void esdlSimulateFor(long t) {
     Time time_ = Time(t, systemc_time_resolution());
     simulateAllRoots(time_);
   }
+
+  extern(C) void esdlWait() {
+    waitAllRoots();
+  }
+
 }

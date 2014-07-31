@@ -17,7 +17,6 @@ module esdl.data.bvec;
 
 import std.conv;
 import std.string;
-import std.metastrings;
 import std.traits;
 import std.format;
 import std.bitmanip;

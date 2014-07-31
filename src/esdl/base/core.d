@@ -23,6 +23,7 @@ public import esdl.base.comm;
 import std.traits: isArray, isIntegral;
 import std.random: Random, uniform;
 
+import esdl.sys.sched: stickToCpuCore, CPU_COUNT;
 
 alias void delegate() DelegateThunk;
 alias void function() FunctionThunk;
@@ -67,7 +68,10 @@ struct _esdl__component {};
 // down the hierarchy.
 struct parallelize
 {
-  byte _parallel;
+  byte _parallel = byte.min;
+  // When the user does not provide any _poolIndex, a _poolIndex would
+  // be automatically generated
+  uint _poolIndex = uint.max;	// relevant only if _parallel is 1
 }
 
 struct timeUnit
@@ -147,6 +151,10 @@ package interface NamedObj: EsdlObj, TimeContext
 
   public static string namedMixin() {
     return q{
+      static if(!__traits(compiles, _esdl__objId)) {
+	private uint _esdl__objId = uint.max;
+      }
+
       static if(!__traits(compiles, _esdl__name)) {
 	protected string _esdl__name;
       }
@@ -166,8 +174,7 @@ package interface NamedObj: EsdlObj, TimeContext
       // Process
       private static NamedObj _esdl__getParentProc() {
 	auto p = Process.self;
-	if(p !is null) {return p;}
-	else return Routine.self;
+	return p;
       }
 
       // Look for the root object in the parent and return it
@@ -182,7 +189,7 @@ package interface NamedObj: EsdlObj, TimeContext
 	  // be set either during the elaboration or during inside the
 	  // sontructor, this part is not retuired.
 	  // else {
-	  //   auto rootProc = RootProcess.self;
+	  //   auto rootProc = RootThread.self;
 	  //   if(rootProc !is null)
 	  //     return rootProc.getRoot;
 	  // }
@@ -288,7 +295,30 @@ package interface NamedObj: EsdlObj, TimeContext
 }
 
 
-public interface HierComp: NamedObj
+static shared uint _esdl__compCount;
+private void _esdl__setCompId(T)(T t) if(is(T: HierComp)) {
+  synchronized(typeid(HierComp)) {
+    if(t._esdl__compId is uint.max) {
+      t._esdl__compId = _esdl__compCount;
+      _esdl__compCount = _esdl__compCount + 1;
+    }
+  }
+}
+
+static shared uint _esdl__objCount;
+private void _esdl__setObjId(T)(T t) if(is(T: NamedObj)) {
+  synchronized(typeid(NamedObj)) {
+    if(t._esdl__objId is uint.max) {
+      t._esdl__objId = _esdl__objCount;
+      _esdl__objCount = _esdl__objCount + 1;
+    }
+    static if(is(T: HierComp)) {
+      t._esdl__setCompId();
+    }
+  }
+}
+
+public interface HierComp: NamedObj, ParContext
 {
   import core.sync.semaphore: CoreSemaphore = Semaphore;
 
@@ -343,44 +373,42 @@ public interface HierComp: NamedObj
   public void killTree();
 
   // Interface functions for enabling parallelize UDP
-  public CoreSemaphore _esdl__getLockMutex();
+  public CoreSemaphore _esdl__getParLock();
   public void _esdl__setEntityMutex(CoreSemaphore parentLock,
-					     byte linfo, byte plinfo);
+				    parallelize linfo, parallelize plinfo);
 
-  static byte _esdl__get_parallelism(L)(L l) {
+  static auto _esdl__get_parallelism(L)(L l) {
     enum int Q = _esdl__attr!(parallelize, L);
     static if(Q is -1) {
-      enum byte par = -1; // inherit from parent
+      enum par = parallelize(-1, uint.max); // inherit from parent
     }
     else {
       static if(__traits(isSame, __traits(getAttributes, L)[Q],
 			 parallelize)) {
-	enum byte par = byte.min;
+	enum par = parallelize(byte.min, uint.max);
       }
       else {
-	enum attr = __traits(getAttributes, L)[Q];
-	enum byte par = attr._parallel;
+	enum par = __traits(getAttributes, L)[Q];
       }
     }
     return par;
   }
 
-  static byte _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
+  static auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
     enum int P = _esdl__attr!(parallelize, t, I);
     enum int Q = _esdl__attr!(parallelize, L);
     static if(P is -1) {
       // check if the entity definition has a parallelize tag
       static if(Q is -1) {
-	enum byte par = -1; // inherit from parent
+	enum par = parallelize(-1, uint.max); // inherit from parent
       }
       else {
 	static if(__traits(isSame, __traits(getAttributes, L)[Q],
 			   parallelize)) {
-	  enum byte par = byte.min;
+	  enum par = parallelize(byte.min, uint.max);
 	}
 	else {
-	  enum attr = __traits(getAttributes, L)[Q];
-	  enum byte par = attr._parallel;
+	  enum par = __traits(getAttributes, L)[Q];
 	}
       }
     }
@@ -388,11 +416,10 @@ public interface HierComp: NamedObj
       // first check if the attribute is just @parallelize
       static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
 			 parallelize)) {
-	enum byte par = byte.min;
+	enum par = parallelize(byte.min, uint.max);
       }
       else {
-	enum attr = __traits(getAttributes, t.tupleof[I])[P];
-	enum byte par = attr._parallel;
+	enum par = __traits(getAttributes, t.tupleof[I])[P];
       }
     }
     return par;
@@ -501,7 +528,11 @@ public interface HierComp: NamedObj
   }
 
   static string hierMixin() {
-    return q{
+    return ParContextMixin() ~
+      q{
+      static if(!__traits(compiles, _esdl__compId)) {
+	private uint _esdl__compId = uint.max;
+      }
       //////////////////////////////////////////////////////
       // Implementation of the parallelize UDP functionality
       //////////////////////////////////////////////////////
@@ -527,13 +558,13 @@ public interface HierComp: NamedObj
       // for this variable is copied from the uppper hierarchy
       // This variable is set and used only during the elaboration
       // phase
-      static if(!__traits(compiles, _esdl__lockInfo)) {
-	byte _esdl__lockInfo = 1; // default value
+      static if(!__traits(compiles, _esdl__parInfo)) {
+	parallelize _esdl__parInfo = parallelize(-1, uint.max); // default value
       }
 
       // Effectively immutable in the run phase since the variable is
       // set durin gthe elaboration
-      public final override CoreSemaphore _esdl__getLockMutex() {
+      public final override CoreSemaphore _esdl__getParLock() {
 	return _esdl__parLock;
       }
 
@@ -541,36 +572,69 @@ public interface HierComp: NamedObj
       // based on the UDP option @parallelize. This function is called
       // during the elaboration phase.
       public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
-						       byte linfo, byte plinfo) {
-	if(linfo == -1) {	// take hier information
-	  _esdl__lockInfo = plinfo;
-	  if(plinfo == byte.min) { // UDP @parallelize without argument
+						       parallelize linfo, parallelize plinfo) {
+	if(linfo._parallel == -1) {	// take hier information
+	  _esdl__parInfo = plinfo;
+	  if(plinfo._parallel == byte.min) { // UDP @parallelize without argument
 	    _esdl__parLock = null;
 	  }
-	  else if(plinfo == 0) {
+	  else if(plinfo._parallel == 0) {
 	    _esdl__parLock = parentLock;
 	  }
 	  else {
-	    _esdl__parLock = new CoreSemaphore(plinfo);
+	    _esdl__parLock = new CoreSemaphore(plinfo._parallel);
 	  }
 	}
 	else {
-	  if(plinfo == 0) {
+	  if(plinfo._parallel == 0) {
 	    // FIXME -- give out warning
 	  }
-	  _esdl__lockInfo = linfo;
-	  if(linfo == byte.min) {	// parallelize
+	  _esdl__parInfo = linfo;
+	  if(linfo._parallel == byte.min) {	// parallelize
 	    _esdl__parLock = null;
 	  }
-	  else if(linfo == 0) {
+	  else if(linfo._parallel == 0) {
 	    _esdl__parLock = new CoreSemaphore(1);
 	  }
 	  else {
-	    _esdl__parLock = new CoreSemaphore(linfo);
+	    _esdl__parLock = new CoreSemaphore(linfo._parallel);
 	  }
 	}
       }
 
+      public ParContext _esdl__parInheritFrom() {
+	auto parent = cast(HierComp) this.getParent();
+	assert(parent !is null);
+	return parent;
+      }
+      public uint _esdl__parDetermineIndex() {
+	auto nthreads = getSimulator._executor._poolThreads.length;
+	return _esdl__compId % nthreads;
+      }
+      public final void _esdl__setParConfig(ParConfig parentCfg,
+					    parallelize linfo, parallelize plinfo) {
+	if(linfo._parallel == -1) {	// take hier information
+	  _esdl__parInfo = plinfo;
+	}
+	else {
+	  _esdl__parInfo = linfo;
+	}
+	
+	if(_esdl__parInfo._parallel != 0) { // UDP @parallelize
+	  // without argument
+	  auto nthreads = getSimulator._executor._poolThreads.length;	  
+	  if(_esdl__parInfo._poolIndex != uint.max) {
+	    assert(_esdl__parInfo._poolIndex < nthreads);
+	    _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
+	  }
+	  else {
+	    _esdl__parConfig = new ParConfig(_esdl__compId % nthreads);
+	  }
+	}
+	else {
+	  _esdl__parConfig = parentCfg;
+	}
+      }
       //////////////////////////////////////////////////////
       // Implementation of the hierarchy/elaboration methods
       //////////////////////////////////////////////////////
@@ -1242,7 +1306,7 @@ void _esdl__connect(T)(T t) {
 // separately(in the process/routine constructor)
 void _esdl__register(T, L)(T t, ref L l)
   if(is(T : NamedObj) && is(T == class)) {
-    static if((is(L : Process)) &&(is(L == class))) {
+    static if((is(L : BaseWorker)) && (is(L == class))) {
       synchronized(l) {
 	// Dynamic tasks get registered by the constructor --
 	// static tasks get registered during Elaboration.
@@ -1250,11 +1314,19 @@ void _esdl__register(T, L)(T t, ref L l)
       }
     }
 
-    static if(is(L : Routine)) {
+    static if((is(L : BaseTask)) && (is(L == class))) {
       synchronized(l) {
 	// Dynamic tasks get registered by the constructor --
 	// static tasks get registered during Elaboration.
-	t.getSimulator.reqRegisterRoutine(l);
+	t.getSimulator.reqRegisterProcess(l, l.stage);
+      }
+    }
+
+    static if((is(L : BaseRoutine)) && (is(L == class))) {
+      synchronized(l) {
+	// Dynamic tasks get registered by the constructor --
+	// static tasks get registered during Elaboration.
+	t.getSimulator.reqRegisterProcess(l, l.stage);
       }
     }
 
@@ -1262,7 +1334,7 @@ void _esdl__register(T, L)(T t, ref L l)
 
 
 // void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
-//   if(is(L f : Task!(F, S), alias F, size_t S)) {
+//   if(is(L f : Worker!(F, S), alias F, size_t S)) {
 //     synchronized(t) {
 //       // import std.functional; // used for toDelegate
 //       // import std.traits;
@@ -1270,7 +1342,7 @@ void _esdl__register(T, L)(T t, ref L l)
 //       alias L._FUNCTION F;
 //       alias L._STACKSIZE S;
 
-//       l = t.new t.TaskT!(T, F, S)(t);
+//       l = t.new t.Worker!(T, F, S)(t);
 //       // string getFuncName()
 //       // {
 //       //   return "t." ~ __traits(identifier, F);
@@ -1292,12 +1364,12 @@ void _esdl__register(T, L)(T t, ref L l)
 //       //	 {
 //       //	   dg(ARGS);
 //       //	 };
-//       //     l = new Task!(F, A)(fun, 0);
+//       //     l = new Worker!(F, A)(fun, 0);
 //       //     // l = new Process(fun, 0);
 //       //   }
 //       // else
 //       //   {
-//       //     l = new Task!(F, A)(dg, 0);
+//       //     l = new Worker!(F, A)(dg, 0);
 //       //     // l = new Process(dg, 0);
 //       //   }
 //     }
@@ -1305,8 +1377,8 @@ void _esdl__register(T, L)(T t, ref L l)
 
 // {
 
-//   // Tasks
-//   // else static if(is(L f == Task!(T, N), immutable(char)[] T, ulong N))
+//   // Workers
+//   // else static if(is(L f == Worker!(T, N), immutable(char)[] T, ulong N))
 //   //	     {
 //   //	       synchronized(t)
 //   //		 {
@@ -1324,10 +1396,10 @@ void _esdl__register(T, L)(T t, ref L l)
 
 //   // else static if(is(L == class) &&
 //   //		     is(L c: NamedObj) &&
-//   //		     ! is(L: RootProcess))
+//   //		     ! is(L: RootThread))
 //   //	     {
-//   //	       // static if(is(L f == Task!(S, T), alias S, T...) ||
-//   //	       //	    is(L f == Task!(T, N), immutable(char)[] T, ulong N) ||
+//   //	       // static if(is(L f == Worker!(S, T), alias S, T...) ||
+//   //	       //	    is(L f == Worker!(T, N), immutable(char)[] T, ulong N) ||
 //   //	       //	    is(L g == Inst!E, E : ElabContext))
 //   //	       pragma(msg, "Instantiating: " ~ L.stringof);
 //   //	       if(l is null) l = new L();
@@ -1335,6 +1407,47 @@ void _esdl__register(T, L)(T t, ref L l)
 
 // }
 
+class ParConfig
+{
+  private uint _threadPoolIndex = uint.max;
+  public uint getThreadIndex() {
+    return _threadPoolIndex;
+  }
+  public void setThreadIndex(uint index) {
+    _threadPoolIndex = index;
+  }
+  this(uint index) {
+    _threadPoolIndex = index;
+  }
+}
+
+// Determine what thread from the thread pool to use
+public uint _esdl__parContextFindIndex(U)(U u) if(is(U: ParContext)) {
+  // First get the @parallelize attribute
+ }
+
+// @parallelize(0) would result in the ParContext using the same
+// thread as the parEnclosing context
+public interface ParContext
+{
+  // Get the enclosing ParContext
+  public ParContext _esdl__parInheritFrom();
+  public uint _esdl__parDetermineIndex();
+  public ParConfig _esdl__getParConfig();
+  static string ParContextMixin() {
+    return q{
+      ParConfig _esdl__parConfig;
+      public ParConfig _esdl__getParConfig() {
+	// of the ParContext does not have a ParConfig Object, get it
+	// from the enclosing ParContext
+	if(_esdl__parConfig is null) {
+	  _esdl__parConfig = _esdl__parInheritFrom()._esdl__getParConfig();
+	}
+	return _esdl__parConfig;
+      }
+    };
+  }
+}
 
 public interface ElabContext: HierComp
 {
@@ -1418,7 +1531,7 @@ public interface ElabContext: HierComp
     (T t, L l, uint[] indices=null) {
     debug(ATTRCONFIG) {
       import std.stdio;
-      writeln("** ElabContext: Fooorating " ~ t.tupleof[I].stringof ~ ":" ~
+      writeln("** ElabContext: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
 	      typeof(l).stringof);
     }
     synchronized(l) {
@@ -1445,9 +1558,10 @@ public interface ElabContext: HierComp
     synchronized(l) {
       import core.sync.semaphore: Semaphore;
       auto linfo = _esdl__get_parallelism(l);
-      l._esdl__setEntityMutex(null, linfo, 1);
       l.doBuild();
       l._esdl__postBuild();
+      l._esdl__setEntityMutex(null, linfo, parallelize(byte.min, uint.max));
+      l._esdl__setParConfig(null, linfo, parallelize(byte.min, uint.max));
       _esdl__elabMems(l);
       l._esdl__postElab();
     }
@@ -1471,14 +1585,17 @@ public interface ElabContext: HierComp
 	t._esdl__addChildComp(l);
       }
       l._esdl__nomenclate!I(t, indices);
+      l._esdl__setObjId();
       l._esdl__setParent(t);
       l._esdl__setRoot(t.getRoot);
       l._esdl__setIndices(indices);
-      auto linfo = _esdl__get_parallelism!I(t, l);
-      l._esdl__setEntityMutex(t._esdl__getLockMutex, linfo,
-			      t._esdl__lockInfo);
       l.doBuild();
       l._esdl__postBuild();
+      auto linfo = _esdl__get_parallelism!I(t, l);
+      l._esdl__setEntityMutex(t._esdl__getParLock, linfo,
+			      t._esdl__parInfo);
+      l._esdl__setParConfig(t._esdl__parConfig, linfo,
+			    t._esdl__parInfo);
       _esdl__elabMems(l);
       l._esdl__postElab();
     }
@@ -1578,9 +1695,7 @@ interface EventAgent
   protected void trigger(EsdlSimulator sim);
   protected void addClientEvent(SimEvent client, size_t index);
   // A Process(Process or Routine) can be client to only one Event Agent
-  // protected void addClientProc(EventClient client);
-  protected void addClientProcess(Process client);
-  protected void addClientRoutine(Routine client);
+  protected void addClientProc(Process client);
 }
 
 // Any object that is able to get notified by an event
@@ -1873,7 +1988,7 @@ public class NotificationObj(T): EventObj
 
   public final void init(string name, NamedObj parent=null) {
     synchronized {
-      if(RootProcess.self !is null && parent is null) {
+      if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for NotificationObj being "
 	       "\"init\" during elaboration");
       }
@@ -1882,6 +1997,7 @@ public class NotificationObj(T): EventObj
       }
       if(name !is null) {
 	_notificationObj._esdl__nomenclate(name);
+	_notificationObj._esdl__setObjId();
       }
     }
   }
@@ -1914,6 +2030,7 @@ public class NotificationObj(T): EventObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setObjId();
       l._esdl__obj._esdl__setParent(t);
     }
   }
@@ -2164,6 +2281,7 @@ public class NotificationQueueObj(T): NotificationObj!T
 	_notificationQueueObj = new NotificationQueueObj!T();
       }
       _notificationQueueObj._esdl__nomenclate(name);
+      _notificationQueueObj._esdl__setObjId();
     }
   }
   // alias init init;
@@ -2195,6 +2313,7 @@ public class NotificationQueueObj(T): NotificationObj!T
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setObjId();
       l._esdl__obj._esdl__setParent(t);
     }
   }
@@ -2218,9 +2337,7 @@ public class EventObj: EventAgent, NamedObj
   private IndexedSimEvent[] _clientEvents;
 
   // Processes that are waiting for this event to trigger
-  private Process[] _clientProcs;
-  // Routines that would be triggered by this event
-  private Routine[] _clientRoutines;
+  private Process[] _clientProcesses;
 
   protected this(NamedObj parent=null) {
     this(null, parent);
@@ -2254,9 +2371,9 @@ public class EventObj: EventAgent, NamedObj
   }
 
   // called when a process starts waiting for this event
-  protected final void addClientProcess(Process client) {
+  protected final void addClientProc(Process client) {
     synchronized(this) {
-      this._clientProcs ~= client;
+      this._clientProcesses ~= client;
     }
 
     // just to make sure that the event a thread is waiting for, is
@@ -2268,14 +2385,6 @@ public class EventObj: EventAgent, NamedObj
     // synchronized(client) {
     //   client._waitingFor = this;
     // }
-  }
-
-  // FIXME -- save the event with the routine, so that the event is
-  // not possibly garbage collected
-  protected final void addClientRoutine(Routine client) {
-    synchronized(this) {
-      this._clientRoutines ~= client;
-    }
   }
 
   public final void wait() {
@@ -2297,18 +2406,12 @@ public class EventObj: EventAgent, NamedObj
       writeln("Event Triggered: ", this.getFullName);
     }
 
-    foreach(c; _clientProcs) {
+    foreach(c; _clientProcesses) {
       sim._executor.addRunnableProcess(c);
       // c._waitingFor = null;
     }
 
-    _clientProcs.length = 0;
-
-    foreach(ref c; _clientRoutines) {
-      sim._executor.addRunnableRoutine(c);
-    }
-
-    _clientRoutines.length = 0;
+    _clientProcesses.length = 0;
 
     auto clientEvents = _clientEvents;
     _clientEvents.length = 0;
@@ -2445,8 +2548,7 @@ public class EventObj: EventAgent, NamedObj
       this.notify();
     }
     synchronized(this) {
-      _clientRoutines.length = 0;
-      _clientProcs.length = 0;
+      _clientProcesses.length = 0;
       this.cancel();
     }
   }
@@ -2611,7 +2713,7 @@ public class EventObj: EventAgent, NamedObj
 
   public final void init(string name, NamedObj parent=null) {
     synchronized {
-      if(RootProcess.self !is null && parent is null) {
+      if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for EventObj being "
 	       "\"init\" during elaboration");
       }
@@ -2620,6 +2722,7 @@ public class EventObj: EventAgent, NamedObj
       }
       if(name !is null) {
 	_eventObj._esdl__nomenclate(name);
+	_eventObj._esdl__setObjId();
       }
     }
   }
@@ -2642,6 +2745,7 @@ public class EventObj: EventAgent, NamedObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setObjId();
       l._esdl__obj._esdl__setParent(t);
     }
   }
@@ -2891,6 +2995,7 @@ public class EventQueueObj: EventObj
 	_eventObj = new EventQueueObj();
       }
       _eventObj._esdl__nomenclate(name);
+      _eventObj._esdl__setObjId();
     }
   }
   // alias init init;
@@ -2912,6 +3017,7 @@ public class EventQueueObj: EventObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setObjId();
       l._esdl__obj._esdl__setParent(t);
     }
   }
@@ -3176,7 +3282,7 @@ final private class TimedEvent: SimEvent
       return true;
     }
 
-    // auto thread = staticCast!SimThread(Thread.getThis());
+    // auto thread = staticCast!BaseThread(Thread.getThis());
     // if(Process.self is null) {
     //   assert(false, "Immediate notification does not work in Routines!");
     // }
@@ -3402,31 +3508,44 @@ final class EventNotice
   }
 
   private TimeNoticeUnion unionTimeNext;
-  alias unionTimeNext this;
+
+  private EventNotice next() {
+    return unionTimeNext._next;
+  }
+
+  private void next(EventNotice n) {
+    unionTimeNext._next = n;
+  }
+
+  private SimTime time() {
+    return unionTimeNext._time;
+  }
+
+  private void time(SimTime t) {
+    unionTimeNext._time = t;
+  }
+
+  // alias unionTimeNext this;
 
   private TimedEvent _event;
 
-  __gshared private EventNotice freelist;
-
   static EventNotice alloc(SimTime t, TimedEvent event) {
-    synchronized(typeid(EventNotice)) {
-      // assert(t > SimTime(0));
-      debug {
-	import std.stdio: writeln;
-	writeln("Creating Timed Event at time ", t.getVal);
-      }
-      EventNotice f;
-      if(freelist !is null) {
-	f = freelist;
-	freelist = f._next;
-	f._time = t;
-	f._event = event;
-      }
-      else {
-	f = new EventNotice(t, event);
-      }
-      return f;
+    // assert(t > SimTime(0));
+    debug {
+      import std.stdio: writeln;
+      writeln("Creating Timed Event at time ", t.getVal);
     }
+    EventNotice f;
+    if(SimThread.self._eventNoticeList !is null) {
+      f = SimThread.self._eventNoticeList;
+      SimThread.self._eventNoticeList = f.next;
+      f.time = t;
+      f._event = event;
+    }
+    else {
+      f = new EventNotice(t, event, SimThread.self);
+    }
+    return f;
   }
 
   // called in the single threaded schedule phase, hence no need for
@@ -3446,15 +3565,16 @@ final class EventNotice
   }
 
   static void dealloc(EventNotice f) {
+    auto simThread = f._simThread;
     f._event = null;
-    f._next = freelist;
-    freelist = f;
+    f.next = simThread._eventNoticeList;
+    simThread._eventNoticeList = f;
   }
 
   // _time is effectively immutable
   package final SimTime atTime() {
     // synchronized(this) {
-    return this._time;
+    return this.time;
     // }
   }
 
@@ -3472,11 +3592,13 @@ final class EventNotice
     }
   }
 
+  private SimThread _simThread;
   // make new not callable directly -- private
-  private this(SimTime t, TimedEvent event) {
+  private this(SimTime t, TimedEvent event, SimThread simThread) {
     synchronized(this) {
-      this._time = t;
+      this.time = t;
       this._event = event;
+      this._simThread = simThread;
     }
   }
 
@@ -3484,7 +3606,7 @@ final class EventNotice
     // if(rhs is null) return -1;
     // if(this is null) return 1;
     synchronized(this, rhs) {
-      return this._time.opCmp(rhs._time);
+      return this.time.opCmp(rhs.time);
     }
   }
 }
@@ -3503,8 +3625,7 @@ interface Procedure: HierComp
   // find out what procedure is running now
   public static Procedure self() {
     if(Process.self !is null) return Process.self;
-    if(Routine.self !is null) return Routine.self;
-    return RootProcess.self;
+    return RootThread.self;
   }
 
   // Functions for Random Stability
@@ -3838,35 +3959,43 @@ public void nextTrigger(I)(I n)
 
 public void nextTrigger(E)(E e)
   if(is(E: SimTime) || is(E: Time)) {
-      auto event = Routine.self._timed;
+      auto event = Process.self._timed;
       event.notify(e);
       _nextTriggerEvent(event);
     }
 
 private void _nextTriggerEvent(EventObj event) {
-  if(Routine.self is null) {
-    assert(false, "nextTrigger may be called only from a Routine");
-  }
-  Routine.self.nextTrigger(event);
+  assert(Process.self !is null);
+  Process.self.nextTrigger(event);
+}
+
+public Process worker(DelegateThunk dg, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWorker(dg, stage, sz);
+  return f;
+}
+
+public Process worker(FunctionThunk fn, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWorker(fn, stage, sz);
+  return f;
 }
 
 public Process process(DelegateThunk dg, int stage = 0, size_t sz = 0) {
-  Process f = new Process(dg, stage, sz);
+  Process f = new BaseTask(dg, stage, sz);
   return f;
 }
 
 public Process process(FunctionThunk fn, int stage = 0, size_t sz = 0) {
-  Process f = new Process(fn, stage, sz);
+  Process f = new BaseTask(fn, stage, sz);
   return f;
 }
 
-public Routine routine(DelegateThunk dg) {
-  Routine f = new Routine(dg);
+public Process routine(DelegateThunk dg, int stage = 0) {
+  Process f = new BaseRoutine(dg, stage);
   return f;
 }
 
-public Routine routine(FunctionThunk fn) {
-  Routine f = new Routine(fn);
+public Process routine(FunctionThunk fn, int stage = 0) {
+  Process f = new BaseRoutine(fn, stage);
   return f;
 }
 
@@ -3936,14 +4065,14 @@ public ForkMono fork(F)(F thunk) {
   return new ForkMono(proc);
  }
 
-public Routine cron(E, F)(E event, F thunk) {
-  Routine rtn;
+public BaseRoutine cron(E, F)(E event, F thunk) {
+  BaseRoutine rtn;
   auto e = getEventObj(event);
   static if(is(F: DelegateThunk) ||
 	    is(F: FunctionThunk)) {
-    rtn = new Routine(thunk);
+    rtn = new BaseRoutine(thunk);
   }
-  else static if(is(F: Routine)) {
+  else static if(is(F: BaseRoutine)) {
       rtn = thunk;
     }
     else {
@@ -3990,18 +4119,14 @@ private ref Random getRandGen() {
   Procedure proc;
   proc = Process.self;
   if(proc is null) {
-    proc = RootProcess.self;
+    proc = RootThread.self;
   }
   if(proc !is null) {
     return proc.randGen();
   }
-  auto routine = Routine.self;
-  if(routine !is null) {
-    return routine.randGen();
-  }
   else {
     assert(false, "randGen can be accessed only from a Process,"
-	   " RootProcess, or Routine");
+	   " or RootThread");
   }
 }
 
@@ -4081,24 +4206,35 @@ public void srandom(uint _seed) {
   }
 }
 
-class TaskT(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
+class Worker(T, alias F, int R=0, size_t S=0): Worker!(F, R, S)
 {
   this(T t) {
     auto dg = recreateDelegate!F(t);
 
     static assert((ParameterTypeTuple!dg).length == 0);
     super(dg, R, S);
-    //	{
-    //	  auto ARGS = adjustArgs!(T, A)(t);
-    //	  auto fn = delegate()
-    //	    {
-    //	      dg(ARGS.expand);
-    //	    };
-    //	  super(fn, 0);
-    //	}
-    // else
-    // {
-    // }
+  }
+
+}
+
+class Task(T, alias F, int R=0, size_t S=0): Task!(F, R, S)
+{
+  this(T t) {
+    auto dg = recreateDelegate!F(t);
+
+    static assert((ParameterTypeTuple!dg).length == 0);
+    super(dg, R, S);
+  }
+
+}
+
+class Routine(T, alias F, int R=0): Routine!(F, R)
+{
+  this(T t) {
+    auto dg = recreateDelegate!F(t);
+
+    static assert((ParameterTypeTuple!dg).length == 0);
+    super(dg, R);
   }
 
 }
@@ -4108,9 +4244,7 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 
   static string elabTasks() {
     return
-      q{
-
-    };
+      q{};
   }
 
   static string configTime() {
@@ -4155,7 +4289,6 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
       configTime() ~
       timedMixin() ~
       elabTasks();
-
   }
 }
 
@@ -4168,11 +4301,77 @@ class Entity: EntityIntf
 
 
 
+template Worker(alias F, int R=0, size_t S=0)
+{
+  static if(__traits(compiles, F())) {
+    // pragma(msg, F.stringof);
+    class Worker: BaseWorker
+    {
+      alias F _FUNCTION;
+      enum ulong _STACKSIZE = S;
+
+      this() {
+	// import std.stdio;
+	// writeln("New Dynamic Worker");
+	super(F, S);
+      }
+    }
+  }
+  else {
+    // Normally during elaboration of the tasks, this branch would be taken
+    class Worker: BaseWorker
+    {
+      alias F _FUNCTION;
+      enum ulong _STACKSIZE = S;
+
+      protected this(void delegate() dg, int stage, size_t stackSize) {
+	super(dg, stage, stackSize);
+      }
+
+      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
+      {
+	synchronized(t) {
+	  l = new Worker!(T, F, R, S)(t);
+	}
+      }
+
+      static void _esdl__elab(size_t I, T, L)
+	(T t, ref L l, uint[] indices=null) {
+	debug(ELABORATE) {
+	  import std.stdio;
+	  writeln("** Worker: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+		  typeof(l).stringof);
+	}
+	l._esdl__inst!I(t, l);
+	synchronized(l) {
+	  import core.sync.semaphore: Semaphore;
+	  static if(is(T unused: ElabContext)) {
+	    t._esdl__addChildObj(l);
+	    t._esdl__addChildTask(l);
+	    t._esdl__addChildComp(l);
+	  }
+	  l._dynamic = false;
+	  l._esdl__setIndices(indices);
+	  l._esdl__nomenclate!I(t, indices);
+	  l._esdl__setObjId();
+	  l._esdl__setRoot(t.getRoot);
+	  l._esdl__setParent(t);
+	  t._esdl__register(l);
+	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
+	  l._esdl__parLock = t._esdl__getParLock;
+	  l._esdl__parConfig = t._esdl__getParConfig;
+	}
+      }
+
+    }
+  }
+}
+
 template Task(alias F, int R=0, size_t S=0)
 {
   static if(__traits(compiles, F())) {
     // pragma(msg, F.stringof);
-    class Task: Process
+    class Task: BaseTask
     {
       alias F _FUNCTION;
       enum ulong _STACKSIZE = S;
@@ -4186,7 +4385,7 @@ template Task(alias F, int R=0, size_t S=0)
   }
   else {
     // Normally during elaboration of the tasks, this branch would be taken
-    class Task: Process
+    class Task: BaseTask
     {
       alias F _FUNCTION;
       enum ulong _STACKSIZE = S;
@@ -4198,39 +4397,7 @@ template Task(alias F, int R=0, size_t S=0)
       static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
       {
 	synchronized(t) {
-	  // import std.functional; // used for toDelegate
-	  // import std.traits;
-
-	  l = new TaskT!(T, F, R, S)(t);
-	  // string getFuncName()
-	  // {
-	  //   return "t." ~ __traits(identifier, F);
-	  // }
-
-	  // import std.stdio;
-	  // writeln("New thread for: ", t.getFullName);
-	  // // does not work for functions with default arguments
-	  // // typeof(toDelegate(&F)) dg;
-	  // // pragma(msg, getFuncName());
-	  // typeof(& mixin(getFuncName())) dg;
-
-	  // dg.funcptr = &F;
-	  // dg.ptr = cast(void *)t;
-
-	  // static if((ParameterTypeTuple!dg).length > 0)
-	  //   {
-	  //     auto fun = delegate()
-	  //	 {
-	  //	   dg(ARGS);
-	  //	 };
-	  //     l = new Task!(F, A)(fun, 0);
-	  //     // l = new Process(fun, 0);
-	  //   }
-	  // else
-	  //   {
-	  //     l = new Task!(F, A)(dg, 0);
-	  //     // l = new Process(dg, 0);
-	  //   }
+	  l = new Task!(T, F, R, S)(t);
 	}
       }
 
@@ -4252,24 +4419,79 @@ template Task(alias F, int R=0, size_t S=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
+	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setParent(t);
 	  t._esdl__register(l);
-	  auto linfo = _esdl__get_parallelism!I(t, l);
-	  l._esdl__parLock = t._esdl__getLockMutex;
+	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
+	  l._esdl__parLock = t._esdl__getParLock;
+	  l._esdl__parConfig = t._esdl__getParConfig;
+	}
+      }
+    }
+  }
+}
+
+template Routine(alias F, int R=0)
+{
+  static if(__traits(compiles, F())) {
+    // pragma(msg, F.stringof);
+    class Routine: BaseRoutine
+    {
+      alias F _FUNCTION;
+
+      this() {
+	// import std.stdio;
+	// writeln("New Dynamic Routine");
+	super(F);
+      }
+    }
+  }
+  else {
+    // Normally during elaboration of the tasks, this branch would be taken
+    class Routine: BaseRoutine
+    {
+      alias F _FUNCTION;
+
+      protected this(void delegate() dg, int stage) {
+	super(dg, stage);
+      }
+
+      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
+      {
+	synchronized(t) {
+	  l = new Routine!(T, F, R)(t);
 	}
       }
 
-      // this()
-      //   {
-      //     static assert((ParameterTypeTuple!F).length == 0);
-      //     auto dg =
-      //       recreateDelegateFromVoidPtr!F(cast(void *) this.outer);
-      //     super(dg, _STACKSIZE);
-      //   }
-
+      static void _esdl__elab(size_t I, T, L)
+	(T t, ref L l, uint[] indices=null) {
+	debug(ELABORATE) {
+	  import std.stdio;
+	  writeln("** Routine: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+		  typeof(l).stringof);
+	}
+	l._esdl__inst!I(t, l);
+	synchronized(l) {
+	  import core.sync.semaphore: Semaphore;
+	  static if(is(T unused: ElabContext)) {
+	    t._esdl__addChildObj(l);
+	    t._esdl__addChildTask(l);
+	    t._esdl__addChildComp(l);
+	  }
+	  l._dynamic = false;
+	  l._esdl__setIndices(indices);
+	  l._esdl__nomenclate!I(t, indices);
+	  l._esdl__setObjId();
+	  l._esdl__setRoot(t.getRoot);
+	  l._esdl__setParent(t);
+	  t._esdl__register(l);
+	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
+	  l._esdl__parLock = t._esdl__getParLock;
+	  l._esdl__parConfig = t._esdl__getParConfig;
+	}
+      }
     }
-    // }
   }
 }
 
@@ -4336,7 +4558,7 @@ private auto recreateDelegate(alias F, T)(T _entity)
 
 // Alternative task definition using struct -- we are using
 
-// struct Task(string THUNK, size_t STACKSIZE=0L)
+// struct Worker(string THUNK, size_t STACKSIZE=0L)
 // {
 //   static immutable string _THUNK = THUNK;
 //   enum ulong _STACKSIZE = STACKSIZE;
@@ -4352,21 +4574,21 @@ private auto recreateDelegate(alias F, T)(T _entity)
 //   {
 //     synchronized {
 //       import std.exception: enforce;
-//       enforce(this._proc, "Uninitialized Task");
+//       enforce(this._proc, "Uninitialized Worker");
 //       return this._proc;
 //     }
 //   }
 
 //   alias _esdl__obj this;
 
-//   @disable void opAssign(Task);
+//   @disable void opAssign(Worker);
 //   // Allow assigning from module handle once
 //   public void opAssign(Process task)
 //   {
 //     synchronized {
 //       // Allow it only once
 //       this._proc &&
-//	assert(false, "Task re-initialization not allowed");
+//	assert(false, "Worker re-initialization not allowed");
 
 //       this._proc = task;
 //     }
@@ -4403,63 +4625,30 @@ class PersistFlag
   }
 }
 
-abstract class SimThread: Thread
-{
-  this( void function() fn, size_t sz = 0 ) {
-    super(fn, sz);
-    _persist = new PersistFlag;
-  }
-
-  this( void delegate() dg, size_t sz = 0 ) {
-    super(dg, sz);
-    _persist = new PersistFlag;
-  }
-
-  protected PersistFlag _persist;
-
-  public final void raisePersistFlag() {
-    _persist.raise(getSimulator);
-  }
-
-  public final void dropPersistFlag() {
-    _persist.drop(getSimulator);
-  }
-
-  public abstract void waitSensitiveP(EventObj event);
-  public abstract void waitSensitive(EventObj event);
-  public abstract void waitSensitiveP();
-  public abstract void waitSensitive();
-  public abstract void nextTrigger(EventObj event);
-  public abstract EventObj nextTrigger();
-
-  public abstract RootEntityIntf getRoot();
-  public abstract EsdlSimulator getSimulator();
-
-}
-
-abstract class SimProcess: SimThread
+class SimThread: Thread
 {
   import core.sync.semaphore: Semaphore;
 
+  private static SimThread _self;
+
+  private EventNotice _eventNoticeList;
+
+  public static SimThread self() {
+    return _self;
+  }
+
   this( void function() fn, size_t sz = 0 ) {
     synchronized(this) {
-      super(fn, sz);
+      super(() {_self = this; fn();}, sz);
       _waitLock = new Semaphore(0);
-      state = ProcState.STARTING;
     }
   }
 
   this( void delegate() dg, size_t sz = 0 ) {
     synchronized(this) {
-      super(dg, sz);
+      super({_self = this; dg();}, sz);
       _waitLock = new Semaphore(0);
-      state = ProcState.STARTING;
     }
-  }
-
-  final void caughtException() {
-    state = ProcState.EXCEPTION;
-    // _execLock.notify();
   }
 
   static if(!__traits(compiles, _esdl__root)) {
@@ -4467,20 +4656,20 @@ abstract class SimProcess: SimThread
   }
 
 
-  protected override RootEntityIntf getRoot() {
+  protected RootEntityIntf getRoot() {
     synchronized(this) {
       return _esdl__root;
     }
   }
 
-  protected override EsdlSimulator getSimulator() {
+  protected EsdlSimulator getSimulator() {
     return getRoot().simulator();
   }
 
   // final protected void waitBarrier() {
   //   // synchronized(this)
   //   //	{
-  //   this.getSimulator.freeLock();
+  //   freeLock();
   //   // }
   // }
 
@@ -4492,16 +4681,18 @@ abstract class SimProcess: SimThread
   // }
 
   private Semaphore _waitLock;
-  // D Mutexes are recursive -- therefor the same thread can lock a
-  // Mutex multiple times. This behaviour is not useful for us.
-  // private Semaphore _execLock;
 
+  void call() {
+    _waitLock.notify();
+  }
+  
+  void yield() {
+    _waitLock.wait();
+  }
+  
   // class State {};
   //  private State _stateMonitor;
 
-  private ProcState _state = ProcState.STARTING;
-  private bool _dontInit      = false;
-  private ProcState _origState;
   private bool _hasStarted = false;
 
   private final  bool hasStarted() {
@@ -4514,172 +4705,6 @@ abstract class SimProcess: SimThread
     }
     super.start();
   }
-
-  private final ProcState state() {
-    synchronized(this /*_stateMonitor*/) {
-      debug(THREAD) {
-	import std.stdio;
-	Process t = cast(Process) this;
-	if(t !is null)
-	  writeln(t.getFullName, ": Thread is ", _state);
-      }
-      return _state;
-    }
-  }
-
-  protected ProcStateReq reqState() {
-    assert(false, "This function is overriden in the derived function");
-  }
-
-  protected bool reqIsRec() {
-    assert(false, "This function is overriden in the derived function");
-  }
-
-  private final void state(ProcState s) {
-    synchronized(this /*_stateMonitor*/) {
-      debug(THREAD) {
-	import std.stdio;
-	Process t = cast(Process) this;
-	if(t !is null)
-	  writeln(t.getFullName, ": Setting Thread to ", s);
-      }
-      _state = s;
-    }
-  }
-
-  private final bool isAlive() {
-    synchronized(this /*_stateMonitor*/) {
-      return(_state == ProcState.WAITING ||
-	     _state == ProcState.SUSPENDED ||
-	     _state == ProcState.DISABLED);
-    }
-  }
-
-  private final void requestSuspend() {
-    synchronized(this) {
-      if(_state == ProcState.STARTING ||
-	 _state == ProcState.WAITING) {
-	this._origState = this._state;
-	this._state = ProcState.SUSPENDED;
-      }
-      else {
-	assert(false, "Cannot suspend a process in state " ~ _state);
-      }
-    }
-  }
-
-  private final void requestDisable() {
-    synchronized(this) {
-      if(_state == ProcState.STARTING ||
-	 _state == ProcState.WAITING) {
-	this._origState = this._state;
-	this._state = ProcState.DISABLED;
-      }
-      else {
-	assert(false, "Cannot disable a process in state " ~ _state);
-      }
-    }
-  }
-
-  // returns true if the process immediately needs to start running
-  private final bool requestResume() {
-    if(_state == ProcState.SUSPENDED) {
-      if(_origState == ProcState.RUNNING) {
-	_state = ProcState.WAITING;
-	return true;
-      } else {
-	_state = _origState;
-	return false;
-      }
-    }
-    // ignore all the threads that are not in the SUSPENDED state
-    return false;
-  }
-
-  private final void requestEnable() {
-    if(_state == ProcState.DISABLED) {
-      _state = _origState;
-      return;
-    }
-    // ignore all other states
-    return;
-  }
-
-  // returns true if the task requires explicit termination
-  private final bool requestAbort() {
-    if(_isDefunct()) return false;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.ABORTED;
-      return false; // has not started yet -- no need to terminate
-    }
-    else {
-      _state = ProcState.ABORTED;
-      return true;  // thread needs to be terminated
-    }
-  }
-    
-  private final bool requestKill() {
-    if(_isDefunct()) return false;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.KILLED;
-      return false;
-    }
-    else {
-      _state = ProcState.KILLED;
-      return true;
-    }
-  }
-
-  public final bool _isActive() {
-    return (_state <= _ACTIVE);
-  }
-
-  public final bool isActive() {
-    synchronized(this) {
-      return (_state <= _ACTIVE);
-    }
-  }
-
-  public final bool _isRunnable() {
-    return (_state < _DEFUNCT);
-  }
-
-  public final bool isRunnable() {
-    synchronized(this) {
-      return (_state < _DEFUNCT);
-    }
-  }
-
-  public final bool _isDefunct() {
-    return(_state >= _DEFUNCT);
-  }
-
-  public final bool isDefunct() {
-    synchronized(this) {
-      return(_state >= _DEFUNCT);
-    }
-  }
-
-  public final bool _isKilled() {
-    return(_state >= _KILLED);
-  }
-
-  public final bool isKilled() {
-    synchronized(this) {
-      return(_state >= _KILLED);
-    }
-  }
-
-
-  class TermException: Throwable
-  {
-    this() {
-      super("Process Terminated");
-    }
-  }
-
 }
 
 // This flag (whenever raised) get registered with the simulator. If a
@@ -4699,10 +4724,279 @@ abstract class SimProcess: SimThread
 // wait for an external actor to activate the simulation again.
 
 
-class Process: SimProcess, EventClient, Procedure
+class BaseWorker: Process
+{
+  SimThread _thread;
+
+  this(void function() fn, int stage = 0, size_t sz = 0 ) {
+    synchronized(this) {
+      super(fn, stage);
+      if(sz is 0) {
+	_thread = new SimThread(() {fn_wrap(fn);});
+      }
+      else {
+	_thread = new SimThread(() {fn_wrap(fn);}, sz);
+      }
+    }
+  }
+
+  this(void delegate() dg, int stage = 0, size_t sz = 0 ) {
+    synchronized(this) {
+      super(dg, stage);
+      if(sz is 0) {
+	_thread = new SimThread(() {dg_wrap(dg);});
+      }
+      else {
+	_thread = new SimThread(() {dg_wrap(dg);}, sz);
+      }
+    }
+  }
+
+  protected final override void execute() {
+    if(_state == ProcState.RUNNING) {
+      if(_thread._hasStarted) {
+	_thread.call();
+      }
+      else {
+	_thread.start();
+      }
+      return;
+    }
+    assert(false, "Unexpected Process State: " ~ _state);
+  }
+
+  protected final override void call() {
+    _thread.call();
+  }
+
+  protected final override void yield() {
+    _thread.yield();
+  }
+
+  final override void freeLock(bool onlyBarrier=false) {
+    this.getSimulator.freeLock(this, onlyBarrier);
+  }
+
+  protected override final void requestAbort(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+    }
+    else {
+      _state = ProcState.ABORTED;
+      x._termProcs ~= this;
+    }
+  }
+
+  protected override final void requestKill(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+    }
+    else {
+      _state = ProcState.KILLED;
+      x._termProcs ~= this;
+    }
+  }
+  public override final bool isRunnableTask() {
+    return false;
+  }
+  public override final bool isRunnableWorker() {
+      return (_state < _DEFUNCT);
+  }
+}
+
+class BaseTask: Process
+{
+  Fiber _fiber;
+
+  this(void function() fn, int stage = 0, size_t sz = 0 ) {
+    synchronized(this) {
+      super(fn, stage);
+      if(sz is 0) {
+	_fiber = new Fiber(() {fn_wrap(fn);});
+      }
+      else {
+	_fiber = new Fiber(() {fn_wrap(fn);}, sz);
+      }
+    }
+  }
+
+  this(void delegate() dg, int stage = 0, size_t sz = 0 ) {
+    synchronized(this) {
+      super(dg, stage);
+      if(sz is 0) {
+	_fiber = new Fiber(() {dg_wrap(dg);});
+      }
+      else {
+	_fiber = new Fiber(() {dg_wrap(dg);}, sz);
+      }
+    }
+  }
+
+  protected final override void execute() {
+    if(_state == ProcState.RUNNING) {
+      this.call();
+      return;
+    }
+    assert(false, "Unexpected Process State: " ~ _state);
+  }
+
+  protected final override void call() {
+    Process._self = this;
+    _fiber.call();
+    Process._self = null;
+  }
+
+  protected final override void yield() {
+    _fiber.yield();
+  }
+
+  final override void freeLock(bool onlyBarrier=false) {
+    // do nothing for a fiber
+  }
+
+  protected override final void requestAbort(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+    }
+    else {
+      _state = ProcState.ABORTED;
+      x._termProcs ~= this;
+    }
+  }
+
+  protected override final void requestKill(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+    }
+    else {
+      _state = ProcState.KILLED;
+      x._termProcs ~= this;
+    }
+  }
+  public override final bool isRunnableTask() {
+      return (_state < _DEFUNCT);
+  }
+  public override final bool isRunnableWorker() {
+    return false;
+  }
+
+}
+
+class BaseRoutine: Process
+{
+  // Fiber _fiber;
+  private EventObj _nextTrigger;
+  
+  private void function() _fn = null;
+  private void delegate() _dg = null;
+  
+  public override void nextTrigger(EventObj event) {
+    synchronized(this) {
+      _nextTrigger = event;
+    }
+  }
+
+  this(void function() fn, int stage = 0) {
+    synchronized(this) {
+      _fn = fn;
+      super(fn, stage);
+    }
+  }
+
+  this(void delegate() dg, int stage = 0) {
+    synchronized(this) {
+      _dg = dg;
+      super(dg, stage);
+    }
+  }
+
+  protected final override void execute() {
+    if(_state == ProcState.RUNNING) {
+      this.call();
+      return;
+    }
+    assert(false, "Unexpected Process State: " ~ _state);
+  }
+
+  protected final override void call() {
+    Process._self = this;
+    if(_fn !is null) {
+      _fn();
+    }
+    if(_dg !is null) {
+      _dg();
+    }
+    Process._self = null;
+    if(_nextTrigger is null) {
+      _nextTrigger = _sensitiveTo;
+    }
+
+    if(_nextTrigger !is null) {
+      _nextTrigger.addClientProc(this);
+      _nextState = ProcState.WAITING;
+    }
+  }
+
+  protected final override void yield() {
+    assert(false, "A Routine can not yield!");
+  }
+
+  final override void freeLock(bool onlyBarrier=false) {
+    // do nothing for a routine
+  }
+
+  protected override final void requestAbort(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+    }
+    else {
+      _state = ProcState.ABORTED;
+      x._termProcs ~= this;
+    }
+  }
+
+  protected override final void requestKill(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+    }
+    else {
+      _state = ProcState.KILLED;
+      x._termProcs ~= this;
+    }
+  }
+
+  public override final bool isRunnableTask() {
+    return (_state < _DEFUNCT);
+  }
+
+  public override final bool isRunnableWorker() {
+    return false;
+  }
+
+  private final void preExecute() {
+    super.preExecute();
+    _nextTrigger = null;
+  }
+}
+
+
+abstract class Process: Procedure, EventClient
 {
   __gshared size_t _procCount;
   private size_t _procID;
+
   public final size_t procID() {
     return _procID;
   }
@@ -4723,14 +5017,14 @@ class Process: SimProcess, EventClient, Procedure
   // private EventObj _waitingFor = null;
 
   // Return true if the event is dynamically spawned
-  public final bool isDynamic() {
+  public override final bool isDynamic() {
     synchronized(this) {
       return _dynamic;
     }
   }
 
   // Add a newly launched process to the list
-  protected final void addProcess(Process t) {
+  protected override final void addProcess(Process t) {
     synchronized(this) {
       _esdl__childProcs ~= t;
       debug(FORK) {
@@ -4784,16 +5078,64 @@ class Process: SimProcess, EventClient, Procedure
     }
   }
 
+  // depends on whether it is a fiber or a thread
+  void freeLock(bool onlyBarrier=false);
+  
   private final void cleanup() {
+    // cleanup gets called only when a process comes to an end
+    // as this does not happen frequently, we can freely use synchronization
+    // here
     if(state is ProcState.RUNNING) {
-      state = ProcState.FINISHED;
+      _nextState = ProcState.FINISHED;
     }
     if(this.state is ProcState.KILLED ||
        this.state is ProcState.ABORTED) {
-      this.getSimulator.freeLock(this, true);
+      freeLock(true);
     }
     else {
-      this.getSimulator.freeLock(this, false);
+      freeLock(false);
+    }
+  }
+
+  this(void function() fn, int stage = 0) {
+    synchronized(typeid(Process)) {
+      _procID = _procCount++;
+    }
+    synchronized(this) {
+      _persist = new PersistFlag;
+      _ended.init(this);
+      _endedTree.init(this);
+      _stage = stage;
+
+      _timed = new EventObj(this);
+
+      state = ProcState.STARTING;
+      this.setRandomSeed();
+      if(Process.self) {
+	this._esdl__fixParent();
+	this.reqRegisterProcess(stage);
+      }
+    }
+  }
+
+  this(void delegate() dg, int stage = 0) {
+    synchronized (typeid(Process)) {
+      _procID = _procCount++;
+    }
+    synchronized(this) {
+      _persist = new PersistFlag;
+      _ended.init(this);
+      _endedTree.init(this);
+      _stage = stage;
+
+      _timed = new EventObj(this);
+
+      state = ProcState.STARTING;
+      this.setRandomSeed();
+      if(Process.self) {
+	this._esdl__fixParent();
+	this.reqRegisterProcess(stage);
+      }
     }
   }
 
@@ -4803,45 +5145,41 @@ class Process: SimProcess, EventClient, Procedure
   // actually need to be run. This is done because execute is
   // completed using a barrier and the barrier count has to be
   // available before we start.
-  protected final bool preExecute() {
+  protected void preExecute() {
     if(_state == ProcState.STARTING ||
        _state == ProcState.WAITING) {
       _state = ProcState.RUNNING;
-      return true;
     }
     if(_state == ProcState.SUSPENDED) {
       _origState = ProcState.RUNNING;
-      return false;
     }
-    return false;
   }
 
-  protected final void execute() {
-    if(_state == ProcState.RUNNING) {
-      if(_hasStarted) {
-	_waitLock.notify();
-      }
-      else {
-	super.start();
-      }
-      return;
-    }
-    assert(false, "Unexpected Process State: " ~ _state);
-  }
+  abstract protected void execute();
   
   // make sure that a user can not directly "start" the underlying
   // thread -- somehow it seems @disable does not work alone, the
   // private tag seems to make the effect though
   @disable private final void start();
 
+  abstract protected void call();
+  abstract protected void yield();
+
+  protected void postExecute() {
+    if(_nextState !is ProcState.NONE) {
+      _state = _nextState;
+      _nextState = ProcState.NONE;
+    }
+  }
+
   final protected void abortProcess() {
     if(_isRunnable()) {
       _state = ProcState.ABORTED;
       if(_state == ProcState.STARTING) {
-  	this.getSimulator.freeLock(this, true);
+  	freeLock(true);
       }
       else {
-  	_waitLock.notify();
+  	call();
       }
     }
     debug(PROC) {
@@ -4856,10 +5194,10 @@ class Process: SimProcess, EventClient, Procedure
     if(_isRunnable()) {
       _state = ProcState.KILLED;
       if(_state == ProcState.STARTING) {
-	this.getSimulator.freeLock(this, true);
+	freeLock(true);
       }
       else {
-	_waitLock.notify();
+	call();
       }
     }
     debug(PROC) {
@@ -4869,6 +5207,8 @@ class Process: SimProcess, EventClient, Procedure
   }
 	
 	
+  private bool _dontInit      = false;
+
   public final void dontInitialize() {
     synchronized(this) {
       if(_state !is ProcState.STARTING) {
@@ -4931,16 +5271,17 @@ class Process: SimProcess, EventClient, Procedure
 
   private final void _esdl__fixParent() {
     synchronized(this) {
-      if(Process.self || Routine.self) { // only dynamic procedures
+      if(Process.self) { // only dynamic procedures
 	Procedure _parent = Procedure.self;
 	this._esdl__setParent(_parent);
 	this._esdl__setRoot(_parent.getRoot());
-	// if(_parent._esdl__getLockMutex is null) {
+	// if(_parent._esdl__getParLock is null) {
 	//   // For the time being all the dynamic tasks would run one-at-a-time
 	//   this._esdl__parLock = new Semaphore(1);
 	// }
 	// else {
-	this._esdl__parLock = _parent._esdl__getLockMutex;
+	this._esdl__parLock = _parent._esdl__getParLock;
+	this._esdl__parConfig = _parent._esdl__getParConfig();
 	// }
       }
     }
@@ -5008,44 +5349,16 @@ class Process: SimProcess, EventClient, Procedure
     return _endedTree;
   }
 
-  this(void function() fn, int stage = 0, size_t sz = 0 ) {
-    synchronized(typeid(Process)) {
-      _procID = _procCount++;
-    }
-    synchronized(this) {
-      _ended.init(this);
-      _endedTree.init(this);
-      _stage = stage;
-
-      _timed = new EventObj(this);
-
-      super(() {fn_wrap(fn);}, sz);
-      this.setRandomSeed();
-      if(Process.self || Routine.self) {
-	this._esdl__fixParent();
-	this.reqRegisterProcess(stage);
-      }
+   class TermException: Throwable
+  {
+    this() {
+      super("Process Terminated");
     }
   }
 
-  this(void delegate() dg, int stage = 0, size_t sz = 0 ) {
-    synchronized (typeid(Process)) {
-      _procID = _procCount++;
-    }
-    synchronized(this) {
-      _ended.init(this);
-      _endedTree.init(this);
-      _stage = stage;
-
-      _timed = new EventObj(this);
-
-      super(() {dg_wrap(dg);}, sz);
-      this.setRandomSeed();
-      if(Process.self || Routine.self) {
-	this._esdl__fixParent();
-	this.reqRegisterProcess(stage);
-      }
-    }
+  final void caughtException() {
+    _nextState = ProcState.EXCEPTION;
+    // _execLock.notify();
   }
 
   private final void fn_wrap(void function() fn) {
@@ -5083,11 +5396,10 @@ class Process: SimProcess, EventClient, Procedure
 	import std.stdio;
 	writeln("Process ending with exception   : ", Process.procID);
       }
-      this.getSimulator.freeLock(this);
+      freeLock();
       this.caughtException();
       throw(e);
     }
-    // cleanup is defined in TaskProcess
     this.cleanup();
   }
 
@@ -5126,15 +5438,18 @@ class Process: SimProcess, EventClient, Procedure
 	import std.stdio;
 	writeln("Process ending with exception   : ", Process.procID);
       }
-      this.getSimulator.freeLock(this);
+      freeLock();
       this.caughtException();
       throw(e);
     }
-    // cleanup is defined in TaskProcess
     this.cleanup();
   }
 
-  public final override void waitSensitive() {
+  public void nextTrigger(EventObj event) {
+    assert(false, "nextTrigger may be called only by a Routine");
+  }
+  
+  public final void waitSensitive() {
     EventObj event = this.sensitiveTo();
     if(event is null) {
       assert(false,
@@ -5143,7 +5458,7 @@ class Process: SimProcess, EventClient, Procedure
     this.waitSensitive(event);
   }
 
-  public final override void waitSensitiveP() {
+  public final void waitSensitiveP() {
     EventObj event = this.sensitiveTo();
     if(event is null) {
       assert(false,
@@ -5152,17 +5467,17 @@ class Process: SimProcess, EventClient, Procedure
     this.waitSensitiveP(event);
   }
 
-  public final override void waitSensitiveP(EventObj event) {
+  public final void waitSensitiveP(EventObj event) {
     if(! event.triggered) {
       waitSensitive(event);
     }
   }
 
-  public final override void waitSensitive(EventObj event) {
-    event.addClientProcess(this);
-    state = ProcState.WAITING;
-    this.getSimulator.freeLock(this);
-    _waitLock.wait();
+  public final void waitSensitive(EventObj event) {
+    event.addClientProc(this);
+    _nextState = ProcState.WAITING;
+    freeLock();
+    yield();
     if(this._isKilled()) {
       throw new TermException();
     }
@@ -5197,15 +5512,19 @@ class Process: SimProcess, EventClient, Procedure
 
   private final void terminateWaiting() {
     synchronized(this) {
-      _waitLock.notify();
+      call();
     }
   }
 
   // this is looked at the time thread enters waiting state
-  private ProcStateReq _reqState; // requested state
-  private bool _reqIsRec; // requested state
+  private ProcState _reqState; // requested state
+  private bool _reqIsRec; // recursive request
 
-  protected final override ProcStateReq reqState() {
+  private ProcState _state = ProcState.STARTING;
+  private ProcState _origState;
+  private ProcState _nextState;	// Right after the process yields
+
+  protected final ProcState requestState() {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5215,7 +5534,15 @@ class Process: SimProcess, EventClient, Procedure
     }
   }
 
-  private final void reqState(ProcStateReq s, bool rec = false) {
+  protected final ProcState _requestState() {
+    debug(PROC) {
+      import std.stdio;
+      writeln(this.procID, " Thread has request for ", _reqState);
+    }
+    return _reqState;
+  }
+
+  private final void requestState(ProcState s, bool rec = false) {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5227,7 +5554,17 @@ class Process: SimProcess, EventClient, Procedure
     getSimulator().reqUpdateProc(this);
   }
 
-  protected final override bool reqIsRec() {
+  private final void _requestState(ProcState s, bool rec = false) {
+    debug(PROC) {
+      import std.stdio;
+      writeln(this.procID, " Requesting Thread to ", s);
+    }
+    _reqState = s;
+    _reqIsRec = rec;
+    getSimulator().reqUpdateProc(this);
+  }
+
+  protected final bool reqIsRec() {
     synchronized(this) {
       debug(PROC) {
 	import std.stdio;
@@ -5244,83 +5581,75 @@ class Process: SimProcess, EventClient, Procedure
 
   public final void suspend() {
     synchronized(this) {
-      this.reqState(ProcStateReq.SUSPEND, false);
+      this.requestState(ProcState.SUSPENDED, false);
     }
   }
 
   public final void suspendTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.SUSPEND, true);
+      this.requestState(ProcState.SUSPENDED, true);
     }
   }
 
   public final void disable() {
     synchronized(this) {
-      this.reqState(ProcStateReq.DISABLE, false);
+      this.requestState(ProcState.DISABLED, false);
     }
   }
 
   public final void disableTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.DISABLE, true);
+      this.requestState(ProcState.DISABLED, true);
     }
   }
 
 
   public final void resume() {
     synchronized(this) {
-      this.reqState(ProcStateReq.RESUME, false);
+      this.requestState(ProcState.RESUMED, false);
     }
   }
 
   public final void resumeTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.RESUME, true);
+      this.requestState(ProcState.RESUMED, true);
     }
   }
 
   public final void enable() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ENABLE, false);
+      this.requestState(ProcState.ENABLED, false);
     }
   }
 
   public final void enableTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ENABLE, true);
+      this.requestState(ProcState.ENABLED, true);
     }
   }
 
   public final void abort() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ABORT, false);
+      this.requestState(ProcState.ABORTED, false);
     }
   }
 
   public final void abortTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.ABORT, true);
+      this.requestState(ProcState.ABORTED, true);
     }
   }
 
   public final void kill() {
     synchronized(this) {
-      this.reqState(ProcStateReq.KILL, false);
+      this.requestState(ProcState.KILLED, false);
     }
   }
 
   public final void killTree() {
     synchronized(this) {
-      this.reqState(ProcStateReq.KILL, true);
+      this.requestState(ProcState.KILLED, true);
     }
-  }
-
-  public final override void nextTrigger(EventObj event) {
-    assert(false, "Can not call nextTrigger from a Process");
-  }
-
-  public final override EventObj nextTrigger() {
-    assert(false, "Can not call nextTrigger from a Process");
   }
 
   public final override Process[] getChildTasks() {
@@ -5353,6 +5682,145 @@ class Process: SimProcess, EventClient, Procedure
 
   public final override void _esdl__addChildTask(Process child) {}
   public final override void _esdl__addChildComp(HierComp child) {}
+
+  public final bool _isKilled() {
+    return(_state >= _KILLED);
+  }
+
+  public final bool isKilled() {
+    synchronized(this) {
+      return(_state >= _KILLED);
+    }
+  }
+
+  private final ProcState state() {
+    synchronized(this /*_stateMonitor*/) {
+      debug(THREAD) {
+	import std.stdio;
+	writeln(getFullName, ": Thread is ", _state);
+      }
+      return _state;
+    }
+  }
+
+  private final void state(ProcState s) {
+    synchronized(this /*_stateMonitor*/) {
+      debug(THREAD) {
+	import std.stdio;
+	writeln(getFullName, ": Setting Thread to ", s);
+      }
+      _state = s;
+    }
+  }
+
+  private final bool isAlive() {
+    synchronized(this /*_stateMonitor*/) {
+      return(_state == ProcState.WAITING ||
+	     _state == ProcState.SUSPENDED ||
+	     _state == ProcState.DISABLED);
+    }
+  }
+
+  private final void requestSuspend() {
+    synchronized(this) {
+      if(_state == ProcState.STARTING ||
+	 _state == ProcState.WAITING) {
+	this._origState = this._state;
+	this._state = ProcState.SUSPENDED;
+      }
+      else {
+	assert(false, "Cannot suspend a process in state " ~ _state);
+      }
+    }
+  }
+
+  private final void requestDisable() {
+    synchronized(this) {
+      if(_state == ProcState.STARTING ||
+	 _state == ProcState.WAITING) {
+	this._origState = this._state;
+	this._state = ProcState.DISABLED;
+      }
+      else {
+	assert(false, "Cannot disable a process in state " ~ _state);
+      }
+    }
+  }
+
+  // returns true if the process immediately needs to start running
+  private final bool requestResume() {
+    if(_state == ProcState.SUSPENDED) {
+      if(_origState == ProcState.RUNNING) {
+	_state = ProcState.WAITING;
+	return true;
+      } else {
+	_state = _origState;
+	return false;
+      }
+    }
+    // ignore all the threads that are not in the SUSPENDED state
+    return false;
+  }
+
+  private final void requestEnable() {
+    if(_state == ProcState.DISABLED) {
+      _state = _origState;
+      return;
+    }
+    // ignore all other states
+    return;
+  }
+
+  // returns true if the task requires explicit termination
+  protected void requestAbort(EsdlExecutor x);
+    
+  protected void requestKill(EsdlExecutor x);
+
+  public final bool _isActive() {
+    return (_state <= _ACTIVE);
+  }
+
+  public final bool isActive() {
+    synchronized(this) {
+      return (_state <= _ACTIVE);
+    }
+  }
+
+  public final bool _isRunnable() {
+    return (_state < _DEFUNCT);
+  }
+
+  public bool isRunnableTask();
+  public bool isRunnableWorker();
+
+  public final bool isRunnable() {
+    synchronized(this) {
+      return (_state < _DEFUNCT);
+    }
+  }
+
+  public final bool _isDefunct() {
+    return(_state >= _DEFUNCT);
+  }
+
+  public final bool isDefunct() {
+    synchronized(this) {
+      return(_state >= _DEFUNCT);
+    }
+  }
+
+  // For lockStage
+  protected PersistFlag _persist;
+
+  public final void raisePersistFlag() {
+    _persist.raise(getSimulator);
+  }
+
+  public final void dropPersistFlag() {
+    _persist.drop(getSimulator);
+  }
+
+
 }
 
 // A specialized class for single process forks -- this class exists
@@ -5525,257 +5993,6 @@ class Fork
   }
 }
 
-class Routine: EventClient, Procedure
-{
-  private EventObj _sensitiveTo = null;
-  private EventObj _nextTrigger;
-  private bool _dynamic = true;
-  private EventObj _timed;
-
-  public final bool isDynamic() {
-    synchronized(this) {
-      return _dynamic;
-    }
-  }
-
-  protected final void addProcess(Process t) {
-    synchronized(this) {
-      _esdl__childTasks ~= t;
-    }
-  }
-
-  // called only in the sched phase
-  protected final void removeProcess(Process t) {
-    ptrdiff_t i = -1;
-    foreach(j, f; _esdl__childTasks) {
-      if(f is t) {
-	i = j;
-	break;
-      }
-    }
-    debug(FORK) {
-      import std.stdio;
-      writeln("Removing fork from active forks list: ",
-	      i, "/", _esdl__childTasks.length);
-    }
-    if(i is -1) {
-      assert(false, "removeProcess: Fork not found on the list ");
-    }
-    else {
-      for(size_t j=i; j != _esdl__childTasks.length - 1; ++j) {
-	_esdl__childTasks[j] = _esdl__childTasks[j+1];
-      }
-      _esdl__childTasks.length -= 1;
-    }
-  }
-
-  ProcState _state = ProcState.STARTING;
-  bool _dontInit      = false;
-
-  public final void dontInitialize() {
-    synchronized(this) {
-      import std.exception;
-      enforce(_state == ProcState.STARTING,
-	      "A process can be tagged dontInitialize "
-	      "only before it has started running");
-      _dontInit = true;
-    }
-  }
-
-  // Called only in schedule phase -- no need for syn guards
-  public final bool isDontInitialize() {
-    return _dontInit;
-  }
-
-
-  public final void sensitiveTo(EventObj event) {
-    synchronized(this) {
-      _sensitiveTo = event;
-    }
-  }
-
-  public final void sensitiveTo(SimEvent simEvent) {
-    auto event = new EventObj(simEvent);
-    sensitiveTo(event);
-  }
-
-  public final EventObj sensitiveTo() {
-    synchronized(this) {
-      return _sensitiveTo;
-    }
-  }
-
-  protected final void poke(EsdlSimulator sim, EventObj agent, size_t index) {}
-
-  protected final void poke(EsdlSimulator sim) {}
-
-  public final bool notify() {
-    assert(false, "Cannot notify an Routine: " ~ this.getFullName);
-  }
-
-  public final bool notify(SimTime steps) {
-    assert(false, "Cannot notify an Routine: " ~ this.getFullName);
-  }
-
-
-  protected final void addAgent(EventObj agent) {
-    assert(false, "Routine not dependent on any event: "
-	   ~ this.getFullName() ~ " -- addAgent");
-  }
-
-  public final EventObj nextTrigger() {
-    synchronized(this) {
-      auto event = _nextTrigger;
-      _nextTrigger = null;
-      return event;
-    }
-  }
-
-  public final void nextTrigger(EventObj event) {
-    synchronized(this) {
-      _nextTrigger = event;
-    }
-  }
-
-  // interface HierComp
-
-  mixin(hierMixin());
-
-  public final uint[] routineIndices() {
-    // import std.stdio: writeln;
-    // writeln("Adding indices: ", indices);
-    return _esdl__indices;
-  }
-
-  private final void _esdl__fixParent() {
-    synchronized(this) {
-      if(Process.self || Routine.self) {
-	Procedure _parent = Procedure.self;
-	this._esdl__setParent(_parent);
-	this._esdl__setRoot(_parent.getRoot());
-	// if(_parent._esdl__getLockMutex is null) {
-	//   import core.sync.semaphore: Semaphore;
-	//   // For the time being all the dynamic tasks would run one-at-a-time
-	//   this._esdl__parLock = new Semaphore(1);
-	// }
-	// else {
-	this._esdl__parLock = _parent._esdl__getLockMutex;
-	// }
-      }
-    }
-  }
-
-  Random _randGen;
-
-   protected final override ref Random randGen() {
-    synchronized(this) {
-      return _randGen;
-    }
-  }
-
-  private void delegate() _dg = null;
-  private static Routine _self;
-  public static Routine self() {
-    return _self;
-  }
-
-  this( void function() fn ) {
-    synchronized(this) {
-      _timed = new EventObj(this);
-      _dg =() {fn_wrap(fn);};
-    }
-    this.setRandomSeed();
-    if(Process.self || Routine.self) {
-      this._esdl__fixParent();
-      this.reqRegisterRoutine();
-    }
-  }
-
-  this( void delegate() dg ) {
-    synchronized(this) {
-      _timed = new EventObj(this);
-      _dg =() {dg_wrap(dg);};
-    }
-    this.setRandomSeed();
-    if(Process.self || Routine.self) {
-      this._esdl__fixParent();
-      this.reqRegisterRoutine();
-    }
-  }
-
-  private final void fn_wrap(void function() fn) {
-    try {
-      fn();
-
-      // set the next trigger
-      EventObj trigger = this.nextTrigger();
-      if(trigger is null) trigger = this.sensitiveTo();
-      if(trigger !is null) {
-	trigger.addClientRoutine(this);
-      }
-    }
-    catch(Throwable e) {
-      import std.stdio: writeln;
-      writeln("Thread threw exception: ", e);
-    }
-  }
-
-  private final void dg_wrap(void delegate() dg) {
-    try {
-      dg();
-
-      // set the next trigger
-      EventObj trigger = this.nextTrigger();
-      if(trigger is null) trigger = this.sensitiveTo();
-      if(trigger !is null) {
-	trigger.addClientRoutine(this);
-      }
-    }
-    catch(Throwable e) {
-      import std.stdio: writeln;
-      writeln("Thread threw exception: ", e);
-    }
-  }
-
-  private final void setRandomSeed() {
-    synchronized(this) {
-      uint seed = urandom();
-      this._randGen.seed(seed);
-    }
-  }
-
-  private final void reqRegisterRoutine() {
-    import std.exception: enforce;
-    enforce(this.getSimulator !is null);
-    this.getSimulator.reqRegisterRoutine(this);
-  }
-
-  static void _esdl__elab(size_t I, T, L)
-    (T t, ref L l, uint[] indices=null) {
-    debug(ELABORATE) {
-      import std.stdio;
-      writeln("** Routine: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
-	      typeof(l).stringof);
-    }
-    l._esdl__inst!I(t, l);
-    synchronized(l) {
-      import core.sync.semaphore: Semaphore;
-      static if(is(T unused: ElabContext)) {
-	t._esdl__addChildObj(l);
-	t._esdl__addChildComp(l);
-      }
-      l._dynamic = false;
-      l._esdl__setIndices(indices);
-      l._esdl__nomenclate!I(t, indices);
-      l._esdl__setRoot(t.getRoot);
-      l._esdl__setParent(t);
-      t._esdl__register(l);
-      auto linfo = _esdl__get_parallelism!I(t, l);
-      l._esdl__parLock = t._esdl__getLockMutex;
-    }
-  }
-}
-
 interface ChannelIF
 {
   // update would be called only during the schedule phase
@@ -5828,47 +6045,56 @@ class Channel: ChannelIF, NamedObj // Primitive Channel
 
 }
 
-class RootProcess: SimThread, Procedure
+class RootThread: Procedure
 {
-  private static RootProcess _self;
-  public static RootProcess self() {return _self;}
+  Thread _thread;
+
+  private static RootThread _self;
+  public static RootThread self() {return _self;}
 
   private final void fn_wrap(void function() fn) {
+    // FIXME -- the root thread should stick to the first of the
+    // available threads
+    stickToCpuCore(0);
     _self = this;
     fn();
   }
 
   private final void dg_wrap(void delegate() dg) {
+    // FIXME -- the root thread should stick to the first of the
+    // available threads
+    stickToCpuCore(0);
     _self = this;
     dg();
   }
 
-  this( void function() fn, size_t sz = 0 ) {
-    super(() {fn_wrap(fn);}, sz);
+  this(void function() fn, size_t sz = 0 ) {
+    synchronized(this) {
+      if(sz is 0) {
+	_thread = new Thread(() {fn_wrap(fn);});
+      }
+      else {
+	_thread = new Thread(() {fn_wrap(fn);}, sz);
+      }
+    }
   }
 
-  this( void delegate() dg, size_t sz = 0 ) {
-    super(() {dg_wrap(dg);}, sz);
+  this(void delegate() dg, size_t sz = 0 ) {
+    synchronized(this) {
+      if(sz is 0) {
+	_thread = new Thread(() {dg_wrap(dg);});
+      }
+      else {
+	_thread = new Thread(() {dg_wrap(dg);}, sz);
+      }
+    }
   }
 
-  public final override void waitSensitiveP(EventObj event) {
-    assert(false, "Can not call wait from RootProcess");
+  private final void start() {
+    // _thread is effectively immutable
+    _thread.start();
   }
-  public final override void waitSensitive(EventObj event) {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void waitSensitive() {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void waitSensitiveP() {
-    assert(false, "Can not call wait from RootProcess");
-  }
-  public final override void nextTrigger(EventObj event) {
-    assert(false, "Can not call nextTrigger from RootProcess");
-  }
-  public final override EventObj nextTrigger() {
-    assert(false, "Can not call nextTrigger from RootProcess");
-  }
+
 
   @_esdl__ignore Random _randGen;
 
@@ -5893,7 +6119,7 @@ class RootProcess: SimThread, Procedure
     (T t, ref L l, uint[] indices=null) {
     debug(ELABORATE) {
       import std.stdio;
-      writeln("** RootProcess: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+      writeln("** RootThread: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
 	      typeof(l).stringof);
     }
     synchronized(l) {
@@ -5902,6 +6128,7 @@ class RootProcess: SimThread, Procedure
 	t._esdl__addChildComp(l);
       }
       l._esdl__nomenclate!I(t, indices);
+      l._esdl__setObjId();
       l._esdl__setParent(t);
       _esdl__elabMems(l);
     }
@@ -5919,17 +6146,23 @@ private enum ProcState: byte
       RUNNING = 1,		// runnning
       WAITING = 2,		// waiting for an event
       // _ACTIVE
+
+
+      RESUMED = 3,
+      ENABLED = 4,
+      // _REQUESTS
       
-      SUSPENDED = 3,		// user suspended
-      DISABLED = 4,		// user disabled
+      SUSPENDED = 5,		// user suspended
+      DISABLED = 6,		// user disabled
 
       // _DEFUNCT
-      FINISHED = 5,		// naturally ended run
-      EXCEPTION = 6,		// thread faced an exception
+      FINISHED = 7,		// naturally ended run
+      EXCEPTION = 8,		// thread faced an exception
 
       // _KILLED
-      ABORTED = 7,		// user aborted
-      KILLED = 8,	// end of simulation
+      ABORTED = 9,		// user aborted
+      KILLED = 10,	// end of simulation
+      NONE = 11,
       }
 
 private enum _ACTIVE  = ProcState.WAITING; // <= _ACTIVE are active tasks
@@ -5937,58 +6170,54 @@ private enum _DEFUNCT = ProcState.FINISHED; // >= _DEFUNCT are defunt tasks
 private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tasks
 
 
-private enum ProcStateReq: byte
-  {   ENABLE,
-      RESUME,
-      SUSPEND,
-      DISABLE,
-      ABORT,
-      KILL, // At the end of simulation, kill recursively
-      NONE,
-      }
-
-
-class RoutineThread: SimProcess
+class PoolThread: SimThread
 {
 
+  private immutable uint _poolIndex;
   static if(!__traits(compiles, _esdl__root)) {
     @_esdl__ignore protected RootEntityIntf _esdl__root;
   }
 
 
-  this(EsdlSimulator sim, size_t sz = 0 ) {
+  this(EsdlSimulator sim, uint index, size_t sz = 0 ) {
     synchronized(this) {
       this._esdl__root = sim.getRoot();
-      super(&execRoutineProcess, sz);
+      super(&execTaskProcesses, sz);
+      _poolIndex = index;
     }
   }
 
-  private final void execRoutineProcess() {
-    Routine routine = null;
-    _esdl__root.simulator()._executor._routineThreadStartBarrier.wait();
+  private final void execTaskProcesses() {
+    // First set affinity
+    _esdl__root.simulator()._executor._poolThreadStartBarrier.wait();
+    // FIXME -- stick to the index starting from the available threads
+    stickToCpuCore(_poolIndex);
     while(true) {
       // wait for next cycle
-      this._waitLock.wait();
+      _esdl__root.simulator()._executor._poolThreadBarrier.wait();
+      // this._waitLock.wait();
 
       if(this._hasHalted()) {
-	_esdl__root.simulator()._executor._routineThreadBarrier.wait();
+	_esdl__root.simulator()._executor._poolThreadBarrier.wait();
 	break;
       }
 
-      routine = this._esdl__root.simulator()._executor.nextRoutine();
-      while(routine !is null) {
-	Routine._self = routine;
-	_esdl__root.initRoutine();
-	routine._dg();
-	routine = this._esdl__root.simulator()._executor.nextRoutine();
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
+	if(proc._state == ProcState.RUNNING) {
+	  proc.execute();
+	}
       }
-      _esdl__root.simulator()._executor._routineThreadBarrier.wait();
-
+      _esdl__root.simulator()._executor._poolThreadBarrier.wait();
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
+	proc.postExecute();
+      }
+      this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex].length = 0;
+      _esdl__root.simulator()._executor._poolThreadBarrier.wait();
     }
   }
 
 
-private bool _halted = false;
+  private bool _halted = false;
 
   private final bool _hasHalted() {
     synchronized(this) {
@@ -6010,33 +6239,8 @@ private bool _halted = false;
     super.start();
   }
 
-  public final override EventObj nextTrigger() {
-    synchronized(this) {
-      return Routine.self.nextTrigger();
-    }
-  }
-
-  public final override void nextTrigger(EventObj event) {
-    synchronized(this) {
-      Routine.self.nextTrigger(event);
-    }
-  }
-
-  public final override void waitSensitiveP(EventObj event) {
-    assert(false, "Can not call wait from a Routine");
-  }
-  public final override void waitSensitive(EventObj event) {
-    assert(false, "Can not call wait from a Routine");
-  }
-  public final override void waitSensitive() {
-    assert(false, "Can not call wait from a Routine");
-  }
-  public final override void waitSensitiveP() {
-    assert(false, "Can not call wait from a Routine");
-  }
-
   public final override RootEntityIntf getRoot() {
-    assert(false, "getRoot not available in RoutineThread");
+    assert(false, "getRoot not available in PoolThread");
   }
 }
 
@@ -6059,6 +6263,15 @@ enum SimRunPhase: byte
       PAUSE,
       STAGE_DONE,
       SIMULATION_DONE,
+  }
+
+void waitAllRoots() {
+  RootEntityIntf.waitSimAll();
+}
+
+void startSimAllRoots(T)(T t)
+  if(is(T == Time) || is(T == SimTime)) {
+    RootEntityIntf.startSimAll(t);
   }
 
 void simulateAllRoots(T)(T t)
@@ -6154,8 +6367,8 @@ void execElab(T)(T t)
 	// _esdl__done!0(t);
 	_esdl__endElab(t);
 
-	t.getSimulator._executor.initRoutineThreads();
-	t.getSimulator._executor._routineThreadStartBarrier.wait();
+	t.getSimulator._executor.initPoolThreads();
+	t.getSimulator._executor._poolThreadStartBarrier.wait();
 
 	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
@@ -6172,16 +6385,14 @@ void execElab(T)(T t)
 interface EsdlExecutorIf
 {
   public void addRunnableProcess(Process task);
-  public void addRunnableRoutine(Routine routine);
   public void reqRegisterProcess(Process task, int reqStage=0);
   public void reqUpdateProcess(Process task);
   public void reqPurgeProcess(Process task);
-  public void reqRegisterRoutine(Routine routine, int reqStage=0);
   // public ref Process[] getRunnableProcs();
-  public size_t runnableProcsCount();
+  public size_t runnableWorkersCount();
+  public size_t runnableTasksCount();
   public size_t runnableThreadsCount();
-  public size_t runnableRoutinesCount();
-  public void processRegisteredProcs();
+  public void processRegistered();
 }
 
 class EsdlExecutor: EsdlExecutorIf
@@ -6192,8 +6403,8 @@ class EsdlExecutor: EsdlExecutorIf
   import esdl.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
   private Barrier _procBarrier;
-  private Barrier _routineThreadBarrier;
-  private Barrier _routineThreadStartBarrier;
+  private Barrier _poolThreadBarrier;
+  private Barrier _poolThreadStartBarrier;
   // private size_t _numThreads;
   // private ProcessMonitor _monitor;
   // private Semaphore _termSemaphore;
@@ -6212,19 +6423,16 @@ class EsdlExecutor: EsdlExecutorIf
       }
   }
 
-  private Process[] _runnableProcs;
-  private Routine[] _runnableRoutines;
-  // Before adding them to _runnableProcs, make a check whether
+  private Process[] _runnableWorkers;
+  private Process[] _runnableTasks;
+  private Process[][] _runnableTasksGroups;
+  // Before adding them to _runnableWorkers, make a check whether
   // these tasks are dontInit
-  private Process[][] _registeredProcs;
+  private Process[][] _registeredProcesses;
   private Process[] _updateProcs;
   private Process[] _purgeProcs;
 
-  // Before adding them to _runnableRoutines, make a check whether
-  // these routines are dontInit
-  private Routine[][] _registeredRoutines;
-
-  private RoutineThread[] _routineThreads = null;
+  private PoolThread[] _poolThreads = null;
 
   private int _minStage = int.max;
   private int _stage;
@@ -6243,7 +6451,7 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   private final bool incrStage() {
-    if(_stageIndex == _registeredProcs.length - 1) {
+    if(_stageIndex == _registeredProcesses.length - 1) {
       return false;
     }
     else {
@@ -6254,92 +6462,76 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   private final void _incrMaxStage() {
-    _stageIndex = cast(int) _registeredProcs.length - 1;
+    _stageIndex = cast(int) _registeredProcesses.length - 1;
   }
 
-  private final void createRoutineThreads(size_t numThreads,
+  private final void createPoolThreads(size_t numThreads,
 				    size_t stackSize) {
-    _routineThreads.length = numThreads;
-    for(size_t i=0; i!=numThreads; ++i) {
+    _poolThreads.length = numThreads;
+    _runnableTasksGroups.length = numThreads;
+    for(uint i=0; i!=numThreads; ++i) {
       debug {
 	import std.stdio;
-	writeln("Creating Routine Threads: ", i);
+	writeln("Creating Pool Threads: ", i);
       }
-      _routineThreads[i] = new RoutineThread(_simulator, stackSize);
+      _poolThreads[i] = new PoolThread(_simulator, i, stackSize);
     }
   }
 
-  private final void initRoutineThreads() {
-    foreach(rt; _routineThreads) {
+  private final void initPoolThreads() {
+    foreach(i, rt; _poolThreads) {
       rt.initialize();
     }
   }
 
 
-  private final Routine nextRoutine() {
-    synchronized(this) {
-      if(_runnableRoutines.length == 0) return null;
-      auto routine = _runnableRoutines[0];
-      _runnableRoutines = _runnableRoutines[1..$];
-      return routine;
-    }
-  }
-
   public final size_t runnableThreadsCount() {
-    return(_runnableProcs.length +
-	   _runnableRoutines.length);
+    return(_runnableWorkers.length +
+	   _runnableTasks.length);
   }
 
-  public final size_t runnableProcsCount() {
-    return _runnableProcs.length;
+  public final size_t runnableWorkersCount() {
+    return _runnableWorkers.length;
   }
 
-  public final size_t runnableRoutinesCount() {
-    return _runnableRoutines.length;
+  public final size_t runnableTasksCount() {
+    return _runnableTasks.length;
   }
 
   // private size_t _processedProcs = 0;
   // private size_t _processedRoutines = 0;
 
-  public final void processRegisteredProcs() {
-    foreach(ref task; _registeredProcs[_stageIndex]) {
-      synchronized(task) {
-	if(task.isDontInitialize()) {
-	  EventObj event = task.sensitiveTo();
-	  event.addClientProcess(task);
+  public final void processRegistered() {
+    foreach(ref proc; _registeredProcesses[_stageIndex]) {
+      synchronized(proc) {
+	if(proc.isDontInitialize()) {
+	  EventObj event = proc.sensitiveTo();
+	  event.addClientProc(proc);
 	}
 	else {
-	  if(task.isRunnable) {
-	    this._runnableProcs ~= task;
+	  if(proc.isRunnableWorker) {
+	    this._runnableWorkers ~= proc;
+	  }
+	  if(proc.isRunnableTask) {
+	    this._runnableTasks ~= proc;
+	    this._runnableTasksGroups[proc._esdl__parConfig._threadPoolIndex] ~= proc;
 	  }
 	}
       }
     }
-    // _processedProcs = _registeredProcs.length;
-    _registeredProcs[_stageIndex].length = 0;
-    foreach(ref routine; _registeredRoutines[_stageIndex]) {
-      synchronized(routine) {
-	if(routine.isDontInitialize()) {
-	  EventObj event = routine.sensitiveTo();
-	  event.addClientRoutine(routine);
-	}
-	else {
-	  this._runnableRoutines ~= routine;
-	}
-      }
-    }
-    // _processedRoutines = _registeredRoutines.length;
-    _registeredRoutines[_stageIndex].length = 0;
+    // _processedProcs = _registeredProcesses.length;
+    _registeredProcesses[_stageIndex].length = 0;
   }
 
-  public final void addRunnableProcess(Process task) {
-    if(task.isRunnable) {
-      this._runnableProcs ~= task;
+  public final void addRunnableProcess(Process p) {
+    if(p.isRunnableWorker) {
+      this._runnableWorkers ~= p;
     }
-  }
-
-  public final void addRunnableRoutine(Routine routine) {
-    this._runnableRoutines ~= routine;
+    if(p.isRunnableTask) {
+      import std.stdio;
+      this._runnableTasks ~= p;
+      this._runnableTasksGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
+    }
   }
 
   private final void addPhaseIfNeeded(int reqStage) {
@@ -6348,22 +6540,18 @@ class EsdlExecutor: EsdlExecutorIf
       if(_stageIndex is -1) { // run phase has not started yet
 	if(_minStage is int.max) {
 	  _minStage = reqStage;
-	  _registeredRoutines.length = 1;
-	  _registeredProcs.length = 1;
+	  _registeredProcesses.length = 1;
 	}
   	else if(reqStage < _minStage) {
   	  auto delta = _minStage - reqStage;
   	  _minStage = reqStage;
-  	  _registeredProcs.length += delta;
-  	  _registeredRoutines.length += delta;
-  	  auto len = _registeredProcs.length;
+  	  _registeredProcesses.length += delta;
+  	  auto len = _registeredProcesses.length;
   	  for (size_t i=len; i!=0; --i) {
   	    if(i > delta) {
-  	      _registeredProcs[i-1] = _registeredProcs[i-1-delta];
-  	      _registeredRoutines[i-1] = _registeredRoutines[i-1-delta];
+  	      _registeredProcesses[i-1] = _registeredProcesses[i-1-delta];
   	    } else {
-  	      _registeredProcs[i-1] = [];
-  	      _registeredRoutines[i-1] = [];
+  	      _registeredProcesses[i-1] = [];
   	    }
   	  }
   	}
@@ -6375,10 +6563,9 @@ class EsdlExecutor: EsdlExecutorIf
   		 " is already over: " ~ reqStage.to!string());
   	}
       }
-      if(reqStage - _minStage >= _registeredProcs.length) {
-  	auto delta = reqStage - _minStage - _registeredProcs.length + 1;
-  	_registeredProcs.length += delta;
-  	_registeredRoutines.length += delta;
+      if(reqStage - _minStage >= _registeredProcesses.length) {
+  	auto delta = reqStage - _minStage - _registeredProcesses.length + 1;
+  	_registeredProcesses.length += delta;
       }
     }
   }
@@ -6386,14 +6573,7 @@ class EsdlExecutor: EsdlExecutorIf
   public final void reqRegisterProcess(Process task, int reqStage=0) {
     synchronized(this) {
       addPhaseIfNeeded(reqStage);
-      this._registeredProcs[reqStage-_minStage] ~= task;
-    }
-  }
-
-  public final void reqRegisterRoutine(Routine routine, int reqStage=0) {
-    synchronized(this) {
-      addPhaseIfNeeded(reqStage);
-      this._registeredRoutines[reqStage-_minStage] ~= routine;
+      this._registeredProcesses[reqStage-_minStage] ~= task;
     }
   }
 
@@ -6408,6 +6588,8 @@ class EsdlExecutor: EsdlExecutorIf
       this._purgeProcs ~= task;
     }
   }
+
+  Process[] _termProcs;
 
   public final void updateProcs() {
     // expand the list by recursion
@@ -6444,61 +6626,76 @@ class EsdlExecutor: EsdlExecutorIf
       }
     }
 
-    Process[] _termProcs;
-
     // first create a list of tasks that require temination
     foreach(proc; expandedList) {
-      final switch(proc.reqState) {
-      case ProcStateReq.RESUME:
+      final switch(proc.requestState) {
+      case ProcState.STARTING:
+      case ProcState.RUNNING: assert(false);
+	break;
+      case ProcState.RESUMED:
 	if(_stage == proc._stage && proc.requestResume()) {
 	  addRunnableProcess(proc);
 	}
 	break;
-      case ProcStateReq.ENABLE:
+      case ProcState.ENABLED:
 	if(_stage == proc._stage) {
 	  proc.requestEnable();
 	}
 	break;
-      case ProcStateReq.SUSPEND:
+      case ProcState.SUSPENDED:
 	if(_stage == proc._stage) {
 	  proc.requestSuspend();
 	}
 	break;
-      case ProcStateReq.DISABLE:
+      case ProcState.DISABLED:
 	if(_stage == proc._stage) {
 	  proc.requestDisable();
 	}
 	break;
-      case ProcStateReq.ABORT:
-	if(_stage == proc._stage && proc.requestAbort()) {
-	  _termProcs ~= proc;
+      case ProcState.ABORTED:
+	if(_stage == proc._stage) {
+	  proc.requestAbort(this);
 	}
 	break;
-      case ProcStateReq.KILL:
-	if(proc.requestKill()) {
-	  _termProcs ~= proc;
-	}
+      case ProcState.KILLED:
+	proc.requestKill(this);
 	break;
-      case ProcStateReq.NONE:
+      case ProcState.NONE:
+      case ProcState.WAITING:
+      case ProcState.FINISHED:
+      case ProcState.EXCEPTION:
 	assert(false, "Illegal Process Requested State -- NONE");
+	break;
       }
+      
       // If I uncomment the next line, I get a crash :-(
-      // proc.reqState = ProcStateReq.NONE;
+      // proc.requestState = ProcState.NONE;
     }
     foreach(proc; expandedList) {
-      proc.reqState(ProcStateReq.NONE, false);
+      proc.requestState(ProcState.NONE, false);
     }
     _updateProcs.length = 0;
     if(_termProcs.length > 0) {
+      termProcesses();
+    }
+  }
 
-      _procBarrier.reset(cast(uint)_termProcs.length + 1);
+  void termProcesses() {
+    if(_termProcs.length > 0) {
+      import std.algorithm: filter, count;	// filter
+      auto termWorkers = filter!(function bool(Process t)
+			       {return t.isRunnableWorker();})(_termProcs);
+
+      _procBarrier.reset(cast(uint) count(termWorkers) + 1);
 
       // right now only handles terminate requests
       foreach(proc; _termProcs) {
+	import std.stdio;
 	proc.terminateWaiting();
       }
       _procBarrier.wait();
     }
+    _termProcs.length = 0;
   }
 
   static class DebugBarrier: Barrier
@@ -6585,12 +6782,12 @@ class EsdlExecutor: EsdlExecutorIf
 	_procSemaphore = new Semaphore(cast(uint)numThreads);
       }
       debug(BARRIER) {
-	_routineThreadBarrier = new DebugBarrier(cast(uint)numThreads + 1);
-	_routineThreadStartBarrier = new DebugBarrier(cast(uint)numThreads + 1);
+	_poolThreadBarrier = new DebugBarrier(cast(uint)numThreads + 1);
+	_poolThreadStartBarrier = new DebugBarrier(cast(uint)numThreads + 1);
       }
       else {
-	_routineThreadBarrier = new Barrier(cast(uint)numThreads + 1);
-	_routineThreadStartBarrier = new Barrier(cast(uint)numThreads + 1);
+	_poolThreadBarrier = new Barrier(cast(uint)numThreads + 1);
+	_poolThreadStartBarrier = new Barrier(cast(uint)numThreads + 1);
       }
       // _termBarrier = new Barrier(// cast(uint)tasks.length +
       //			 1);
@@ -6599,49 +6796,57 @@ class EsdlExecutor: EsdlExecutorIf
     }
   }
 
-  public final void execRoutines() {
-    foreach(ref _routineThread; this._routineThreads) {
-      _routineThread._waitLock.notify();
-    }
-    _routineThreadBarrier.wait();
+  public final void execTasks() {
+    // all threads start here
+    _poolThreadBarrier.wait();
+    // wait for all threads to end
+    _poolThreadBarrier.wait();
+    // wait for postExecute() to end
+    _poolThreadBarrier.wait();
   }
 
-  public final void haltRoutines() {
+  public final void joinPoolThreads() {
     import std.stdio: writeln;
     writeln(" > Shutting down all the Routine Threads ....");
-    foreach(ref _routineThread; this._routineThreads) {
-      _routineThread._halt();
-      _routineThread._waitLock.notify();
+    foreach(ref _poolThread; this._poolThreads) {
+      _poolThread._halt();
+      _poolThread._waitLock.notify();
     }
-    _routineThreadBarrier.wait();
+    // start all the threads in the pool
+    _poolThreadBarrier.wait();
+    // wait for all the threads in the pool to finish
+    _poolThreadBarrier.wait();
   }
 
-  public final void execProcs() {
+  public final Process[] execWorkers() {
     Process[] runProcs;
     debug(EXECUTOR) {
       import std.stdio: writeln;
       writeln("Creating a barrier of size: ",
-	      _runnableProcs.length);
+	      _runnableWorkers.length);
     }
     debug(EXECUTOR) {
       import std.stdio: writeln;
       writeln("******* About to execute ",
-	      _runnableProcs.length, " tasks");
+	      _runnableWorkers.length, " tasks");
     }
 
 
-    foreach(ref task; this._runnableProcs) {
+    foreach(ref task; this._runnableWorkers) {
       debug(EXECUTOR) {
 	import std.stdio: writeln;
 	writeln("******* About to execute ",
 		task.procID, " (ID) ", task.state, "(status)");
       }
-      if(task.preExecute()) {
+      task.preExecute();
+      if(task._stage == ProcState.RUNNING) {
 	runProcs ~= task;
       }
     }
 
-    this._runnableProcs.length = 0;
+    auto procs = runProcs;
+    
+    this._runnableWorkers.length = 0;
 
     _procBarrier.reset(cast(uint)runProcs.length + 1);
 
@@ -6677,6 +6882,7 @@ class EsdlExecutor: EsdlExecutorIf
       import std.stdio: writeln;
       writeln("All tasks done with executing");
     }
+    return procs;
   }
 
 
@@ -6684,7 +6890,7 @@ class EsdlExecutor: EsdlExecutorIf
     import std.algorithm: filter, count;	// filter
     auto waitingProcs = filter!(function bool(Process t) { return t.isAlive();})(procs);
 
-    debug {
+    debug(TERMINATE) {
       import std.stdio: writeln;
       writeln("******* About to terminate ",
 	      count(waitingProcs), " waiting procs");
@@ -6697,12 +6903,12 @@ class EsdlExecutor: EsdlExecutorIf
 	writeln("Terminating Process");
       }
     }
-    debug {
+    debug(TERMINATE) {
       import std.stdio: writeln;
       writeln("All processes terminating");
     }
     _procBarrier.wait();
-    debug {
+    debug(TERMINATE) {
       import std.stdio: writeln;
       writeln("All processes done with terminating");
     }
@@ -6995,18 +7201,17 @@ interface RootEntityIntf: EntityIntf
   // elaboration phase is over. Since all the threads call it, it is useful
   // to set thread static variables.
   public void initProcess();
-  public void initRoutine();
 
-  static void doSimAll(T)(T t)
+  static void startSimAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.doSim(t);
+	root.startSim(t);
       }
     }
-  static void doSimAllUpto(T)(T t)
+  static void startSimAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.doSimUpto(t);
+	root.startSimUpto(t);
       }
     }
   static void waitSimAll() {
@@ -7016,12 +7221,12 @@ interface RootEntityIntf: EntityIntf
   }
   static void simulateAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      doSimAll(t);
+      startSimAll(t);
       waitSimAll();
     }
   static void simulateAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      doSimAllUpto(t);
+      startSimAllUpto(t);
       waitSimAll();
     }
   static void terminateAll() {
@@ -7045,19 +7250,19 @@ interface RootEntityIntf: EntityIntf
   }
   
   final void simulate(Time t) {
-    doSim(t);
+    startSim(t);
     waitSim();
   }
   final void simulate(SimTime st = MAX_SIMULATION_TIME) {
-    doSim(st);
+    startSim(st);
     waitSim();
   }
   final void simulateUpto(Time t) {
-    doSimUpto(t);
+    startSimUpto(t);
     waitSim();
   }
   final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
-    doSimUpto(st);
+    startSimUpto(st);
     waitSim();
   }
   final public void waitSim() {
@@ -7067,29 +7272,29 @@ interface RootEntityIntf: EntityIntf
     this.getSimulator.waitElab();
     addRoot(this);
   }
-  final void doSim(Time t) {
+  final void startSim(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSim(t);
+    getSimulator.startSim(t);
   }
-  final void doSim(SimTime st = MAX_SIMULATION_TIME) {
+  final void startSim(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSim(st);
+    getSimulator.startSim(st);
   }
-  final void doSimUpto(Time t) {
+  final void startSimUpto(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSimUpto(t);
+    getSimulator.startSimUpto(t);
   }
-  final void doSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+  final void startSimUpto(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.doSimUpto(st);
+    getSimulator.startSimUpto(st);
   }
   final public void waitSimEnd() {
     this.getSimulator.waitSimEnd();
@@ -7187,12 +7392,6 @@ abstract class RootEntity: RootEntityIntf
     _esdl__noUnboundExePorts = false;
   }
 
-  public override void initRoutine() {
-    _esdl__rootEntity = this;
-    _esdl__timeScale = Routine.self.getTimeScale();
-    _esdl__simPhase = SimPhase.SIMULATE;
-  }
-
   public override void initProcess() {
     _esdl__rootEntity = this;
     _esdl__timeScale = Process.self.getTimeScale();
@@ -7210,9 +7409,9 @@ class EsdlSimulator: EntityIntf
 
   enum SchedPhase: byte
   {   IMMEDIATE,
+      UPDATE,
       DELTA,
       TIMED,
-      UPDATE,
       EXEC
       }
 
@@ -7234,8 +7433,8 @@ class EsdlSimulator: EntityIntf
   @_esdl__ignore private long _updateCount = 0;	// increments each time update happens
   @_esdl__ignore private size_t _threadCount = 1;
 
-  private RootProcess _rootThread;
-  public final RootProcess rootThread() {
+  private RootThread _rootThread;
+  public final RootThread rootThread() {
     synchronized(this) {
       return _rootThread;
     }
@@ -7334,17 +7533,17 @@ class EsdlSimulator: EntityIntf
   }
 
   // private Process[] tasks;
-  final void doSim(Time t) {
+  final void startSim(Time t) {
     SimTime st = SimTime(this, t);
-    this.doSim(st);
+    this.startSim(st);
   }
 
-  final void doSimUpto(Time t) {
+  final void startSimUpto(Time t) {
     SimTime st = SimTime(this, t);
-    this.doSimUpto(st);
+    this.startSimUpto(st);
   }
 
-  final void doSim(SimTime runTime = MAX_SIMULATION_TIME) {
+  final void startSim(SimTime runTime = MAX_SIMULATION_TIME) {
     synchronized(this) {
       import std.conv: to;
       // elabDoneLock.wait();
@@ -7361,8 +7560,8 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void doSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
-    doSim(runTime-getSimTime());
+  final void startSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
+    startSim(runTime-getSimTime());
   }
   
   final void terminate() {
@@ -7378,7 +7577,7 @@ class EsdlSimulator: EntityIntf
       import std.stdio: writeln;
       writeln(" > Shutting down all the active tasks ....");
       this._executor.terminateProcs(getRoot()._esdl__getChildProcsHier());
-      this._executor.haltRoutines();
+      this._executor.joinPoolThreads();
       writeln(" > Simulation Complete....");
       simTermLock.notify();
     }
@@ -7418,7 +7617,7 @@ class EsdlSimulator: EntityIntf
       // these could be the processes registered in the beginning of a
       // stage or the dynamic processes that could be registered at
       // any time during the simulation
-      _executor.processRegisteredProcs();
+      _executor.processRegistered();
 
       // Reset the scheduler if termStage has been requested
       if(_termStageRequested is true) {
@@ -7432,20 +7631,20 @@ class EsdlSimulator: EntityIntf
 
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	writeln(" > Looking for Immediate tasks/routines");
+	writeln(" > Looking for Immediate tasks");
       }
 
       _scheduler.triggerImmediateEvents();
       // tasks = _executor.getRunnableProcs();
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	if(_executor.runnableProcsCount)
-	  writeln(" > Got Immediate tasks: ", _executor.runnableProcsCount);
+	if(_executor.runnableWorkersCount)
+	  writeln(" > Got Immediate workers: ", _executor.runnableWorkersCount);
       }
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	if(_executor.runnableRoutinesCount)
-	  writeln(" > Got Immediate routines: ", _executor.runnableRoutinesCount);
+	if(_executor.runnableTasksCount)
+	  writeln(" > Got Immediate tasks: ", _executor.runnableTasksCount);
       }
       
       if(_executor.runnableThreadsCount is 0) {
@@ -7470,7 +7669,7 @@ class EsdlSimulator: EntityIntf
 	  schedPhase = SchedPhase.DELTA;
 	  debug(SCHEDULER) {
 	    import std.stdio: writeln;
-	    writeln(" > Looking for Delta tasks/routines");
+	    writeln(" > Looking for Delta tasks");
 	  }
 	  debug(TIME) {
 	    import std.stdio: writeln;
@@ -7478,15 +7677,15 @@ class EsdlSimulator: EntityIntf
 	  }
 	  _scheduler.triggerDeltaEvents();
 	  debug(SCHEDULER) {
-	    if(_executor.runnableProcsCount) {
+	    if(_executor.runnableWorkersCount) {
 	      import std.stdio: writeln;
-	      writeln(" > Got Delta tasks: ", _executor.runnableProcsCount);
+	      writeln(" > Got Delta workers: ", _executor.runnableWorkersCount);
 	    }
 	  }
 	  debug(SCHEDULER) {
-	    if(_executor.runnableRoutinesCount) {
+	    if(_executor.runnableTasksCount) {
 	      import std.stdio: writeln;
-	      writeln(" > Got Delta routines: ", _executor.runnableRoutinesCount);
+	      writeln(" > Got Delta tasks: ", _executor.runnableTasksCount);
 	    }
 	  }
 	  while(this.phase is SimPhase.SIMULATE &&
@@ -7494,7 +7693,7 @@ class EsdlSimulator: EntityIntf
 	    schedPhase = SchedPhase.TIMED;
 	    debug(SCHEDULER) {
 	      import std.stdio: writeln;
-	      writeln(" > Looking for Timed tasks/routines");
+	      writeln(" > Looking for Timed tasks");
 	    }
 	    final switch(_scheduler.triggerNextEventNotices(runUntil)) {
 	    case SimRunPhase.SIMULATE_DONE:
@@ -7502,17 +7701,17 @@ class EsdlSimulator: EntityIntf
 	      break;
 	    case SimRunPhase.SIMULATE:
 	      debug(SCHEDULER) {
-		if(_executor.runnableProcsCount) {
+		if(_executor.runnableWorkersCount) {
 		  import std.stdio: writeln;
 		  writeln(" > Got Timed tasks: ",
-			  _executor.runnableProcsCount);
+			  _executor.runnableWorkersCount);
 		}
 	      }
 	      debug(SCHEDULER) {
-		if(_executor.runnableRoutinesCount) {
+		if(_executor.runnableTasksCount) {
 		  import std.stdio: writeln;
-		  writeln(" > Got Timed routines: ",
-			  _executor.runnableRoutinesCount);
+		  writeln(" > Got Timed tasks: ",
+			  _executor.runnableTasksCount);
 		}
 	      }
 	      break;
@@ -7547,21 +7746,36 @@ class EsdlSimulator: EntityIntf
       schedPhase = SchedPhase.EXEC;
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	writeln(" > Executing Tasks and Routines: ", this.phase);
+	writeln(" > Executing Workers and Tasks: ", this.phase);
       }
-      if(_executor.runnableProcsCount) {
-	_executor.execProcs();
+      // preExecute for tasks
+      foreach(group; _executor._runnableTasksGroups) {
+	foreach(proc; group) {
+	  proc.preExecute();
+	}
+      }
+      Process[] runProcs;
+      if(_executor.runnableWorkersCount) {
+	runProcs = _executor.execWorkers();
+	debug(SCHEDULER) {
+	  import std.stdio: writeln;
+	  writeln(" > Done executing workers");
+	}
+      }
+      if(_executor.runnableTasksCount) {
+	_executor.execTasks();
 	debug(SCHEDULER) {
 	  import std.stdio: writeln;
 	  writeln(" > Done executing tasks");
 	}
-      }
-      if(_executor.runnableRoutinesCount) {
-	_executor.execRoutines();
-	debug(SCHEDULER) {
-	  import std.stdio: writeln;
-	  writeln(" > Done executing routines");
+	if(_executor.runnableTasksCount) {
+	  _executor._runnableTasks.length = 0;
 	}
+      }
+      // change the state of the Workers only after we are also
+      // done with the tasks
+      foreach(proc; runProcs) {
+	proc.postExecute();
       }
     }
   }
@@ -7639,10 +7853,6 @@ class EsdlSimulator: EntityIntf
     this._executor.reqRegisterProcess(task, stage);
   }
 
-  public final void reqRegisterRoutine(Routine routine) {
-    this._executor.reqRegisterRoutine(routine);
-  }
-
   public final void requestUpdate(Channel channel) {
     synchronized(this) {
       this._channelUpdateReqs ~= channel;
@@ -7679,7 +7889,6 @@ class EsdlSimulator: EntityIntf
 	this._scheduler = new EsdlHeapScheduler(this);
 	this._executor = new EsdlExecutor(this);
 
-	import core.cpuid: threadsPerCPU;
 	_elabDoneLock = new Semaphore(0);
 	_simStepLock = new Semaphore(0);
 	_simDoneLock = new Semaphore(0);
@@ -7687,12 +7896,15 @@ class EsdlSimulator: EntityIntf
 
 	version(MULTICORE) {
 	  import core.cpuid: threadsPerCPU;
-	  _executor.threadCount(2*threadsPerCPU());
-	  _executor.createRoutineThreads(2*threadsPerCPU(), 0);
+	  auto count = CPU_COUNT();
+	  _executor.threadCount(count// -1
+				);
+	  _executor.createPoolThreads(count// -1
+				      , 0);
 	}
 	else {
 	  _executor.threadCount(1);
-	  _executor.createRoutineThreads(1, 0);
+	  _executor.createPoolThreads(1, 0);
 	}
 	// We do this to make dure that all the routine threads are up
 	// and running before we attempt to create other threads. For
@@ -7712,7 +7924,7 @@ class EsdlSimulator: EntityIntf
 
   public final void elabRootThread(T)(T t) {
     synchronized(this) {
-      _rootThread = new RootProcess({
+      _rootThread = new RootThread({
 	  _esdl__rootEntity = t;
 	  try {
 	    simLoop(t);
@@ -7722,7 +7934,7 @@ class EsdlSimulator: EntityIntf
 	    writeln("Simulation Root Thread threw exception: ", e);
 	    // throw(e);
 	  }
-	});
+	}, 64*1024*1024);
       _rootThread._esdl__setParent(this);
       _rootThread._esdl__setName("root");
     }

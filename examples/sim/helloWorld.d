@@ -5,12 +5,14 @@
 // Authors:   Puneet Goel <puneet@coverify.com>
 import esdl.base;
 
+@parallelize(1)
 class Hello: Entity {
   void sayHello() {
     import std.stdio: writeln;
-    writeln("Hello World from: ", getFullName());
+    writeln("Hello World from: ", Process.self.getFullName());
   }
-  Task!sayHello greet[2];
+  Worker!sayHello greet[2];
+  Task!sayHello greetWorker[2];
 }
 
 @timeUnit(1.nsec)
