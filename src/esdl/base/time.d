@@ -11,7 +11,6 @@
 module esdl.base.time;
 
 import std.math;		// needed for ^^ operation
-import esdl.base.core: getRootEntity;
 
 protected enum TimeUnit: byte
   {   SEC  = 0,
@@ -242,6 +241,7 @@ interface TimeConfigContext: TimeContext
       }
 
       override protected void _esdl__setTimePrecision(Time t) {
+	import esdl.base.core;
 	// if(! getRootEntity.timePrecisionSet()) {
 	//   if(getSimPhase() !is SimPhase.CONFIGURE) {
 	//     assert(false,
@@ -446,14 +446,17 @@ immutable SimTime MAX_SIMULATION_TIME = SimTime(long.max);
 public void _esdl__setTimePrecision(Time t) {
   _isPowerOf10(t._value) ||
     assert(false, "timePrecision takes only powers of 10 as arguments");
+  import esdl.base.core: getRootEntity;
   getRootEntity.setTimePrecision(t.normalize);
 }
 
 public Time getTimePrecision() {
+  import esdl.base.core: getRootEntity;
   return getRootEntity.getTimePrecision();
 }
 
 public byte getTimePrecisionOrder() {
+  import esdl.base.core: getRootEntity;
   auto t = getRootEntity.getTimePrecision();
   auto retval = cast(byte)(t._unit + _log10(t._value));
   return retval;

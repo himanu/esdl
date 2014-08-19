@@ -15,8 +15,8 @@ class Hello: Entity {
   Task!sayHello greetWorker[2];
 }
 
-@timeUnit(1.nsec)
-@timePrecision(1.psec)
+// @timeUnit(1.nsec)
+// @timePrecision(1.psec)
 class VlangWorld: RootEntity {
   this(string name) {
     super(name);

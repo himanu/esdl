@@ -5,9 +5,7 @@
 // Authors:   Puneet Goel <puneet@coverify.com>
 
 import std.stdio;
-import esdl.data.rand;
-import esdl.data.obdd;
-import esdl.data.bvec;
+import esdl;
 
 class Foo: Randomizable
 {
