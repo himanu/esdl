@@ -4257,9 +4257,20 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 	  // this._phase = SimPhase.CONFIGURE;
 	  if(this._timeScale is 0 && scale is 0) {
 	    import std.stdio;
-	    writeln("********** No default getTimeUnit specified; "
-		    "setting getTimeUnit to 1.nsec");
-	    this._esdl__setTimeUnit = 1.nsec;
+	    Time prec = getRootEntity.getTimePrecision.normalize();
+	    if(prec._value is 0) {
+	      writeln("********** No default timePrecision specified; "
+		      "setting timePrecision to 1.psec");
+	      this._esdl__setTimePrecision = 1.psec;
+	      writeln("********** No default timeUnit specified; "
+		      "setting timeUnit to 1.nsec");
+	      this._esdl__setTimeUnit = 1.nsec;
+	    }
+	    else {
+	      writeln("********** No default timeUnit specified; "
+		      "setting timeUnit to timePrecision: ", prec);
+	      this._esdl__setTimeUnit = prec;
+	    }
 	  }
 
 	  if(this._timeScale is 0) {

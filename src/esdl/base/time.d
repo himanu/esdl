@@ -11,6 +11,7 @@
 module esdl.base.time;
 
 import std.math;		// needed for ^^ operation
+import esdl.base.core: getRootEntity;
 
 protected enum TimeUnit: byte
   {   SEC  = 0,
@@ -148,6 +149,11 @@ public struct Time
     return value_ ~ "." ~ unit_;
   }
 
+  public R to(R)() if(is(R: real)) {
+    import std.conv: to;
+    return _value * ((cast(R) 10) ^^ _unit);
+  }
+
   public string toString() {
     return this.to!string;
   }
@@ -215,6 +221,12 @@ interface TimeConfigContext: TimeContext
 	  if(! t.isZero()) {
 	    Time prec = getRootEntity.getTimePrecision.normalize();
 	    Time tuni = t.normalize();
+	    if(tuni._value !is 0 && prec._value is 0) {
+	      import std.stdio;
+	      prec = tuni;
+	      writeln("********** timePrecision undefined, setting it to top level timeUnit: ", prec);
+	      getRootEntity._esdl__setTimePrecision(prec);
+	    }
 	    if(prec._unit > tuni._unit ||
 	       ((tuni._value * 10L^^(tuni._unit - prec._unit)) %
 	    	prec._value) !is 0) {
@@ -230,7 +242,6 @@ interface TimeConfigContext: TimeContext
       }
 
       override protected void _esdl__setTimePrecision(Time t) {
-	import esdl.base.core;
 	// if(! getRootEntity.timePrecisionSet()) {
 	//   if(getSimPhase() !is SimPhase.CONFIGURE) {
 	//     assert(false,
@@ -254,12 +265,6 @@ interface TimeConfigContext: TimeContext
 	  {
 	    return this._timeScale;
 	  }
-      }
-
-      package void getTimeScale(ulong t) {
-	synchronized(this) {
-	  this._timeScale = t;
-	}
       }
 
       // returns true if the given number is an exact power of 10
@@ -441,17 +446,14 @@ immutable SimTime MAX_SIMULATION_TIME = SimTime(long.max);
 public void _esdl__setTimePrecision(Time t) {
   _isPowerOf10(t._value) ||
     assert(false, "timePrecision takes only powers of 10 as arguments");
-  import esdl.base.core: getRootEntity;
   getRootEntity.setTimePrecision(t.normalize);
 }
 
 public Time getTimePrecision() {
-  import esdl.base.core: getRootEntity;
   return getRootEntity.getTimePrecision();
 }
 
 public byte getTimePrecisionOrder() {
-  import esdl.base.core: getRootEntity;
   auto t = getRootEntity.getTimePrecision();
   auto retval = cast(byte)(t._unit + _log10(t._value));
   return retval;

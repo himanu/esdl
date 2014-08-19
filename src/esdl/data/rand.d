@@ -1031,7 +1031,7 @@ public bool randomize(T) (ref T t)
     }
   }
 
-public void _esdl__initCstEng(T) (ref T t)
+public void _esdl__initCstEng(T) (T t)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
 
@@ -1043,7 +1043,7 @@ public void _esdl__initCstEng(T) (ref T t)
     }
   }
 
-public bool _esdl__randomize(T) (ref T t, _ESDL__ConstraintBase withCst = null)
+public bool _esdl__randomize(T) (T t, _ESDL__ConstraintBase withCst = null)
   if(is(T v: RandomizableIntf) &&
      is(T == class)) {
     import std.exception;
