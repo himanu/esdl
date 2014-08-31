@@ -668,7 +668,7 @@ template ULogicVec(N...) if(CheckVecParams!N) {
 // A tightly packed fixed width vector of bits
 struct vec(bool S, bool L, N...) if(CheckVecParams!N)
   {
-    import esdl.base.time;
+    import esdl.data.time;
     enum size_t SIZE = VecSize!(1,N);
     private alias VecParams!(SIZE,S).StoreT store_t;
 

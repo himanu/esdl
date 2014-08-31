@@ -11,9 +11,11 @@
 module esdl.base.core;
 
 // import std.concurrency: Thread;
-import core.thread;
+// import core.thread;
+import core.thread: Thread, Fiber;
+// import esdl.sys.thread: Fiber;
 
-public import esdl.base.time;
+public import esdl.data.time;
 public import esdl.base.comm;
 
 // use atomicStore and atomicLoad
@@ -2060,7 +2062,7 @@ public class NotificationQueueObj(T): NotificationObj!T
 
   struct TimedNotice
   {
-    enum SimTime invalid = SimTime(long.min);
+    enum SimTime invalid = SimTime(ulong.max);
     
     SimTime _time = invalid;
     T _data;
@@ -2775,7 +2777,7 @@ public class EventQueueObj: EventObj
 
   struct TimedNotice
   {
-    enum SimTime invalid = SimTime(long.min);
+    enum SimTime invalid = SimTime(ulong.max);
     
     SimTime _time = invalid;
 
@@ -6839,19 +6841,20 @@ class EsdlExecutor: EsdlExecutorIf
     debug(EXECUTOR) {
       import std.stdio: writeln;
       writeln("******* About to execute ",
-	      _runnableWorkers.length, " tasks");
+	      _runnableWorkers.length, " workers");
     }
 
 
-    foreach(ref task; this._runnableWorkers) {
+    foreach(ref worker; this._runnableWorkers) {
       debug(EXECUTOR) {
 	import std.stdio: writeln;
 	writeln("******* About to execute ",
-		task.procID, " (ID) ", task.state, "(status)");
+		worker.procID, " (ID) ", worker.state, "(status)");
       }
-      task.preExecute();
-      if(task._stage == ProcState.RUNNING) {
-	runProcs ~= task;
+      worker.preExecute();
+      if(worker._stage == ProcState.RUNNING ||
+	 worker._stage == ProcState.STARTING) {
+	runProcs ~= worker;
       }
     }
 
@@ -6862,21 +6865,21 @@ class EsdlExecutor: EsdlExecutorIf
     _procBarrier.reset(cast(uint)runProcs.length + 1);
 
     while(runProcs.length != 0) {
-      Process[] tasks = runProcs;
+      Process[] workers = runProcs;
       runProcs.length = 0;
-      foreach(ref task; tasks) {
+      foreach(ref worker; workers) {
 	this._procSemaphore.wait();
-	if(task._esdl__parLock is null ||
-	   task._esdl__parLock.tryWait) {
-	  task.execute();
+	if(worker._esdl__parLock is null ||
+	   worker._esdl__parLock.tryWait) {
+	  worker.execute();
 	}
 	else {			// postpone
-	  runProcs ~= task;
+	  runProcs ~= worker;
 	  this._procSemaphore.notify();
 	  debug(EXECUTOR) {
 	    import std.stdio: writeln;
 	    writeln("######## Could not get lock -- Postponing Process ",
-		    runProcs.length, " tasks");
+		    runProcs.length, " workers");
 	  }
 	}
       }
@@ -6884,14 +6887,14 @@ class EsdlExecutor: EsdlExecutorIf
 
     debug(EXECUTOR) {
       import std.stdio: writeln;
-      writeln("All tasks executing");
+      writeln("All workers executing");
     }
 
     this._procBarrier.wait();
 
     debug(EXECUTOR) {
       import std.stdio: writeln;
-      writeln("All tasks done with executing");
+      writeln("All workers done with executing");
     }
     return procs;
   }
@@ -7945,7 +7948,7 @@ class EsdlSimulator: EntityIntf
 	    writeln("Simulation Root Thread threw exception: ", e);
 	    // throw(e);
 	  }
-	}, 64*1024*1024);
+	});
       _rootThread._esdl__setParent(this);
       _rootThread._esdl__setName("root");
     }
@@ -8038,3 +8041,287 @@ public void finish() {
     vpi_control(vpiFinish, 1);
   }
 }
+
+// TimeContext
+
+interface TimeContext
+{
+  public Time getTimeUnit();
+  public ulong getTimeScale();
+}
+
+interface TimeConfigContext: TimeContext
+{
+  public Time getTimeUnit();
+  protected void _esdl__setTimeUnit(Time t);
+  protected void _esdl__setTimePrecision(Time t);
+  public ulong getTimeScale();
+  package void _esdl__setTimeScale(ulong t);
+  public final SimTime tu(ulong val) {
+    return SimTime(val*getTimeScale());
+  }
+  // SimTime Time(ulong val, TimeUnit unit);
+  // SimTime Time(string unit="default")(ulong val);
+  // SimTime Time(double val);
+  // SimTime Time(double val, TimeUnit unit);
+  public void fixTimeParameters(ulong scale = 0);
+
+  static final string timedMixin() {
+    return q{
+      protected ulong _timeScale = 0;
+
+      override protected void _esdl__setTimeUnit(Time t) {
+	synchronized(this) {
+	  if(! t.isZero()) {
+	    Time prec = getRootEntity.getTimePrecision.normalize();
+	    Time tuni = t.normalize();
+	    if(tuni._value !is 0 && prec._value is 0) {
+	      import std.stdio;
+	      prec = tuni;
+	      writeln("********** timePrecision undefined, setting it to top level timeUnit: ", prec);
+	      getRootEntity._esdl__setTimePrecision(prec);
+	    }
+	    if(prec._unit > tuni._unit ||
+	       ((tuni._value * 10L^^(tuni._unit - prec._unit)) %
+	    	prec._value) !is 0) {
+	      import std.string: format;
+	      assert(false,
+	    	     format("setTimeUnit %s incompatible with setTimePrecision %s",
+	    		    tuni, prec));
+	    }
+	    _timeScale =
+	      tuni._value * (10L^^(tuni._unit - prec._unit)) / prec._value;
+	  }
+	}
+      }
+
+      override protected void _esdl__setTimePrecision(Time t) {
+	// if(! getRootEntity.timePrecisionSet()) {
+	//   if(getSimPhase() !is SimPhase.CONFIGURE) {
+	//     assert(false,
+	// 	   "_esdl__setTimePrecision should only be called from"
+	// 	   " within doConfig method");
+	//   }
+	if(! t.isZero()) {
+	  ._esdl__setTimePrecision(t.normalize());
+	}
+	// }
+      }
+      
+      override public Time getTimeUnit() {
+	synchronized(this) {
+	  return this._timeScale * getTimePrecision;
+	}
+      }
+
+      override public ulong getTimeScale() {
+	synchronized(this)
+	  {
+	    return this._timeScale;
+	  }
+      }
+
+      // returns true if the given number is an exact power of 10
+      private static bool _isPowerOf10(ulong n) {
+	if(n == 0) return false;
+	if(n == 1) return true;
+	if(n % 10L == 0) return _isPowerOf10(n/10L);
+	else return false;
+      }
+      
+      private static ubyte _log10(ulong n) {
+	if(n == 1) return 0;
+	else return cast(ubyte)(1 + _log10(n/10L));
+      }
+
+      // unittest {
+      //   assert(TimedObject._isPowerOf10(10) == true);
+      //   assert(TimedObject._isPowerOf10(20) == false);
+      //   assert(TimedObject._isPowerOf10(0) == false);
+      //   assert(TimedObject._isPowerOf10(1) == true);
+      //   assert(TimedObject._log10(1) == 0);
+      //   assert(TimedObject._log10(100) == 2);
+      //   assert(TimedObject._log10(10000) == 4);
+      // }
+    };
+  }
+
+}
+
+struct SimTime
+{
+  import std.traits: isIntegral;
+  // Just store simulation time steps
+  private ulong _value;
+
+  public this(ulong value) {
+    this._value = value;
+  }
+
+  public ulong getVal() {
+    return _value;
+  }
+
+  public void opAssign(ulong value) {
+    this._value = value;
+  }
+
+  public void opAssign(SimTime t) {
+    this._value = t._value;
+  }
+
+  public this(TimeConfigContext context, ulong val) {
+    synchronized(context) {
+      this._value = val * context.getTimeScale;
+    }
+  }
+
+  public this(TimeConfigContext context, ulong val, TimeUnit unit) {
+    synchronized(context) {
+      if(getTimePrecisionOrder <= unit) {
+	this._value = val * 10L ^^(unit - getTimePrecisionOrder);
+      }
+      else {
+	this._value = val / 10L ^^(getTimePrecisionOrder - unit);
+      }
+    }
+  }
+
+  public this(TimeConfigContext context, Time t) {
+    synchronized(context) {
+      if(getTimePrecisionOrder <= t._unit) {
+	this._value = t._value * 10L ^^(t._unit - getTimePrecisionOrder);
+      }
+      else {
+	this._value = t._value / 10L ^^(getTimePrecisionOrder - t._unit);
+      }
+    }
+  }
+
+  public int opCmp(SimTime rhs) {
+    if(this._value == rhs._value) return 0;
+    if(this._value < rhs._value) return -1;
+    else return 1;
+  }
+
+  public int opCmp(ulong rhs) {
+    if(this._value == rhs) return 0;
+    if(this._value < rhs) return -1;
+    else return 1;
+  }
+
+  public bool opEquals(SimTime rhs) {
+    return _value == rhs._value;
+  }
+
+  public bool opEquals(ulong rhs) {
+    return _value == rhs;
+  }
+
+  public SimTime opBinary(string op)(SimTime rhs)
+    if(op == "+") {
+      // import std.exception;	// enforce
+      auto result = this._value + rhs._value;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinary(string op)(SimTime rhs)
+    if(op == "-") {
+      // import std.exception;	// enforce
+      // enforce that rhs is not greater
+      // -- since a long can not hold a negative number
+      // enforce(rhs._value <= this._value);
+      auto result = this._value - rhs._value;
+      return SimTime(result);
+    }
+
+  public SimTime opBinary(string op, T)(T rhs)
+    if(isIntegral!T && op == "*") {
+      import std.exception;	// enforce
+      auto result = this._value * rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinaryRight(string op, T)(T rhs)
+    if(isIntegral!T && op == "*") {
+      import std.exception;	// enforce
+      auto result = this._value * rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinary(string op, T)(T rhs)
+    if(isIntegral!T && op == "/") {
+      import std.exception;	// enforce
+      auto result = this._value / rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinaryRight(string op, T)(T rhs)
+    if(isIntegral!T && op == "/") {
+      import std.exception;	// enforce
+      auto result = this._value / rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public T to(T)()
+    if(is(T == string)) {
+      import std.conv;
+      return "#" ~ to!string(_value);
+    }
+
+  public T to(T)()
+    if(is(T == ulong) || is(T == long)) {
+      return _value;
+    }
+
+  public bool isZero() {
+    if(_value is 0) return true;
+    else return false;
+  }
+
+  alias to!string toString;
+}
+
+// alias SimTime SimTime;
+immutable SimTime DELTA = SimTime(0L);
+
+immutable SimTime MAX_SIMULATION_TIME = SimTime(ulong.max);
+
+public void _esdl__setTimePrecision(Time t) {
+  _isPowerOf10(t._value) ||
+    assert(false, "timePrecision takes only powers of 10 as arguments");
+  getRootEntity.setTimePrecision(t.normalize);
+}
+
+public Time getTimePrecision() {
+  return getRootEntity.getTimePrecision();
+}
+
+public byte getTimePrecisionOrder() {
+  auto t = getRootEntity.getTimePrecision();
+  auto retval = cast(byte)(t._unit + _log10(t._value));
+  return retval;
+}
+
+private bool _isPowerOf10(ulong n) {
+  if(n == 0) return false;
+  if(n == 1) return true;
+  if(n % 10L == 0) return _isPowerOf10(n/10L);
+  else return false;
+}
+      
+private ubyte _log10(ulong n) {
+  if(n == 1) return 0;
+  else return cast(ubyte)(1 + _log10(n/10L));
+}
+

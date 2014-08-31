@@ -11,8 +11,8 @@ class Hello: Entity {
     import std.stdio: writeln;
     writeln("Hello World from: ", Process.self.getFullName());
   }
-  Worker!sayHello greet[2];
-  Task!sayHello greetWorker[2];
+  Task!sayHello greet[2];
+  Worker!sayHello greetWorker[2];
 }
 
 // @timeUnit(1.nsec)
