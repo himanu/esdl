@@ -82,12 +82,7 @@ abstract class VcdVar: VcdNode
     _size = size;
   }
 
-  abstract void addScalarValChange(uint timeStep, char value);
-  abstract void addVectorValChange(uint timeStep, string value);
-  abstract void addLogicStringValChange(uint timeStep, string value);
-  abstract void addRealValChange(uint timeStep, string value);
-  abstract void addCommandValChange(uint timeStep, SIM_COMMAND value);
-  abstract void addStringValChange(uint timeStep, string value);
+  abstract void addValChange(uint timeStep, string value);
 
   // Takes too much memory
   // static VcdVar makeVarVec(size_t A=1, size_t N=64, size_t Z=128)
@@ -97,7 +92,7 @@ abstract class VcdVar: VcdNode
   //   }
   //   else if(size == N) {
   //     alias T = ulvec!N;
-  //     return new VcdVecWave!T(parent, name, size);
+  //     return new VcdWave!T(parent, name, size);
   //   }
   //   else if(size < N) {
   //     return makeVarVec!(A, (N+A)/2, N)(parent, name, size);
@@ -112,20 +107,19 @@ abstract class VcdVar: VcdNode
     static if(N <= MaxVectorSize) {
       static if(N == 64) {
 	if(size <= 8) {
-	  alias T = ulvec!8;
-	  return new VcdVecWave!T(parent, vcd, name, size);
+	  return new VcdVecWave!N(parent, vcd, name, size);
 	}
 	else if(size <= 16) {
 	  alias T = ulvec!16;
-	  return new VcdVecWave!T(parent, vcd, name, size);
+	  return new VcdVecWave!N(parent, vcd, name, size);
 	}
 	else if(size <= 32) {
 	  alias T = ulvec!32;
-	  return new VcdVecWave!T(parent, vcd, name, size);
+	  return new VcdVecWave!N(parent, vcd, name, size);
 	}
 	else if(size <= 64) {
 	  alias T = ulvec!64;
-	  return new VcdVecWave!T(parent, vcd, name, size);
+	  return new VcdVecWave!N(parent, vcd, name, size);
 	}
 	else {
 	  return makeVarVec!(N+64)(parent, vcd, name, size);
@@ -134,7 +128,7 @@ abstract class VcdVar: VcdNode
       else {			// static if(N != 64)
 	if(size <= N) {	
 	  alias T = ulvec!N;
-	  return new VcdVecWave!T(parent, vcd, name, size);
+	  return new VcdVecWave!N(parent, vcd, name, size);
 	}
 	else {
 	  return makeVarVec!(N+64)(parent, vcd, name, size);
@@ -142,7 +136,7 @@ abstract class VcdVar: VcdNode
       }
     }
     else {
-      return new VcdVecWave!lstr(parent, vcd, name, size);
+      return new VcdLogicStringWave(parent, vcd, name, size);
     }
   }
 }
@@ -174,63 +168,169 @@ struct VcdVecVal(V)
   }
 }
 
-class VcdVecWave(V): VcdVar
+class VcdStringWave: VcdVar
 {
-  VcdVecVal!V _wave[];
+  VcdVecVal!string _wave[];
+  this(VcdScope parent, VCD vcd, string name, uint size) {
+    super(parent, vcd, size);
+  }
+  override void addValChange(uint timeStep, string value) {
+    _wave ~= VcdVecVal!string(timeStep, value);
+  }
+}
+
+class VcdRealWave: VcdVar
+{
+  VcdVecVal!real _wave[];
+  this(VcdScope parent, VCD vcd, string name, uint size) {
+    super(parent, vcd, size);
+  }
+  override void addValChange(uint timeStep, string value) {
+    if(value[0] != 'r' && value[0] != 'R') {
+      assert(false, "Illegal real value: " ~ value);
+    }
+    if(!isNumeric(value[1..$])) {
+      assert(false, "Illegal real value: " ~ value);
+    }
+    real val = value[1..$].to!real;
+    _wave ~= VcdVecVal!real(timeStep, val);
+  }
+}
+  
+
+class VcdCommandWave: VcdVar
+{
+  VcdVecVal!SIM_COMMAND _wave[];
+  this(VcdScope parent, VCD vcd, string name, uint size) {
+    super(parent, vcd, size);
+  }
+  override void addValChange(uint timeStep, string word) {
+    SIM_COMMAND* cmd;
+    if((cmd = word in VCD._commandTypeLookup) !is null) {
+      _wave ~= VcdVecVal!SIM_COMMAND(timeStep, *cmd);
+    }
+    else {
+      assert(false, "UNEXPECTED command: " ~ word);
+    }
+  }
+}
+
+class VcdEventWave: VcdVar
+{
+  VcdVecVal!bool _wave[];
+  this(VcdScope parent, VCD vcd, string name, uint size) {
+    super(parent, vcd, size);
+  }
+  override void addValChange(uint timeStep, string value) {
+    if(value[0] != '1') {
+      assert(false, "Illegal value for an event: " ~ value[0]);
+    }
+    else {
+      _wave ~= VcdVecVal!bool(timeStep, true);
+    }
+  }
+}
+  
+class VcdLogicStringWave: VcdVar
+{
+  VcdVecVal!lstr _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, size);
   }
 
-  override void addScalarValChange(uint timeStep, char value) {
-    static if(isBitVector!V || is(V == bool)) {
-      if(_size != 1) {
-	assert(false, "Scalar Value provided for a variable of size: " ~
-	       _size.to!string);
-      }
-      static if(is(V == bool)) { // for events
-	if(value != '1') {
-	  assert(false, "Illegal value for an event");
-	}
-	else {
-	  _wave ~= VcdVecVal!bool(timeStep, true);
-	}
+  override void addValChange(uint timeStep, string value) {
+    lstr val;			// all 0s
+    val.length = _size;
+    // left fill bit in value -- 
+    char leftFill;
+    // 0th char is 'b' or 'B'      
+
+    if(value[0] != 'b' && value[0] != 'B') {
+      assert(false, "Illegal vector value: " ~ value);
+    }
+    switch(value[1]) {
+    case '0':
+    case '1':
+      leftFill = '0';
+      break;
+    case 'x':
+    case 'X':
+      leftFill = 'X';
+      break;
+    case 'z':
+    case 'Z':
+      leftFill = 'Z';
+      break;
+    default:
+      assert(false, "Illegal vector value: " ~ value);
+    }
+      
+    for (uint n=0; n!=_size; ++n) {
+      char nBit;
+      if(value.length > n + 1) {
+	nBit = value[$-1-n];
       }
       else {
-	switch(value) {
-	case '0':
-	  V val = 0;
-	  _wave ~= VcdVecVal!V(timeStep, val);
-	  break;
-	case '1':
-	  V val = 1;
-	  _wave ~= VcdVecVal!V(timeStep, val);
-	  break;
-	case 'x':
-	case 'X':
-	  V val = LOGIC_X;
-	  _wave ~= VcdVecVal!V(timeStep, val);
-	  break;
-	case 'z':
-	case 'Z':
-	  V val = LOGIC_Z;
-	  _wave ~= VcdVecVal!V(timeStep, val);
-	  break;
-	default:
-	  assert(false, "Unrecognized Scalar Value: " ~ value);
-	}
+	nBit = leftFill;
+      }
+      switch(nBit) {
+      case '0':
+	val[n] = LOGIC_0;
+	break;
+      case '1':
+	val[n] = LOGIC_1;
+	break;
+      case 'x':
+      case 'X':
+	val[n] = LOGIC_X;
+	break;
+      case 'z':
+      case 'Z':
+	val[n] = LOGIC_Z;
+	break;
+      default:
+	assert(false, "Illegal vector value: " ~ value);
+      }
+    }
+    _wave ~= VcdVecVal!lstr(timeStep, val);
+  }
+}  
+
+
+class VcdVecWave(size_t N): VcdVar
+{
+  VcdVecVal!(ulvec!N) _wave[];
+  this(VcdScope parent, VCD vcd, string name, uint size) {
+    super(parent, vcd, size);
+  }
+
+  override void addValChange(uint timeStep, string value) {
+    ulvec!N val;			// all 0s
+    // left fill bit in value -- 
+    char leftFill;
+    // 0th char is 'b' or 'B'      
+    if(_size == 1 && value.length == 1) {
+      switch(value[0]) {
+      case '0':
+	val[0] = LOGIC_0;
+	break;
+      case '1':
+	val[0] = LOGIC_1;
+	break;
+      case 'x':
+      case 'X':
+	val[0] = LOGIC_X;
+	break;
+      case 'z':
+      case 'Z':
+	val[0] = LOGIC_Z;
+	break;
+      default:
+	assert(false, "Illegal vector value: " ~ value);
       }
     }
     else {
-      assert(false, "addScalarValChange applicable only to bitvectors or bool");
-    }
-  }
-  
-  override void addVectorValChange(uint timeStep, string value) {
-    static if(isBitVector!V) {
-      V val;			// all 0s
-      // left fill bit in value -- 
-      char leftFill;
-      // 0th char is 'b' or 'B'      
+
       if(value[0] != 'b' && value[0] != 'B') {
 	assert(false, "Illegal vector value: " ~ value);
       }
@@ -278,108 +378,8 @@ class VcdVecWave(V): VcdVar
 	  assert(false, "Illegal vector value: " ~ value);
 	}
       }
-      _wave ~= VcdVecVal!V(timeStep, val);
     }
-    else {
-	assert(false, "UNEXPECTED type for addVectorValChange: " ~ V.stringof);
-      }
-    
-  }
-  
-  override void addLogicStringValChange(uint timeStep, string value) {
-    static if(is(V == lstr)) {
-      V val;			// all 0s
-      val.length = _size;
-      // left fill bit in value -- 
-      char leftFill;
-      // 0th char is 'b' or 'B'      
-      if(value[0] != 'b' && value[0] != 'B') {
-	assert(false, "Illegal vector value: " ~ value);
-      }
-      switch(value[1]) {
-      case '0':
-      case '1':
-	leftFill = '0';
-	break;
-      case 'x':
-      case 'X':
-	leftFill = 'X';
-	break;
-      case 'z':
-      case 'Z':
-	leftFill = 'Z';
-	break;
-      default:
-	assert(false, "Illegal vector value: " ~ value);
-      }
-      
-      for (uint n=0; n!=_size; ++n) {
-	char nBit;
-	if(value.length > n + 1) {
-	  nBit = value[$-1-n];
-	}
-	else {
-	  nBit = leftFill;
-	}
-	switch(nBit) {
-	case '0':
-	  val[n] = LOGIC_0;
-	  break;
-	case '1':
-	  val[n] = LOGIC_1;
-	  break;
-	case 'x':
-	case 'X':
-	  val[n] = LOGIC_X;
-	  break;
-	case 'z':
-	case 'Z':
-	  val[n] = LOGIC_Z;
-	  break;
-	default:
-	  assert(false, "Illegal vector value: " ~ value);
-	}
-      }
-      _wave ~= VcdVecVal!V(timeStep, val);
-    }
-    else {
-      assert(false, "UNEXPECTED type for addVectorValChange: " ~ V.stringof);
-    }
-    
-  }
-  
-  override void addRealValChange(uint timeStep, string value) {
-    static if(is(V == real)) {
-      if(value[0] != 'r' && value[0] != 'R') {
-	assert(false, "Illegal real value: " ~ value);
-      }
-      if(!isNumeric(value[1..$])) {
-	assert(false, "Illegal real value: " ~ value);
-      }
-      real val = value[1..$].to!real;
-      _wave ~= VcdVecVal!V(timeStep, val);
-    }
-    else {
-	assert(false, "UNEXPECTED type for addRealValChange: " ~ V.stringof);
-      }
-  }
-  
-  override void addStringValChange(uint timeStep, string value) {
-    static if(is(V == string)) {
-      _wave ~= VcdVecVal!string(timeStep, value);
-    }
-    else {
-	assert(false, "UNEXPECTED type for addStringValChange: " ~ V.stringof);
-      }
-  }
-  
-  override void addCommandValChange(uint timeStep, SIM_COMMAND value) {
-    static if(is(V == SIM_COMMAND)) {
-      _wave ~= VcdVecVal!SIM_COMMAND(timeStep, value);
-    }
-    else {
-      assert(false, "UNEXPECTED type for addCommandValChange: " ~ V.stringof);
-    }
+    _wave ~= VcdVecVal!(ulvec!N)(timeStep, val);
   }
   
 };
@@ -389,12 +389,12 @@ class VCD
   public this(string name) {
     _file = new VcdFile(name);
     _timeStamps ~= 0;
-    _comments = new VcdVecWave!string(null, this, "comments", 1);
-    _commands = new VcdVecWave!SIM_COMMAND(null, this, "commands", 1);
-    _dumpon =   new VcdVecWave!bool(null, this, "$dumpon", 1);
-    _dumpoff =  new VcdVecWave!bool(null, this, "$dumpoff", 1);
-    _dumpall =  new VcdVecWave!bool(null, this, "$dumpall", 1);
-    _dumpvars = new VcdVecWave!bool(null, this, "$dumpvars", 1);
+    _comments = new VcdStringWave(null, this, "comments", 1);
+    _commands = new VcdCommandWave(null, this, "commands", 1);
+    _dumpon =   new VcdEventWave(null, this, "$dumpon", 1);
+    _dumpoff =  new VcdEventWave(null, this, "$dumpoff", 1);
+    _dumpall =  new VcdEventWave(null, this, "$dumpall", 1);
+    _dumpvars = new VcdEventWave(null, this, "$dumpvars", 1);
     parseDeclarations();
     parseSimulation();
   }
@@ -406,13 +406,13 @@ class VCD
   string  _comment;
   VcdScope _root;
   // commands along with timestamps
-  VcdVecWave!SIM_COMMAND _commands;
-  VcdVecWave!bool        _dumpon;
-  VcdVecWave!bool        _dumpoff;
-  VcdVecWave!bool        _dumpall;
-  VcdVecWave!bool        _dumpvars;
+  VcdCommandWave      _commands;
+  VcdEventWave        _dumpon;
+  VcdEventWave        _dumpoff;
+  VcdEventWave        _dumpall;
+  VcdEventWave        _dumpvars;
   // comments in the dump area along with timestamps
-  VcdVecWave!string      _comments;
+  VcdStringWave       _comments;
 
   // associative array that keeps a lookup for the string symbols and
   // the corresponding variable
@@ -575,11 +575,11 @@ class VCD
     VcdVar var;
     switch(varType) {
     case VAR_TYPE.EVENT:
-      var = new VcdVecWave!bool(currScope, this, name, 1);
+      var = new VcdEventWave(currScope, this, name, 1);
       break;
     case VAR_TYPE.REAL:
     case VAR_TYPE.REALTIME:
-      var = new VcdVecWave!real(currScope, this, name, 1);
+      var = new VcdRealWave(currScope, this, name, 1);
       break;
     default:			// ulvec!size
       // if(size >= 1024) assert(false, "Too big vector size 1024");
@@ -677,7 +677,7 @@ class VCD
       comment ~= word;
       comment ~= " ";
     }
-    _comments.addStringValChange(cast(uint) (_timeStamps.length-1), comment[0..$-1]);
+    _comments.addValChange(cast(uint) (_timeStamps.length-1), comment[0..$-1]);
   }
 
   void parseValChange(string word) {
@@ -686,7 +686,7 @@ class VCD
        word[0] == 'z' || word[0] == 'Z') { // scalar value
       string id = word[1..$];
       auto wave = id in _lookup;
-      (*wave).addScalarValChange(cast(uint) (_timeStamps.length-1), word[0]);
+      (*wave).addValChange(cast(uint) (_timeStamps.length-1), word[0..1]);
       if(id is null) {
 	assert(false, _file.errorString());
       }
@@ -698,42 +698,45 @@ class VCD
 	assert(false, _file.errorString());
       }
       if((*wave)._size < MaxVectorSize) {
-	(*wave).addVectorValChange(cast(uint) (_timeStamps.length-1), word);
+	(*wave).addValChange(cast(uint) (_timeStamps.length-1), word);
       }
       else {
-	(*wave).addLogicStringValChange(cast(uint) (_timeStamps.length-1), word);
+	(*wave).addValChange(cast(uint) (_timeStamps.length-1), word);
       }
     }
     else if(word[0] == 'r' || word[0] == 'R') {	// vector real
       string id = _file.nextWord();
       auto wave = id in _lookup;
-      (*wave).addRealValChange(cast(uint) (_timeStamps.length-1), word);
+      (*wave).addValChange(cast(uint) (_timeStamps.length-1), word);
       if(id is null) {
 	assert(false, _file.errorString());
       }
     }
   }
   
-  void parseSimulationCommand(SIM_COMMAND command) {
-    _commands.addCommandValChange(cast(uint) (_timeStamps.length-1), command);
-    switch(command) {
-    case SIM_COMMAND.DUMPON:
-      _dumpon.addScalarValChange(cast(uint) (_timeStamps.length-1), true);
-      break;
-    case SIM_COMMAND.DUMPOFF:
-      _dumpoff.addScalarValChange(cast(uint) (_timeStamps.length-1), true);
-      break;
-    case SIM_COMMAND.DUMPALL:
-      _dumpall.addScalarValChange(cast(uint) (_timeStamps.length-1), true);
-      break;
-    case SIM_COMMAND.DUMPVARS:
-      _dumpvars.addScalarValChange(cast(uint) (_timeStamps.length-1), true);
-      break;
-    default: break;
+  void parseSimulationCommand(string word) {
+    _commands.addValChange(cast(uint) (_timeStamps.length-1), word);
+    SIM_COMMAND* command;
+    if((command = (word in _commandTypeLookup)) !is null) {
+      switch(*command) {
+      case SIM_COMMAND.DUMPON:
+	_dumpon.addValChange(cast(uint) (_timeStamps.length-1), "1");
+	break;
+      case SIM_COMMAND.DUMPOFF:
+	_dumpoff.addValChange(cast(uint) (_timeStamps.length-1), "1");
+	break;
+      case SIM_COMMAND.DUMPALL:
+	_dumpall.addValChange(cast(uint) (_timeStamps.length-1), "1");
+	break;
+      case SIM_COMMAND.DUMPVARS:
+	_dumpvars.addValChange(cast(uint) (_timeStamps.length-1), "1");
+	break;
+      default: break;
+      }
     }
-    string word;
-    while((word = _file.nextWord()) != "$end") {
-      parseValChange(word);
+    string value;
+    while((value = _file.nextWord()) != "$end") {
+      parseValChange(value);
     }
   }
 
@@ -753,8 +756,8 @@ class VCD
 	  _timeStamps ~= timeStr.to!ulong;
 	}
       }
-      else if((cmd = word in _commandTypeLookup) !is null) {
-	parseSimulationCommand(*cmd);
+      else if(word[0] == '$') {
+	parseSimulationCommand(word);
       }
       else {
 	parseValChange(word);
