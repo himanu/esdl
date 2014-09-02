@@ -18,7 +18,77 @@ import std.string: isNumeric;	// required for timeScale
 
 // beyond this size the parser would create a logicstring instead of
 // an lvec for storing data.
-enum uint MaxVectorSize = 4096;
+enum uint MaxVectorSize = 65536; // 16384; // 32768; // 65536;
+
+import core.bitop;
+
+// A tightly packed fixed width vector of bits
+struct VcdVec(size_t N)
+{
+
+  static if(N <= 8)                     private alias ubyte  store_t;
+  else static if(N <= 16)               private alias ushort store_t;
+  else static if(N <= 32)               private alias uint   store_t;
+  else static if(size_t.sizeof*8 == 32) private alias uint   store_t;
+    else                                private alias ulong  store_t;
+
+  private enum size_t STORESIZE =
+    (8*store_t.sizeof+N-1)/(8*store_t.sizeof);
+
+  private store_t[STORESIZE] _aval;
+  private store_t[STORESIZE] _bval;
+
+  auto setBit(size_t i, char b) {
+    static if(STORESIZE == 1) {
+      switch(b) {
+      case '0':
+	this._aval[0] &= ~(1L << i);
+	this._bval[0] &= ~(1L << i);
+	break;
+      case '1':
+	this._aval[0] |=  (1L << i);
+	this._bval[0] &= ~(1L << i);
+	break;
+      case 'X':
+      case 'x':
+	this._aval[0] &= ~(1L << i);
+	this._bval[0] |=  (1L << i);
+	break;
+      case 'Z':
+      case 'z':
+	this._aval[0] |=  (1L << i);
+	this._bval[0] |=  (1L << i);
+	break;
+      default:
+	assert(false, "Illegal character: " ~ b);
+      }
+    }
+    else {
+      switch(b) {
+      case '0':
+	btr((cast(size_t*) _aval.ptr), i);
+	btr((cast(size_t*) _bval.ptr), i);
+	break;
+      case '1':
+	bts((cast(size_t*) _aval.ptr), i);
+	btr((cast(size_t*) _bval.ptr), i);
+	break;
+      case 'X':
+      case 'x':
+	btr((cast(size_t*) _aval.ptr), i);
+	bts((cast(size_t*) _bval.ptr), i);
+	break;
+      case 'Z':
+      case 'z':
+	bts((cast(size_t*) _aval.ptr), i);
+	bts((cast(size_t*) _bval.ptr), i);
+	break;
+      default:
+	assert(false, "Illegal character: " ~ b);
+      }
+    }
+  }
+}
 
 enum SCOPE_TYPE: byte
   {   BEGIN,
@@ -91,7 +161,7 @@ abstract class VcdVar: VcdNode
   //     assert(false, "Can not handle variables of size > 65536");
   //   }
   //   else if(size == N) {
-  //     alias T = ulvec!N;
+  //     alias T = VcdVec!N;
   //     return new VcdWave!T(parent, name, size);
   //   }
   //   else if(size < N) {
@@ -102,41 +172,40 @@ abstract class VcdVar: VcdNode
   //   }
   // }
 
-  static VcdVar makeVarVec(size_t N=64)
+  static VcdVar makeVarVec(size_t A=0, size_t Z=MaxVectorSize/64)
     (VcdScope parent, VCD vcd, string name, uint size) {
-    static if(N <= MaxVectorSize) {
-      static if(N == 64) {
-	if(size <= 8) {
-	  return new VcdVecWave!N(parent, vcd, name, size);
-	}
-	else if(size <= 16) {
-	  alias T = ulvec!16;
-	  return new VcdVecWave!N(parent, vcd, name, size);
-	}
-	else if(size <= 32) {
-	  alias T = ulvec!32;
-	  return new VcdVecWave!N(parent, vcd, name, size);
-	}
-	else if(size <= 64) {
-	  alias T = ulvec!64;
-	  return new VcdVecWave!N(parent, vcd, name, size);
-	}
-	else {
-	  return makeVarVec!(N+64)(parent, vcd, name, size);
-	}
+    static if(A == 0) {
+      if(size > MaxVectorSize) {
+	return new VcdLogicStringWave(parent, vcd, name, size);
       }
-      else {			// static if(N != 64)
-	if(size <= N) {	
-	  alias T = ulvec!N;
-	  return new VcdVecWave!N(parent, vcd, name, size);
-	}
-	else {
-	  return makeVarVec!(N+64)(parent, vcd, name, size);
-	}
+      if(size <= 8) {
+	return new VcdVecWave!8(parent, vcd, name, size);
+      }
+      else if(size <= 16) {
+	return new VcdVecWave!16(parent, vcd, name, size);
+      }
+      else if(size <= 32) {
+	return new VcdVecWave!32(parent, vcd, name, size);
+      }
+      else if(size <= 64) {
+	return new VcdVecWave!64(parent, vcd, name, size);
+      }
+      else {
+	return makeVarVec!(A+1, Z)(parent, vcd, name, size);
       }
     }
-    else {
-      return new VcdLogicStringWave(parent, vcd, name, size);
+    else {			// static if(A != 1)
+      size_t n = (size + 63 - 1) / 64;
+      enum size_t N = (A + Z)/2;
+      if(n == N) {	
+	return new VcdVecWave!(N*64)(parent, vcd, name, size);
+      }
+      else if(n > N) {
+	return makeVarVec!(N+1, Z)(parent, vcd, name, size);
+      }
+      else {
+	return makeVarVec!(A, N-1)(parent, vcd, name, size);
+      }
     }
   }
 }
@@ -151,10 +220,10 @@ enum SIM_COMMAND: byte
 
 // V is a type and can be
 // bool     -- EVENT
-// ulvec!32 -- INTEGER
-// ulvec!n  -- PARAMETER, REG, SUPPLY0, SUPPLY1, TRI, TRIAND, TRIOR, TRIREG
+// VcdVec!32 -- INTEGER
+// VcdVec!n  -- PARAMETER, REG, SUPPLY0, SUPPLY1, TRI, TRIAND, TRIOR, TRIREG
 //             TRI0, TRI1, WAND, WIRE, WOR
-// ulvec!64 -- time
+// VcdVec!64 -- time
 // real     -- REAL
 // real     -- REALTIME
 
@@ -299,38 +368,20 @@ class VcdLogicStringWave: VcdVar
 
 class VcdVecWave(size_t N): VcdVar
 {
-  VcdVecVal!(ulvec!N) _wave[];
+  VcdVecVal!(VcdVec!N) _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, size);
   }
 
   override void addValChange(uint timeStep, string value) {
-    ulvec!N val;			// all 0s
+    VcdVec!N val;			// all 0s
     // left fill bit in value -- 
     char leftFill;
-    // 0th char is 'b' or 'B'      
+    // 0th char is 'b' or 'B'
     if(_size == 1 && value.length == 1) {
-      switch(value[0]) {
-      case '0':
-	val[0] = LOGIC_0;
-	break;
-      case '1':
-	val[0] = LOGIC_1;
-	break;
-      case 'x':
-      case 'X':
-	val[0] = LOGIC_X;
-	break;
-      case 'z':
-      case 'Z':
-	val[0] = LOGIC_Z;
-	break;
-      default:
-	assert(false, "Illegal vector value: " ~ value);
-      }
+      val.setBit(0, value[0]);
     }
     else {
-
       if(value[0] != 'b' && value[0] != 'B') {
 	assert(false, "Illegal vector value: " ~ value);
       }
@@ -359,29 +410,11 @@ class VcdVecWave(size_t N): VcdVar
 	else {
 	  nBit = leftFill;
 	}
-	switch(nBit) {
-	case '0':
-	  val[n] = LOGIC_0;
-	  break;
-	case '1':
-	  val[n] = LOGIC_1;
-	  break;
-	case 'x':
-	case 'X':
-	  val[n] = LOGIC_X;
-	  break;
-	case 'z':
-	case 'Z':
-	  val[n] = LOGIC_Z;
-	  break;
-	default:
-	  assert(false, "Illegal vector value: " ~ value);
-	}
+	val.setBit(n, nBit);
       }
     }
-    _wave ~= VcdVecVal!(ulvec!N)(timeStep, val);
+    _wave ~= VcdVecVal!(VcdVec!N)(timeStep, val);
   }
-  
 };
 
 class VCD
@@ -495,19 +528,19 @@ class VCD
   void parseTimeScale() {
     string word;
     int val;
-
+    string values="100000000000000000000";
     word = _file.nextWord();
-    if(isNumeric(word)) {
+    if(word == values[0..word.length]) {
       val = word.to!int;
       word = _file.nextWord();
     }
     // cover the case where time is specified as 1s (without space)
-    else if(isNumeric(word[0..$-1])) {
+    else if(word[0..$-1] == values[0..word.length-1]) {
       val = word[0..$-1].to!int;
       word = word[$-1..$];
     }
     // cover the case where time is specified as 1ns (without space)
-    else if(isNumeric(word[0..$-2])) {
+    else if(word[0..$-2] == values[0..word.length-2]) {
       val = word[0..$-2].to!int;
       word = word[$-2..$];
     }
@@ -581,14 +614,16 @@ class VCD
     case VAR_TYPE.REALTIME:
       var = new VcdRealWave(currScope, this, name, 1);
       break;
-    default:			// ulvec!size
+    default:			// VcdVec!size
       // if(size >= 1024) assert(false, "Too big vector size 1024");
       // mixin(genVarCode(0, 64));
-      var = VcdVar.makeVarVec(currScope, this, name, size);
-      if(id in _lookup) {
-	assert(false, "Duplicate Variable ID: " ~ id);
+      VcdVar *var_;
+      if((var_ = (id in _lookup)) !is null) {
+	var = *var_;
+	// assert(false, "Duplicate Variable ID: " ~ id);
       }
       else {
+	var = VcdVar.makeVarVec(currScope, this, name, size);
 	_lookup[id] = var;
       }
       break;
@@ -597,10 +632,10 @@ class VCD
   
 // V is a type and can be
 // bool     -- EVENT
-// ulvec!32 -- INTEGER
-// ulvec!n  -- PARAMETER, REG, SUPPLY0, SUPPLY1, TRI, TRIAND, TRIOR, TRIREG
+// VcdVec!32 -- INTEGER
+// VcdVec!n  -- PARAMETER, REG, SUPPLY0, SUPPLY1, TRI, TRIAND, TRIOR, TRIREG
 //             TRI0, TRI1, WAND, WIRE, WOR
-// ulvec!64 -- TIME
+// VcdVec!64 -- TIME
 // real     -- REAL
 // real     -- REALTIME
 
