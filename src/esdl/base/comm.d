@@ -351,7 +351,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
     }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -535,7 +535,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
     }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -642,7 +642,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
 //   }
 
 //   // Hierarchy
-//   mixin(namedMixin());
+//   mixin NamedMixin;
 
 // }
 
@@ -747,7 +747,7 @@ class MutexObj: MutexIF, NamedObj
   }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -908,7 +908,7 @@ class SemaphoreObj: SemaphoreIF, NamedObj
     }
   }
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
