@@ -248,9 +248,8 @@ package interface NamedObj: EsdlObj, TimeContext
     // name of an (array) object
     public final void _esdl__nomenclate(size_t I, T)(T t, uint[] indices) {
       synchronized(this) {
-	import std.string: chompPrefix;
 	import std.conv: to;
-	string name = chompPrefix(t.tupleof[I].stringof, "t.");
+	string name = t.tupleof[I].stringof[2..$]; // chomp "t."
 	foreach(i; indices) {
 	  name ~= "[" ~ to!string(i) ~ "]";
 	}
@@ -610,10 +609,11 @@ public interface HierComp: NamedObj, ParContext
       assert(parent !is null);
       return parent;
     }
-    public uint _esdl__parDetermineIndex() {
-      auto nthreads = getSimulator._executor._poolThreads.length;
-      return _esdl__compId % nthreads;
+
+    public uint _esdl__parComponentId() {
+      return _esdl__compId;
     }
+
     public final void _esdl__setParConfig(ParConfig parentCfg,
 					  parallelize linfo, parallelize plinfo) {
       if(linfo._parallel == -1) {	// take hier information
@@ -631,7 +631,7 @@ public interface HierComp: NamedObj, ParContext
 	  _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
 	}
 	else {
-	  _esdl__parConfig = new ParConfig(_esdl__compId % nthreads);
+	  _esdl__parConfig = new ParConfig(_esdl__parComponentId() % nthreads);
 	}
       }
       else {
@@ -1422,18 +1422,14 @@ class ParConfig
   }
 }
 
-// Determine what thread from the thread pool to use
-public uint _esdl__parContextFindIndex(U)(U u) if(is(U: ParContext)) {
-  // First get the @parallelize attribute
- }
-
 // @parallelize(0) would result in the ParContext using the same
 // thread as the parEnclosing context
 public interface ParContext
 {
   // Get the enclosing ParContext
+  // In case of Entity, this would be defined to be the parent entity
   public ParContext _esdl__parInheritFrom();
-  public uint _esdl__parDetermineIndex();
+  public uint _esdl__parComponentId();
   public ParConfig _esdl__getParConfig();
   mixin template ParContextMixin()
   {
@@ -1709,57 +1705,81 @@ interface EventClient
   public bool notify(SimTime steps);
 }
 
-// nested struct
 final class IndexedSimEvent
 {
   import core.atomic;
   import core.memory;
 
-  private size_t _client;
   private size_t _ptr;
+
+  version(WEAKPTR) {
+    private size_t _client;
+  }
+  else {
+    private SimEvent _client;
+  }
+
 
   // SimEvent client = void;
   size_t index = void;
 
   this(SimEvent event, size_t i) {
-    this.index = i;
-    auto ptr = cast(size_t)*cast(void**)&event;
+    synchronized (this) {
+      this.index = i;
+      version(WEAKPTR) {
+	auto ptr = cast(size_t)cast(void*)event;
 
-    // We use atomics because not all architectures may guarantee
-    // atomic store and load of these values.
-    atomicStore(*cast(shared)&_client, ptr);
+	// We use atomics because not all architectures may guarantee
+	// atomic store and load of these values.
+	atomicStore(*cast(shared)&_client, ptr);
 
-    // Only assigned once, so no atomics.
-    _ptr = ptr;
+	// Only assigned once, so no atomics.
+	_ptr = ptr;
 
-    rt_attachDisposeEvent(event, &unhook);
-    // GC.setAttr(cast(void*)this, GC.BlkAttr.NO_SCAN);
-    GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
+	rt_attachDisposeEvent(event, &unhook);
+	GC.setAttr(cast(void*)this, GC.BlkAttr.NO_SCAN);
+	// GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
+      }
+      else {
+	_client = event;
+      }
+    }
   }
 
   private final SimEvent client() {
-    auto obj = cast(SimEvent)cast(void*)atomicLoad(*cast(shared)&_client);
+    synchronized(this) {
+      version(WEAKPTR) {
+	auto obj = cast(SimEvent)cast(void*)atomicLoad(*cast(shared)&_client);
 
-    // We've moved obj into the GC-scanned stack space, so it's now
-    // safe to ask the GC whether the object is still alive. Note
-    // that even if the cast and assignment of the obj local
-    // doesn't put the object on the stack, this call will. So,
-    // either way, this is safe.
-    if (GC.addrOf(cast(void*)obj)) return obj;
-    return null;
+	// We've moved obj into the GC-scanned stack space, so it's now
+	// safe to ask the GC whether the object is still alive. Note
+	// that even if the cast and assignment of the obj local
+	// doesn't put the object on the stack, this call will. So,
+	// either way, this is safe.
+	if (GC.addrOf(cast(void*)obj)) {
+	  return obj;
+	}
+	else {
+	  return null;
+	}
+      }
+      else {
+	return _client;
+      }
+    }
   }
+  version(WEAKPTR) {
+    private final void unhook(Object object) {
+      rt_detachDisposeEvent(object, &unhook);
 
-  private final void unhook(Object object) {
-    rt_detachDisposeEvent(object, &unhook);
-
-    // This assignment is important. If we don't null _client when
-    // it is collected, the check in object could return false
-    // positives where the GC has reused the memory for a new
-    // object.
-    // writeln("Event is nulled");
-    atomicStore(*cast(shared)&_client, cast(size_t)0);
+      // This assignment is important. If we don't null _client when
+      // it is collected, the check in object could return false
+      // positives where the GC has reused the memory for a new
+      // object.
+      // writeln("Event is nulled");
+      atomicStore(*cast(shared)&_client, cast(size_t)0);
+    }
   }
-
 }
 
 // FIXME -- create a freelist for notifications

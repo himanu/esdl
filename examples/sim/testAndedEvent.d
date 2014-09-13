@@ -33,11 +33,6 @@ class Foo: Entity {
 
   Task!testEvent test;
 
-  override void doConfig() {
-    timePrecision = 1.psec;
-    timeUnit = 100.psec;
-    // writeln("Contructor for Bar ", this.fullName);
-  }
 }
 
 class Sim: RootEntity {
@@ -48,10 +43,6 @@ class Sim: RootEntity {
 
   Inst!(Foo) top;
 
-  override void doConfig() {
-    timeUnit(100.psec);
-    timePrecision(10.psec);
-  }
 
 }
 

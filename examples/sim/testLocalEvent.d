@@ -12,7 +12,7 @@ class Foo: Entity {
   Event e1, e2;
   
   void hello() {
-    for (size_t i=0; i!=1000000; ++i)
+    for (size_t i=0; i!=1000; ++i)
       {
 	// Event e0, e5;
 	// e0.init();

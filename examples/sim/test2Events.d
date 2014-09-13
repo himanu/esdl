@@ -35,11 +35,6 @@ class Foo: Entity {
   Task!hello1 hello1World; // = Task(&hello);
   Task!hello2 hello2World;
       
-  override void doConfig() {
-    timePrecision = 1.psec;
-    timeUnit = 10.psec;
-    // writeln("Configuring Foo instance ", this.fullName);
-  }
 }
 
 @timeUnit(100.psec)
@@ -53,11 +48,6 @@ class Sim: RootEntity {
 
   @parallelize
     Foo[2] top;
-
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-  }
 
 }
 

@@ -56,8 +56,8 @@ class TrafficLight: Entity
       {
 	// lockStage();
 	// unlockStage();
-	// writeln(getSimTime, ": Red -> Green ", index, " -- ",
-	// 	Process.self.getFullName());
+	writeln(getSimTime, ": Red -> Green ", index, " -- ",
+		Process.self.getFullName());
 	yellow[index].notify(20);
 	// writeln("I am here: ", index);
 	red[index].notify(25);
@@ -68,7 +68,7 @@ class TrafficLight: Entity
 	    }
 	  }
 	wait(yellow[index]);
-	// writeln("Green -> Yellow ", index);
+	writeln("Green -> Yellow ", index);
 	for (size_t i=0; i!=10000; ++i)
 	  {
 	    foreach (idx, ref bar; foo) {
@@ -76,7 +76,7 @@ class TrafficLight: Entity
 	    }
 	  }
 	wait(red[index]);
-	// writeln("Yellow -> Red ", index);
+	writeln("Yellow -> Red ", index);
 	green[(index + 1)%POLES].notify();
 	for (size_t i=0; i!=10000; ++i)
 	  {
@@ -86,7 +86,8 @@ class TrafficLight: Entity
 	  }
 	wait(green[index]);
 	synchronized(this) {
-	  ++count;
+	  count = count + 1;
+	  // ++count;
 	  // if(count == 1) getRoot.abortTree();
 	}
       }
@@ -123,7 +124,7 @@ class Dummy: Entity
 @timePrecision(10.psec)
 class TrafficRoot: RootEntity
 {
-  Inst!Dummy[400] dummy;
+  Inst!Dummy[4] dummy;
 
   this(string name) {
     super(name);
@@ -150,7 +151,7 @@ void main()
 
   // theRoot.doSim(25.nsec);
   // theRoot.waitSim();
-  theRoot.simulateUpto(250.nsec);
+  theRoot.simulateUpto(25.nsec);
   // theRoot.simulate(2500.nsec);
   // theRoot.simulate(0.nsec);
   theRoot.finish();

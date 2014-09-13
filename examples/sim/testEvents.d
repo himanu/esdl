@@ -116,9 +116,6 @@ class Foo: Entity {
   Task!hello helloWorld;
   // Process!hello helloProcess;
       
-  override void doConfig() {
-  }
-
 }
 
 @timeUnit(100.psec)
@@ -137,8 +134,6 @@ class Sim: RootEntity {
     // srandom(0);
   }
 
-  override void doConfig() {
-  }
 }
 
 void main()

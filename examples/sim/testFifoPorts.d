@@ -67,10 +67,6 @@ class Foo: Entity {
   }
 
       
-  override void doConfig() {
-    timePrecision = 10.psec;
-    timeUnit = 100.psec;
-  }
 
 }
 
@@ -84,11 +80,6 @@ class Sim: RootEntity {
   // Inst!(Foo) [2] top;
   Inst!Foo[1] foo;
   // Foo[2] foo;
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-    // writeln("Configure the RootEntity: ", this.getFullName);
-  }
 }
 
 int main()

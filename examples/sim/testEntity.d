@@ -58,10 +58,6 @@ class TrafficRoot: RootEntity {
 
   Inst!TrafficLight traffic[2][32];
 
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-  }
 }
 
 void main()
