@@ -509,20 +509,20 @@ public class ConstraintEngine {
 					bddDist);
 
     auto solVecs = solution.toVector();
-    enforce(solVecs.length == 1,
-	    "Expecting exactly one solutions here; got: " ~
-	    to!string(solVecs.length));
 
-    auto bits = solVecs[0];
+    byte[] bits;
+    if(solVecs.length != 0) {
+      bits = solVecs[0];
+    }
 
     foreach(vec; stage._randVecs) {
       vec.value = 0;	// init
       foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
-	if(bits[j] == 1) {
-	  vec.value = vec.value + (1L << i);
-	}
-	if(bits[j] == -1) {
+	if(bits.length == 0 || bits[j] == -1) {
 	  vec.value = vec.value + ((cast(ulong) _rgen.flip()) << i);
+	}
+	else if(bits[j] == 1) {
+	  vec.value = vec.value + (1L << i);
 	}
       }
       // vec.bddvec = null;
