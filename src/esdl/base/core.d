@@ -26,6 +26,7 @@ import std.traits: isArray, isIntegral;
 import std.random: Random, uniform;
 
 import esdl.sys.sched: stickToCpuCore, CPU_COUNT;
+import unstd.memory.weakref;
 
 alias void delegate() DelegateThunk;
 alias void function() FunctionThunk;
@@ -59,6 +60,13 @@ private interface EsdlObj {}
 struct _esdl__ignore {};
 struct _esdl__component {};
 
+enum ParallelPolicy: byte
+  {   MULTI = byte.min,
+      NONE = -1,
+      INHERIT = 0,
+      SINGLE = 1,
+      }
+
 // This struct is used to control homw many threads can be
 // simultaneously active. A value of 0 here would mean maximum
 // constraint -- only one thread active down the hierarchy. Default
@@ -70,7 +78,7 @@ struct _esdl__component {};
 // down the hierarchy.
 struct parallelize
 {
-  byte _parallel = byte.min;
+  ParallelPolicy _parallel = ParallelPolicy.MULTI;
   // When the user does not provide any _poolIndex, a _poolIndex would
   // be automatically generated
   uint _poolIndex = uint.max;	// relevant only if _parallel is 1
@@ -319,6 +327,56 @@ private void _esdl__setObjId(T)(T t) if(is(T: NamedObj)) {
   }
  }
 
+public auto _esdl__get_parallelism(L)(L l) {
+  enum int Q = _esdl__attr!(parallelize, L);
+  static if(Q is -1) {
+    enum par = parallelize(ParallelPolicy.NONE,
+			   uint.max); // inherit from parent
+  }
+  else {
+    static if(__traits(isSame, __traits(getAttributes, L)[Q],
+		       parallelize)) {
+      enum par = parallelize(ParallelPolicy.MULTI, uint.max);
+    }
+    else {
+      enum par = __traits(getAttributes, L)[Q];
+    }
+  }
+  return par;
+}
+
+public auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
+  enum int P = _esdl__attr!(parallelize, t, I);
+  enum int Q = _esdl__attr!(parallelize, L);
+  static if(P is -1) {
+    // check if the entity definition has a parallelize tag
+    static if(Q is -1) {
+      enum par = parallelize(ParallelPolicy.NONE,
+			     uint.max); // inherit from parent
+    }
+    else {
+      static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			 parallelize)) {
+	enum par = parallelize(byte.min, uint.max);
+      }
+      else {
+	enum par = __traits(getAttributes, L)[Q];
+      }
+    }
+  }
+  else {
+    // first check if the attribute is just @parallelize
+    static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
+		       parallelize)) {
+      enum par = parallelize(byte.min, uint.max);
+    }
+    else {
+      enum par = __traits(getAttributes, t.tupleof[I])[P];
+    }
+  }
+  return par;
+}
+
 public interface HierComp: NamedObj, ParContext
 {
   import core.sync.semaphore: CoreSemaphore = Semaphore;
@@ -375,56 +433,9 @@ public interface HierComp: NamedObj, ParContext
 
   // Interface functions for enabling parallelize UDP
   public CoreSemaphore _esdl__getParLock();
+  public parallelize _esdl__getParInfo();
   public void _esdl__setEntityMutex(CoreSemaphore parentLock,
 				    parallelize linfo, parallelize plinfo);
-
-  static auto _esdl__get_parallelism(L)(L l) {
-    enum int Q = _esdl__attr!(parallelize, L);
-    static if(Q is -1) {
-      enum par = parallelize(-1, uint.max); // inherit from parent
-    }
-    else {
-      static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			 parallelize)) {
-	enum par = parallelize(byte.min, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, L)[Q];
-      }
-    }
-    return par;
-  }
-
-  static auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
-    enum int P = _esdl__attr!(parallelize, t, I);
-    enum int Q = _esdl__attr!(parallelize, L);
-    static if(P is -1) {
-      // check if the entity definition has a parallelize tag
-      static if(Q is -1) {
-	enum par = parallelize(-1, uint.max); // inherit from parent
-      }
-      else {
-	static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			   parallelize)) {
-	  enum par = parallelize(byte.min, uint.max);
-	}
-	else {
-	  enum par = __traits(getAttributes, L)[Q];
-	}
-      }
-    }
-    else {
-      // first check if the attribute is just @parallelize
-      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
-			 parallelize)) {
-	enum par = parallelize(byte.min, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, t.tupleof[I])[P];
-      }
-    }
-    return par;
-  }
 
   static Time _esdl__get_timeUnit(L)(L l) {
     enum int Q = _esdl__attr!(timeUnit, L);
@@ -561,7 +572,11 @@ public interface HierComp: NamedObj, ParContext
     // This variable is set and used only during the elaboration
     // phase
     static if(!__traits(compiles, _esdl__parInfo)) {
-      parallelize _esdl__parInfo = parallelize(-1, uint.max); // default value
+      parallelize _esdl__parInfo = parallelize(ParallelPolicy.NONE,
+					       uint.max); // default value
+      public final override parallelize _esdl__getParInfo() {
+	return _esdl__parInfo;
+      }
     }
 
     // Effectively immutable in the run phase since the variable is
@@ -575,12 +590,14 @@ public interface HierComp: NamedObj, ParContext
     // during the elaboration phase.
     public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
 						     parallelize linfo, parallelize plinfo) {
-      if(linfo._parallel == -1) {	// take hier information
+      if(linfo._parallel == ParallelPolicy.NONE) {
+	// take hier information	
 	_esdl__parInfo = plinfo;
-	if(plinfo._parallel == byte.min) { // UDP @parallelize without argument
+	if(plinfo._parallel == ParallelPolicy.MULTI) {
+	  // UDP @parallelize without argument	  
 	  _esdl__parLock = null;
 	}
-	else if(plinfo._parallel == 0) {
+	else if(plinfo._parallel == ParallelPolicy.INHERIT) {
 	  _esdl__parLock = parentLock;
 	}
 	else {
@@ -588,14 +605,14 @@ public interface HierComp: NamedObj, ParContext
 	}
       }
       else {
-	if(plinfo._parallel == 0) {
+	if(plinfo._parallel == ParallelPolicy.INHERIT) {
 	  // FIXME -- give out warning
 	}
 	_esdl__parInfo = linfo;
-	if(linfo._parallel == byte.min) {	// parallelize
+	if(linfo._parallel == ParallelPolicy.MULTI) {	// parallelize
 	  _esdl__parLock = null;
 	}
-	else if(linfo._parallel == 0) {
+	else if(linfo._parallel == ParallelPolicy.INHERIT) {
 	  _esdl__parLock = new CoreSemaphore(1);
 	}
 	else {
@@ -616,15 +633,17 @@ public interface HierComp: NamedObj, ParContext
 
     public final void _esdl__setParConfig(ParConfig parentCfg,
 					  parallelize linfo, parallelize plinfo) {
-      if(linfo._parallel == -1) {	// take hier information
+      if(linfo._parallel == ParallelPolicy.NONE) { // take hier information
 	_esdl__parInfo = plinfo;
       }
       else {
 	_esdl__parInfo = linfo;
       }
 
-      if(_esdl__parInfo._parallel != 0) { // UDP @parallelize
-	// without argument
+      if(_esdl__parInfo._parallel == ParallelPolicy.INHERIT) {
+	_esdl__parConfig = parentCfg;
+      }
+      else {
 	auto nthreads = getSimulator._executor._poolThreads.length;
 	if(_esdl__parInfo._poolIndex != uint.max) {
 	  assert(_esdl__parInfo._poolIndex < nthreads);
@@ -633,9 +652,6 @@ public interface HierComp: NamedObj, ParContext
 	else {
 	  _esdl__parConfig = new ParConfig(_esdl__parComponentId() % nthreads);
 	}
-      }
-      else {
-	_esdl__parConfig = parentCfg;
       }
     }
     //////////////////////////////////////////////////////
@@ -1556,8 +1572,10 @@ public interface ElabContext: HierComp
       auto linfo = _esdl__get_parallelism(l);
       l.doBuild();
       l._esdl__postBuild();
-      l._esdl__setEntityMutex(null, linfo, parallelize(byte.min, uint.max));
-      l._esdl__setParConfig(null, linfo, parallelize(byte.min, uint.max));
+      l._esdl__setEntityMutex(null, linfo, parallelize(ParallelPolicy.MULTI,
+						       uint.max));
+      l._esdl__setParConfig(null, linfo, parallelize(ParallelPolicy.MULTI,
+						     uint.max));
       _esdl__elabMems(l);
       l._esdl__postElab();
     }
@@ -1710,10 +1728,8 @@ final class IndexedSimEvent
   import core.atomic;
   import core.memory;
 
-  private size_t _ptr;
-
-  version(WEAKPTR) {
-    private size_t _client;
+  version(WEAKREF) {
+    WeakReference!SimEvent _client;
   }
   else {
     private SimEvent _client;
@@ -1726,19 +1742,8 @@ final class IndexedSimEvent
   this(SimEvent event, size_t i) {
     synchronized (this) {
       this.index = i;
-      version(WEAKPTR) {
-	auto ptr = cast(size_t)cast(void*)event;
-
-	// We use atomics because not all architectures may guarantee
-	// atomic store and load of these values.
-	atomicStore(*cast(shared)&_client, ptr);
-
-	// Only assigned once, so no atomics.
-	_ptr = ptr;
-
-	rt_attachDisposeEvent(event, &unhook);
-	GC.setAttr(cast(void*)this, GC.BlkAttr.NO_SCAN);
-	// GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
+      version(WEAKREF) {
+	_client = weakReference!SimEvent(event);
       }
       else {
 	_client = event;
@@ -1748,16 +1753,9 @@ final class IndexedSimEvent
 
   private final SimEvent client() {
     synchronized(this) {
-      version(WEAKPTR) {
-	auto obj = cast(SimEvent)cast(void*)atomicLoad(*cast(shared)&_client);
-
-	// We've moved obj into the GC-scanned stack space, so it's now
-	// safe to ask the GC whether the object is still alive. Note
-	// that even if the cast and assignment of the obj local
-	// doesn't put the object on the stack, this call will. So,
-	// either way, this is safe.
-	if (GC.addrOf(cast(void*)obj)) {
-	  return obj;
+      version(WEAKREF) {
+	if (_client.alive()) {
+	  return _client.target();
 	}
 	else {
 	  return null;
@@ -1766,18 +1764,6 @@ final class IndexedSimEvent
       else {
 	return _client;
       }
-    }
-  }
-  version(WEAKPTR) {
-    private final void unhook(Object object) {
-      rt_detachDisposeEvent(object, &unhook);
-
-      // This assignment is important. If we don't null _client when
-      // it is collected, the check in object could return false
-      // positives where the GC has reused the memory for a new
-      // object.
-      // writeln("Event is nulled");
-      atomicStore(*cast(shared)&_client, cast(size_t)0);
     }
   }
 }
@@ -6012,6 +5998,13 @@ class Fork
       task.enable();
     }
   }
+
+  public final void setAffinity(ParContext context) {
+    foreach(proc; _procs) {
+      assert(proc.state() == ProcState.STARTING);
+      proc._esdl__parConfig = context._esdl__getParConfig();
+    }
+  }
 }
 
 interface ChannelIF
@@ -7261,6 +7254,8 @@ interface RootEntityIntf: EntityIntf
 
   public SimTime getSimTime();
 
+  public uint getNumPoolThreads();
+  
   public void setTimePrecision(Time precision);
   public Time getTimePrecision();
   public bool timePrecisionSet();
@@ -7422,6 +7417,10 @@ abstract class RootEntity: RootEntityIntf
 
   public final override SimTime getSimTime() {
     return _esdl__root.simulator().simTime();
+  }
+
+  public final override uint getNumPoolThreads() {
+    return cast(uint) _esdl__root.simulator()._executor._poolThreads.length;
   }
 }
 
