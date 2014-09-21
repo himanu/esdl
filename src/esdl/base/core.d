@@ -1117,7 +1117,7 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
 	  // debug message for listing the base classes being
 	  // recursed
 	  import std.stdio;
-	  writeln("*** Fooorating " ~ typeof(b).stringof);
+	  writeln("*** Elaborating " ~ typeof(b).stringof);
 	}
 	_esdl__configMems!(FOO, 0, CI)(b);
       }
@@ -4823,7 +4823,7 @@ class BaseTask: Process
     synchronized(this) {
       super(fn, stage);
       if(sz is 0) {
-	_fiber = new Fiber(() {fn_wrap(fn);});
+	_fiber = new Fiber(() {fn_wrap(fn);}, 1024*1024);
       }
       else {
 	_fiber = new Fiber(() {fn_wrap(fn);}, sz);
@@ -4835,7 +4835,7 @@ class BaseTask: Process
     synchronized(this) {
       super(dg, stage);
       if(sz is 0) {
-	_fiber = new Fiber(() {dg_wrap(dg);});
+	_fiber = new Fiber(() {dg_wrap(dg);}, 1024*1024);
       }
       else {
 	_fiber = new Fiber(() {dg_wrap(dg);}, sz);
@@ -4858,7 +4858,15 @@ class BaseTask: Process
   }
 
   protected final override void yield() {
-    _fiber.yield();
+    debug(FIBER) {
+      import std.stdio;
+      writeln("Before Fiber Yield");
+      _fiber.yield();
+      writeln("After  Fiber Yield");
+    }
+    else {
+      _fiber.yield();
+    }
   }
 
   final override void freeLock(bool onlyBarrier=false) {
@@ -5494,6 +5502,10 @@ abstract class Process: Procedure, EventClient
     synchronized(this) {
       uint seed = urandom();
       this._randGen.seed(seed);
+      debug(SEED) {
+	import std.stdio;
+	writeln("seed is: ", seed);
+      }
     }
   }
 

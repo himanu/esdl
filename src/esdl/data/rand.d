@@ -258,6 +258,9 @@ public class ConstraintEngine {
   BddDomain[] _domains;
 
   this(uint seed, size_t rnum) {
+    debug(NOCONSTRAINTS) {
+      assert(false, "Constraint engine started");
+    }
     _rgen.seed(seed);
     _buddy = _new!Buddy(400, 400);
     _cstRands.length = rnum;
