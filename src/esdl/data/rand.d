@@ -165,7 +165,7 @@ struct RandGen
 
   private Random _gen;
 
-  private bvec!32 _bv;
+  private Bit!32 _bv;
 
   private ubyte _bi = 32;
 
@@ -865,7 +865,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 	    }
 	    else {
 	      import esdl.data.bvec;
-	      bvec!64 temp = vecVal.value;
+	      Bit!64 temp = vecVal.value;
 	      t.tupleof[I] = cast(L) temp;
 	    }
 	  }

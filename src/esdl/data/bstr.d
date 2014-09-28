@@ -194,7 +194,7 @@ struct BitString(bool L)
   //  */
   // static if(L)
   //   {
-  //     int opApply(scope int delegate(ref ulvec!1) dg)
+  //     int opApply(scope int delegate(ref ULogic!1) dg)
   //     {
   //    int result;
 
@@ -210,7 +210,7 @@ struct BitString(bool L)
   //     }
 
   //     /** ditto */
-  //     int opApply(scope int delegate(ulvec!1) dg) const
+  //     int opApply(scope int delegate(ULogic!1) dg) const
   //     {
   //    int result;
 
@@ -225,7 +225,7 @@ struct BitString(bool L)
   //     }
 
   //     /** ditto */
-  //     int opApply(scope int delegate(ref size_t, ref ulvec!1) dg)
+  //     int opApply(scope int delegate(ref size_t, ref ULogic!1) dg)
   //     {
   //    int result;
 
@@ -241,7 +241,7 @@ struct BitString(bool L)
   //     }
 
   //     /** ditto */
-  //     int opApply(scope int delegate(size_t, ulvec!1) dg) const
+  //     int opApply(scope int delegate(size_t, ULogic!1) dg) const
   //     {
   //    int result;
 
@@ -945,11 +945,11 @@ struct BitString(bool L)
   if(is(T == bool) || isIntegral!T ||
      (isBitVector!T && (L || (! T.IS4STATE)))) {
     static if(is(T == bool)) {
-      alias ubvec!(1) V;
+      alias UBit!(1) V;
       V v = t;
     }
     else static if(isIntegral!T) {
-        alias ubvec!(T.sizeof*8) V;
+        alias UBit!(T.sizeof*8) V;
         V v = t;
       }
       else {
@@ -984,8 +984,8 @@ struct BitString(bool L)
   void getFront(T)(out T t, size_t index, bool bigEndian=false)
     if(((! L) && (is(T == bool) || isIntegral!T)) ||
        (isBitVector!T && (T.IS4STATE || (! L)))) {
-      static if(is(T == bool))     alias ubvec!(1) V;
-      else static if(isIntegral!T) alias ubvec!(T.sizeof*8) V;
+      static if(is(T == bool))     alias UBit!(1) V;
+      else static if(isIntegral!T) alias UBit!(T.sizeof*8) V;
         else                       alias T V;
       assert(len-index >= V.SIZE);
       V v;
@@ -1005,8 +1005,8 @@ struct BitString(bool L)
   void getBack(T)(out T t, size_t index, bool bigEndian=false)
     if(((! L) && (is(T == bool) || isIntegral!T)) ||
        (isBitVector!T && (T.IS4STATE || (! L)))) {
-      static if(is(T == bool))     alias ubvec!(1) V;
-      else static if(isIntegral!T) alias ubvec!(T.sizeof*8) V;
+      static if(is(T == bool))     alias UBit!(1) V;
+      else static if(isIntegral!T) alias UBit!(T.sizeof*8) V;
         else                       alias T V;
       getFront(t, index-V.SIZE, bigEndian);
     }
@@ -1014,8 +1014,8 @@ struct BitString(bool L)
   void popBack(T)(out T t, bool bigEndian=false)
     if(((! L) && (is(T == bool) || isIntegral!T)) ||
        (isBitVector!T && (T.IS4STATE || (! L)))) {
-      static if(is(T == bool))     alias ubvec!(1) V;
-      else static if(isIntegral!T) alias ubvec!(T.sizeof*8) V;
+      static if(is(T == bool))     alias UBit!(1) V;
+      else static if(isIntegral!T) alias UBit!(T.sizeof*8) V;
         else                       alias T V;
       getBack(t, len, bigEndian);
       length = len - V.SIZE;
@@ -1134,11 +1134,11 @@ struct BitString(bool L)
   if(is(T == bool) || isIntegral!T ||
      (isBitVector!T && (L || (! T.IS4STATE)))) {
     static if(is(T == bool)) {
-      alias ubvec!(1) V;
+      alias UBit!(1) V;
       V v = t;
     }
     else static if(isIntegral!T) {
-        alias ubvec!(T.sizeof*8) V;
+        alias UBit!(T.sizeof*8) V;
         V v = t;
       }
       else {
@@ -1363,7 +1363,7 @@ struct BitString(bool L)
   }
 
   public void fromArray(bool BIGENDIAN=false, T)(T[] arr)
-    if((! L) && (isIntegral!T || is(T == bool) || is(T == bit) ||
+    if((! L) && (isIntegral!T || is(T == bool) || is(T == Bit!1) ||
 		 isSomeChar!T)) {
       assert(isEmpty());
       // special case, no array element is going to spread across bstr elements boundry
@@ -1391,14 +1391,14 @@ struct BitString(bool L)
   }
 
   public void toArray(bool BIGENDIAN=false, T)(out T[] arr)
-    if((! L) && (isIntegral!T || is(T == bool) || is(T == bit) ||
+    if((! L) && (isIntegral!T || is(T == bool) || is(T == Bit!1) ||
 		 isSomeChar!T)) {
       for (size_t i=0; i*BitLength!T < len; ++i) {
         auto v = aptr[(i*BitLength!T)/bitsPerSizeT];
         static if(BIGENDIAN) arr ~= (cast(T) (v >> ((i*BitLength!T) & (bitsPerSizeT-1)))).reverse;
         else {
 	  // FIXME
-	  static if(is(T == bit)) {
+	  static if(is(T == Bit!1)) {
 	    if((v >> ((i*BitLength!T) & (bitsPerSizeT-1))) % 2) {
 	      arr ~= cast(T) false;
 	    }

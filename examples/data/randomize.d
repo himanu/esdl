@@ -27,7 +27,7 @@ class Bar: Foo
   @rand ubyte mom;
   @rand ubyte sis;
 
-  @rand ulvec!18 pun1 = 0;
+  @rand ULogic!18 pun1 = 0;
   @rand ubyte pun2 = 0;
 
   // @rand!(16) ubyte[] bar;

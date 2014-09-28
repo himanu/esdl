@@ -593,15 +593,15 @@ struct vec(bool S, bool L, string VAL, size_t RADIX) {
   }
 }
 
-enum ubvec!1 BIT_0   = ubvec!1(0);
-enum ubvec!1 BIT_1   = ubvec!1(1);
+enum UBit!1 BIT_0   = UBit!1(0);
+enum UBit!1 BIT_1   = UBit!1(1);
 alias BIT_0 _0;
 alias BIT_1 _1;
 
-enum ulvec!1 LOGIC_0 = ulvec!1(0);
-enum ulvec!1 LOGIC_1 = ulvec!1(1);
-enum ulvec!1 LOGIC_X = cast(ulvec!1)bin!"X";
-enum ulvec!1 LOGIC_Z = cast(ulvec!1)bin!"Z";
+enum ULogic!1 LOGIC_0 = ULogic!1(0);
+enum ULogic!1 LOGIC_1 = ULogic!1(1);
+enum ULogic!1 LOGIC_X = cast(ULogic!1)bin!"X";
+enum ULogic!1 LOGIC_Z = cast(ULogic!1)bin!"Z";
 
 alias LOGIC_X _X;
 alias LOGIC_Z _Z;
@@ -632,9 +632,8 @@ alias LOGIC_Z _z;
   return result;
 }
 
-alias vec!(false, true, 1) logic;
-
-alias vec!(false, false, 1) bit;
+// alias vec!(false, true, 1) logic;
+// alias vec!(false, false, 1) bit;
 
 template vec(T) if(is(T == bool)) {
   alias vec!(false, false, 1) vec;
@@ -2519,10 +2518,10 @@ public void fromBits(T, B)(ref T val, B bv)
   }
 
 
-alias BitVec bvec;
-alias UBitVec ubvec;
-alias LogicVec lvec;
-alias ULogicVec ulvec;
+alias BitVec Bit;
+alias UBitVec UBit;
+alias LogicVec Logic;
+alias ULogicVec ULogic;
 
 
 
@@ -2533,14 +2532,14 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 64 ; ++k){
-    static ubvec!64     a ; 
-    static ubvec!64     b ;  
+    static UBit!64     a ; 
+    static UBit!64     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(0, (pow(2,k)-1)); 
       auto b_1 = uniform(0, (pow(2,k)-1)); 
       a = a_1 ;
       b = b_1 ;
-      auto y = cast(ubvec!64) (a + b) ;
+      auto y = cast(UBit!64) (a + b) ;
       assert(y == (a_1 + b_1));
     }
   }
@@ -2552,14 +2551,14 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 64 ; ++k){
-    static ubvec!65     a ; 
-    static ubvec!65     b ;  
+    static UBit!65     a ; 
+    static UBit!65     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(0, (pow(2,k)-1)); 
       auto b_1 = uniform(0, (pow(2,k)-1)); 
       a = a_1 ;
       b = b_1 ;
-      auto y = cast(ubvec!65) (a + b) ;
+      auto y = cast(UBit!65) (a + b) ;
       assert(y == (a_1 + b_1));
     }
   }
@@ -2572,24 +2571,24 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 64 ; ++k){
-    static ubvec!64     a ; 
-    static ubvec!64     b ;  
+    static UBit!64     a ; 
+    static UBit!64     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(0, (pow(2,k)-1)); 
       auto b_1 = uniform(0, (pow(2,k)-1)); 
       a = a_1 ;
       b = b_1 ;
-      auto y = cast(ubvec!64) (a - b);
+      auto y = cast(UBit!64) (a - b);
       assert(y == (a_1 - b_1));
     }
   }
 
-  ubvec!8  a = cast(byte) 0xff ;
-  ubvec!8  b = cast(byte) 0xff ;
-  ubvec!9  y = a + b;
+  UBit!8  a = cast(byte) 0xff ;
+  UBit!8  b = cast(byte) 0xff ;
+  UBit!9  y = a + b;
   assert(y == 510) ;
 
-  y = cast(ubvec!9)(a + b) ;
+  y = cast(UBit!9)(a + b) ;
   assert(y == 510) ;
 
 }
@@ -2600,15 +2599,15 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k != 33 ; ++k){
-    static ubvec!64     a ; 
-    static ubvec!64     b ;  
-    // static ubvec!64     y ;
+    static UBit!64     a ; 
+    static UBit!64     b ;  
+    // static UBit!64     y ;
     for(uint i = 0 ; i != 1000; ++i){
       auto a_1 = uniform(0, (pow(2,k)-1)); 
       auto b_1 = uniform(0, (pow(2,k)-1)); 
       a = a_1 ;
       b = b_1 ;
-      auto y = cast(ubvec!64) (a * b) ;
+      auto y = cast(UBit!64) (a * b) ;
       assert(y == (a_1 * b_1));
     }
   }
@@ -2620,11 +2619,11 @@ unittest {
   import std.math ;
   import std.stdio ;
 
-  ubvec!63[]   mubvec ;
-  ubvec!63[]   nubvec ;
-  ubvec!63[16] pubvec ;
-  mubvec.length = 16 ;
-  nubvec.length = 16 ;
+  UBit!63[]   mUBit ;
+  UBit!63[]   nUBit ;
+  UBit!63[16] pUBit ;
+  mUBit.length = 16 ;
+  nUBit.length = 16 ;
 }
 
 
@@ -2633,8 +2632,8 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 15 ; ++k){
-    static bvec!63     a ; 
-    static bvec!63     b ;  
+    static Bit!63     a ; 
+    static Bit!63     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2655,8 +2654,8 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 15 ; ++k){
-    static bvec!63     a ; 
-    static bvec!63     b ;  
+    static Bit!63     a ; 
+    static Bit!63     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2667,13 +2666,13 @@ unittest {
     }
   }
 
-  bvec!8  a = cast(byte) 0xff ;
-  bvec!8  b = cast(byte) 0xff ;
-  auto z = cast(bvec!9)a + cast(bvec!9)b;
-  bvec!9  y = a + b;
+  Bit!8  a = cast(byte) 0xff ;
+  Bit!8  b = cast(byte) 0xff ;
+  auto z = cast(Bit!9)a + cast(Bit!9)b;
+  Bit!9  y = a + b;
   assert(y == -2) ;
 
-  y = cast(bvec!9)(a + b) ;
+  y = cast(Bit!9)(a + b) ;
   assert(y == -2) ;
 
 }
@@ -2683,9 +2682,9 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k != 4 ; ++k){
-    static bvec!63     a ; 
-    static bvec!63     b ;  
-    // static bvec!64     y ;
+    static Bit!63     a ; 
+    static Bit!63     b ;  
+    // static Bit!64     y ;
     for(uint i = 0 ; i != 4; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2704,38 +2703,38 @@ unittest {
   import std.math ;
   import std.stdio ;
 
-  ubvec!64[]   mubvec ;
-  ubvec!64[]   nubvec ;
-  ubvec!64[16] pubvec ;
-  mubvec.length = 16 ;
-  nubvec.length = 16 ;
+  UBit!64[]   mUBit ;
+  UBit!64[]   nUBit ;
+  UBit!64[16] pUBit ;
+  mUBit.length = 16 ;
+  nUBit.length = 16 ;
 
   for(uint i = 0 ; i < 16 ; ++i){
     auto a_1 = uniform(0, 10000); 
     auto b_1 = uniform(0, 10000); 
-    mubvec[i] = a_1 ;
-    nubvec[i] = b_1 ;
-    pubvec[i] = cast(ubvec!64) (mubvec[i] + nubvec[i]);
-    assert(pubvec[i] == (a_1 + b_1));
+    mUBit[i] = a_1 ;
+    nUBit[i] = b_1 ;
+    pUBit[i] = cast(UBit!64) (mUBit[i] + nUBit[i]);
+    assert(pUBit[i] == (a_1 + b_1));
   }
 
   for(uint i = 0 ; i < 16 ; ++i){
     auto a_1 = uniform(0, 10000); 
     auto b_1 = uniform(0, 10000); 
-    mubvec[i] = a_1 ;
-    nubvec[i] = b_1 ;
-    pubvec[i] = cast(ubvec!64) (mubvec[i] - nubvec[i]);
-    assert(pubvec[i] == (a_1 - b_1));
+    mUBit[i] = a_1 ;
+    nUBit[i] = b_1 ;
+    pUBit[i] = cast(UBit!64) (mUBit[i] - nUBit[i]);
+    assert(pUBit[i] == (a_1 - b_1));
   }
 
 
   for(uint i = 0 ; i < 16 ; ++i){
     auto a_1 = uniform(0, 1000); 
     auto b_1 = uniform(0, 1000); 
-    mubvec[i] = a_1 ;
-    nubvec[i] = b_1 ;
-    pubvec[i] = cast(ubvec!64) (mubvec[i] * nubvec[i]);
-    assert(pubvec[i] == (a_1 * b_1));
+    mUBit[i] = a_1 ;
+    nUBit[i] = b_1 ;
+    pUBit[i] = cast(UBit!64) (mUBit[i] * nUBit[i]);
+    assert(pUBit[i] == (a_1 * b_1));
   }
 }
 
@@ -2745,8 +2744,8 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 15 ; ++k){
-    static bvec!63     a ; 
-    static bvec!63     b ;  
+    static Bit!63     a ; 
+    static Bit!63     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2757,9 +2756,9 @@ unittest {
     }
   }
 
-  bvec!8  a = cast(byte) 0xff ;
-  bvec!8  b = cast(byte) 0xff ;
-  bvec!9  y = a + b;
+  Bit!8  a = cast(byte) 0xff ;
+  Bit!8  b = cast(byte) 0xff ;
+  Bit!9  y = a + b;
   assert(y == -2) ;
 
   y = a + b;
@@ -2773,8 +2772,8 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 15 ; ++k){
-    static bvec!63     a ; 
-    static bvec!63     b ;  
+    static Bit!63     a ; 
+    static Bit!63     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2794,9 +2793,9 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k != 15 ; ++k){
-    static bvec!63     a ; 
-    static bvec!63     b ;  
-    // static bvec!64     y ;
+    static Bit!63     a ; 
+    static Bit!63     b ;  
+    // static Bit!64     y ;
     for(uint i = 0 ; i != 10; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2812,8 +2811,8 @@ unittest {
 unittest {
    import std.stdio ;
 
-   ulvec!8 a1  = bin!q{11111111} ; 
-   ulvec!8 a2  = hex!q{ff} ;  
+   ULogic!8 a1  = bin!q{11111111} ; 
+   ULogic!8 a2  = hex!q{ff} ;  
 
    ubyte a1_s = 0b11111111 ;
    ubyte a2_s = 0b11111111 ;
@@ -2866,8 +2865,8 @@ unittest {
 unittest {
    import std.stdio ;
 
-   lvec!8 a1 = bin!q{11111111} ; 
-   lvec!8 a2 = hex!q{ff} ;  
+   Logic!8 a1 = bin!q{11111111} ; 
+   Logic!8 a2 = hex!q{ff} ;  
 
    byte a1_s = cast(byte)0b11111111 ;
    byte a2_s = cast(byte)0b11111111 ;
@@ -2921,8 +2920,8 @@ unittest {
 unittest {
    import std.stdio ;
 
-   ubvec!8 a1 = bin!q{11111111} ; 
-   ubvec!8 a2 = hex!q{ff} ;  
+   UBit!8 a1 = bin!q{11111111} ; 
+   UBit!8 a2 = hex!q{ff} ;  
 
    ubyte a1_s = 0b11111111 ;
    ubyte a2_s = 0b11111111 ;
@@ -2971,8 +2970,8 @@ unittest {
    assert(~a1_s == ~a1);
 
    a1 = bin!q{1} ; 
-   ubvec!1 a2_ = cast(ubvec!1)a1[0] ;
-   bvec!1 a3 = cast(bvec!1)a2_ ;
+   UBit!1 a2_ = cast(UBit!1)a1[0] ;
+   Bit!1 a3 = cast(Bit!1)a2_ ;
    assert(a1[0] == a3);
 
 }
@@ -2980,8 +2979,8 @@ unittest {
 unittest {
    import std.stdio ;
 
-   bvec!8 a1 = bin!q{11111111} ; 
-   bvec!8 a2 = hex!q{ff} ;  
+   Bit!8 a1 = bin!q{11111111} ; 
+   Bit!8 a2 = hex!q{ff} ;  
 
    byte a1_s = cast(byte)0b11111111 ;
    byte a2_s = cast(byte)0b11111111 ;
@@ -3030,8 +3029,8 @@ unittest {
    assert(~a1_s == ~a1);
 
    a1 = bin!q{1} ; 
-   bvec!1 a2_ = cast(bvec!1)a1[0] ;
-   ubvec!1 a3 = cast(ubvec!1)a2_ ;
+   Bit!1 a2_ = cast(Bit!1)a1[0] ;
+   UBit!1 a3 = cast(UBit!1)a2_ ;
    assert(a1[0] == a3);
 
 
@@ -3042,7 +3041,7 @@ unittest {
 
    import std.stdio ;
 
-   lvec!8 a1 = bin!q{1} ; 
+   Logic!8 a1 = bin!q{1} ; 
    assert(a1 == LOGIC_1);   
 
    a1 = bin!q{0};
@@ -3067,7 +3066,7 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!8 a1 = bin!q{1} ; 
+   ULogic!8 a1 = bin!q{1} ; 
    assert(a1 == LOGIC_1);   
 
    a1 = bin!q{0};
@@ -3087,8 +3086,8 @@ unittest {
    assert(!a1.isZ());
 
    a1 = bin!q{1} ; 
-   lvec!1 a2 = a1[0] ;
-   ulvec!1 a3 = a2 ;
+   Logic!1 a2 = a1[0] ;
+   ULogic!1 a3 = a2 ;
    assert(a1[0] == a3);
 }
 
@@ -3099,10 +3098,10 @@ unittest {
     assert(!isStr4State("1"));
     assert(!isStr4State("0"));
 
-    bvec!8  x1 ; x1.randomize(); x1.reverse();
-    ubvec!8 x2 ; x2.randomize(); x2.reverse();
-    lvec!8  x3 ; x3.randomize(); x3.reverse();
-    ulvec!8 x4 ; x4.randomize(); x4.reverse();
+    Bit!8  x1 ; x1.randomize(); x1.reverse();
+    UBit!8 x2 ; x2.randomize(); x2.reverse();
+    Logic!8  x3 ; x3.randomize(); x3.reverse();
+    ULogic!8 x4 ; x4.randomize(); x4.reverse();
 
 
 }
@@ -3111,13 +3110,13 @@ unittest {
 
     import std.stdio ;
 
-    bvec!8 x1 = hex!q{5} ;
-    bvec!9 x2 = cast(bvec!9)x1 ;
+    Bit!8 x1 = hex!q{5} ;
+    Bit!9 x2 = cast(Bit!9)x1 ;
 
-    ubvec!8 x3 = hex!q{5} ;
-    ubvec!9 x4 = cast(ubvec!9)x3 ;
+    UBit!8 x3 = hex!q{5} ;
+    UBit!9 x4 = cast(UBit!9)x3 ;
 
-    x2 = cast(bvec!9) x4 ;
+    x2 = cast(Bit!9) x4 ;
 
     writefln("%d",x1);
     writefln("%s",x1);
@@ -3137,13 +3136,13 @@ unittest {
 
     import std.stdio ;
 
-    lvec!8 x1 = hex!q{5} ;
-    lvec!9 x2 = cast(lvec!9)x1 ;
+    Logic!8 x1 = hex!q{5} ;
+    Logic!9 x2 = cast(Logic!9)x1 ;
 
-    ulvec!8 x3 = hex!q{5} ;
-    ulvec!9 x4 = cast(ulvec!9)x3 ;
+    ULogic!8 x3 = hex!q{5} ;
+    ULogic!9 x4 = cast(ULogic!9)x3 ;
 
-    x2 = cast(lvec!9) x4 ;
+    x2 = cast(Logic!9) x4 ;
 
     writefln("%d",x1);
     writefln("%s",x1);
@@ -3157,7 +3156,7 @@ unittest {
     writefln("%o",x3);
     writefln("%b",x3);
 
-    ulvec!4 x5 ;
+    ULogic!4 x5 ;
     x5[0] = LOGIC_0 ;
     x5[1] = LOGIC_1 ;
     x5[2] = LOGIC_X ;
@@ -3168,7 +3167,7 @@ unittest {
     assert(x5[2].isX());
     assert(x5[3].isZ());
 
-    lvec!4 x6 ;
+    Logic!4 x6 ;
     x6[0] = LOGIC_0 ;
     x6[1] = LOGIC_1 ;
     x6[2] = LOGIC_X ;
@@ -3183,10 +3182,10 @@ unittest {
 
 unittest {
 
-    bvec!65 [] x1 ;
-    bvec!65 [] x2 ;
+    Bit!65 [] x1 ;
+    Bit!65 [] x2 ;
 
-    bvec!130 [16] y ; 
+    Bit!130 [16] y ; 
     x1.length = 16 ;
     x2.length = 16 ;
  
@@ -3197,10 +3196,10 @@ unittest {
 
 unittest {
 
-    ubvec!8 [] x1 ;
-    ubvec!8 [] x2 ;
+    UBit!8 [] x1 ;
+    UBit!8 [] x2 ;
 
-    ubvec!16 [16] y ; 
+    UBit!16 [16] y ; 
     x1.length = 16 ;
     x2.length = 16 ;
  
@@ -3212,10 +3211,10 @@ unittest {
 
 unittest {
 
-    lvec!65 [] x1 ;
-    lvec!65 [] x2 ;
+    Logic!65 [] x1 ;
+    Logic!65 [] x2 ;
 
-    lvec!130 [16] y ; 
+    Logic!130 [16] y ; 
     x1.length = 16 ;
     x2.length = 16 ;
  
@@ -3226,10 +3225,10 @@ unittest {
 
 unittest {
 
-    ulvec!65 [] x1 ;
-    ulvec!65 [] x2 ;
+    ULogic!65 [] x1 ;
+    ULogic!65 [] x2 ;
 
-    ulvec!130 [16] y ; 
+    ULogic!130 [16] y ; 
     x1.length = 16 ;
     x2.length = 16 ;
  
@@ -3244,31 +3243,31 @@ unittest {
 
 unittest {
 
-   bvec!8 x1 = bin!q{11111111} ;
+   Bit!8 x1 = bin!q{11111111} ;
    assert(cast(byte)x1 != 0) ;
    assert(cast(byte)x1 == bin!q{11111111}) ;
    assert(cast(byte)x1 == hex!q{ff}) ;
    //assert(cast(byte)x1 > hex!q{f}) ;
 
-   ubvec!8 x2 = bin!q{11111111} ;
+   UBit!8 x2 = bin!q{11111111} ;
    assert(cast(byte)x2 != 0) ;
    assert(cast(byte)x2 == bin!q{11111111}) ;
    assert(cast(byte)x2 == hex!q{ff}) ;
    //assert(cast(byte)x2 > hex!q{f}) ;
 
-   lvec!8 x3 = bin!q{11111111} ;
+   Logic!8 x3 = bin!q{11111111} ;
    assert(cast(byte)x3 != 0) ;
    assert(cast(byte)x3 == bin!q{11111111}) ;
    assert(cast(byte)x3 == hex!q{ff}) ;
    //assert(cast(byte)x3 > hex!q{f}) ;
 
-   ulvec!8 x4 = bin!q{11111111} ;
+   ULogic!8 x4 = bin!q{11111111} ;
    assert(cast(byte)x4 != 0) ;
    assert(cast(byte)x4 == bin!q{11111111}) ;
    assert(cast(byte)x4 == hex!q{ff}) ;
    //assert(cast(byte)x4 > hex!q{f}) ;
 
-   bvec!8 x5 = x1 >> bin!q{1} ;
+   Bit!8 x5 = x1 >> bin!q{1} ;
    assert(x5 == bin!q{1111111});
 
    x5 = x1 << bin!q{1} ;
@@ -3276,10 +3275,10 @@ unittest {
    x5 = x1 << hex!q{1} ;
    assert(x5 == bin!q{11111110});
 
-   ubvec!8 x6 = x2 >>> bin!q{1} ;
+   UBit!8 x6 = x2 >>> bin!q{1} ;
    //assert(x6 == bin!q{111111});
 
-   lvec!8 x7 = x3 >> bin!q{1} ;
+   Logic!8 x7 = x3 >> bin!q{1} ;
    assert(x7 == bin!q{111111});
 
    x7 = x3 <<  bin!q{1} ;
@@ -3287,18 +3286,18 @@ unittest {
    x7 = x3 <<  hex!q{1} ;
    assert(x7 == bin!q{1111110});
 
-   ulvec!8 x8 = x4 >>> bin!q{1} ;
+   ULogic!8 x8 = x4 >>> bin!q{1} ;
 
 }
 
 unittest {
 
-   ubvec!1025 mfunc(ubvec!1024 p_, ubvec!1024 n_){
-      ubvec!1025 temp  = (p_ + n_);
+   UBit!1025 mfunc(UBit!1024 p_, UBit!1024 n_){
+      UBit!1025 temp  = (p_ + n_);
       return(temp);
    }
 
-   ubvec!1025 x = mfunc(cast(ubvec!1024)1024,cast(ubvec!1024)100) ;
+   UBit!1025 x = mfunc(cast(UBit!1024)1024,cast(UBit!1024)100) ;
 
 }
 
@@ -3307,7 +3306,7 @@ unittest {
     import std.random ;
     import std.stdio ;
     immutable uint N = 65 ;
-    lvec!65 wow ;
+    Logic!65 wow ;
     for(uint i = 0 ; i < N ; ++i){
       int tmp = uniform(0, 4); 
          
@@ -3331,7 +3330,7 @@ unittest {
     import std.random ;
     import std.stdio ;
     immutable uint N = 65 ;
-    ulvec!65 wow ;
+    ULogic!65 wow ;
     for(uint i = 0 ; i < N ; ++i){
       int tmp = uniform(0, 4); 
          
@@ -3356,7 +3355,7 @@ unittest {
 
    import std.stdio ;
 
-   lvec!1024 a ; 
+   Logic!1024 a ; 
    for(uint i = 0 ; i < 1024 ; ++i) a[i] = LOGIC_Z ;
    for(uint i = 0 ; i < 1024 ; ++i) assert(a[i].isZ()) ;
 
@@ -3375,7 +3374,7 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!1024 a ; 
+   ULogic!1024 a ; 
    for(uint i = 0 ; i < 1024 ; ++i) a[i] = LOGIC_Z ;
    for(uint i = 0 ; i < 1024 ; ++i) assert(a[i].isZ()) ;
 
@@ -3394,7 +3393,7 @@ unittest {
 unittest {
 
    import std.stdio ;
-   lvec!1 a = bin!q{Z} ;
+   Logic!1 a = bin!q{Z} ;
    assert(a.isZ());
    assert(a.isX());
 
@@ -3405,7 +3404,7 @@ unittest {
 
 unittest {
 
-   alias bvec!8 array ;
+   alias Bit!8 array ;
 
    array[]  mem ;
 
@@ -3413,7 +3412,7 @@ unittest {
    mem.length = 2048 ;
    mem.length = 1024 ;
 
-   bvec!8[string][]  hash ;
+   Bit!8[string][]  hash ;
 
 }
 
@@ -3421,9 +3420,9 @@ unittest {
 
    import std.stdio ;
 
-   bvec!8 lsb = bin!q{00000000} ;
-   bvec!8 msb = bin!q{11111111} ;
-   bvec!16 concat = msb ~ lsb ;
+   Bit!8 lsb = bin!q{00000000} ;
+   Bit!8 msb = bin!q{11111111} ;
+   Bit!16 concat = msb ~ lsb ;
    assert(concat == bin!q{1111111100000000});
    assert(concat >  bin!q{1000000001111111});
    assert(concat >= bin!q{1000000001111111});
@@ -3444,9 +3443,9 @@ unittest {
 
 unittest {
 
-   ubvec!8 lsb = bin!q{00000000} ;
-   ubvec!8 msb = bin!q{11111111} ;
-   ubvec!16 concat = msb ~ lsb ;
+   UBit!8 lsb = bin!q{00000000} ;
+   UBit!8 msb = bin!q{11111111} ;
+   UBit!16 concat = msb ~ lsb ;
    assert(concat == bin!q{1111111100000000});
    assert(concat >  bin!q{1000000001111111});
    assert(concat >= bin!q{1000000001111111});
@@ -3459,98 +3458,98 @@ unittest {
    assert(concat_1 != bin!q{1000000001111111});
 }
 
-// concat ~ does not work for lvec/ulvec 
+// concat ~ does not work for Logic/ULogic 
 
 unittest {
 
-   lvec!8 lsb = bin!q{11111111} ;
-   lvec!8 msb = bin!q{11111111} ;
+   Logic!8 lsb = bin!q{11111111} ;
+   Logic!8 msb = bin!q{11111111} ;
    auto concat = msb ~ lsb ;
 
 }
  
 unittest {
 
-   ulvec!8 lsb = bin!q{11111111} ;
-   ulvec!8 msb = bin!q{11111111} ;
+   ULogic!8 lsb = bin!q{11111111} ;
+   ULogic!8 msb = bin!q{11111111} ;
    auto concat = msb ~ lsb ;
 
 }
 
 unittest {
 
-   ubvec!16 mbvec    = bin!q{1111111111111111};
+   UBit!16 mBit    = bin!q{1111111111111111};
 
-   ubvec!8  mbvec_8      = cast(ubvec!8) mbvec ;
-   ubvec!16 mbvec_16     = cast(ubvec!16) mbvec ;
-   ubyte    mbvec_ubyte  = cast(ubyte) mbvec ;
-   uint     mbvec_uint   = cast(uint) mbvec ;
-   ushort   mbvec_ushort = cast(ushort) mbvec ;
-   ulong    mbvec_ulong  = cast(ulong) mbvec ;
+   UBit!8  mBit_8      = cast(UBit!8) mBit ;
+   UBit!16 mBit_16     = cast(UBit!16) mBit ;
+   ubyte    mBit_ubyte  = cast(ubyte) mBit ;
+   uint     mBit_uint   = cast(uint) mBit ;
+   ushort   mBit_ushort = cast(ushort) mBit ;
+   ulong    mBit_ulong  = cast(ulong) mBit ;
 
-   byte     mbvec_byte   = cast(byte) mbvec ;
-   int      mbvec_int    = cast(int) mbvec ;
-   short    mbvec_short  = cast(short) mbvec ;
-   long     mbvec_long   = cast(long) mbvec ;
+   byte     mBit_byte   = cast(byte) mBit ;
+   int      mBit_int    = cast(int) mBit ;
+   short    mBit_short  = cast(short) mBit ;
+   long     mBit_long   = cast(long) mBit ;
 /*
-   float    mbvec_float  = cast(float)  mbvec ;
-   double   mbvec_double = cast(double)  mbvec ;
-   real     mbvec_real   = cast(double)  mbvec ;
+   float    mBit_float  = cast(float)  mBit ;
+   double   mBit_double = cast(double)  mBit ;
+   real     mBit_real   = cast(double)  mBit ;
 */
 }
 
 unittest {
 
-   bvec!16 mbvec    = bin!q{1111111111111111};
+   Bit!16 mBit    = bin!q{1111111111111111};
 
-   bvec!8  mbvec_8      = cast(bvec!8) mbvec ;
-   bvec!16 mbvec_16     = cast(bvec!16) mbvec ;
-   ubyte    mbvec_ubyte  = cast(ubyte) mbvec ;
-   uint     mbvec_uint   = cast(uint) mbvec ;
-   ushort   mbvec_ushort = cast(ushort) mbvec ;
-   ulong    mbvec_ulong  = cast(ulong) mbvec ;
+   Bit!8  mBit_8      = cast(Bit!8) mBit ;
+   Bit!16 mBit_16     = cast(Bit!16) mBit ;
+   ubyte    mBit_ubyte  = cast(ubyte) mBit ;
+   uint     mBit_uint   = cast(uint) mBit ;
+   ushort   mBit_ushort = cast(ushort) mBit ;
+   ulong    mBit_ulong  = cast(ulong) mBit ;
 
-   byte     mbvec_byte   = cast(byte) mbvec ;
-   int      mbvec_int    = cast(int) mbvec ;
-   short    mbvec_short  = cast(short) mbvec ;
-   long     mbvec_long   = cast(long) mbvec ;
+   byte     mBit_byte   = cast(byte) mBit ;
+   int      mBit_int    = cast(int) mBit ;
+   short    mBit_short  = cast(short) mBit ;
+   long     mBit_long   = cast(long) mBit ;
 
 }
 
 
 unittest {
 
-   lvec!16 mlvec    = bin!q{1111111111111111};
+   Logic!16 mLogic    = bin!q{1111111111111111};
 
-   lvec!8  mlvec_8      = cast(lvec!8) mlvec ;
-   lvec!16 mlvec_16     = cast(lvec!16) mlvec ;
-   ubyte    mlvec_ubyte  = cast(ubyte) mlvec ;
-   uint     mlvec_uint   = cast(uint) mlvec ;
-   ushort   mlvec_ushort = cast(ushort) mlvec ;
-   ulong    mlvec_ulong  = cast(ulong) mlvec ;
+   Logic!8  mLogic_8      = cast(Logic!8) mLogic ;
+   Logic!16 mLogic_16     = cast(Logic!16) mLogic ;
+   ubyte    mLogic_ubyte  = cast(ubyte) mLogic ;
+   uint     mLogic_uint   = cast(uint) mLogic ;
+   ushort   mLogic_ushort = cast(ushort) mLogic ;
+   ulong    mLogic_ulong  = cast(ulong) mLogic ;
 
-   byte     mlvec_byte   = cast(byte) mlvec ;
-   int      mlvec_int    = cast(int) mlvec ;
-   short    mlvec_short  = cast(short) mlvec ;
-   long     mlvec_long   = cast(long) mlvec ;
+   byte     mLogic_byte   = cast(byte) mLogic ;
+   int      mLogic_int    = cast(int) mLogic ;
+   short    mLogic_short  = cast(short) mLogic ;
+   long     mLogic_long   = cast(long) mLogic ;
 
 }
 
 unittest {
 
-   ulvec!16 mlvec    = bin!q{1111111111111111};
+   ULogic!16 mLogic    = bin!q{1111111111111111};
 
-   ulvec!8  mlvec_8      = cast(ulvec!8) mlvec ;
-   ulvec!16 mlvec_16     = cast(ulvec!16) mlvec ;
-   ubyte    mlvec_ubyte  = cast(ubyte) mlvec ;
-   uint     mlvec_uint   = cast(uint) mlvec ;
-   ushort   mlvec_ushort = cast(ushort) mlvec ;
-   ulong    mlvec_ulong  = cast(ulong) mlvec ;
+   ULogic!8  mLogic_8      = cast(ULogic!8) mLogic ;
+   ULogic!16 mLogic_16     = cast(ULogic!16) mLogic ;
+   ubyte    mLogic_ubyte  = cast(ubyte) mLogic ;
+   uint     mLogic_uint   = cast(uint) mLogic ;
+   ushort   mLogic_ushort = cast(ushort) mLogic ;
+   ulong    mLogic_ulong  = cast(ulong) mLogic ;
 
-   byte     mlvec_byte   = cast(byte) mlvec ;
-   int      mlvec_int    = cast(int) mlvec ;
-   short    mlvec_short  = cast(short) mlvec ;
-   long     mlvec_long   = cast(long) mlvec ;
+   byte     mLogic_byte   = cast(byte) mLogic ;
+   int      mLogic_int    = cast(int) mLogic ;
+   short    mLogic_short  = cast(short) mLogic ;
+   long     mLogic_long   = cast(long) mLogic ;
 
 }
 
@@ -3560,15 +3559,15 @@ unittest {
    import std.complex ;
    import std.stdio ;
 
-   alias  bvec!16 mtype ;
+   alias  Bit!16 mtype ;
 
-   mtype rbvec_1 = hex!q{5} ;
-   mtype ibvec_1 = hex!q{5} ;
-   auto c_1 = complex!(mtype) (rbvec_1,ibvec_1);
+   mtype rBit_1 = hex!q{5} ;
+   mtype iBit_1 = hex!q{5} ;
+   auto c_1 = complex!(mtype) (rBit_1,iBit_1);
 
-   mtype rbvec_2 = hex!q{5} ;
-   mtype ibvec_2 = hex!q{5} ;
-   auto c_2 = complex!(mtype) (rbvec_2,ibvec_2);
+   mtype rBit_2 = hex!q{5} ;
+   mtype iBit_2 = hex!q{5} ;
+   auto c_2 = complex!(mtype) (rBit_2,iBit_2);
 
    { 
       auto c_3 = c_1 + c_2 ; 
@@ -3605,15 +3604,15 @@ unittest {
    import std.complex ;
    import std.stdio ;
 
-   alias  ubvec!16 mtype ;
+   alias  UBit!16 mtype ;
 
-   mtype rbvec_1 = hex!q{5} ;
-   mtype ibvec_1 = hex!q{5} ;
-   auto c_1 = complex!(mtype) (rbvec_1,ibvec_1);
+   mtype rBit_1 = hex!q{5} ;
+   mtype iBit_1 = hex!q{5} ;
+   auto c_1 = complex!(mtype) (rBit_1,iBit_1);
 
-   mtype rbvec_2 = hex!q{5} ;
-   mtype ibvec_2 = hex!q{5} ;
-   auto c_2 = complex!(mtype) (rbvec_2,ibvec_2);
+   mtype rBit_2 = hex!q{5} ;
+   mtype iBit_2 = hex!q{5} ;
+   auto c_2 = complex!(mtype) (rBit_2,iBit_2);
 
    { 
       auto c_3 = c_1 + c_2 ; 
@@ -3653,16 +3652,16 @@ unittest {
 
    import std.stdio ;
 
-   bvec!8 msb = bin!q{11111111} ;
-   bvec!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
+   Bit!8 msb = bin!q{11111111} ;
+   Bit!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
 
    assert(concat == hex!q{ffffffffffffffffff});
    //assert(concat >  hex!q{ffff});
    //assert(concat >= hex!q{ffff});
    //assert(concat != hex!q{ffff});
 
-   bvec!73  concat_1 = concat + concat ;
-   bvec!144 concat_2 = concat * concat ;
+   Bit!73  concat_1 = concat + concat ;
+   Bit!144 concat_2 = concat * concat ;
             concat_2 = concat - concat ;
             concat_2 = concat | concat ;
             concat_2 = concat || concat ;
@@ -3677,16 +3676,16 @@ unittest {
 
    import std.stdio ;
 
-   ubvec!8 msb = bin!q{11111111} ;
-   ubvec!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
+   UBit!8 msb = bin!q{11111111} ;
+   UBit!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
 
    assert(concat == hex!q{ffffffffffffffffff});
    //assert(concat >  hex!q{ffff});
    //assert(concat >= hex!q{ffff});
    //assert(concat != hex!q{ffff});
 
-   ubvec!73  concat_1 = concat + concat ;
-   ubvec!144 concat_2 = concat * concat ;
+   UBit!73  concat_1 = concat + concat ;
+   UBit!144 concat_2 = concat * concat ;
              concat_2 = concat - concat ;
              concat_2 = concat | concat ;
              concat_2 = concat || concat ;
@@ -3701,16 +3700,16 @@ unittest {
 
    import std.stdio ;
 
-   lvec!8 msb = bin!q{11111111} ;
-   lvec!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
+   Logic!8 msb = bin!q{11111111} ;
+   Logic!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
 
    assert(concat == hex!q{ffffffffffffffffff});
    //assert(concat >  hex!q{ffff});
    //assert(concat >= hex!q{ffff});
    //assert(concat != hex!q{ffff});
 
-   lvec!73  concat_1 = concat + concat ;
-   lvec!144 concat_2 = concat * concat ;
+   Logic!73  concat_1 = concat + concat ;
+   Logic!144 concat_2 = concat * concat ;
             concat_2 = concat - concat ;
             concat_2 = concat | concat ;
             concat_2 = concat || concat ;
@@ -3725,16 +3724,16 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!8 msb = bin!q{11111111} ;
-   ulvec!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
+   ULogic!8 msb = bin!q{11111111} ;
+   ULogic!72 concat = msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ~ msb ;
 
    assert(concat == hex!q{ffffffffffffffffff});
    //assert(concat >  hex!q{ffff});
    //assert(concat >= hex!q{ffff});
    //assert(concat != hex!q{ffff});
 
-   ulvec!73  concat_1 = concat + concat ;
-   ulvec!144 concat_2 = concat * concat ;
+   ULogic!73  concat_1 = concat + concat ;
+   ULogic!144 concat_2 = concat * concat ;
              concat_2 = concat - concat ;
              concat_2 = concat | concat ;
              concat_2 = concat || concat ;
@@ -3754,29 +3753,29 @@ unittest {
    static enum N = 16 ;
    static enum M = N*2 ;
 
-   static ubvec!N[] nbvec ;
-   static ubvec!M[] mbvec ;
+   static UBit!N[] nBit ;
+   static UBit!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(ubvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(UBit!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   //for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   //for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   //for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   //for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 
 
@@ -3791,29 +3790,29 @@ unittest {
    static enum N = 65 ;
    static enum M = N*2 ;
 
-   static ubvec!N[] nbvec ;
-   static ubvec!M[] mbvec ;
+   static UBit!N[] nBit ;
+   static UBit!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(ubvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(UBit!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -3826,29 +3825,29 @@ unittest {
    static enum N = 16 ;
    static enum M = N*2 ;
 
-   static bvec!N[] nbvec ;
-   static bvec!M[] mbvec ;
+   static Bit!N[] nBit ;
+   static Bit!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(bvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(Bit!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -3861,29 +3860,29 @@ unittest {
    static enum N = 65 ;
    static enum M = N*2 ;
 
-   static bvec!N[] nbvec ;
-   static bvec!M[] mbvec ;
+   static Bit!N[] nBit ;
+   static Bit!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(bvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(Bit!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -3896,29 +3895,29 @@ unittest {
    static enum N = 16 ;
    static enum M = N*2 ;
 
-   static ulvec!N[] nbvec ;
-   static ulvec!M[] mbvec ;
+   static ULogic!N[] nBit ;
+   static ULogic!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(ulvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(ULogic!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   //for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   //for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   //for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   //for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -3931,29 +3930,29 @@ unittest {
    static enum N = 65 ;
    static enum M = N*2 ;
 
-   static ulvec!N[] nbvec ;
-   static ulvec!M[] mbvec ;
+   static ULogic!N[] nBit ;
+   static ULogic!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(ulvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(ULogic!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -3967,29 +3966,29 @@ unittest {
    static enum N = 16 ;
    static enum M = N*2 ;
 
-   static lvec!N[] nbvec ;
-   static lvec!M[] mbvec ;
+   static Logic!N[] nBit ;
+   static Logic!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(lvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(Logic!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -4002,29 +4001,29 @@ unittest {
    static enum N = 65 ;
    static enum M = N*2 ;
 
-   static lvec!N[] nbvec ;
-   static lvec!M[] mbvec ;
+   static Logic!N[] nBit ;
+   static Logic!M[] mBit ;
 
-   nbvec.length = 1024 ; 
-   mbvec.length = nbvec.length ; 
+   nBit.length = 1024 ; 
+   mBit.length = nBit.length ; 
 
    for(uint i = 0 ; i < 1024 ; ++i){
-      nbvec[i] = cast(lvec!N)(cast(ushort)uniform(0, 65535)) ;
+      nBit[i] = cast(Logic!N)(cast(ushort)uniform(0, 65535)) ;
    } 
 
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] + nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] - nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] * nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] | nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] || nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] & nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] && nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] ^ nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = !nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = ~nbvec[i] ;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >> 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] << 1;  
-   for(uint i = 0 ; i < 1024 ; ++i) mbvec[i] = nbvec[i] >>> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] + nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] - nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] * nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] | nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] || nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] & nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] && nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] ^ nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = !nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = ~nBit[i] ;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >> 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] << 1;  
+   for(uint i = 0 ; i < 1024 ; ++i) mBit[i] = nBit[i] >>> 1;  
 
 } 
 
@@ -4032,9 +4031,9 @@ unittest {
 
 unittest {
 
-   bvec!16 [1024] a ;
-   bvec!16 [1024] b ;
-   bvec!17 [1024] y ;
+   Bit!16 [1024] a ;
+   Bit!16 [1024] b ;
+   Bit!17 [1024] y ;
 
    foreach(ushort i ; a){
       a[i] = i ;
@@ -4057,9 +4056,9 @@ unittest {
 
 unittest {
 
-   ubvec!16 [1024] a ;
-   ubvec!16 [1024] b ;
-   ubvec!17 [1024] y ;
+   UBit!16 [1024] a ;
+   UBit!16 [1024] b ;
+   UBit!17 [1024] y ;
 
    foreach(ushort i ; a){
       a[i] = i ;
@@ -4081,11 +4080,11 @@ unittest {
 
 unittest {
 
-   lvec!16 [1024] a ;
-   lvec!16 [1024] b ;
-   lvec!17 [1024] y ;
+   Logic!16 [1024] a ;
+   Logic!16 [1024] b ;
+   Logic!17 [1024] y ;
 
-   foreach(lvec!16 i ; a){
+   foreach(Logic!16 i ; a){
       a[cast(ulong)i] = i ;
       b[cast(ulong)i] = i ;
       y[cast(ulong)i] = a[cast(ulong)i] + b[cast(ulong)i] ;
@@ -4105,11 +4104,11 @@ unittest {
 
 unittest {
 
-   ulvec!16 [1024] a ;
-   ulvec!16 [1024] b ;
-   ulvec!17 [1024] y ;
+   ULogic!16 [1024] a ;
+   ULogic!16 [1024] b ;
+   ULogic!17 [1024] y ;
 
-   foreach(ulvec!16 i ; a){
+   foreach(ULogic!16 i ; a){
       a[cast(ulong)i] = i ;
       b[cast(ulong)i] = i ;
       y[cast(ulong)i] = a[cast(ulong)i] + b[cast(ulong)i] ;
@@ -4136,9 +4135,9 @@ unittest {
 ////////////////////////////////
 unittest {
 
-   bvec!64 [1024] a ;
-   bvec!64 [1024] b ;
-   bvec!65 [1024] y ;
+   Bit!64 [1024] a ;
+   Bit!64 [1024] b ;
+   Bit!65 [1024] y ;
 
    foreach(ulong i ; a){
       a[i] = i ;
@@ -4161,9 +4160,9 @@ unittest {
 
 unittest {
 
-   ubvec!64 [1024] a ;
-   ubvec!64 [1024] b ;
-   ubvec!65 [1024] y ;
+   UBit!64 [1024] a ;
+   UBit!64 [1024] b ;
+   UBit!65 [1024] y ;
 
    foreach(ulong i ; a){
       a[i] = i ;
@@ -4185,11 +4184,11 @@ unittest {
 
 unittest {
 
-   lvec!64 [1024] a ;
-   lvec!64 [1024] b ;
-   lvec!65 [1024] y ;
+   Logic!64 [1024] a ;
+   Logic!64 [1024] b ;
+   Logic!65 [1024] y ;
 
-   foreach(lvec!64 i ; a){
+   foreach(Logic!64 i ; a){
       a[cast(ulong)i] = i ;
       b[cast(ulong)i] = i ;
       y[cast(ulong)i] = a[cast(ulong)i] + b[cast(ulong)i] ;
@@ -4209,11 +4208,11 @@ unittest {
 
 unittest {
 
-   ulvec!64 [1024] a ;
-   ulvec!64 [1024] b ;
-   ulvec!65 [1024] y ;
+   ULogic!64 [1024] a ;
+   ULogic!64 [1024] b ;
+   ULogic!65 [1024] y ;
 
-   foreach(ulvec!64 i ; a){
+   foreach(ULogic!64 i ; a){
       a[cast(ulong)i] = i ;
       b[cast(ulong)i] = i ;
       y[cast(ulong)i] = a[cast(ulong)i] + b[cast(ulong)i] ;
@@ -4236,51 +4235,51 @@ unittest {
    import std.stdio ;
 
    {
-      scope     bvec!65 p = hex!q{ffff};
-      scope     bvec!65 q = hex!q{ffff};
-      scope     bvec!66 y = p + q ;
+      scope     Bit!65 p = hex!q{ffff};
+      scope     Bit!65 q = hex!q{ffff};
+      scope     Bit!66 y = p + q ;
    }
    
    {
-      scope     bvec!16 p = hex!q{ffff};
-      scope     bvec!16 q = hex!q{ffff};
-      scope     bvec!17 y = p + q ;
+      scope     Bit!16 p = hex!q{ffff};
+      scope     Bit!16 q = hex!q{ffff};
+      scope     Bit!17 y = p + q ;
    }
    
    {
-      scope     ubvec!65 p = hex!q{ffff};
-      scope     ubvec!65 q = hex!q{ffff};
-      scope     ubvec!66 y = p + q ;
+      scope     UBit!65 p = hex!q{ffff};
+      scope     UBit!65 q = hex!q{ffff};
+      scope     UBit!66 y = p + q ;
    }
    
    {
-      scope     ubvec!16 p = hex!q{ffff};
-      scope     ubvec!16 q = hex!q{ffff};
-      scope     ubvec!17 y = p + q ;
+      scope     UBit!16 p = hex!q{ffff};
+      scope     UBit!16 q = hex!q{ffff};
+      scope     UBit!17 y = p + q ;
    }
    
    {
-      scope     lvec!65 p = hex!q{ffff};
-      scope     lvec!65 q = hex!q{ffff};
-      scope     lvec!66 y = p + q ;
+      scope     Logic!65 p = hex!q{ffff};
+      scope     Logic!65 q = hex!q{ffff};
+      scope     Logic!66 y = p + q ;
    }
    
    {
-      scope     lvec!16 p = hex!q{ffff};
-      scope     lvec!16 q = hex!q{ffff};
-      scope     lvec!17 y = p + q ;
+      scope     Logic!16 p = hex!q{ffff};
+      scope     Logic!16 q = hex!q{ffff};
+      scope     Logic!17 y = p + q ;
    }
    
    {
-      scope     ulvec!65 p = hex!q{ffff};
-      scope     ulvec!65 q = hex!q{ffff};
-      scope     ulvec!66 y = p + q ;
+      scope     ULogic!65 p = hex!q{ffff};
+      scope     ULogic!65 q = hex!q{ffff};
+      scope     ULogic!66 y = p + q ;
    }
    
    {
-      scope     ulvec!16 p = hex!q{ffff};
-      scope     ulvec!16 q = hex!q{ffff};
-      scope     ulvec!17 y = p + q ;
+      scope     ULogic!16 p = hex!q{ffff};
+      scope     ULogic!16 q = hex!q{ffff};
+      scope     ULogic!17 y = p + q ;
    }
 
 
@@ -4294,51 +4293,51 @@ unittest {
    import std.stdio ;
 
    {
-      immutable bvec!65 p ;
-      immutable bvec!65 q ;
-      immutable bvec!66 y = p + q ;
+      immutable Bit!65 p ;
+      immutable Bit!65 q ;
+      immutable Bit!66 y = p + q ;
    }
    
    {
-      immutable bvec!16 p ;
-      immutable bvec!16 q ;
-      immutable bvec!17 y = p + q ;
+      immutable Bit!16 p ;
+      immutable Bit!16 q ;
+      immutable Bit!17 y = p + q ;
    }
    
    {
-      immutable ubvec!65 p ;
-      immutable ubvec!65 q ;
-      immutable ubvec!66 y = p + q ;
+      immutable UBit!65 p ;
+      immutable UBit!65 q ;
+      immutable UBit!66 y = p + q ;
    }
    
    {
-      immutable ubvec!16 p ;
-      immutable ubvec!16 q ;
-      immutable ubvec!17 y = p + q ;
+      immutable UBit!16 p ;
+      immutable UBit!16 q ;
+      immutable UBit!17 y = p + q ;
    }
    
    {
-      immutable lvec!65 p ;
-      immutable lvec!65 q ;
-      immutable lvec!66 y = p + q ;
+      immutable Logic!65 p ;
+      immutable Logic!65 q ;
+      immutable Logic!66 y = p + q ;
    }
    
    {
-      immutable lvec!16 p ;
-      immutable lvec!16 q ;
-      immutable lvec!17 y = p + q ;
+      immutable Logic!16 p ;
+      immutable Logic!16 q ;
+      immutable Logic!17 y = p + q ;
    }
    
    {
-      immutable ulvec!65 p ;
-      immutable ulvec!65 q ;
-      immutable ulvec!66 y = p + q ;
+      immutable ULogic!65 p ;
+      immutable ULogic!65 q ;
+      immutable ULogic!66 y = p + q ;
    }
    
    {
-      immutable ulvec!16 p ;
-      immutable ulvec!16 q ;
-      immutable ulvec!17 y = p + q ;
+      immutable ULogic!16 p ;
+      immutable ULogic!16 q ;
+      immutable ULogic!17 y = p + q ;
    }
 
 
@@ -4374,10 +4373,10 @@ unittest {
  
     import std.stdio ;
  
-    lvec!4 x = bin!q{1101};
+    Logic!4 x = bin!q{1101};
     x.reverse();
  
-    lvec!4 y = bin!q{1011};
+    Logic!4 y = bin!q{1011};
     assert(x.reverse() == y);
  
  }
@@ -4386,10 +4385,10 @@ unittest {
  
     import std.stdio ;
  
-    ulvec!4 x = bin!q{1101};
+    ULogic!4 x = bin!q{1101};
     x.reverse();
  
-    lvec!4 y = bin!q{1011};
+    Logic!4 y = bin!q{1011};
     assert(x.reverse == y);
  }
 
@@ -4397,10 +4396,10 @@ unittest {
  
     import std.stdio ;
  
-    bvec!4 x = bin!q{1101};
+    Bit!4 x = bin!q{1101};
     x.reverse();
  
-    lvec!4 y = bin!q{1011};
+    Logic!4 y = bin!q{1011};
     assert(x.reverse == y);
  
  }
@@ -4409,10 +4408,10 @@ unittest {
  
     import std.stdio ;
  
-    ubvec!4 x = bin!q{1101};
+    UBit!4 x = bin!q{1101};
     auto z = x.reverse();
  
-    lvec!4 y = bin!q{1011};
+    Logic!4 y = bin!q{1011};
     // FIXME
     import std.stdio;
     writeln(x, y);
@@ -4424,7 +4423,7 @@ unittest {
 
    import std.stdio ;
 
-   bvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   Bit!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
    writefln("%d",x);
    writefln("%s",x);
    writefln("%x",x);
@@ -4440,7 +4439,7 @@ unittest {
 
    import std.stdio ;
 
-   ubvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   UBit!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
    writefln("%d",x);
    writefln("%s",x);
    writefln("%x",x);
@@ -4456,7 +4455,7 @@ unittest {
 
    import std.stdio ;
 
-   lvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   Logic!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
    writefln("%d",x);
    writefln("%s",x);
    writefln("%x",x);
@@ -4472,7 +4471,7 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   ULogic!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
    writefln("%d",x);
    writefln("%s",x);
    writefln("%x",x);
@@ -4488,8 +4487,8 @@ unittest {
 
    import std.stdio ;
 
-   bvec!1 x = bin!q{1};
-   bvec!1 y ;
+   Bit!1 x = bin!q{1};
+   Bit!1 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4501,8 +4500,8 @@ unittest {
 
    import std.stdio ;
 
-   ubvec!1 x = bin!q{1};
-   ubvec!1 y ;
+   UBit!1 x = bin!q{1};
+   UBit!1 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4514,8 +4513,8 @@ unittest {
 
    import std.stdio ;
 
-   lvec!1 x = bin!q{1};
-   lvec!1 y ;
+   Logic!1 x = bin!q{1};
+   Logic!1 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4527,8 +4526,8 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!1 x = bin!q{1};
-   ulvec!1 y ;
+   ULogic!1 x = bin!q{1};
+   ULogic!1 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4544,8 +4543,8 @@ unittest {
 
    import std.stdio ;
 
-   bvec!16 x = hex!q{aaaa};
-   bvec!16 y ;
+   Bit!16 x = hex!q{aaaa};
+   Bit!16 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4557,8 +4556,8 @@ unittest {
 
    import std.stdio ;
 
-   ubvec!16 x = hex!q{aaaa};
-   ubvec!16 y ;
+   UBit!16 x = hex!q{aaaa};
+   UBit!16 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4570,8 +4569,8 @@ unittest {
 
    import std.stdio ;
 
-   lvec!16 x = hex!q{aaaa};
-   lvec!16 y ;
+   Logic!16 x = hex!q{aaaa};
+   Logic!16 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4583,8 +4582,8 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!16 x = hex!q{aaaa};
-   ulvec!16 y ;
+   ULogic!16 x = hex!q{aaaa};
+   ULogic!16 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4598,8 +4597,8 @@ unittest {
 
    import std.stdio ;
 
-   bvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
-   bvec!128 y ;
+   Bit!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   Bit!128 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4611,8 +4610,8 @@ unittest {
 
    import std.stdio ;
 
-   ubvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
-   ubvec!128 y ;
+   UBit!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   UBit!128 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4624,8 +4623,8 @@ unittest {
 
    import std.stdio ;
 
-   lvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
-   lvec!128 y ;
+   Logic!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   Logic!128 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4637,8 +4636,8 @@ unittest {
 
    import std.stdio ;
 
-   ulvec!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
-   ulvec!128 y ;
+   ULogic!128 x = hex!q{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa};
+   ULogic!128 y ;
    y += x ;
    y -= x ;
    //y *= x ;
@@ -4662,9 +4661,9 @@ unittest {
    writefln("%b",a);
    writefln("%o",a);
 
-   bvec!32 b = hex!q{aa} ;
+   Bit!32 b = hex!q{aa} ;
 
-   bvec!33 y1 = a + b ; 
+   Bit!33 y1 = a + b ; 
            y1 = a - b ; 
            y1 = a | b ; 
            y1 = a || b ; 
@@ -4683,9 +4682,9 @@ unittest {
    writefln("%b",a);
    writefln("%o",a);
 
-   bvec!32 b = hex!q{a} ;
+   Bit!32 b = hex!q{a} ;
 
-   bvec!33 y1 = a + b ; 
+   Bit!33 y1 = a + b ; 
            y1 = a - b ; 
            y1 = a | b ; 
            y1 = a || b ; 
@@ -4704,9 +4703,9 @@ unittest {
    writefln("%b",a);
    writefln("%o",a);
 
-   bvec!32 b = hex!q{a} ;
+   Bit!32 b = hex!q{a} ;
 
-   bvec!33 y1 = a + b ; 
+   Bit!33 y1 = a + b ; 
            y1 = a - b ; 
            y1 = a | b ; 
            y1 = a || b ; 
@@ -4733,9 +4732,9 @@ unittest {
    writefln("%b",a);
    writefln("%o",a);
 
-   ubvec!32 b = hex!q{aa} ;
+   UBit!32 b = hex!q{aa} ;
 
-   ubvec!33 y1 = a + b ; 
+   UBit!33 y1 = a + b ; 
            y1 = a - b ; 
            y1 = a | b ; 
            y1 = a || b ; 
@@ -4754,9 +4753,9 @@ unittest {
    writefln("%b",a);
    writefln("%o",a);
 
-   ubvec!32 b = hex!q{a} ;
+   UBit!32 b = hex!q{a} ;
 
-   ubvec!33 y1 = a + b ; 
+   UBit!33 y1 = a + b ; 
            y1 = a - b ; 
            y1 = a | b ; 
            y1 = a || b ; 
@@ -4775,9 +4774,9 @@ unittest {
    writefln("%b",a);
    writefln("%o",a);
 
-   ubvec!32 b = hex!q{a} ;
+   UBit!32 b = hex!q{a} ;
 
-   ubvec!33 y1 = a + b ; 
+   UBit!33 y1 = a + b ; 
            y1 = a - b ; 
            y1 = a | b ; 
            y1 = a || b ; 
@@ -4805,9 +4804,9 @@ unittest {
       writefln("%b",a);
       writefln("%o",a);
    
-      lvec!32 b = hex!q{aa} ;
+      Logic!32 b = hex!q{aa} ;
    
-      lvec!33 y1 = a + b ; 
+      Logic!33 y1 = a + b ; 
               y1 = a - b ; 
               //y1 = a | b ; 
               y1 = a || b ; 
@@ -4826,9 +4825,9 @@ unittest {
       writefln("%b",a);
       writefln("%o",a);
    
-      lvec!32 b = hex!q{a} ;
+      Logic!32 b = hex!q{a} ;
    
-      lvec!33 y1 = a + b ; 
+      Logic!33 y1 = a + b ; 
               y1 = a - b ; 
               //y1 = a | b ; 
               y1 = a || b ; 
@@ -4847,9 +4846,9 @@ unittest {
       writefln("%b",a);
       writefln("%o",a);
    
-      lvec!32 b = hex!q{a} ;
+      Logic!32 b = hex!q{a} ;
    
-      lvec!33 y1 = a + b ; 
+      Logic!33 y1 = a + b ; 
               y1 = a - b ; 
               //y1 = a | b ; 
               y1 = a || b ; 
@@ -4876,9 +4875,9 @@ unittest {
       writefln("%b",a);
       writefln("%o",a);
    
-      ulvec!32 b = hex!q{aa} ;
+      ULogic!32 b = hex!q{aa} ;
    
-      ulvec!33 y1 = a + b ; 
+      ULogic!33 y1 = a + b ; 
               y1 = a - b ; 
               //y1 = a | b ; 
               y1 = a || b ; 
@@ -4897,9 +4896,9 @@ unittest {
       writefln("%b",a);
       writefln("%o",a);
    
-      ulvec!32 b = hex!q{a} ;
+      ULogic!32 b = hex!q{a} ;
    
-      ulvec!33 y1 = a + b ; 
+      ULogic!33 y1 = a + b ; 
               y1 = a - b ; 
               //y1 = a | b ; 
               y1 = a || b ; 
@@ -4918,9 +4917,9 @@ unittest {
       writefln("%b",a);
       writefln("%o",a);
    
-      ulvec!32 b = hex!q{a} ;
+      ULogic!32 b = hex!q{a} ;
    
-      ulvec!33 y1 = a + b ; 
+      ULogic!33 y1 = a + b ; 
               y1 = a - b ; 
               //y1 = a | b ; 
               y1 = a || b ; 
@@ -4939,66 +4938,66 @@ unittest {
 
    {
    
-      bvec!16 x = hex!q{100} ;
+      Bit!16 x = hex!q{100} ;
       
-      bvec!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      Bit!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{300});
    }
    
    {
    
-      bvec!65 x = hex!q{1} ;
+      Bit!65 x = hex!q{1} ;
       
-      bvec!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      Bit!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{200});
    }
    
    {
    
-      ubvec!16 x = hex!q{100} ;
+      UBit!16 x = hex!q{100} ;
       
-      ubvec!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      UBit!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{300});
    }
    
    {
    
-      ubvec!65 x = hex!q{1} ;
+      UBit!65 x = hex!q{1} ;
       
-      ubvec!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      UBit!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{200});
    }
    
    
    {
    
-      lvec!16 x = hex!q{100} ;
+      Logic!16 x = hex!q{100} ;
       
-      lvec!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      Logic!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{300});
    }
    
    {
    
-      lvec!65 x = hex!q{1} ;
+      Logic!65 x = hex!q{1} ;
       
-      lvec!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      Logic!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{200});
    }
    
    {
    
-      ulvec!16 x = hex!q{100} ;
+      ULogic!16 x = hex!q{100} ;
       
-      ulvec!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      ULogic!32 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{300});
    }
    
    {
    
-      ulvec!65 x = hex!q{1} ;
+      ULogic!65 x = hex!q{1} ;
       
-      ulvec!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
+      ULogic!128 y = ( x == hex!q{1}) ? hex!q{200} : hex!q{300} ;
       assert(y == hex!q{200});
    }
 
@@ -5050,38 +5049,38 @@ unittest {
 
    import std.stdio ;
 
-   bvec!16[]  b = new bvec!16[20] ; 
-   bvec!128[] c = new bvec!128[20] ; 
+   Bit!16[]  b = new Bit!16[20] ; 
+   Bit!128[] c = new Bit!128[20] ; 
    delete(b) ;
    delete(c) ;
 
 // Associative arrays :
-   ubvec!32 [string]  address_map = [ "reset_ctl_reg" : cast(ubvec!32)0x0,
-                                      "clock_ctl_reg" : cast(ubvec!32)0x1,
-                                      "modem_ctl_reg" : cast(ubvec!32)0x2,
-                                      "moden_ctl_reg" : cast(ubvec!32)0x3,
-                                      "modeo_ctl_reg" : cast(ubvec!32)0x4,
-                                      "modep_ctl_reg" : cast(ubvec!32)0x5,
-                                      "modeq_ctl_reg" : cast(ubvec!32)0x6,
-                                      "moder_ctl_reg" : cast(ubvec!32)0x7,
-                                      "modes_ctl_reg" : cast(ubvec!32)0x8
+   UBit!32 [string]  address_map = [ "reset_ctl_reg" : cast(UBit!32)0x0,
+                                      "clock_ctl_reg" : cast(UBit!32)0x1,
+                                      "modem_ctl_reg" : cast(UBit!32)0x2,
+                                      "moden_ctl_reg" : cast(UBit!32)0x3,
+                                      "modeo_ctl_reg" : cast(UBit!32)0x4,
+                                      "modep_ctl_reg" : cast(UBit!32)0x5,
+                                      "modeq_ctl_reg" : cast(UBit!32)0x6,
+                                      "moder_ctl_reg" : cast(UBit!32)0x7,
+                                      "modes_ctl_reg" : cast(UBit!32)0x8
                                     ];
 
    
    writefln("%s",address_map);
 
-   address_map["data1_val_reg"] = cast(ubvec!32)0x9  ;
-   address_map["data2_val_reg"] = cast(ubvec!32)0xa  ;
-   address_map["data3_val_reg"] = cast(ubvec!32)0xb  ;
-   address_map["data4_val_reg"] = cast(ubvec!32)0xc  ;
-   address_map["data5_val_reg"] = cast(ubvec!32)0xd  ;
-   address_map["data6_val_reg"] = cast(ubvec!32)0xe  ;
-   address_map["data7_val_reg"] = cast(ubvec!32)0xf  ;
-   address_map["data8_val_reg"] = cast(ubvec!32)0x10 ;
+   address_map["data1_val_reg"] = cast(UBit!32)0x9  ;
+   address_map["data2_val_reg"] = cast(UBit!32)0xa  ;
+   address_map["data3_val_reg"] = cast(UBit!32)0xb  ;
+   address_map["data4_val_reg"] = cast(UBit!32)0xc  ;
+   address_map["data5_val_reg"] = cast(UBit!32)0xd  ;
+   address_map["data6_val_reg"] = cast(UBit!32)0xe  ;
+   address_map["data7_val_reg"] = cast(UBit!32)0xf  ;
+   address_map["data8_val_reg"] = cast(UBit!32)0x10 ;
    
    writefln("%s",address_map);
 
-   ubvec!32 [string]  address_map_temp = address_map ;
+   UBit!32 [string]  address_map_temp = address_map ;
 
    writefln("%s",address_map_temp);
 
