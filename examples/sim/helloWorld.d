@@ -4,28 +4,21 @@
 //            http://www.boost.org/LICENSE_1_0.txt)
 // Authors:   Puneet Goel <puneet@coverify.com>
 import esdl.base;
+import std.stdio;
 
-@parallelize(1)
-class Hello: Entity {
-  void sayHello() {
-    import std.stdio: writeln;
-    writeln("Hello World from: ", Process.self.getFullName());
+@timeUnit(1.nsec)
+@timePrecision(1.psec)
+@parallelize(ParallelPolicy.SINGLE)
+class Foo: Entity {
+  void hello() {
+    writeln("Greetings from: ",
+	    Process.self.getFullName());
   }
-  Task!sayHello greet[2];
-  Worker!sayHello greetWorker[2];
+  Task!hello greet[2];
 }
-
-// @timeUnit(1.nsec)
-// @timePrecision(1.psec)
-class VlangWorld: RootEntity {
-  this(string name) {
-    super(name);
-  }
-  Hello hello[2];
+class Top: Entity {
+  Foo foo[4];
 }
-
 void main() {
-  auto theRoot = new VlangWorld("theRoot");
-  theRoot.elaborate();
-  theRoot.simulate(100.nsec);
+  simulate!(Top, "root");
 }

@@ -147,7 +147,7 @@ package interface NamedObj: EsdlObj, TimeContext
   }
 
   public void _esdl__nomenclate()(string name);
-  public void _esdl__nomenclate(size_t I, T)(T t, uint[] indices);
+  public void _esdl__nomenclate(size_t I, string S="", T)(T t, uint[] indices);
 
   // get the simulation phase
   // Assumes that the getRoot has been set
@@ -254,10 +254,17 @@ package interface NamedObj: EsdlObj, TimeContext
 
     // Called during the elaboration phase to help determine the
     // name of an (array) object
-    public final void _esdl__nomenclate(size_t I, T)(T t, uint[] indices) {
+    public final void _esdl__nomenclate(size_t I,
+					string S="",
+					T)(T t, uint[] indices) {
       synchronized(this) {
 	import std.conv: to;
-	string name = t.tupleof[I].stringof[2..$]; // chomp "t."
+	static if(S=="") {
+	  string name = t.tupleof[I].stringof[2..$]; // chomp "t."
+	}
+	else {
+	  string name = S;
+	}
 	foreach(i; indices) {
 	  name ~= "[" ~ to!string(i) ~ "]";
 	}
@@ -427,8 +434,9 @@ public interface HierComp: NamedObj, ParContext
   public void resume();
   public void enable();
   public void abort();
-  public void kill();
   public void abortTree();
+  // A process is killed in the end by the simulator
+  public void kill();
   public void killTree();
 
   // Interface functions for enabling parallelize UDP
@@ -591,10 +599,10 @@ public interface HierComp: NamedObj, ParContext
     public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
 						     parallelize linfo, parallelize plinfo) {
       if(linfo._parallel == ParallelPolicy.NONE) {
-	// take hier information	
+	// take hier information
 	_esdl__parInfo = plinfo;
 	if(plinfo._parallel == ParallelPolicy.MULTI) {
-	  // UDP @parallelize without argument	  
+	  // UDP @parallelize without argument
 	  _esdl__parLock = null;
 	}
 	else if(plinfo._parallel == ParallelPolicy.INHERIT) {
@@ -1049,7 +1057,7 @@ template CheckInstObj(L)
   static if(is(L == class) && is(L unused: ElabContext)) {
     enum bool CheckInstObj = true;
   }
-  else static if(is(L unused: Inst!Q, Q)) {
+  else static if(is(L unused: Inst!(Q, S), Q, string S)) {
       enum bool CheckInstObj = true;
     }
   else static if(isArray!L) {
@@ -1581,7 +1589,7 @@ public interface ElabContext: HierComp
     }
   }
 
-  static void _esdl__elab(size_t I, T, L)
+  static void _esdl__elab(size_t I, string S="", T, L)
     (T t, ref L l, uint[] indices=null) {
     debug(ELABORATE) {
       import std.stdio;
@@ -1598,7 +1606,7 @@ public interface ElabContext: HierComp
 	t._esdl__addChildObj(l);
 	t._esdl__addChildComp(l);
       }
-      l._esdl__nomenclate!I(t, indices);
+      l._esdl__nomenclate!(I, S)(t, indices);
       l._esdl__setObjId();
       l._esdl__setParent(t);
       l._esdl__setRoot(t.getRoot);
@@ -4151,64 +4159,65 @@ public void srandom(uint _seed) {
   getRandGen().seed(_seed);
 }
 
-@_esdl__component struct Inst(M : EntityIntf)
-{
-  alias M EntityType;
-  private M _esdl__instance = void;
+@_esdl__component struct Inst(M, string S="")
+  if(is(M: EntityIntf))
+    {
+      alias M EntityType;
+      private M _esdl__instance = void;
 
-  package ref M _esdl__objRef() {
-    return this._esdl__instance;
-  }
+      package ref M _esdl__objRef() {
+	return this._esdl__instance;
+      }
 
-  M _esdl__obj() {
-    // _esdl__instance is effectively immutable since the
-    // initialization is done during the elaboration phase.
-    // synchronized(typeid(M)) {
-    if(_esdl__instance is null) {
-      assert(false, "Uninitialized Inst");
-    }
-    return this._esdl__instance;
-    // }
-  }
+      M _esdl__obj() {
+	// _esdl__instance is effectively immutable since the
+	// initialization is done during the elaboration phase.
+	// synchronized(typeid(M)) {
+	if(_esdl__instance is null) {
+	  assert(false, "Uninitialized Inst");
+	}
+	return this._esdl__instance;
+	// }
+      }
 
-  alias _esdl__obj this;
+      alias _esdl__obj this;
 
-  // Disallow Inst assignment
-  @disable void opAssign(Inst);
-  // Allow assigning from module handle once
-  public final void opAssign(M m) {
-    synchronized(typeid(M)) {
-      // Allow it only once
-      this._esdl__instance &&
-	assert(false, "Inst re-initialization not allowed");
+      // Disallow Inst assignment
+      @disable void opAssign(Inst);
+      // Allow assigning from module handle once
+      public final void opAssign(M m) {
+	synchronized(typeid(M)) {
+	  // Allow it only once
+	  this._esdl__instance &&
+	    assert(false, "Inst re-initialization not allowed");
 
-      this._esdl__instance = m;
-    }
-  }
+	  this._esdl__instance = m;
+	}
+      }
 
-  // Next two methods help with elaboration
-  static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
-    l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
-  }
+      // Next two methods help with elaboration
+      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
+	l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
+      }
 
-  static void _esdl__config(FOO, L) (L l) {
-    l._esdl__objRef._esdl__config(l._esdl__objRef);
-  }
+      static void _esdl__config(FOO, L) (L l) {
+	l._esdl__objRef._esdl__config(l._esdl__objRef);
+      }
 
-  static void _esdl__config(FOO, size_t I, T, L)
-    (T t, L l, uint[] indices=null) {
-    l._esdl__objRef._esdl__config!(FOO, I)(t, l._esdl__objRef, indices);
-  }
+      static void _esdl__config(FOO, size_t I, T, L)
+	(T t, L l, uint[] indices=null) {
+	l._esdl__objRef._esdl__config!(FOO, I)(t, l._esdl__objRef, indices);
+      }
 
-  static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
-  {
-    debug(ELABORATE) {
-      import std.stdio;
-      writeln("** Inst: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
-	      typeof(l).stringof);
-    }
-    l._esdl__objRef._esdl__elab!I(t, l._esdl__objRef, indices);
-  }
+      static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
+      {
+	debug(ELABORATE) {
+	  import std.stdio;
+	  writeln("** Inst: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+		  typeof(l).stringof);
+	}
+	l._esdl__objRef._esdl__elab!(I, S)(t, l._esdl__objRef, indices);
+      }
 }
 
 class Worker(T, alias F, int R=0, size_t S=0): Worker!(F, R, S)
@@ -7267,7 +7276,7 @@ interface RootEntityIntf: EntityIntf
   public SimTime getSimTime();
 
   public uint getNumPoolThreads();
-  
+
   public void setTimePrecision(Time precision);
   public Time getTimePrecision();
   public bool timePrecisionSet();
@@ -8341,4 +8350,19 @@ private bool _isPowerOf10(ulong n) {
 private ubyte _log10(ulong n) {
   if(n == 1) return 0;
   else return cast(ubyte)(1 + _log10(n/10L));
+}
+
+class Root(T): RootEntity if(is(T: EntityIntf))
+  {
+    this(string name) {
+      super(name);
+    }
+    mixin("Inst!T " ~ T.stringof ~ "Instance;\n");
+}
+
+
+public void simulate(T, string NAME)() {
+  auto root = new Root!T(NAME);
+  root.elaborate();
+  root.simulate();
 }
