@@ -4511,45 +4511,47 @@ template Routine(alias F, int R=0)
   }
 }
 
-// private auto recreateDelegateFromVoidPtr(alias F)(void* _entity)
-// {
-//   void delegate() dg;
-//   dg.funcptr = &F;
-//   // Need to add dilligence here
-//   // But how to make sure that the function does not take arguments
-//   dg.ptr = _entity;
-//   return dg;
-// }
-
 private auto recreateDelegate(alias F, T)(T _entity)
 {
-  // import std.traits: ReturnType, ParameterTypeTuple;
   import std.functional: toDelegate;
-  union DelegateUnion(DG, FT)
-  {
-    DG dg;
-    alias dg this;
-    struct
-    {
-      void* ptr;
-      FT funcptr;
-    }
-  }
-
-  // ReturnType!F delegate(ParameterTypeTuple!F) dg;
   alias typeof(toDelegate(&F)) DG;
-  // alias typeof(dg) DG;
-  alias typeof(&F) FT;
-
-  DelegateUnion!(DG, FT) du;
-
-  // DG dg;
-
-  du.funcptr = &F;
-  du.ptr = cast(void *) _entity;
-
-  return du.dg;
+  DG dg;
+  dg.funcptr = &F;
+  dg.ptr = *(cast(void **) (&_entity));
+  return dg;
 }
+
+// alternate implemetation assumes dg.funcptr and dg.ptr are not assignable
+// private auto recreateDelegate(alias F, T)(T _entity)
+// {
+//   // import std.traits: ReturnType, ParameterTypeTuple;
+//   import std.functional: toDelegate;
+//   union DelegateUnion(DG, FT)
+//   {
+//     DG dg;
+//     alias dg this;
+//     struct
+//     {
+//       void* ptr;
+//       FT funcptr;
+//     }
+//   }
+
+//   // ReturnType!F delegate(ParameterTypeTuple!F) dg;
+//   alias typeof(toDelegate(&F)) DG;
+//   // alias typeof(dg) DG;
+//   alias typeof(&F) FT;
+
+//   DelegateUnion!(DG, FT) du;
+
+//   // DG dg;
+
+//   du.funcptr = &F;
+//   // to skip any opCast and "alias this"
+//   du.ptr = *(cast(void **) (&_entity));
+
+//   return du.dg;
+// }
 
 // auto adjustArgs(T, A...)(T t)
 // {
@@ -5905,6 +5907,10 @@ class Fork
     }
   }
 
+  public static Fork self() {
+    return Process.self.thisFork();
+  }
+
   public final void joinAll() {
     // wait for all tasks that are not terminated
     EventObj[] events;
@@ -6300,13 +6306,13 @@ enum SimRunPhase: byte
       SIMULATION_DONE,
       }
 
-void waitAllRoots() {
-  RootEntityIntf.waitSimAll();
+void joinAllRoots() {
+  RootEntityIntf.joinSimAll();
 }
 
-void startSimAllRoots(T)(T t)
+void forkSimAllRoots(T)(T t)
   if(is(T == Time) || is(T == SimTime)) {
-    RootEntityIntf.startSimAll(t);
+    RootEntityIntf.forkSimAll(t);
   }
 
 void simulateAllRoots(T)(T t)
@@ -6323,15 +6329,15 @@ void terminateAllRoots() {
   RootEntityIntf.terminateAll();
 }
 
-void doElab(T)(T t)
+void forkElab(T)(T t)
 {
   t.getSimulator.elabRootThread(t);
 }
 
 void elaborate(T)(T t)
 {
-  t.doElab();
-  t.waitElab();
+  t.forkElab();
+  t.joinElab();
 }
 
 void execElab(T)(T t)
@@ -7238,32 +7244,32 @@ interface RootEntityIntf: EntityIntf
   // to set thread static variables.
   public void initProcess();
 
-  static void startSimAll(T)(T t)
+  static void forkSimAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.startSim(t);
+	root.forkSim(t);
       }
     }
-  static void startSimAllUpto(T)(T t)
+  static void forkSimAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.startSimUpto(t);
+	root.forkSimUpto(t);
       }
     }
-  static void waitSimAll() {
+  static void joinSimAll() {
     foreach(root; allRoots()) {
-      root.waitSim();
+      root.joinSim();
     }
   }
   static void simulateAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      startSimAll(t);
-      waitSimAll();
+      forkSimAll(t);
+      joinSimAll();
     }
   static void simulateAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      startSimAllUpto(t);
-      waitSimAll();
+      forkSimAllUpto(t);
+      joinSimAll();
     }
   static void terminateAll() {
     foreach(root; allRoots()) {
@@ -7288,62 +7294,80 @@ interface RootEntityIntf: EntityIntf
   }
 
   final void simulate(Time t) {
-    startSim(t);
-    waitSim();
+    forkSim(t);
+    joinSim();
   }
   final void simulate(SimTime st = MAX_SIMULATION_TIME) {
-    startSim(st);
-    waitSim();
+    forkSim(st);
+    joinSim();
   }
   final void simulateUpto(Time t) {
-    startSimUpto(t);
-    waitSim();
+    forkSimUpto(t);
+    joinSim();
   }
   final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
-    startSimUpto(st);
-    waitSim();
+    forkSimUpto(st);
+    joinSim();
   }
-  final public void waitSim() {
-    this.getSimulator.waitSim();
+  final public void joinSim() {
+    this.getSimulator.joinSim();
   }
-  final public void waitElab() {
-    this.getSimulator.waitElab();
+  final public void join() {
+    this.getSimulator.joinSim();
+  }
+  final public void joinElab() {
+    this.getSimulator.joinElab();
     addRoot(this);
   }
-  final void startSim(Time t) {
+  final void fork(Time t) {
+    forkSim(t);
+  }
+  final void forkSim(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSim(t);
+    getSimulator.forkSim(t);
   }
-  final void startSim(SimTime st = MAX_SIMULATION_TIME) {
+  final void fork(SimTime st = MAX_SIMULATION_TIME) {
+    forkSim(st);
+  }
+  final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSim(st);
+    getSimulator.forkSim(st);
   }
-  final void startSimUpto(Time t) {
+  final void forkSimUpto(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSimUpto(t);
+    getSimulator.forkSimUpto(t);
   }
-  final void startSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+  final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSimUpto(st);
+    getSimulator.forkSimUpto(st);
   }
-  final public void waitSimEnd() {
-    this.getSimulator.waitSimEnd();
+  final public void joinSimEnd() {
+    this.getSimulator.joinSimEnd();
   }
   final public void finish() {
-    this.abortTree();
+    this.killTree();
     this.getSimulator.termStage();
     // To handle the situation where the finish call gets made during a PAUSE
     if(simPhase() == SimPhase.PAUSE) {
       this.simulate(0.nsec);
     }
+    version(COSIM_VERILOG) {
+      // pragma(msg, "Compiling COSIM_VERILOG version!");
+      import esdl.intf.vpi;
+      vpi_control(vpiFinish, 1);
+    }
+    // now if this thread is one of the tasks, it must stop
+    Process self = Process.self();
+    if(cast(BaseTask) self !is null) wait(0);
+    if(cast(BaseWorker) self !is null) wait(0);
   }
   final public void terminate() {
     this.killTree();
@@ -7357,6 +7381,10 @@ interface RootEntityIntf: EntityIntf
       import esdl.intf.vpi;
       vpi_control(vpiFinish, 1);
     }
+    // now if this thread is one of the tasks, it must stop
+    Process self = Process.self();
+    if(cast(BaseTask) self !is null) wait(0);
+    if(cast(BaseWorker) self !is null) wait(0);
   }
 }
 
@@ -7575,17 +7603,17 @@ class EsdlSimulator: EntityIntf
   }
 
   // private Process[] tasks;
-  final void startSim(Time t) {
+  final void forkSim(Time t) {
     SimTime st = SimTime(this, t);
-    this.startSim(st);
+    this.forkSim(st);
   }
 
-  final void startSimUpto(Time t) {
+  final void forkSimUpto(Time t) {
     SimTime st = SimTime(this, t);
-    this.startSimUpto(st);
+    this.forkSimUpto(st);
   }
 
-  final void startSim(SimTime runTime = MAX_SIMULATION_TIME) {
+  final void forkSim(SimTime runTime = MAX_SIMULATION_TIME) {
     synchronized(this) {
       import std.conv: to;
       // elabDoneLock.wait();
@@ -7602,8 +7630,8 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void startSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
-    startSim(runTime-getSimTime());
+  final void forkSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
+    forkSim(runTime-getSimTime());
   }
 
   final void terminate() {
@@ -7822,15 +7850,15 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void waitElab() {
+  final void joinElab() {
     elabDoneLock.wait();
   }
 
-  final void waitSim() {
+  final void joinSim() {
     simDoneLock.wait();
   }
 
-  final void waitSimEnd() {
+  final void joinSimEnd() {
     simTermLock.wait();
   }
 
@@ -8063,11 +8091,6 @@ public void finish() {
     writeln("Somebody called finish");
   }
   getRootEntity.finish();
-  version(COSIM_VERILOG) {
-    // pragma(msg, "Compiling COSIM_VERILOG version!");
-    import esdl.intf.vpi;
-    vpi_control(vpiFinish, 1);
-  }
 }
 
 // TimeContext
@@ -8365,4 +8388,11 @@ public void simulate(T, string NAME)() {
   auto root = new Root!T(NAME);
   root.elaborate();
   root.simulate();
+}
+
+public auto forkSim(T, string NAME)() {
+  auto root = new Root!T(NAME);
+  root.elaborate();
+  root.forkSim();
+  return root;
 }
