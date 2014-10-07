@@ -121,37 +121,94 @@ enum VAR_TYPE: byte
 
 class VcdNode
 {
+  import std.array: split;
   string _name;
   // root will have null parent
   VcdScope _parent;
   VCD      _vcd;
-  this(VcdScope parent, VCD vcd) {
+
+  this(VcdScope parent, VCD vcd, string name) {
     _parent = parent;
     _vcd    = vcd;
+    _name   = name;
     if(_parent !is null) {	// null for _root scope
       _parent._children ~= this;
     }
   }
+
+  alias opCmp = Object.opCmp;
+
+  // VcdNodes need to be sorted by their names
+  public int opCmp(VcdNode other) {
+    if(this._name < other._name) return -1;
+    else if(this._name > other._name) return 1;
+    else return 0;
+  }
+
+  public int opCmp(string other) {
+    if(this._name < other) return -1;
+    else if(this._name > other) return 1;
+    else return 0;
+  }
+
+  final public VcdNode find(string name) {
+    return findName(split(name, _vcd.delim()));
+  }
+  
+  abstract VcdNode findName(string[] name);
 }
 
 class VcdScope: VcdNode
 {
+  import std.range;
   // keep this as a dynamic array so that sorting is easy
   string _scopeType;		// keep is string for flexibility
   VcdNode[] _children;
-  this(VcdScope parent, VCD vcd) {
-    super(parent, vcd);
+  this(VcdScope parent, VCD vcd, string name, string type) {
+    super(parent, vcd, name);
+    _scopeType = type;
+  }
+
+  override VcdNode findName(string[] name) {
+    if(name.length == 0) return this;
+    debug(FIND) {
+      import std.stdio;
+      writeln("Finding: ", name[0], " remaining:", name.length);
+      foreach(ch; _children) {
+	writeln(ch._name);
+      }
+    }
+    // writeln("In: ", _children[0]._name);
+    auto children = assumeSorted(_children);
+    auto lb = children.lowerBound(name[0]);
+    if(lb.length < _children.length) {
+      auto child = _children[lb.length];
+      if(child._name == name[0]) {
+	debug(FIND) {
+	  import std.stdio;
+	  writeln("Found: ", name[0]);
+	  writeln("Remaining: ", name[1..$]);
+	}
+	return child.findName(name[1..$]);
+      }
+    }
+    return null;
   }
 }
 
 abstract class VcdVar: VcdNode
 {
   uint _size;
-  this(VcdScope parent, VCD vcd, uint size) {
-    super(parent, vcd);
+  this(VcdScope parent, VCD vcd, string name, uint size) {
+    super(parent, vcd, name);
     _size = size;
   }
 
+  override VcdNode findName(string[] name) {
+    if(name.length == 0) return this;
+    else return null;
+  }
+  
   abstract void addValChange(uint timeStep, string value);
 
   // Takes too much memory
@@ -241,7 +298,7 @@ class VcdStringWave: VcdVar
 {
   VcdVecVal!string _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
-    super(parent, vcd, size);
+    super(parent, vcd, name, size);
   }
   override void addValChange(uint timeStep, string value) {
     _wave ~= VcdVecVal!string(timeStep, value);
@@ -252,7 +309,7 @@ class VcdRealWave: VcdVar
 {
   VcdVecVal!real _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
-    super(parent, vcd, size);
+    super(parent, vcd, name, size);
   }
   override void addValChange(uint timeStep, string value) {
     if(value[0] != 'r' && value[0] != 'R') {
@@ -271,7 +328,7 @@ class VcdCommandWave: VcdVar
 {
   VcdVecVal!SIM_COMMAND _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
-    super(parent, vcd, size);
+    super(parent, vcd, name, size);
   }
   override void addValChange(uint timeStep, string word) {
     SIM_COMMAND* cmd;
@@ -288,7 +345,7 @@ class VcdEventWave: VcdVar
 {
   VcdVecVal!bool _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
-    super(parent, vcd, size);
+    super(parent, vcd, name, size);
   }
   override void addValChange(uint timeStep, string value) {
     if(value[0] != '1') {
@@ -304,7 +361,7 @@ class VcdLogicStringWave: VcdVar
 {
   VcdVecVal!lstr _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
-    super(parent, vcd, size);
+    super(parent, vcd, name, size);
   }
 
   override void addValChange(uint timeStep, string value) {
@@ -370,7 +427,7 @@ class VcdVecWave(size_t N): VcdVar
 {
   VcdVecVal!(VcdVec!N) _wave[];
   this(VcdScope parent, VCD vcd, string name, uint size) {
-    super(parent, vcd, size);
+    super(parent, vcd, name, size);
   }
 
   override void addValChange(uint timeStep, string value) {
@@ -417,6 +474,47 @@ class VcdVecWave(size_t N): VcdVar
   }
 };
 
+class VcdFile
+{
+  import std.stdio;
+  private this(string name) {
+    _name = name;
+    _file = File(name, "r");
+  }
+  File     _file;
+  string   _name;
+  char[]   _buf;
+  char[][] _words;
+  // index of the word to return when nextWord called
+  size_t   _index = 0;
+  // line number of the file
+  size_t   _lnum = 0;
+  string nextWord() {
+    string word = getNextWord();
+    if(word is null) {
+      assert(false, "Unexpected EOF");
+    }
+    return word;
+  }
+  string getNextWord() {
+    while(_index == _words.length) {
+      import std.array;
+      ++_lnum;
+      if(_file.readln(_buf) == 0) {
+	return null;
+      }
+      _words = split(_buf);
+      _index = 0;
+    }
+    return cast(string) _words[_index++];
+  }
+  string errorString() {
+    import std.string;
+    return format("Unexpected token '%s' while parsing VCD file: " ~
+		  "%s at line number %d", _words[_index-1], _name, _lnum);
+  }
+}
+
 class VCD
 {
   public this(string name) {
@@ -431,6 +529,17 @@ class VCD
     parseDeclarations();
     parseSimulation();
   }
+
+  char _delim = '.';
+
+  void setDelimiter(char d) {
+    _delim = d;
+  }
+
+  char delim() {
+    return _delim;
+  }
+  
   VcdFile _file;
   string  _date;
   string  _version;
@@ -495,6 +604,10 @@ class VCD
   // 	VERSION,
   // 	}
 
+  VcdNode find(string name) {
+    return _root.find(name);
+  }
+  
   void parseDeclarationComment() {
     string word;
     while((word = _file.nextWord()) != "$end") {
@@ -639,23 +752,26 @@ class VCD
 // real     -- REAL
 // real     -- REALTIME
 
-  void parseScope(VcdScope currScope, ) {
-    currScope._scopeType = _file.nextWord().dup;
-    currScope._name = _file.nextWord().dup;
+  void parseScope(VcdScope currScope) {
+    import std.algorithm;
     if(_file.nextWord() != "$end") {
       assert(false, _file.errorString);
     }
     while(true) {
       auto word = _file.nextWord();
       if(word == "$scope") {
-	VcdScope child = new VcdScope(currScope, this);
+	string scopeType = _file.nextWord().dup;
+	string name = _file.nextWord().dup;
+	VcdScope child = new VcdScope(currScope, this, name, scopeType);
 	parseScope(child);
       }
       else if(word == "$upscope") {
 	if(_file.nextWord() != "$end") {
 	  assert(false, _file.errorString);
 	}
-	else return;
+	// before we return, sort the currScope
+	sort(currScope._children);
+	return;
       }
       else if(word == "$var") {
 	parseVar(currScope);
@@ -668,6 +784,8 @@ class VCD
   
   void parseDeclarations() {
     string word;
+    assert(_root is null);
+    _root = new VcdScope(null, this, "root", "root"); // root has null parent
     while((word = _file.nextWord()) !is null) {
       if(word == "$comment") {
 	assert(_comment is null);
@@ -687,9 +805,10 @@ class VCD
 	}
       }
       else if(word == "$scope") {
-	assert(_root is null);
-	_root = new VcdScope(null, this); // root has null parent
-	parseScope(_root);
+	string scopeType = _file.nextWord().dup;
+	string name = _file.nextWord().dup;
+	VcdScope child = new VcdScope(_root, this, name, scopeType);
+	parseScope(child);
       }
       else if(word == "$timescale") {
 	assert(_timeScale.isZero());
@@ -798,46 +917,5 @@ class VCD
 	parseValChange(word);
       }
     }
-  }
-}
-
-class VcdFile
-{
-  import std.stdio;
-  private this(string name) {
-    _name = name;
-    _file = File(name, "r");
-  }
-  File     _file;
-  string   _name;
-  char[]   _buf;
-  char[][] _words;
-  // index of the word to return when nextWord called
-  size_t   _index = 0;
-  // line number of the file
-  size_t   _lnum = 0;
-  string nextWord() {
-    string word = getNextWord();
-    if(word is null) {
-      assert(false, "Unexpected EOF");
-    }
-    return word;
-  }
-  string getNextWord() {
-    while(_index == _words.length) {
-      import std.array;
-      ++_lnum;
-      if(_file.readln(_buf) == 0) {
-	return null;
-      }
-      _words = split(_buf);
-      _index = 0;
-    }
-    return cast(string) _words[_index++];
-  }
-  string errorString() {
-    import std.string;
-    return format("Unexpected token '%s' while parsing VCD file: " ~
-		  "%s at line number %d", _words[_index-1], _name, _lnum);
   }
 }
