@@ -47,6 +47,7 @@
 // arrays to help achieve that. TBD
 
 module esdl.data.cstx;
+import std.conv;
 
 struct ConstraintParser {
 
@@ -1068,7 +1069,7 @@ struct ConstraintParser {
   }
 
   // translate the expression and also consume the semicolon thereafter
-  void procStmt() {
+  void procExprStmt() {
     fill("  cstExpr ~= ");
 
     if(ifConds.length !is 0) {
@@ -1099,7 +1100,8 @@ struct ConstraintParser {
     fill(CST[srcTag..srcCursor]);
 
     if(CST[srcCursor++] !is ';') {
-      assert(false, "Error: -- ';' missing at end of statement");
+      assert(false, "Error: -- ';' missing at end of statement; at " ~
+	     srcCursor.to!string);
     }
     if(ifConds.length !is 0) {
       fill(");\n");
@@ -1109,41 +1111,53 @@ struct ConstraintParser {
     }
   }
 
-  void procBlock() {
-    size_t srcTag = 0;
-  loop:
-    while(srcCursor <= CST.length) {
-      import std.conv: to;
+  void procStmt() {
+    import std.conv: to;
 
-      srcTag = parseSpace();
+    size_t srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    StmtToken stmtToken = nextStmtToken();
+
+    final switch(stmtToken) {
+    case StmtToken.FOREACH:
+      procForeachBlock();
+      return;
+    case StmtToken.IFCOND:
+      procIfBlock();
+      return;
+    case StmtToken.ERROR:
+      assert(false, "Unidentified symbol in constraints at: " ~
+	     srcCursor.to!string);
+    case StmtToken.BLOCK:
+      assert(false, "Unidentified symbol in constraints");
+    case StmtToken.ENDBLOCK:
+    case StmtToken.ENDCST:
+      assert(false, "Unexpeceted end of constraint block");
+    case StmtToken.STMT:
+      procExprStmt();
+    }
+  }
+  
+  void procBlock() {
+    while(srcCursor <= CST.length) {
+      size_t srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
 
       StmtToken stmtToken = nextStmtToken();
 
-      final switch(stmtToken) {
+      switch(stmtToken) {
       case StmtToken.ENDCST:
 	fill("  return cstExpr;\n}\n");
-	break loop;
+	return;
       case StmtToken.ENDBLOCK:
 	fill("    // END OF BLOCK \n");
 	srcCursor++;		// skip the end of block brace '}'
-	break loop;
-      case StmtToken.FOREACH:
-	procForeachBlock();
-	continue loop;
-      case StmtToken.IFCOND:
-	procIfBlock();
-	continue loop;
-      case StmtToken.ERROR:
-	assert(false, "Unidentified symbol in constraints at: " ~
-	       srcCursor.to!string);
-      case StmtToken.BLOCK:
-	assert(false, "Unidentified symbol in constraints");
-      case StmtToken.STMT:
+	return;
+      default:
 	procStmt();
       }
     }
-
   }
 
 
