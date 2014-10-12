@@ -1334,7 +1334,7 @@ struct BitString(bool L)
   }
 
   private size_t[] toArrA() const {
-    size_t arr[];
+    size_t[] arr;
     arr.length = dim;
     for(size_t i=0; i != dim; ++i) {
       arr[i] = aptr[i];
@@ -1344,7 +1344,7 @@ struct BitString(bool L)
 
   static if(L) {
     private size_t[] toArrB() const {
-      size_t arr[];
+      size_t[] arr;
       arr.length = dim;
       for(size_t i=0; i != dim; ++i) {
         arr[i] = bptr[i];

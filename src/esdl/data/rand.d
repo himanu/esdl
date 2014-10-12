@@ -246,7 +246,7 @@ class CstStage {
 
 public class ConstraintEngine {
   // Keep a list of constraints in the class
-  _ESDL__ConstraintBase cstList[];
+  _ESDL__ConstraintBase[] cstList;
   _ESDL__ConstraintBase cstWith;
   bool _cstWithChanged;
   
@@ -2293,7 +2293,7 @@ class CstNotBddExpr: CstBddExpr
 
 class CstBlock: CstBddExpr
 {
-  CstBddExpr _exprs[];
+  CstBddExpr[] _exprs;
 
   override public CstVecPrim[] getPrims() {
     CstVecPrim[] prims;

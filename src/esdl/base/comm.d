@@ -790,7 +790,7 @@ class MutexObj: MutexIF, NamedObj
   // }
 
   static public Mutex[] opIndex(size_t n) {
-    Mutex mutexs[] = new Mutex[n];
+    Mutex[] mutexs = new Mutex[n];
     foreach(ref mutex;mutexs) {
       synchronized {
 	mutex.init();

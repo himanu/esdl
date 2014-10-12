@@ -18,7 +18,7 @@ enum __CPU_SETSIZE = 1024;	// max 1024 CPUs
 enum __NCPUBITS = 8 * __cpu_mask.sizeof;
 
 struct cpu_set_t {
-  __cpu_mask __bits[__CPU_SETSIZE / __NCPUBITS];
+  __cpu_mask[__CPU_SETSIZE / __NCPUBITS] __bits;
 }
 
 void CPU_SET(size_t cpu, cpu_set_t* cpusetp) {

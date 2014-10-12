@@ -1986,7 +1986,7 @@ public class NotificationObj(T): EventObj
   }
 
   public static Notification!T[] opIndex(size_t n) {
-    Notification!T notifications[] = new Notification!T[n];
+    Notification!T[] notifications = new Notification!T[n];
     foreach(ref notification;notifications) {
       synchronized {
 	notification.init();
@@ -2711,7 +2711,7 @@ public class EventObj: EventAgent, NamedObj
   }
 
   public static Event[] opIndex(size_t n) {
-    Event events[] = new Event[n];
+    Event[] events = new Event[n];
     foreach(ref event;events) {
       synchronized {
 	event.init();
@@ -3449,7 +3449,7 @@ private class AndSimEvent: EventExpr
 
   struct Objections
   {
-    byte flags[];
+    byte[] flags;
     uint num;
 
     size_t length() {
@@ -6671,8 +6671,8 @@ class EsdlExecutor: EsdlExecutorIf
     foreach(proc; expandedList) {
       final switch(proc.requestState) {
       case ProcState.STARTING:
-      case ProcState.RUNNING: assert(false);
-	break;
+      case ProcState.RUNNING:
+	assert(false);
       case ProcState.RESUMED:
 	if(_stage == proc._stage && proc.requestResume()) {
 	  addRunnableProcess(proc);
@@ -6706,7 +6706,6 @@ class EsdlExecutor: EsdlExecutorIf
       case ProcState.FINISHED:
       case ProcState.EXCEPTION:
 	assert(false, "Illegal Process Requested State -- NONE");
-	break;
       }
 
       // If I uncomment the next line, I get a crash :-(

@@ -4698,7 +4698,7 @@ class Buddy
   enum int OPERATOR_NUM = 11;
 
   /* Operator results - entry = left<<1 | right(left,right in {0,1}) */
-  static int oprres[OPERATOR_NUM][4] =
+  static int[4][OPERATOR_NUM] oprres =
     [ [ 0, 0, 0, 1 ], // and( & )
       [ 0, 1, 1, 0 ], // xor( ^ )
       [ 0, 1, 1, 1 ], // or( | )
@@ -5513,7 +5513,7 @@ class Buddy
     return next;
   }
 
-  BddTree reorder_sift_seq(BddTree t, BddTree seq[], int num)
+  BddTree reorder_sift_seq(BddTree t, BddTree[] seq, int num)
   {
     BddTree dis;
     int n;
@@ -5709,7 +5709,7 @@ class Buddy
   {
     int val;
     BddTree block;
-    final private int opCmp(sizePair rhs)
+    public final int opCmp(sizePair rhs)
     {
       if(this.val < rhs.val) return -1;
       if(this.val > rhs.val) return 1;
@@ -5723,6 +5723,8 @@ class Buddy
     BddTree[] seq;
     sizePair[] p;
     int n, num;
+
+    import std.algorithm;
 
     for(dis = t, num = 0; dis !is null; dis = dis.next)
       dis.pos = num++;
@@ -5752,8 +5754,8 @@ class Buddy
     //	}
 
     //   });
-    p = p.sort;
-
+    sort(p);
+    
     /* Create sequence */
     for(n = 0; n < num; n++)
       seq[n] = p[n].block;
@@ -6308,7 +6310,7 @@ class Buddy
   int[] extroots;
   int extrootsize;
 
-  levelData levels[]; /* Indexed by variable! */
+  levelData[] levels; /* Indexed by variable! */
 
   static class levelData
   {
@@ -6320,7 +6322,7 @@ class Buddy
 
   static class imatrix
   {
-    byte rows[][];
+    byte[][] rows;
     int size;
   }
 
@@ -9528,9 +9530,9 @@ class Buddy
     void notify(int oldsize, int newsize);
   }
 
-  protected GCCallback gc_callbacks[];
-  protected ReorderCallback reorder_callbacks[];
-  protected ResizeCallback resize_callbacks[];
+  protected GCCallback[] gc_callbacks;
+  protected ReorderCallback[] reorder_callbacks;
+  protected ResizeCallback[] resize_callbacks;
 
 
   /**
