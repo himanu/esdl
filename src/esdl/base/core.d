@@ -6093,40 +6093,36 @@ class RootThread: Procedure
   private static RootThread _self;
   public static RootThread self() {return _self;}
 
-  private final void fn_wrap(void function() fn) {
-    // FIXME -- the root thread should stick to the first of the
-    // available threads
-    stickToCpuCore(0);
+  private final void fn_wrap(void function() fn, size_t fcore=0) {
+    stickToCpuCore(fcore);
     _self = this;
     fn();
   }
 
-  private final void dg_wrap(void delegate() dg) {
-    // FIXME -- the root thread should stick to the first of the
-    // available threads
-    stickToCpuCore(0);
+  private final void dg_wrap(void delegate() dg, size_t fcore=0) {
+    stickToCpuCore(fcore);
     _self = this;
     dg();
   }
 
-  this(void function() fn, size_t sz = 0 ) {
+  this(void function() fn, size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
       if(sz is 0) {
-	_thread = new Thread(() {fn_wrap(fn);});
+	_thread = new Thread(() {fn_wrap(fn, fcore);});
       }
       else {
-	_thread = new Thread(() {fn_wrap(fn);}, sz);
+	_thread = new Thread(() {fn_wrap(fn, fcore);}, sz);
       }
     }
   }
 
-  this(void delegate() dg, size_t sz = 0 ) {
+  this(void delegate() dg, size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
       if(sz is 0) {
-	_thread = new Thread(() {dg_wrap(dg);});
+	_thread = new Thread(() {dg_wrap(dg, fcore);});
       }
       else {
-	_thread = new Thread(() {dg_wrap(dg);}, sz);
+	_thread = new Thread(() {dg_wrap(dg, fcore);}, sz);
       }
     }
   }
@@ -6214,25 +6210,24 @@ private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tas
 class PoolThread: SimThread
 {
 
-  private immutable uint _poolIndex;
+  private immutable size_t _poolIndex;
   static if(!__traits(compiles, _esdl__root)) {
     @_esdl__ignore protected RootEntityIntf _esdl__root;
   }
 
 
-  this(EsdlSimulator sim, uint index, size_t sz = 0 ) {
+  this(EsdlSimulator sim, size_t index, size_t fcore, size_t sz=0 ) {
     synchronized(this) {
       this._esdl__root = sim.getRoot();
-      super(&execTaskProcesses, sz);
+      super({execTaskProcesses(fcore);}, sz);
       _poolIndex = index;
     }
   }
 
-  private final void execTaskProcesses() {
+  private final void execTaskProcesses(size_t fcore=0) {
     // First set affinity
     _esdl__root.simulator()._executor._poolThreadStartBarrier.wait();
-    // FIXME -- stick to the index starting from the available threads
-    stickToCpuCore(_poolIndex);
+    stickToCpuCore(_poolIndex + fcore % CPU_COUNT());
     while(true) {
       // wait for next cycle
       _esdl__root.simulator()._executor._poolThreadBarrier.wait();
@@ -6506,7 +6501,7 @@ class EsdlExecutor: EsdlExecutorIf
     _stageIndex = cast(int) _registeredProcesses.length - 1;
   }
 
-  private final void createPoolThreads(size_t numThreads,
+  private final void createPoolThreads(size_t numThreads, size_t firstThread,
 				       size_t stackSize) {
     _poolThreads.length = numThreads;
     _runnableTasksGroups.length = numThreads;
@@ -6515,7 +6510,8 @@ class EsdlExecutor: EsdlExecutorIf
 	import std.stdio;
 	writeln("Creating Pool Threads: ", i);
       }
-      _poolThreads[i] = new PoolThread(_simulator, i, stackSize);
+      _poolThreads[i] = new PoolThread(_simulator, i,
+				       firstThread, stackSize);
     }
   }
 
@@ -7282,6 +7278,9 @@ interface RootEntityIntf: EntityIntf
 
   public uint getNumPoolThreads();
 
+  public ulong getNumFirstCore();
+  public ulong getNumMultiCore();
+  
   public void setTimePrecision(Time precision);
   public Time getTimePrecision();
   public bool timePrecisionSet();
@@ -7470,6 +7469,24 @@ abstract class RootEntity: RootEntityIntf
   public final override uint getNumPoolThreads() {
     return cast(uint) _esdl__root.simulator()._executor._poolThreads.length;
   }
+
+  ulong _esdl__numFirstCore = 0;	// The first core -- rootthread rides on this
+  ulong _esdl__numMultiCore = 1;	// number of cores to use
+
+  public ulong getNumFirstCore() {
+    return _esdl__numFirstCore;
+  }
+
+  public ulong getNumMultiCore() {
+    return _esdl__numMultiCore;
+  }
+
+  public void multiCore(ulong ncore = CPU_COUNT(), ulong fcore = 0) {
+    assert(CPU_COUNT() >= ncore);
+
+    _esdl__numMultiCore = ncore;
+    _esdl__numFirstCore = fcore;
+  }
 }
 
 class EsdlSimulator: EntityIntf
@@ -7500,7 +7517,6 @@ class EsdlSimulator: EntityIntf
   // Phase is defined in the SimContext interface class
   // enum SimPhase : byte {BUILD, ELABORATE, CONFIGURE, BINDEXEPORTS, BINDPORTS, SIMULATE}
   @_esdl__ignore private long _updateCount = 0;	// increments each time update happens
-  @_esdl__ignore private size_t _threadCount = 1;
 
   private RootThread _rootThread;
   public final RootThread rootThread() {
@@ -7574,14 +7590,6 @@ class EsdlSimulator: EntityIntf
     synchronized(this) {
       _termStageRequested = true;
       _termSimRequested = true;
-    }
-  }
-
-  public final void threadCount(size_t count) {
-    synchronized(this) {
-      import std.exception: enforce;
-      enforce(this._phase != SimPhase.SIMULATE);
-      this._threadCount = count;
     }
   }
 
@@ -7956,29 +7964,11 @@ class EsdlSimulator: EntityIntf
 	import std.exception: enforce;
 	import std.stdio: writeln;
 	this._scheduler = new EsdlHeapScheduler(this);
-	this._executor = new EsdlExecutor(this);
 
 	_elabDoneLock = new Semaphore(0);
 	_simStepLock = new Semaphore(0);
 	_simDoneLock = new Semaphore(0);
 	_simTermLock = new Semaphore(0);
-
-	version(MULTICORE) {
-	  import core.cpuid: threadsPerCPU;
-	  auto count = CPU_COUNT();
-	  _executor.threadCount(count// -1
-				);
-	  _executor.createPoolThreads(count// -1
-				      , 0);
-	}
-	else {
-	  _executor.threadCount(1);
-	  _executor.createPoolThreads(1, 0);
-	}
-	// We do this to make dure that all the routine threads are up
-	// and running before we attempt to create other threads. For
-	// some reason the simulation sometimes gets into a deadlock
-	// if we do not take care of this
       }
       catch(Throwable e) {
 	import std.conv: to;
@@ -7992,6 +7982,18 @@ class EsdlSimulator: EntityIntf
   }
 
   public final void elabRootThread(T)(T t) {
+    auto count = getRoot.getNumMultiCore();
+    auto first = getRoot.getNumFirstCore();
+
+    this._executor = new EsdlExecutor(this);
+
+    _executor.threadCount(count);
+    _executor.createPoolThreads(count, first, 0);
+    // We do this to make dure that all the routine threads are up
+    // and running before we attempt to create other threads. For
+    // some reason the simulation sometimes gets into a deadlock
+    // if we do not take care of this
+
     synchronized(this) {
       _rootThread = new RootThread({
 	  _esdl__rootEntity = t;
@@ -8003,7 +8005,8 @@ class EsdlSimulator: EntityIntf
 	    writeln("Simulation Root Thread threw exception: ", e);
 	    // throw(e);
 	  }
-	});
+	},
+	getRoot().getNumFirstCore());
       _rootThread._esdl__setParent(this);
       _rootThread._esdl__setName("root");
     }

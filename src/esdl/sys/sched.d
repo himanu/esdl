@@ -70,7 +70,7 @@ void CPU_ZERO(cpu_set_t* cpusetp) {
   memset(cpusetp, '\0', cpu_set_t.sizeof);
 }
 
-public int stickToCpuCore(int coreId) {
+public int stickToCpuCore(size_t coreId) {
   import std.stdio;
   import core.cpuid: threadsPerCPU;
 
