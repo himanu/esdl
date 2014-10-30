@@ -668,39 +668,37 @@ interface RandomizableIntf
     }
   }
 
-  static final string _esdl__randomizable() {
-    return q{
+  mixin template _esdl__randomizable()
+  {
+    alias typeof(this) _esdl__RandType;
+    public _esdl__RandType _esdl__typeID() {
+      return null;
+    }
 
-      alias typeof(this) _esdl__RandType;
-      public _esdl__RandType _esdl__typeID() {
-	return null;
+    public void _esdl__virtualInitCstEng() {
+      _esdl__initCstEng!_esdl__RandType(this);
+    }
+    public bool _esdl__virtualRandomize() {
+      return _esdl__randomize!_esdl__RandType(this);
+    }
+
+    public ConstraintEngine _esdl__cstEng;
+    public uint _esdl__randSeed;
+
+    public void seedRandom(int seed) {
+      _esdl__randSeed = seed;
+      if (_esdl__cstEng !is null) {
+	_esdl__cstEng._rgen.seed(seed);
       }
+    }
+    alias seedRandom srandom;	// for sake of SV like names
 
-      public void _esdl__virtualInitCstEng() {
-	_esdl__initCstEng!_esdl__RandType(this);
-      }
-      public bool _esdl__virtualRandomize() {
-	return _esdl__randomize!_esdl__RandType(this);
-      }
+    public ConstraintEngine getCstEngine() {
+      return _esdl__cstEng;
+    }
 
-      public ConstraintEngine _esdl__cstEng;
-      public uint _esdl__randSeed;
-
-      public void seedRandom (int seed) {
-	_esdl__randSeed = seed;
-	if (_esdl__cstEng !is null) {
-	  _esdl__cstEng._rgen.seed(seed);
-	}
-      }
-      alias seedRandom srandom;	// for sake of SV like names
-
-      public ConstraintEngine getCstEngine() {
-	return _esdl__cstEng;
-      }
-
-      void pre_randomize() {}
-      void post_randomize() {}
-    };
+    void pre_randomize() {}
+    void post_randomize() {}
   }
 
   ConstraintEngine getCstEngine();
@@ -710,7 +708,7 @@ interface RandomizableIntf
 
 class Randomizable: RandomizableIntf
 {
-  mixin(_esdl__randomizable());
+  mixin _esdl__randomizable;
 }
 
 T _new(T, Args...) (Args args) {

@@ -117,7 +117,7 @@ class Dummy: Entity
   // }
   // Task!(etrigger, 0) trigE;
 
-  private TrafficLightWrapper traffic;
+  private TrafficLightWrapper traffic[10];
 }
 
 @timeUnit(100.psec)
@@ -135,6 +135,8 @@ class TrafficRoot: RootEntity
 void main()
 {
   import std.stdio;
+
+
 
   // top level module
   TrafficRoot theRoot = new TrafficRoot("theRoot");

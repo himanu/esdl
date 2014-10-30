@@ -3642,23 +3642,23 @@ interface Procedure: HierComp
   }
 
   // Functions for Random Stability
-  protected ref Random randGen();
+  public ref Random getRandGen();
 
   public final void srandom(uint _seed) {
     synchronized(this) {
-      randGen().seed(_seed);
+      getRandGen().seed(_seed);
     }
   }
 
   public final Random getRandState() {
     synchronized(this) {
-      return randGen.save();
+      return getRandGen.save();
     }
   }
 
   public final void setRandState(Random state) {
     synchronized(this) {
-      randGen = state;
+      getRandGen = state;
     }
   }
 
@@ -4135,16 +4135,21 @@ private ref Random getRandGen() {
     proc = RootThread.self;
   }
   if(proc !is null) {
-    return proc.randGen();
+    return proc.getRandGen();
   }
   else {
-    assert(false, "randGen can be accessed only from a Process,"
+    assert(false, "getRandGen can be accessed only from a Process,"
 	   " or RootThread");
   }
 }
 
 public T urandom(T=uint)() {
-  return uniform!T(getRandGen());
+  auto seed = uniform!T(getRandGen());
+  debug(SEED) {
+    import std.stdio;
+    writeln("URANDOM returns: ", seed);
+  }
+  return seed;
 }
 
 public T urandom(string BOUNDARY="[]", T=uint)(T min, T max) {
@@ -5321,7 +5326,7 @@ abstract class Process: Procedure, EventClient
 
   Random _randGen;
 
-  protected final override ref Random randGen() {
+  public final override ref Random getRandGen() {
     synchronized(this) {
       return _randGen;
     }
@@ -5513,10 +5518,6 @@ abstract class Process: Procedure, EventClient
     synchronized(this) {
       uint seed = urandom();
       this._randGen.seed(seed);
-      debug(SEED) {
-	import std.stdio;
-	writeln("seed is: ", seed);
-      }
     }
   }
 
@@ -6135,7 +6136,7 @@ class RootThread: Procedure
 
   @_esdl__ignore Random _randGen;
 
-  protected final override ref Random randGen() {
+  final override ref Random getRandGen() {
     synchronized(this) {
       return _randGen;
     }
