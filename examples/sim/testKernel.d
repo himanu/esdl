@@ -38,11 +38,6 @@ class Foo: Entity {
 
     Task!hello helloWorld;
       
-    override void doConfig()
-    {
-      timePrecision = 1.psec;
-      timeUnit = 100.psec;
-    }
     override void endElab() {
       writeln("endElab called for ", this.getFullName);
       // foreach(c; this.getChildObjs)
@@ -53,9 +48,6 @@ class Foo: Entity {
   Inst!Bar sub1;
   // Inst!(Bar) sub2;
   Inst!Bar [4] sub2;
-  override void doConfig() {
-    // writeln("Contructor for Foo ", this.getFullName);
-  }
 }
 
 class Sim: RootEntity {
@@ -69,10 +61,6 @@ class Sim: RootEntity {
   Event e2;
   Event e3;
   uint ui;
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-  }
   void proc1() {
     Event e5 = e1 | e2;
   }

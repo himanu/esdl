@@ -22,8 +22,8 @@ interface Frop {
   Event posedge();
   Event negedge();
 
-  void write(lvec!8);
-  lvec!8 read();
+  void write(Logic!8);
+  Logic!8 read();
 
   void registerPort();
 }
@@ -33,7 +33,7 @@ class FropChan: Entity, Frop {
   private Event _posedge;
   private Event _negedge;
 
-  lvec!8 var1;
+  Logic!8 var1;
 
 
   Event event() {return _event;}
@@ -43,11 +43,11 @@ class FropChan: Entity, Frop {
   Event posedge() {return _posedge;}
   Event negedge() {return _negedge;}
   
-  void write(lvec!8 l) {
+  void write(Logic!8 l) {
     var1 ^= l;
   }
 
-  lvec!8 read() {
+  Logic!8 read() {
     return var1;
   }
 

@@ -18,10 +18,6 @@ class RootWrap: RootEntity {
   }
   Task!proc1 taskP;
 
-  override void doConfig() {
-    timeUnit = 100.psec;
-    timePrecision = 10.psec;
-  }
 }
 
 void main()

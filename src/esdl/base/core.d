@@ -11,9 +11,11 @@
 module esdl.base.core;
 
 // import std.concurrency: Thread;
-import core.thread;
+// import core.thread;
+import core.thread: Thread, Fiber;
+// import esdl.sys.thread: Fiber;
 
-public import esdl.base.time;
+public import esdl.data.time;
 public import esdl.base.comm;
 
 // use atomicStore and atomicLoad
@@ -24,6 +26,7 @@ import std.traits: isArray, isIntegral;
 import std.random: Random, uniform;
 
 import esdl.sys.sched: stickToCpuCore, CPU_COUNT;
+import unstd.memory.weakref;
 
 alias void delegate() DelegateThunk;
 alias void function() FunctionThunk;
@@ -57,6 +60,13 @@ private interface EsdlObj {}
 struct _esdl__ignore {};
 struct _esdl__component {};
 
+enum ParallelPolicy: byte
+  {   MULTI = byte.min,
+      NONE = -1,
+      INHERIT = 0,
+      SINGLE = 1,
+      }
+
 // This struct is used to control homw many threads can be
 // simultaneously active. A value of 0 here would mean maximum
 // constraint -- only one thread active down the hierarchy. Default
@@ -68,7 +78,7 @@ struct _esdl__component {};
 // down the hierarchy.
 struct parallelize
 {
-  byte _parallel = byte.min;
+  ParallelPolicy _parallel = ParallelPolicy.MULTI;
   // When the user does not provide any _poolIndex, a _poolIndex would
   // be automatically generated
   uint _poolIndex = uint.max;	// relevant only if _parallel is 1
@@ -113,9 +123,9 @@ struct timePrecision
 
 // NamedObj is an interface and not a class. This is a design decision
 // to allow a user declared entity to inherit from another class and
-// to just use EntityIntf to along with entityMixin. Similarly if one
+// to just use EntityIntf to along with EntityMixin. Similarly if one
 // wants to create a NamedObj, he needs to implement NamedObj
-// interface and for that purpose, the namedMixin is provided.
+// interface and for that purpose, the NamedMixin is provided.
 
 package interface NamedObj: EsdlObj, TimeContext
 {
@@ -137,7 +147,7 @@ package interface NamedObj: EsdlObj, TimeContext
   }
 
   public void _esdl__nomenclate()(string name);
-  public void _esdl__nomenclate(size_t I, T)(T t, uint[] indices);
+  public void _esdl__nomenclate(size_t I, string S="", T)(T t, uint[] indices);
 
   // get the simulation phase
   // Assumes that the getRoot has been set
@@ -149,149 +159,155 @@ package interface NamedObj: EsdlObj, TimeContext
 	   "without connection to the getSimulator simulator");
   }
 
-  public static string namedMixin() {
-    return q{
-      static if(!__traits(compiles, _esdl__objId)) {
-	private uint _esdl__objId = uint.max;
-      }
+  mixin template NamedMixin()
+  {
+    static if(!__traits(compiles, _esdl__objId)) {
+      private uint _esdl__objId = uint.max;
+    }
 
-      static if(!__traits(compiles, _esdl__name)) {
-	protected string _esdl__name;
-      }
+    static if(!__traits(compiles, _esdl__name)) {
+      protected string _esdl__name;
+    }
 
-      // The default getParent will be null, but on elaboration every
-      // (pseudo static) NamedObj is going to have this value set
-      // after elaboration. The RootEntityIntf would have its self as
-      // parent. Dynamically spawned processes with identify their
-      // parent by looking at the thread that spawns the given
-      // thread.
-      static if(!__traits(compiles, _esdl__parent)) {
-	@_esdl__ignore protected NamedObj _esdl__parent;
-      }
+    // The default getParent will be null, but on elaboration every
+    // (pseudo static) NamedObj is going to have this value set
+    // after elaboration. The RootEntityIntf would have its self as
+    // parent. Dynamically spawned processes with identify their
+    // parent by looking at the thread that spawns the given
+    // thread.
+    static if(!__traits(compiles, _esdl__parent)) {
+      @_esdl__ignore protected NamedObj _esdl__parent;
+    }
 
-      // Returns null if the process is not a child process of another
-      // process or of a routine. Otherwise return the Routine or the
-      // Process
-      private static NamedObj _esdl__getParentProc() {
-	auto p = Process.self;
-	return p;
-      }
+    // Returns null if the process is not a child process of another
+    // process or of a routine. Otherwise return the Routine or the
+    // Process
+    private static NamedObj _esdl__getParentProc() {
+      auto p = Process.self;
+      return p;
+    }
 
-      // Look for the root object in the parent and return it
-      static if(!__traits(compiles, _esdl__root)) {
-	public final RootEntityIntf getRoot() {
-	  auto parent = this.getParent();
-	  if(parent !is null) {
-	    return parent.getRoot;
-	  }
-	  // This is retuired for the cases where the object does not
-	  // have a parent. But since we decided that the parent must
-	  // be set either during the elaboration or during inside the
-	  // sontructor, this part is not retuired.
-	  // else {
-	  //   auto rootProc = RootThread.self;
-	  //   if(rootProc !is null)
-	  //     return rootProc.getRoot;
-	  // }
-	  assert(false,
-		 "Can not determine root of a NamedObj with null Parent");
+    // Look for the root object in the parent and return it
+    static if(!__traits(compiles, _esdl__root)) {
+      public final RootEntityIntf getRoot() {
+	auto parent = this.getParent();
+	if(parent !is null) {
+	  return parent.getRoot;
 	}
-      }
-
-      // Look for the simulator object in the root, and return it
-      public final override EsdlSimulator getSimulator() {
-	return getRoot().simulator();
-      }
-
-      // This function is called only during the elaboration phase
-      public final override void _esdl__setParent(NamedObj parent) {
-	synchronized(this) {
-	  if(this._esdl__parent !is null && this._esdl__parent !is parent) {
-	    assert(false, "Attempt to modify parent object for object: " ~ _esdl__name);
-	  }
-	  else {
-	    this._esdl__parent = parent;
-	  }
-	}
-      }
-
-      // This function is required only during the elaboration phase
-      public final override void _esdl__setName(string name) {
-	synchronized(this) {
-	  if((_esdl__name != "") &&(_esdl__name != name)) {
-	    assert(false, "Attempt to modify name of the object!");
-	  }
-	  this._esdl__name = name;
-	}
-      }
-
-      public final string getName() {
-	// name is always set in elaboration phase and therefor is
-	// effectively immutable during simulation run
-	return this._esdl__name;
-      }
-
-      // Return the parent object and if it not set, signal an error
-      public final override NamedObj getParent() {
-	if(_esdl__parent !is null) return _esdl__parent;
-	assert(false, "Tried to seek parent for a NamedObj "
-	       "which does not have it set");
-	// synchronized(this) {
-	//   _esdl__parent = _esdl__getParentProc();
-	//   return _esdl__parent;
+	// This is retuired for the cases where the object does not
+	// have a parent. But since we decided that the parent must
+	// be set either during the elaboration or during inside the
+	// sontructor, this part is not retuired.
+	// else {
+	//   auto rootProc = RootThread.self;
+	//   if(rootProc !is null)
+	//     return rootProc.getRoot;
 	// }
+	assert(false,
+	       "Can not determine root of a NamedObj with null Parent");
       }
+    }
 
-      // Called during the elaboration phase to help determine the
-      // name of an (array) object
-      public final void _esdl__nomenclate(size_t I, T)(T t, uint[] indices) {
-	synchronized(this) {
-	  import std.string: chompPrefix;
-	  import std.conv: to;
-	  string name = chompPrefix(t.tupleof[I].stringof, "t.");
-	  foreach(i; indices) {
-	    name ~= "[" ~ to!string(i) ~ "]";
-	  }
-	  _esdl__nomenclate(name);
+    // Look for the simulator object in the root, and return it
+    public final override EsdlSimulator getSimulator() {
+      return getRoot().simulator();
+    }
+
+    // This function is called only during the elaboration phase
+    public final override void _esdl__setParent(NamedObj parent) {
+      synchronized(this) {
+	if(this._esdl__parent !is null && this._esdl__parent !is parent) {
+	  assert(false, "Attempt to modify parent object for object: " ~ _esdl__name);
+	}
+	else {
+	  this._esdl__parent = parent;
 	}
       }
+    }
 
-      // Sets the name of an object during elaboration. Name is set
-      // only if it is not already set
-      public final void _esdl__nomenclate()(string name) {
-	synchronized(this) {
-	  if(this._esdl__name == "") this._esdl__name = name;
+    // This function is required only during the elaboration phase
+    public final override void _esdl__setName(string name) {
+      synchronized(this) {
+	if((_esdl__name != "") &&(_esdl__name != name)) {
+	  assert(false, "Attempt to modify name of the object!");
 	}
+	this._esdl__name = name;
       }
+    }
 
-      /////////////////////////////////////////////////////////////
-      // TimeContext
-      /////////////////////////////////////////////////////////////
-      // Parent is fixed either during the elaboration or inside the
-      // (guarded) constructor of the object, hence the parent is
-      // immutable
+    public final string getName() {
+      // name is always set in elaboration phase and therefor is
+      // effectively immutable during simulation run
+      return this._esdl__name;
+    }
 
+    // Return the parent object and if it not set, signal an error
+    public final override NamedObj getParent() {
+      if(_esdl__parent !is null) return _esdl__parent;
+      assert(false, "Tried to seek parent for a NamedObj "
+	     "which does not have it set");
+      // synchronized(this) {
+      //   _esdl__parent = _esdl__getParentProc();
+      //   return _esdl__parent;
+      // }
+    }
 
-      // a plain NamedObj does not have getTimeUnit, and so
-      // seek the getTimeUnit from the parent and return it.
-      static if(!__traits(compiles, _timeScale)) {
-	public final override ulong getTimeScale() {
-	  return this.getParent.getTimeScale();
+    // Called during the elaboration phase to help determine the
+    // name of an (array) object
+    public final void _esdl__nomenclate(size_t I,
+					string S="",
+					T)(T t, uint[] indices) {
+      synchronized(this) {
+	import std.conv: to;
+	static if(S=="") {
+	  string name = t.tupleof[I].stringof[2..$]; // chomp "t."
 	}
-	// And getTimeUnit
-	public final override Time getTimeUnit() {
-	  return this.getParent.getTimeUnit();
+	else {
+	  string name = S;
 	}
+	foreach(i; indices) {
+	  name ~= "[" ~ to!string(i) ~ "]";
+	}
+	_esdl__nomenclate(name);
       }
+    }
 
-      static if(__traits(isAbstractFunction, removeProcess)) {
-	override protected void removeProcess(Process t) {
-	  assert(false, "Illegal call to removeProcess");
-	}
+    // Sets the name of an object during elaboration. Name is set
+    // only if it is not already set
+    public final void _esdl__nomenclate()(string name) {
+      synchronized(this) {
+	if(this._esdl__name == "") this._esdl__name = name;
       }
+    }
 
-    };
+    /////////////////////////////////////////////////////////////
+    // TimeContext
+    /////////////////////////////////////////////////////////////
+    // Parent is fixed either during the elaboration or inside the
+    // (guarded) constructor of the object, hence the parent is
+    // immutable
+
+
+    // a plain NamedObj does not have getTimeUnit, and so
+    // seek the getTimeUnit from the parent and return it.
+    static if(! __traits(compiles, _timeScale)) {
+      public final override ulong getTimeScale() {
+	return this.getParent.getTimeScale();
+      }
+      // And getTimeUnit
+      public final override Time getTimeUnit() {
+	return this.getParent.getTimeUnit();
+      }
+    }
+
+    static if(__traits(isAbstractFunction, removeProcess)) {
+      override protected void removeProcess(Process t) {
+	assert(false, "Illegal call to removeProcess");
+      }
+    }
   }
+
+
 }
 
 
@@ -303,7 +319,7 @@ private void _esdl__setCompId(T)(T t) if(is(T: HierComp)) {
       _esdl__compCount = _esdl__compCount + 1;
     }
   }
-}
+ }
 
 static shared uint _esdl__objCount;
 private void _esdl__setObjId(T)(T t) if(is(T: NamedObj)) {
@@ -316,6 +332,56 @@ private void _esdl__setObjId(T)(T t) if(is(T: NamedObj)) {
       t._esdl__setCompId();
     }
   }
+ }
+
+public auto _esdl__get_parallelism(L)(L l) {
+  enum int Q = _esdl__attr!(parallelize, L);
+  static if(Q is -1) {
+    enum par = parallelize(ParallelPolicy.NONE,
+			   uint.max); // inherit from parent
+  }
+  else {
+    static if(__traits(isSame, __traits(getAttributes, L)[Q],
+		       parallelize)) {
+      enum par = parallelize(ParallelPolicy.MULTI, uint.max);
+    }
+    else {
+      enum par = __traits(getAttributes, L)[Q];
+    }
+  }
+  return par;
+}
+
+public auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
+  enum int P = _esdl__attr!(parallelize, t, I);
+  enum int Q = _esdl__attr!(parallelize, L);
+  static if(P is -1) {
+    // check if the entity definition has a parallelize tag
+    static if(Q is -1) {
+      enum par = parallelize(ParallelPolicy.NONE,
+			     uint.max); // inherit from parent
+    }
+    else {
+      static if(__traits(isSame, __traits(getAttributes, L)[Q],
+			 parallelize)) {
+	enum par = parallelize(byte.min, uint.max);
+      }
+      else {
+	enum par = __traits(getAttributes, L)[Q];
+      }
+    }
+  }
+  else {
+    // first check if the attribute is just @parallelize
+    static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
+		       parallelize)) {
+      enum par = parallelize(byte.min, uint.max);
+    }
+    else {
+      enum par = __traits(getAttributes, t.tupleof[I])[P];
+    }
+  }
+  return par;
 }
 
 public interface HierComp: NamedObj, ParContext
@@ -368,62 +434,16 @@ public interface HierComp: NamedObj, ParContext
   public void resume();
   public void enable();
   public void abort();
-  public void kill();
   public void abortTree();
+  // A process is killed in the end by the simulator
+  public void kill();
   public void killTree();
 
   // Interface functions for enabling parallelize UDP
   public CoreSemaphore _esdl__getParLock();
+  public parallelize _esdl__getParInfo();
   public void _esdl__setEntityMutex(CoreSemaphore parentLock,
 				    parallelize linfo, parallelize plinfo);
-
-  static auto _esdl__get_parallelism(L)(L l) {
-    enum int Q = _esdl__attr!(parallelize, L);
-    static if(Q is -1) {
-      enum par = parallelize(-1, uint.max); // inherit from parent
-    }
-    else {
-      static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			 parallelize)) {
-	enum par = parallelize(byte.min, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, L)[Q];
-      }
-    }
-    return par;
-  }
-
-  static auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
-    enum int P = _esdl__attr!(parallelize, t, I);
-    enum int Q = _esdl__attr!(parallelize, L);
-    static if(P is -1) {
-      // check if the entity definition has a parallelize tag
-      static if(Q is -1) {
-	enum par = parallelize(-1, uint.max); // inherit from parent
-      }
-      else {
-	static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			   parallelize)) {
-	  enum par = parallelize(byte.min, uint.max);
-	}
-	else {
-	  enum par = __traits(getAttributes, L)[Q];
-	}
-      }
-    }
-    else {
-      // first check if the attribute is just @parallelize
-      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
-			 parallelize)) {
-	enum par = parallelize(byte.min, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, t.tupleof[I])[P];
-      }
-    }
-    return par;
-  }
 
   static Time _esdl__get_timeUnit(L)(L l) {
     enum int Q = _esdl__attr!(timeUnit, L);
@@ -442,7 +462,7 @@ public interface HierComp: NamedObj, ParContext
     }
     return par;
   }
-  
+
   static Time _esdl__get_timeUnit(size_t I, T, L)(T t, ref L l) {
     enum int P = _esdl__attr!(timeUnit, t, I);
     enum int Q = _esdl__attr!(timeUnit, L);
@@ -493,7 +513,7 @@ public interface HierComp: NamedObj, ParContext
     }
     return par;
   }
-  
+
   static Time _esdl__get_timePrecision(size_t I, T, L)(T t, ref L l) {
     enum int P = _esdl__attr!(timePrecision, t, I);
     enum int Q = _esdl__attr!(timePrecision, L);
@@ -527,456 +547,461 @@ public interface HierComp: NamedObj, ParContext
     return par;
   }
 
-  static string hierMixin() {
-    return ParContextMixin() ~
-      q{
-      static if(!__traits(compiles, _esdl__compId)) {
-	private uint _esdl__compId = uint.max;
+  mixin template HierMixin()
+  {
+    mixin ParContextMixin;
+
+    static if(!__traits(compiles, _esdl__compId)) {
+      private uint _esdl__compId = uint.max;
+    }
+    //////////////////////////////////////////////////////
+    // Implementation of the parallelize UDP functionality
+    //////////////////////////////////////////////////////
+
+    // Lock to inhibit parallel threads in the same Entity
+    // This valriable is set in elaboration phase and in the later
+    // phases it is only accessed. Therefor this variable can be
+    // treated as effectively immutable.
+
+    // In practice, the end-user does not need to bother about
+    // this Lock. It is automatically picked up by the simulator
+    // when a process wakes up and subsequently, when the process
+    // deactivates (starts waiting for an event), the simulator
+    // gives away the Lock
+    static if(!__traits(compiles, _esdl__parLock)) {
+      import core.sync.semaphore: CoreSemaphore = Semaphore;
+      CoreSemaphore _esdl__parLock;
+    }
+
+    // This variable keeps the information provided by the user as
+    // an argument to the parallelize UDP -- For the hierarchy
+    // levels where the parallelize UDP is not specified, the value
+    // for this variable is copied from the uppper hierarchy
+    // This variable is set and used only during the elaboration
+    // phase
+    static if(!__traits(compiles, _esdl__parInfo)) {
+      parallelize _esdl__parInfo = parallelize(ParallelPolicy.NONE,
+					       uint.max); // default value
+      public final override parallelize _esdl__getParInfo() {
+	return _esdl__parInfo;
       }
-      //////////////////////////////////////////////////////
-      // Implementation of the parallelize UDP functionality
-      //////////////////////////////////////////////////////
+    }
 
-      // Lock to inhibit parallel threads in the same Entity
-      // This valriable is set in elaboration phase and in the later
-      // phases it is only accessed. Therefor this variable can be
-      // treated as effectively immutable.
+    // Effectively immutable in the run phase since the variable is
+    // set durin gthe elaboration
+    public final override CoreSemaphore _esdl__getParLock() {
+      return _esdl__parLock;
+    }
 
-      // In practice, the end-user does not need to bother about
-      // this Lock. It is automatically picked up by the simulator
-      // when a process wakes up and subsequently, when the process
-      // deactivates (starts waiting for an event), the simulator
-      // gives away the Lock
-      static if(!__traits(compiles, _esdl__parLock)) {
-	import core.sync.semaphore: CoreSemaphore = Semaphore;
-	CoreSemaphore _esdl__parLock;
-      }
-
-      // This variable keeps the information provided by the user as
-      // an argument to the parallelize UDP -- For the hierarchy
-      // levels where the parallelize UDP is not specified, the value
-      // for this variable is copied from the uppper hierarchy
-      // This variable is set and used only during the elaboration
-      // phase
-      static if(!__traits(compiles, _esdl__parInfo)) {
-	parallelize _esdl__parInfo = parallelize(-1, uint.max); // default value
-      }
-
-      // Effectively immutable in the run phase since the variable is
-      // set durin gthe elaboration
-      public final override CoreSemaphore _esdl__getParLock() {
-	return _esdl__parLock;
-      }
-
-      // Create a new Semaphore for a given HierComp when required,
-      // based on the UDP option @parallelize. This function is called
-      // during the elaboration phase.
-      public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
-						       parallelize linfo, parallelize plinfo) {
-	if(linfo._parallel == -1) {	// take hier information
-	  _esdl__parInfo = plinfo;
-	  if(plinfo._parallel == byte.min) { // UDP @parallelize without argument
-	    _esdl__parLock = null;
-	  }
-	  else if(plinfo._parallel == 0) {
-	    _esdl__parLock = parentLock;
-	  }
-	  else {
-	    _esdl__parLock = new CoreSemaphore(plinfo._parallel);
-	  }
+    // Create a new Semaphore for a given HierComp when required,
+    // based on the UDP option @parallelize. This function is called
+    // during the elaboration phase.
+    public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
+						     parallelize linfo, parallelize plinfo) {
+      if(linfo._parallel == ParallelPolicy.NONE) {
+	// take hier information
+	_esdl__parInfo = plinfo;
+	if(plinfo._parallel == ParallelPolicy.MULTI) {
+	  // UDP @parallelize without argument
+	  _esdl__parLock = null;
+	}
+	else if(plinfo._parallel == ParallelPolicy.INHERIT) {
+	  _esdl__parLock = parentLock;
 	}
 	else {
-	  if(plinfo._parallel == 0) {
-	    // FIXME -- give out warning
-	  }
-	  _esdl__parInfo = linfo;
-	  if(linfo._parallel == byte.min) {	// parallelize
-	    _esdl__parLock = null;
-	  }
-	  else if(linfo._parallel == 0) {
-	    _esdl__parLock = new CoreSemaphore(1);
-	  }
-	  else {
-	    _esdl__parLock = new CoreSemaphore(linfo._parallel);
-	  }
+	  _esdl__parLock = new CoreSemaphore(plinfo._parallel);
 	}
       }
-
-      public ParContext _esdl__parInheritFrom() {
-	auto parent = cast(HierComp) this.getParent();
-	assert(parent !is null);
-	return parent;
-      }
-      public uint _esdl__parDetermineIndex() {
-	auto nthreads = getSimulator._executor._poolThreads.length;
-	return _esdl__compId % nthreads;
-      }
-      public final void _esdl__setParConfig(ParConfig parentCfg,
-					    parallelize linfo, parallelize plinfo) {
-	if(linfo._parallel == -1) {	// take hier information
-	  _esdl__parInfo = plinfo;
-	}
-	else {
-	  _esdl__parInfo = linfo;
-	}
-	
-	if(_esdl__parInfo._parallel != 0) { // UDP @parallelize
-	  // without argument
-	  auto nthreads = getSimulator._executor._poolThreads.length;	  
-	  if(_esdl__parInfo._poolIndex != uint.max) {
-	    assert(_esdl__parInfo._poolIndex < nthreads);
-	    _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
-	  }
-	  else {
-	    _esdl__parConfig = new ParConfig(_esdl__compId % nthreads);
-	  }
-	}
-	else {
-	  _esdl__parConfig = parentCfg;
-	}
-      }
-      //////////////////////////////////////////////////////
-      // Implementation of the hierarchy/elaboration methods
-      //////////////////////////////////////////////////////
-
-      // _esdl__root is set in the elaboration phase and are used (but
-      // not modified) in the simulation phase, as a result these
-      // varables can be treated as effectively immutable
-      static if(!__traits(compiles, _esdl__root)) {
-	@_esdl__ignore protected RootEntityIntf _esdl__root;
-      }
-
-      public final void _esdl__setRoot(RootEntityIntf root) {
-	synchronized(this) {
-	  if(this._esdl__root !is null &&
-	     this._esdl__root !is root) {
-	    assert(false, "Attempt to modify root object!");
-	  }
-	  else {
-	    this._esdl__root = root;
-	  }
-	}
-      }
-
-
-      public final override RootEntityIntf getRoot() {
-	if(_esdl__root) return _esdl__root;
-	assert(false, "Root not set for HierComp " ~ getName());
-	// synchronized(this) {
-	//   if(_esdl__root) {
-	//     return _esdl__root;
-	//   }
-	//   else if(_esdl__parent) {
-	//     _esdl__root = _esdl__parent.getRoot();
-	//     return _esdl__root;
-	//   }
-	//   else {
-	//     RootEntityIntf root =(cast(RootEntityIntf) this);
-	//     if(root !is null) return root;
-	//     else {
-	//       assert(false, "getRoot: ElabContext Inst " ~ getName() ~ ":" ~
-	//	     typeof(this).stringof ~
-	//	     " does not have a parent!");
-	//     }
-	//   }
-	// }
-      }
-
-      // The Process and Routine classes would have only child
-      // processes and not other hierarchy to track. There may be
-      // Events and Channels etc declared inside a process' body but
-      // a process will not keep track of these objects as it child
-      // objects -- no useful purpose is served .
-      static if(__traits(compiles, _esdl__childProcs)) {}
       else {
-	static if(!__traits(compiles, _esdl__childObjs)) {
-	  @_esdl__ignore protected NamedObj[] _esdl__childObjs;
+	if(plinfo._parallel == ParallelPolicy.INHERIT) {
+	  // FIXME -- give out warning
 	}
-
-	static if(!__traits(compiles, _esdl__childTasks)) {
-	  @_esdl__ignore protected Process[] _esdl__childTasks;
+	_esdl__parInfo = linfo;
+	if(linfo._parallel == ParallelPolicy.MULTI) {	// parallelize
+	  _esdl__parLock = null;
 	}
-
-	static if(!__traits(compiles, _esdl__childComps)) {
-	  @_esdl__ignore protected HierComp[] _esdl__childComps;
+	else if(linfo._parallel == ParallelPolicy.INHERIT) {
+	  _esdl__parLock = new CoreSemaphore(1);
 	}
-
-	static if(__traits(isAbstractFunction, getChildObjs)) {
-	  public final override NamedObj[] getChildObjs() {
-	    // _esdl__childObjs is effectively immutable
-	    return this._esdl__childObjs;
-	  }
+	else {
+	  _esdl__parLock = new CoreSemaphore(linfo._parallel);
 	}
       }
+    }
 
-      // Returns only the static(frozen during elaboration)
-      // hierarchical objects
-      static if(__traits(isAbstractFunction, getChildObjsHier)) {
-	public final override NamedObj[] getChildObjsHier() {
-	  NamedObj[] children = getChildObjs();
-	  foreach(child; getChildComps()) {
-	    children ~= child.getChildObjsHier();
-	  }
-	  return children;
-	}
+    public ParContext _esdl__parInheritFrom() {
+      auto parent = cast(HierComp) this.getParent();
+      assert(parent !is null);
+      return parent;
+    }
+
+    public uint _esdl__parComponentId() {
+      return _esdl__compId;
+    }
+
+    public final void _esdl__setParConfig(ParConfig parentCfg,
+					  parallelize linfo, parallelize plinfo) {
+      if(linfo._parallel == ParallelPolicy.NONE) { // take hier information
+	_esdl__parInfo = plinfo;
+      }
+      else {
+	_esdl__parInfo = linfo;
       }
 
-      static if(__traits(isAbstractFunction, getChildTasks)) {
-	public final override Process[] getChildTasks() {
-	  // Though the scheduler does modify _esdl__childTasks as and
-	  // when processes get spawned or die out, the variable can
-	  // be treated as effectively immutable since the scheduler
-	  // works with single thread
-	  return this._esdl__childTasks;
+      if(_esdl__parInfo._parallel == ParallelPolicy.INHERIT) {
+	_esdl__parConfig = parentCfg;
+      }
+      else {
+	auto nthreads = getSimulator._executor._poolThreads.length;
+	if(_esdl__parInfo._poolIndex != uint.max) {
+	  assert(_esdl__parInfo._poolIndex < nthreads);
+	  _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
+	}
+	else {
+	  _esdl__parConfig = new ParConfig(_esdl__parComponentId() % nthreads);
 	}
       }
+    }
+    //////////////////////////////////////////////////////
+    // Implementation of the hierarchy/elaboration methods
+    //////////////////////////////////////////////////////
 
-      // Returns only the static tasks. Only Entities are traversed as
-      // hierarchy
-      static if(__traits(isAbstractFunction, getChildTasksHier)) {
-	public final override Process[] getChildTasksHier() {
-	  Process[] children = getChildTasks();
-	  foreach(child; getChildComps()) {
-	    children ~= child.getChildTasksHier();
-	  }
-	  return children;
+    // _esdl__root is set in the elaboration phase and are used (but
+    // not modified) in the simulation phase, as a result these
+    // varables can be treated as effectively immutable
+    static if(!__traits(compiles, _esdl__root)) {
+      @_esdl__ignore protected RootEntityIntf _esdl__root;
+    }
+
+    public final void _esdl__setRoot(RootEntityIntf root) {
+      synchronized(this) {
+	if(this._esdl__root !is null &&
+	   this._esdl__root !is root) {
+	  assert(false, "Attempt to modify root object!");
+	}
+	else {
+	  this._esdl__root = root;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__getChildProcs)) {
-	// When called on an entity, returns the  static tasks. Same
-	// behaviour as getChildTasks
-	protected final override Process[] _esdl__getChildProcs() {
-	  // Though the scheduler does modify _esdl__childProcs as and
-	  // when processes get spawned or die out, the variable can
-	  // be treated as effectively immutable since the scheduler
-	  // works with single thread
-	  return _esdl__childTasks; // this._esdl__childProcs;
-	}
+
+    public final override RootEntityIntf getRoot() {
+      if(_esdl__root) return _esdl__root;
+      assert(false, "Root not set for HierComp " ~ getName());
+      // synchronized(this) {
+      //   if(_esdl__root) {
+      //     return _esdl__root;
+      //   }
+      //   else if(_esdl__parent) {
+      //     _esdl__root = _esdl__parent.getRoot();
+      //     return _esdl__root;
+      //   }
+      //   else {
+      //     RootEntityIntf root =(cast(RootEntityIntf) this);
+      //     if(root !is null) return root;
+      //     else {
+      //       assert(false, "getRoot: ElabContext Inst " ~ getName() ~ ":" ~
+      //	     typeof(this).stringof ~
+      //	     " does not have a parent!");
+      //     }
+      //   }
+      // }
+    }
+
+    // The Process and Routine classes would have only child
+    // processes and not other hierarchy to track. There may be
+    // Events and Channels etc declared inside a process' body but
+    // a process will not keep track of these objects as it child
+    // objects -- no useful purpose is served .
+    static if(__traits(compiles, _esdl__childProcs)) {}
+    else {
+      static if(!__traits(compiles, _esdl__childObjs)) {
+	@_esdl__ignore protected NamedObj[] _esdl__childObjs;
       }
 
-      static if(__traits(isAbstractFunction, _esdl__getChildProcsHier)) {
-	// When called for an entity, returns the static tasks and the
-	// dynamic child hierarchy thereof. This function may be
-	// called only in the scheduling phase
-	protected final override Process[] _esdl__getChildProcsHier() {
-	  Process[] children = _esdl__getChildProcs();
-	  foreach(child; getChildComps()) {
-	    children ~= child._esdl__getChildProcsHier();
-	  }
-	  return children;
-	}
+      static if(!__traits(compiles, _esdl__childTasks)) {
+	@_esdl__ignore protected Process[] _esdl__childTasks;
       }
 
-      static if(__traits(isAbstractFunction, getChildComps)) {
-	// Return the child components.
-	public final override HierComp[] getChildComps() {
-	  // _esdl__childComps is effectively immutable
-	  return this._esdl__childComps;
-	}
+      static if(!__traits(compiles, _esdl__childComps)) {
+	@_esdl__ignore protected HierComp[] _esdl__childComps;
       }
 
-      static if(__traits(isAbstractFunction, getChildCompsHier)) {
-	// Return all the components in the static hierarchy.
-	public final override HierComp[] getChildCompsHier() {
-	  HierComp[] children = getChildComps();
-	  foreach(child; getChildComps()) {
-	    children ~= child.getChildCompsHier();
-	  }
-	  return children;
+      static if(__traits(isAbstractFunction, getChildObjs)) {
+	public final override NamedObj[] getChildObjs() {
+	  // _esdl__childObjs is effectively immutable
+	  return this._esdl__childObjs;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__addChildObj)) {
-	// Add object as child of this parent. This function is called
-	// only during the elaboration phase for the purpose of
-	// creation of object hierarchy.
-	public final override void _esdl__addChildObj(NamedObj child) {
-	  synchronized(this) {
-	    bool add = true;
-	    debug(DUPLICATE_CHILD) {
-	      foreach(ref _child; this._esdl__childObjs) {
-		if(child is _child) {
-		  add = false;
-		  break;
-		}
+    // Returns only the static(frozen during elaboration)
+    // hierarchical objects
+    static if(__traits(isAbstractFunction, getChildObjsHier)) {
+      public final override NamedObj[] getChildObjsHier() {
+	NamedObj[] children = getChildObjs();
+	foreach(child; getChildComps()) {
+	  children ~= child.getChildObjsHier();
+	}
+	return children;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, getChildTasks)) {
+      public final override Process[] getChildTasks() {
+	// Though the scheduler does modify _esdl__childTasks as and
+	// when processes get spawned or die out, the variable can
+	// be treated as effectively immutable since the scheduler
+	// works with single thread
+	return this._esdl__childTasks;
+      }
+    }
+
+    // Returns only the static tasks. Only Entities are traversed as
+    // hierarchy
+    static if(__traits(isAbstractFunction, getChildTasksHier)) {
+      public final override Process[] getChildTasksHier() {
+	Process[] children = getChildTasks();
+	foreach(child; getChildComps()) {
+	  children ~= child.getChildTasksHier();
+	}
+	return children;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, _esdl__getChildProcs)) {
+      // When called on an entity, returns the  static tasks. Same
+      // behaviour as getChildTasks
+      protected final override Process[] _esdl__getChildProcs() {
+	// Though the scheduler does modify _esdl__childProcs as and
+	// when processes get spawned or die out, the variable can
+	// be treated as effectively immutable since the scheduler
+	// works with single thread
+	return _esdl__childTasks; // this._esdl__childProcs;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, _esdl__getChildProcsHier)) {
+      // When called for an entity, returns the static tasks and the
+      // dynamic child hierarchy thereof. This function may be
+      // called only in the scheduling phase
+      protected final override Process[] _esdl__getChildProcsHier() {
+	Process[] children = _esdl__getChildProcs();
+	foreach(child; getChildComps()) {
+	  children ~= child._esdl__getChildProcsHier();
+	}
+	return children;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, getChildComps)) {
+      // Return the child components.
+      public final override HierComp[] getChildComps() {
+	// _esdl__childComps is effectively immutable
+	return this._esdl__childComps;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, getChildCompsHier)) {
+      // Return all the components in the static hierarchy.
+      public final override HierComp[] getChildCompsHier() {
+	HierComp[] children = getChildComps();
+	foreach(child; getChildComps()) {
+	  children ~= child.getChildCompsHier();
+	}
+	return children;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, _esdl__addChildObj)) {
+      // Add object as child of this parent. This function is called
+      // only during the elaboration phase for the purpose of
+      // creation of object hierarchy.
+      public final override void _esdl__addChildObj(NamedObj child) {
+	synchronized(this) {
+	  bool add = true;
+	  debug(DUPLICATE_CHILD) {
+	    foreach(ref _child; this._esdl__childObjs) {
+	      if(child is _child) {
+		add = false;
+		break;
 	      }
 	    }
-	    if(add) this._esdl__childObjs ~= child;
 	  }
+	  if(add) this._esdl__childObjs ~= child;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__addChildTask)) {
-	// We maintain a list of static tasks in the entities in order
-	// to avoid incurring efficiency loss because of any dynamic
-	// casting.
-	public final override void _esdl__addChildTask(Process child) {
-	  synchronized(this) {
-	    bool add = true;
-	    debug(DUPLICATE_CHILD) {
-	      foreach(ref _child; this._esdl__childTasks) {
-		if(child is _child) {
-		  add = false;
-		  break;
-		}
+    static if(__traits(isAbstractFunction, _esdl__addChildTask)) {
+      // We maintain a list of static tasks in the entities in order
+      // to avoid incurring efficiency loss because of any dynamic
+      // casting.
+      public final override void _esdl__addChildTask(Process child) {
+	synchronized(this) {
+	  bool add = true;
+	  debug(DUPLICATE_CHILD) {
+	    foreach(ref _child; this._esdl__childTasks) {
+	      if(child is _child) {
+		add = false;
+		break;
 	      }
 	    }
-	    if(add) this._esdl__childTasks ~= child;
 	  }
+	  if(add) this._esdl__childTasks ~= child;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__addChildComp)) {
-	// To help build a list of hierarchical components.
-	public final override void _esdl__addChildComp(HierComp child) {
-	  synchronized(this) {
-	    bool add = true;
-	    debug(DUPLICATE_CHILD) {
-	      foreach(ref _child; this._esdl__childComps) {
-		if(child is _child) {
-		  add = false;
-		  break;
-		}
+    static if(__traits(isAbstractFunction, _esdl__addChildComp)) {
+      // To help build a list of hierarchical components.
+      public final override void _esdl__addChildComp(HierComp child) {
+	synchronized(this) {
+	  bool add = true;
+	  debug(DUPLICATE_CHILD) {
+	    foreach(ref _child; this._esdl__childComps) {
+	      if(child is _child) {
+		add = false;
+		break;
 	      }
 	    }
-	    if(add) this._esdl__childComps ~= child;
 	  }
+	  if(add) this._esdl__childComps ~= child;
 	}
       }
+    }
 
-      // The indeces is useful to find out the position of a given
-      // component inside an array of components. For example, the
-      // end-user might be interested in tweeking the functionality of
-      // a task based on this parameter.
-      protected uint[] _esdl__indices;
-      public final override void _esdl__setIndices(uint[] indices) {
-	_esdl__indices = indices;
-      }
+    // The indeces is useful to find out the position of a given
+    // component inside an array of components. For example, the
+    // end-user might be interested in tweeking the functionality of
+    // a task based on this parameter.
+    protected uint[] _esdl__indices;
+    public final override void _esdl__setIndices(uint[] indices) {
+      _esdl__indices = indices;
+    }
 
-      public final override uint[] getIndices() {
-	return _esdl__indices;
-      }
+    public final override uint[] getIndices() {
+      return _esdl__indices;
+    }
 
-      // Used by the Task and Method templates
-      public final void _esdl__thunk(string THUNK)() {
-	mixin(THUNK);
-      }
+    // Used by the Task and Method templates
+    public final void _esdl__thunk(string THUNK)() {
+      mixin(THUNK);
+    }
 
 
-      static if(__traits(isAbstractFunction, suspend)) {
-	// suspend all the tasks of an entity
-	public final void suspend() {
-	  foreach(task; getChildTasks()) {
-	    task.suspend();
-	  }
+    static if(__traits(isAbstractFunction, suspend)) {
+      // suspend all the tasks of an entity
+      public final void suspend() {
+	foreach(task; getChildTasks()) {
+	  task.suspend();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, suspendTree)) {
-	// suspend all the tasks and processes hierarchically for an
-	// entity.
-	public final void suspendTree() {
-	  foreach(task; getChildTasks()) {
-	    task.suspendTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.suspendTree();
-	  }
+    static if(__traits(isAbstractFunction, suspendTree)) {
+      // suspend all the tasks and processes hierarchically for an
+      // entity.
+      public final void suspendTree() {
+	foreach(task; getChildTasks()) {
+	  task.suspendTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.suspendTree();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, disable)) {
-	// disable all the tasks of an entity.
-	public final void disable() {
-	  foreach(task; getChildTasks()) {
-	    task.disable();
-	  }
+    static if(__traits(isAbstractFunction, disable)) {
+      // disable all the tasks of an entity.
+      public final void disable() {
+	foreach(task; getChildTasks()) {
+	  task.disable();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, disableTree)) {
-	// disable all tasks and processes hierarchically for an
-	// entity.
-	public final void disableTree() {
-	  foreach(task; getChildTasks()) {
-	    task.disableTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.disableTree();
-	  }
+    static if(__traits(isAbstractFunction, disableTree)) {
+      // disable all tasks and processes hierarchically for an
+      // entity.
+      public final void disableTree() {
+	foreach(task; getChildTasks()) {
+	  task.disableTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.disableTree();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, abort)) {
-	// abort all tasks
-	public final void abort() {
-	  foreach(task; getChildTasks()) {
-	    task.abort();
-	  }
+    static if(__traits(isAbstractFunction, abort)) {
+      // abort all tasks
+      public final void abort() {
+	foreach(task; getChildTasks()) {
+	  task.abort();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, abortTree)) {
-	// abort all tasks and ptocesses thereof hierarchically
-	public final void abortTree() {
-	  foreach(task; getChildTasks()) {
-	    task.abortTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.abortTree();
-	  }
+    static if(__traits(isAbstractFunction, abortTree)) {
+      // abort all tasks and ptocesses thereof hierarchically
+      public final void abortTree() {
+	foreach(task; getChildTasks()) {
+	  task.abortTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.abortTree();
 	}
       }
+    }
 
-      static if(! __traits(compiles, kill())) {
-	// kill all tasks
-	public final void kill() {
-	  foreach(task; getChildTasks()) {
-	    task.kill();
-	  }
+    static if(! __traits(compiles, kill())) {
+      // kill all tasks
+      public final void kill() {
+	foreach(task; getChildTasks()) {
+	  task.kill();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, killTree)) {
-	// kill all tasks and ptocesses thereof hierarchically
-	public final void killTree() {
-	  foreach(task; getChildTasks()) {
-	    task.killTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.killTree();
-	  }
+    static if(__traits(isAbstractFunction, killTree)) {
+      // kill all tasks and ptocesses thereof hierarchically
+      public final void killTree() {
+	foreach(task; getChildTasks()) {
+	  task.killTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.killTree();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, resume)) {
-	// resume a suspended entity
-	public final void resume() {
-	  foreach(task; getChildTasks()) {
-	    task.resume();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.resume();
-	  }
+    static if(__traits(isAbstractFunction, resume)) {
+      // resume a suspended entity
+      public final void resume() {
+	foreach(task; getChildTasks()) {
+	  task.resume();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.resume();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, enable)) {
-	// enable a disabled an entity
-	public final void enable() {
-	  foreach(task; getChildTasks()) {
-	    task.enable();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.enable();
-	  }
+    static if(__traits(isAbstractFunction, enable)) {
+      // enable a disabled an entity
+      public final void enable() {
+	foreach(task; getChildTasks()) {
+	  task.enable();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.enable();
 	}
       }
+    }
 
-      mixin(namedMixin());
-
-    };
+    mixin NamedMixin;
 
   }
 }
@@ -1032,7 +1057,7 @@ template CheckInstObj(L)
   static if(is(L == class) && is(L unused: ElabContext)) {
     enum bool CheckInstObj = true;
   }
-  else static if(is(L unused: Inst!Q, Q)) {
+  else static if(is(L unused: Inst!(Q, S), Q, string S)) {
       enum bool CheckInstObj = true;
     }
   else static if(isArray!L) {
@@ -1052,23 +1077,23 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
       static if(_esdl__attr!(_esdl__ignore, t, I) == -1) {
 	alias typeof(t.tupleof[I]) L;
 	static if(CheckInstObj!L) {
-	    // multidimensional arrays would need special (recursive)
-	    // handling, therefor arrays are handled by a separate
-	    // function
-	    static if(isArray!L) {
-	      _esdl__configArray!(FOO, I)(t, t.tupleof[I]);
-	    }
-	    else {
-	      // neither ignored, nor an array, so fooorate the object
-	      t.tupleof[I]._esdl__config!(FOO, I)(t, t.tupleof[I]);
-	      debug(ATTRCONFIG) {
-		// debug message for listing the fooorated objects
-		import std.stdio;
-		writeln("Fooorated " ~ typeof(t.tupleof[I]).stringof ~ " : ",
-			I, "/", t.tupleof.length);
-	      }
+	  // multidimensional arrays would need special (recursive)
+	  // handling, therefor arrays are handled by a separate
+	  // function
+	  static if(isArray!L) {
+	    _esdl__configArray!(FOO, I)(t, t.tupleof[I]);
+	  }
+	  else {
+	    // neither ignored, nor an array, so fooorate the object
+	    t.tupleof[I]._esdl__config!(FOO, I)(t, t.tupleof[I]);
+	    debug(ATTRCONFIG) {
+	      // debug message for listing the fooorated objects
+	      import std.stdio;
+	      writeln("Fooorated " ~ typeof(t.tupleof[I]).stringof ~ " : ",
+		      I, "/", t.tupleof.length);
 	    }
 	  }
+	}
 	else {
 	  debug(ATTRCONFIG) {
 	    // debug message for listing the objects, which do not
@@ -1100,7 +1125,7 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
 	  // debug message for listing the base classes being
 	  // recursed
 	  import std.stdio;
-	  writeln("*** Fooorating " ~ typeof(b).stringof);
+	  writeln("*** Elaborating " ~ typeof(b).stringof);
 	}
 	_esdl__configMems!(FOO, 0, CI)(b);
       }
@@ -1112,11 +1137,11 @@ void _esdl__configArray(FOO, size_t I, T, L)(T t, ref L l, uint[] indices=null)
     // pragma(msg, "Adding: ", typeof(l[j]));
     static if(isArray!(typeof(l[j]))) {
       _esdl__configArray!(FOO, I)(t, l[j],
-			 indices ~ cast(uint) j);
+				  indices ~ cast(uint) j);
     }
     else {
       l[j]._esdl__config!(FOO, I)(t, l[j],
-			 indices ~ cast(uint) j);
+				  indices ~ cast(uint) j);
     }
   }
 }
@@ -1231,10 +1256,10 @@ void _esdl__elabArray(size_t I, T, L)(T t, ref L l, uint[] indices=null)
 //     synchronized(t) {
 //       t.doConfig();
 //       foreach(child; t.getChildComps()) {
-// 	ElabContext hChild = cast(ElabContext) child;
-// 	if(hChild !is null) {
-// 	  _esdl__config(hChild);
-// 	}
+//	ElabContext hChild = cast(ElabContext) child;
+//	if(hChild !is null) {
+//	  _esdl__config(hChild);
+//	}
 //       }
 //     }
 //   }
@@ -1244,10 +1269,10 @@ void _esdl__elabArray(size_t I, T, L)(T t, ref L l, uint[] indices=null)
 //     synchronized(t) {
 //       t._esdl__postConfig();
 //       foreach(child; t.getChildComps()) {
-// 	ElabContext hChild = cast(ElabContext) child;
-// 	if(hChild !is null) {
-// 	  _esdl__postCfg(hChild);
-// 	}
+//	ElabContext hChild = cast(ElabContext) child;
+//	if(hChild !is null) {
+//	  _esdl__postCfg(hChild);
+//	}
 //       }
 //     }
 //   }
@@ -1421,31 +1446,26 @@ class ParConfig
   }
 }
 
-// Determine what thread from the thread pool to use
-public uint _esdl__parContextFindIndex(U)(U u) if(is(U: ParContext)) {
-  // First get the @parallelize attribute
- }
-
 // @parallelize(0) would result in the ParContext using the same
 // thread as the parEnclosing context
 public interface ParContext
 {
   // Get the enclosing ParContext
+  // In case of Entity, this would be defined to be the parent entity
   public ParContext _esdl__parInheritFrom();
-  public uint _esdl__parDetermineIndex();
+  public uint _esdl__parComponentId();
   public ParConfig _esdl__getParConfig();
-  static string ParContextMixin() {
-    return q{
-      ParConfig _esdl__parConfig;
-      public ParConfig _esdl__getParConfig() {
-	// of the ParContext does not have a ParConfig Object, get it
-	// from the enclosing ParContext
-	if(_esdl__parConfig is null) {
-	  _esdl__parConfig = _esdl__parInheritFrom()._esdl__getParConfig();
-	}
-	return _esdl__parConfig;
+  mixin template ParContextMixin()
+  {
+    ParConfig _esdl__parConfig;
+    public ParConfig _esdl__getParConfig() {
+      // of the ParContext does not have a ParConfig Object, get it
+      // from the enclosing ParContext
+      if(_esdl__parConfig is null) {
+	_esdl__parConfig = _esdl__parInheritFrom()._esdl__getParConfig();
       }
-    };
+      return _esdl__parConfig;
+    }
   }
 }
 
@@ -1509,7 +1529,7 @@ public interface ElabContext: HierComp
     // debug(ATTRCONFIG) {
     //   import std.stdio;
     //   writeln("** ElabContext: Fooorating " ~ l.tupleof[I].stringof ~ ":" ~
-    // 	      typeof(l).stringof);
+    //	      typeof(l).stringof);
     // }
     synchronized(l) {
       static assert(is(L unused: ElabContext),
@@ -1560,14 +1580,16 @@ public interface ElabContext: HierComp
       auto linfo = _esdl__get_parallelism(l);
       l.doBuild();
       l._esdl__postBuild();
-      l._esdl__setEntityMutex(null, linfo, parallelize(byte.min, uint.max));
-      l._esdl__setParConfig(null, linfo, parallelize(byte.min, uint.max));
+      l._esdl__setEntityMutex(null, linfo, parallelize(ParallelPolicy.MULTI,
+						       uint.max));
+      l._esdl__setParConfig(null, linfo, parallelize(ParallelPolicy.MULTI,
+						     uint.max));
       _esdl__elabMems(l);
       l._esdl__postElab();
     }
   }
 
-  static void _esdl__elab(size_t I, T, L)
+  static void _esdl__elab(size_t I, string S="", T, L)
     (T t, ref L l, uint[] indices=null) {
     debug(ELABORATE) {
       import std.stdio;
@@ -1584,7 +1606,7 @@ public interface ElabContext: HierComp
 	t._esdl__addChildObj(l);
 	t._esdl__addChildComp(l);
       }
-      l._esdl__nomenclate!I(t, indices);
+      l._esdl__nomenclate!(I, S)(t, indices);
       l._esdl__setObjId();
       l._esdl__setParent(t);
       l._esdl__setRoot(t.getRoot);
@@ -1601,89 +1623,88 @@ public interface ElabContext: HierComp
     }
   }
 
-  final static string hierContextMixin() {
-    return q{
-      // Arrays for ports and exports. These variables are effectively
-      // immutable since (ex)ports are added to them only during
-      // elaboration.
-      static if(!__traits(compiles, _esdl__ports)) {
-	@_esdl__ignore public BasePort[] _esdl__ports;
-      }
+  mixin template HierContextMixin()
+  {
+    // Arrays for ports and exports. These variables are effectively
+    // immutable since (ex)ports are added to them only during
+    // elaboration.
+    static if(!__traits(compiles, _esdl__ports)) {
+      @_esdl__ignore public BasePort[] _esdl__ports;
+    }
 
-      static if(!__traits(compiles, _esdl__exePorts)) {
-	@_esdl__ignore public BaseExePort[] _esdl__exePorts;
-      }
-
-
-      // default function bodies(mostly empty) for the user defined
-      // methods.
-      protected override void preSimulation() {}
-      protected override void postSimulation() {}
-
-      static if(__traits(isAbstractFunction, doConfig)) {
-	public override void doConfig() {}
-      }
-      static if(__traits(isAbstractFunction, doConnect)) {
-	public override void doConnect() {}
-      }
-      static if(__traits(isAbstractFunction, endElab)) {
-	public override void endElab() {}
-      }
-      static if(__traits(isAbstractFunction, doBuild)) {
-	public override void doBuild() {}
-      }
-      static if(__traits(isAbstractFunction, _esdl__postBuild)) {
-	public override void _esdl__postBuild() {}
-      }
-      static if(__traits(isAbstractFunction, _esdl__postElab)) {
-	public override void _esdl__postElab() {}
-      }
-      static if(__traits(isAbstractFunction, _esdl__postConfig)) {
-	public override void _esdl__postConfig() {}
-      }
+    static if(!__traits(compiles, _esdl__exePorts)) {
+      @_esdl__ignore public BaseExePort[] _esdl__exePorts;
+    }
 
 
-      // _esdl__ports and _esdl__exePorts are effectively immutable
-      // and therefor no sync guards are required.
-      public final BasePort[] getPorts() {
-	return this._esdl__ports;
-      }
-      public final BaseExePort[] getExePorts() {
-	return this._esdl__exePorts;
-      }
+    // default function bodies(mostly empty) for the user defined
+    // methods.
+    protected override void preSimulation() {}
+    protected override void postSimulation() {}
 
-      public final override void _esdl__addPort(BasePort port) {
-	synchronized(this) {
-	  bool add = true;
-	  debug(DUPLICATE_CHILD) {
-	    foreach(ref _port; this._esdl__ports) {
-	      if(port is _port) {
-		add = false;
-		break;
-	      }
+    static if(__traits(isAbstractFunction, doConfig)) {
+      public override void doConfig() {}
+    }
+    static if(__traits(isAbstractFunction, doConnect)) {
+      public override void doConnect() {}
+    }
+    static if(__traits(isAbstractFunction, endElab)) {
+      public override void endElab() {}
+    }
+    static if(__traits(isAbstractFunction, doBuild)) {
+      public override void doBuild() {}
+    }
+    static if(__traits(isAbstractFunction, _esdl__postBuild)) {
+      public override void _esdl__postBuild() {}
+    }
+    static if(__traits(isAbstractFunction, _esdl__postElab)) {
+      public override void _esdl__postElab() {}
+    }
+    static if(__traits(isAbstractFunction, _esdl__postConfig)) {
+      public override void _esdl__postConfig() {}
+    }
+
+
+    // _esdl__ports and _esdl__exePorts are effectively immutable
+    // and therefor no sync guards are required.
+    public final BasePort[] getPorts() {
+      return this._esdl__ports;
+    }
+    public final BaseExePort[] getExePorts() {
+      return this._esdl__exePorts;
+    }
+
+    public final override void _esdl__addPort(BasePort port) {
+      synchronized(this) {
+	bool add = true;
+	debug(DUPLICATE_CHILD) {
+	  foreach(ref _port; this._esdl__ports) {
+	    if(port is _port) {
+	      add = false;
+	      break;
 	    }
 	  }
-	  if(add) this._esdl__ports ~= port;
 	}
+	if(add) this._esdl__ports ~= port;
       }
+    }
 
-      public final override void _esdl__addExePort(BaseExePort exeport) {
-	synchronized(this) {
-	  bool add = true;
-	  debug(DUPLICATE_CHILD) {
-	    foreach(ref _exeport; this._esdl__exePorts) {
-	      if(exeport is _exeport) {
-		add = false;
-		break;
-	      }
+    public final override void _esdl__addExePort(BaseExePort exeport) {
+      synchronized(this) {
+	bool add = true;
+	debug(DUPLICATE_CHILD) {
+	  foreach(ref _exeport; this._esdl__exePorts) {
+	    if(exeport is _exeport) {
+	      add = false;
+	      break;
 	    }
 	  }
-	  if(add) this._esdl__exePorts ~= exeport;
 	}
+	if(add) this._esdl__exePorts ~= exeport;
       }
-      // _Random_ Generator
-      // public Random _r;
-    };
+    }
+    // _Random_ Generator
+    // public Random _r;
   }
 }
 
@@ -1710,62 +1731,54 @@ interface EventClient
   public bool notify(SimTime steps);
 }
 
-// nested struct
 final class IndexedSimEvent
 {
   import core.atomic;
   import core.memory;
 
-  private size_t _client;
-  private size_t _ptr;
+  version(WEAKREF) {
+    WeakReference!SimEvent _client;
+  }
+  else {
+    private SimEvent _client;
+  }
+
 
   // SimEvent client = void;
   size_t index = void;
 
   this(SimEvent event, size_t i) {
-    this.index = i;
-    auto ptr = cast(size_t)*cast(void**)&event;
-
-    // We use atomics because not all architectures may guarantee
-    // atomic store and load of these values.
-    atomicStore(*cast(shared)&_client, ptr);
-
-    // Only assigned once, so no atomics.
-    _ptr = ptr;
-
-    rt_attachDisposeEvent(event, &unhook);
-    // GC.setAttr(cast(void*)this, GC.BlkAttr.NO_SCAN);
-    GC.setAttr(cast(void*)this, GC.BlkAttr.NO_MOVE);
+    synchronized (this) {
+      this.index = i;
+      version(WEAKREF) {
+	_client = weakReference!SimEvent(event);
+      }
+      else {
+	_client = event;
+      }
+    }
   }
 
   private final SimEvent client() {
-    auto obj = cast(SimEvent)cast(void*)atomicLoad(*cast(shared)&_client);
-
-    // We've moved obj into the GC-scanned stack space, so it's now
-    // safe to ask the GC whether the object is still alive. Note
-    // that even if the cast and assignment of the obj local
-    // doesn't put the object on the stack, this call will. So,
-    // either way, this is safe.
-    if (GC.addrOf(cast(void*)obj)) return obj;
-    return null;
+    synchronized(this) {
+      version(WEAKREF) {
+	if (_client.alive()) {
+	  return _client.target();
+	}
+	else {
+	  return null;
+	}
+      }
+      else {
+	return _client;
+      }
+    }
   }
-
-  private final void unhook(Object object) {
-    rt_detachDisposeEvent(object, &unhook);
-
-    // This assignment is important. If we don't null _client when
-    // it is collected, the check in object could return false
-    // positives where the GC has reused the memory for a new
-    // object.
-    // writeln("Event is nulled");
-    atomicStore(*cast(shared)&_client, cast(size_t)0);
-  }
-
 }
 
 // FIXME -- create a freelist for notifications
 public class NotificationObj(T): EventObj
-  // , private EventClient
+				 // , private EventClient
 {
   // _data is set when a data is provided while making a notification
   private T _data;
@@ -1859,10 +1872,10 @@ public class NotificationObj(T): EventObj
 	     delN.post(delay, this.get());
 	   });
       // fork({
-      // 	  while(true) {
-      // 	    delN.post(delay, observe(this));
-      // 	  }
-      // 	});
+      //	  while(true) {
+      //	    delN.post(delay, observe(this));
+      //	  }
+      //	});
       NotificationQueue!T n = delN;
       return n;
     }
@@ -1874,10 +1887,10 @@ public class NotificationObj(T): EventObj
 	   clked.post(this.get());
 	 });
     // fork({
-    // 	while(true) {
-    // 	  clk.wait();
-    // 	  clked.post(this.get());
-    // 	}
+    //	while(true) {
+    //	  clk.wait();
+    //	  clked.post(this.get());
+    //	}
     //   });
     Notification!T n = clked;
     return n;
@@ -1973,7 +1986,7 @@ public class NotificationObj(T): EventObj
   }
 
   public static Notification!T[] opIndex(size_t n) {
-    Notification!T notifications[] = new Notification!T[n];
+    Notification!T[] notifications = new Notification!T[n];
     foreach(ref notification;notifications) {
       synchronized {
 	notification.init();
@@ -2060,8 +2073,8 @@ public class NotificationQueueObj(T): NotificationObj!T
 
   struct TimedNotice
   {
-    enum SimTime invalid = SimTime(long.min);
-    
+    enum SimTime invalid = SimTime(ulong.max);
+
     SimTime _time = invalid;
     T _data;
 
@@ -2597,7 +2610,7 @@ public class EventObj: EventAgent, NamedObj
   }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   // internal function for event instantiation -- called during the
   // elaboration phase
@@ -2698,7 +2711,7 @@ public class EventObj: EventAgent, NamedObj
   }
 
   public static Event[] opIndex(size_t n) {
-    Event events[] = new Event[n];
+    Event[] events = new Event[n];
     foreach(ref event;events) {
       synchronized {
 	event.init();
@@ -2775,8 +2788,8 @@ public class EventQueueObj: EventObj
 
   struct TimedNotice
   {
-    enum SimTime invalid = SimTime(long.min);
-    
+    enum SimTime invalid = SimTime(ulong.max);
+
     SimTime _time = invalid;
 
     public final bool isValid() {
@@ -3303,7 +3316,7 @@ final private class TimedEvent: SimEvent
 	    this.getSimulator._scheduler.insertDelta(this);
 	  return true;
 	}
- 	else {	// request for scheduling timed event
+	else {	// request for scheduling timed event
 	  // Create a new timed event
 	  _notice = EventNotice.alloc(this.getSimulator.simTime
 				      + steps, this);
@@ -3436,7 +3449,7 @@ private class AndSimEvent: EventExpr
 
   struct Objections
   {
-    byte flags[];
+    byte[] flags;
     uint num;
 
     size_t length() {
@@ -3629,23 +3642,23 @@ interface Procedure: HierComp
   }
 
   // Functions for Random Stability
-  protected ref Random randGen();
+  public ref Random getRandGen();
 
   public final void srandom(uint _seed) {
     synchronized(this) {
-      randGen().seed(_seed);
+      getRandGen().seed(_seed);
     }
   }
 
   public final Random getRandState() {
     synchronized(this) {
-      return randGen.save();
+      return getRandGen.save();
     }
   }
 
   public final void setRandState(Random state) {
     synchronized(this) {
-      randGen = state;
+      getRandGen = state;
     }
   }
 
@@ -3680,9 +3693,9 @@ public auto observe(E)(E e)
 public void wait(E)(E e)
   if(!is(E == struct) &&
      !isIntegral!E) {
-  auto event = getEventObj(e);
-  waitForEvent(event);
-}
+    auto event = getEventObj(e);
+    waitForEvent(event);
+  }
 
 public void wait(I)(I n)
   if(isIntegral!I &&
@@ -3692,17 +3705,17 @@ public void wait(I)(I n)
 
 public void wait(E)(E e)
   if(is(E: SimTime) || is(E: Time)) {
-      auto event = Process.self._timed;
-      event.notify(e);
-      waitForEvent(event);
-    }
+    auto event = Process.self._timed;
+    event.notify(e);
+    waitForEvent(event);
+  }
 
 public void sleep(E)(E e)
   if(is(E: SimTime) || is(E: Time)) {
-      auto event = Process.self._timed;
-      event.notify(e);
-      waitForEvent(event);
-    }
+    auto event = Process.self._timed;
+    event.notify(e);
+    waitForEvent(event);
+  }
 
 public void sleep(I)(I n)
   if(isIntegral!I &&
@@ -3783,9 +3796,9 @@ public void wait(T, bool M)(Signal!(T, M) e) {
 
 public void waitp(E)(E e)
   if(!is(E == struct)) {
-  auto event = getEventObj(e);
-  waitForEventP(event);
-}
+    auto event = getEventObj(e);
+    waitForEventP(event);
+  }
 
 public void waitp(E)(E e)
   if(is(E: SimTime) || is(E: Time))
@@ -3959,10 +3972,10 @@ public void nextTrigger(I)(I n)
 
 public void nextTrigger(E)(E e)
   if(is(E: SimTime) || is(E: Time)) {
-      auto event = Process.self._timed;
-      event.notify(e);
-      _nextTriggerEvent(event);
-    }
+    auto event = Process.self._timed;
+    event.notify(e);
+    _nextTriggerEvent(event);
+  }
 
 private void _nextTriggerEvent(EventObj event) {
   assert(Process.self !is null);
@@ -4046,7 +4059,7 @@ public Fork fork(F...)(F thunks) if(F.length > 1) {
   forkHelper(procs, thunks);
   Fork retval = new Fork(procs);
   return retval;
-}
+ }
 
 public ForkMono fork(F)(F thunk) {
   Process proc;
@@ -4063,7 +4076,7 @@ public ForkMono fork(F)(F thunk) {
     }
 
   return new ForkMono(proc);
- }
+}
 
 public BaseRoutine cron(E, F)(E event, F thunk) {
   BaseRoutine rtn;
@@ -4122,16 +4135,21 @@ private ref Random getRandGen() {
     proc = RootThread.self;
   }
   if(proc !is null) {
-    return proc.randGen();
+    return proc.getRandGen();
   }
   else {
-    assert(false, "randGen can be accessed only from a Process,"
+    assert(false, "getRandGen can be accessed only from a Process,"
 	   " or RootThread");
   }
 }
 
 public T urandom(T=uint)() {
-  return uniform!T(getRandGen());
+  auto seed = uniform!T(getRandGen());
+  debug(SEED) {
+    import std.stdio;
+    writeln("URANDOM returns: ", seed);
+  }
+  return seed;
 }
 
 public T urandom(string BOUNDARY="[]", T=uint)(T min, T max) {
@@ -4146,64 +4164,65 @@ public void srandom(uint _seed) {
   getRandGen().seed(_seed);
 }
 
-@_esdl__component struct Inst(M : EntityIntf)
-{
-  alias M EntityType;
-  private M _esdl__instance = void;
+@_esdl__component struct Inst(M, string S="")
+  if(is(M: EntityIntf))
+    {
+      alias M EntityType;
+      private M _esdl__instance = void;
 
-  package ref M _esdl__objRef() {
-    return this._esdl__instance;
-  }
+      package ref M _esdl__objRef() {
+	return this._esdl__instance;
+      }
 
-  M _esdl__obj() {
-    // _esdl__instance is effectively immutable since the
-    // initialization is done during the elaboration phase.
-    // synchronized(typeid(M)) {
-    if(_esdl__instance is null) {
-      assert(false, "Uninitialized Inst");
-    }
-    return this._esdl__instance;
-    // }
-  }
+      M _esdl__obj() {
+	// _esdl__instance is effectively immutable since the
+	// initialization is done during the elaboration phase.
+	// synchronized(typeid(M)) {
+	if(_esdl__instance is null) {
+	  assert(false, "Uninitialized Inst");
+	}
+	return this._esdl__instance;
+	// }
+      }
 
-  alias _esdl__obj this;
+      alias _esdl__obj this;
 
-  // Disallow Inst assignment
-  @disable void opAssign(Inst);
-  // Allow assigning from module handle once
-  public final void opAssign(M m) {
-    synchronized(typeid(M)) {
-      // Allow it only once
-      this._esdl__instance &&
-	assert(false, "Inst re-initialization not allowed");
+      // Disallow Inst assignment
+      @disable void opAssign(Inst);
+      // Allow assigning from module handle once
+      public final void opAssign(M m) {
+	synchronized(typeid(M)) {
+	  // Allow it only once
+	  this._esdl__instance &&
+	    assert(false, "Inst re-initialization not allowed");
 
-      this._esdl__instance = m;
-    }
-  }
+	  this._esdl__instance = m;
+	}
+      }
 
-  // Next two methods help with elaboration
-  static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
-    l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
-  }
+      // Next two methods help with elaboration
+      static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
+	l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
+      }
 
-  static void _esdl__config(FOO, L) (L l) {
-    l._esdl__objRef._esdl__config(l._esdl__objRef);
-  }
+      static void _esdl__config(FOO, L) (L l) {
+	l._esdl__objRef._esdl__config(l._esdl__objRef);
+      }
 
-  static void _esdl__config(FOO, size_t I, T, L)
-    (T t, L l, uint[] indices=null) {
-    l._esdl__objRef._esdl__config!(FOO, I)(t, l._esdl__objRef, indices);
-  }
+      static void _esdl__config(FOO, size_t I, T, L)
+	(T t, L l, uint[] indices=null) {
+	l._esdl__objRef._esdl__config!(FOO, I)(t, l._esdl__objRef, indices);
+      }
 
-  static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
-  {
-    debug(ELABORATE) {
-      import std.stdio;
-      writeln("** Inst: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
-	      typeof(l).stringof);
-    }
-    l._esdl__objRef._esdl__elab!I(t, l._esdl__objRef, indices);
-  }
+      static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
+      {
+	debug(ELABORATE) {
+	  import std.stdio;
+	  writeln("** Inst: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+		  typeof(l).stringof);
+	}
+	l._esdl__objRef._esdl__elab!(I, S)(t, l._esdl__objRef, indices);
+      }
 }
 
 class Worker(T, alias F, int R=0, size_t S=0): Worker!(F, R, S)
@@ -4242,72 +4261,63 @@ class Routine(T, alias F, int R=0): Routine!(F, R)
 interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 {
 
-  static string elabTasks() {
-    return
-      q{};
-  }
-
-  static string configTime() {
-    return q{
-
-      // Fix the various time configuration parameters for an entity
-      // once the time precision has been fixed
-      public final override void fixTimeParameters(ulong scale = 0) {
-	synchronized(this) {
-	  // this._phase = SimPhase.CONFIGURE;
-	  if(this._timeScale is 0 && scale is 0) {
-	    import std.stdio;
-	    Time prec = getRootEntity.getTimePrecision.normalize();
-	    if(prec._value is 0) {
-	      writeln("********** No default timePrecision specified; "
-		      "setting timePrecision to 1.psec");
-	      this._esdl__setTimePrecision = 1.psec;
-	      writeln("********** No default timeUnit specified; "
-		      "setting timeUnit to 1.nsec");
-	      this._esdl__setTimeUnit = 1.nsec;
-	    }
-	    else {
-	      writeln("********** No default timeUnit specified; "
-		      "setting timeUnit to timePrecision: ", prec);
-	      this._esdl__setTimeUnit = prec;
-	    }
+  mixin template ConfigTimeMixin()
+  {
+    // Fix the various time configuration parameters for an entity
+    // once the time precision has been fixed
+    public final override void fixTimeParameters(ulong scale = 0) {
+      synchronized(this) {
+	// this._phase = SimPhase.CONFIGURE;
+	if(this._timeScale is 0 && scale is 0) {
+	  import std.stdio;
+	  Time prec = getRootEntity.getTimePrecision.normalize();
+	  if(prec._value is 0) {
+	    writeln("********** No default timePrecision specified; "
+		    "setting timePrecision to 1.psec");
+	    this._esdl__setTimePrecision = 1.psec;
+	    writeln("********** No default timeUnit specified; "
+		    "setting timeUnit to 1.nsec");
+	    this._esdl__setTimeUnit = 1.nsec;
 	  }
-
-	  if(this._timeScale is 0) {
-	    // if timeScale not defined, take it from the parent
-	    this._timeScale = scale;
+	  else {
+	    writeln("********** No default timeUnit specified; "
+		    "setting timeUnit to timePrecision: ", prec);
+	    this._esdl__setTimeUnit = prec;
 	  }
-	  
-	  foreach(ref c; this._esdl__childObjs) {
-	    if(TimeConfigContext m = cast(TimeConfigContext) c) {
-	      synchronized(m) {
-		// propagate the scale downwards
-		m.fixTimeParameters(this._timeScale);
-	      }
+	}
+
+	if(this._timeScale is 0) {
+	  // if timeScale not defined, take it from the parent
+	  this._timeScale = scale;
+	}
+
+	foreach(ref c; this._esdl__childObjs) {
+	  if(TimeConfigContext m = cast(TimeConfigContext) c) {
+	    synchronized(m) {
+	      // propagate the scale downwards
+	      m.fixTimeParameters(this._timeScale);
 	    }
 	  }
 	}
       }
-    };
+    }
   }
 
   // EntityIntf Constructor
-  static string entityMixin() {
-    return
-      // "import std.stdio: writeln;" ~
-      hierMixin() ~
-      hierContextMixin() ~
-      configTime() ~
-      timedMixin() ~
-      elabTasks();
+  mixin template EntityMixin()
+  {
+    mixin TimedMixin;
+    mixin ConfigTimeMixin;
+    mixin HierMixin;
+    mixin HierContextMixin;
   }
 }
 
 // Entity class -- alternate is to inherit from EntityIntf and use the
-// entityMixin
+// EntityMixin
 class Entity: EntityIntf
 {
-  mixin(entityMixin);
+  mixin EntityMixin;
 }
 
 
@@ -4506,45 +4516,47 @@ template Routine(alias F, int R=0)
   }
 }
 
-// private auto recreateDelegateFromVoidPtr(alias F)(void* _entity)
-// {
-//   void delegate() dg;
-//   dg.funcptr = &F;
-//   // Need to add dilligence here
-//   // But how to make sure that the function does not take arguments
-//   dg.ptr = _entity;
-//   return dg;
-// }
-
 private auto recreateDelegate(alias F, T)(T _entity)
 {
-  // import std.traits: ReturnType, ParameterTypeTuple;
   import std.functional: toDelegate;
-  union DelegateUnion(DG, FT)
-  {
-    DG dg;
-    alias dg this;
-    struct
-    {
-      void* ptr;
-      FT funcptr;
-    }
-  }
-
-  // ReturnType!F delegate(ParameterTypeTuple!F) dg;
   alias typeof(toDelegate(&F)) DG;
-  // alias typeof(dg) DG;
-  alias typeof(&F) FT;
-
-  DelegateUnion!(DG, FT) du;
-  
-  // DG dg;
-
-  du.funcptr = &F;
-  du.ptr = cast(void *) _entity;
-
-  return du.dg;
+  DG dg;
+  dg.funcptr = &F;
+  dg.ptr = *(cast(void **) (&_entity));
+  return dg;
 }
+
+// alternate implemetation assumes dg.funcptr and dg.ptr are not assignable
+// private auto recreateDelegate(alias F, T)(T _entity)
+// {
+//   // import std.traits: ReturnType, ParameterTypeTuple;
+//   import std.functional: toDelegate;
+//   union DelegateUnion(DG, FT)
+//   {
+//     DG dg;
+//     alias dg this;
+//     struct
+//     {
+//       void* ptr;
+//       FT funcptr;
+//     }
+//   }
+
+//   // ReturnType!F delegate(ParameterTypeTuple!F) dg;
+//   alias typeof(toDelegate(&F)) DG;
+//   // alias typeof(dg) DG;
+//   alias typeof(&F) FT;
+
+//   DelegateUnion!(DG, FT) du;
+
+//   // DG dg;
+
+//   du.funcptr = &F;
+//   // to skip any opCast and "alias this"
+//   du.ptr = *(cast(void **) (&_entity));
+
+//   return du.dg;
+// }
 
 // auto adjustArgs(T, A...)(T t)
 // {
@@ -4696,11 +4708,11 @@ class SimThread: Thread
   void call() {
     _waitLock.notify();
   }
-  
+
   void yield() {
     _waitLock.wait();
   }
-  
+
   // class State {};
   //  private State _stateMonitor;
 
@@ -4815,7 +4827,7 @@ class BaseWorker: Process
     return false;
   }
   public override final bool isRunnableWorker() {
-      return (_state < _DEFUNCT);
+    return (_state < _DEFUNCT);
   }
 }
 
@@ -4827,7 +4839,7 @@ class BaseTask: Process
     synchronized(this) {
       super(fn, stage);
       if(sz is 0) {
-	_fiber = new Fiber(() {fn_wrap(fn);});
+	_fiber = new Fiber(() {fn_wrap(fn);}, 1024*1024);
       }
       else {
 	_fiber = new Fiber(() {fn_wrap(fn);}, sz);
@@ -4839,7 +4851,7 @@ class BaseTask: Process
     synchronized(this) {
       super(dg, stage);
       if(sz is 0) {
-	_fiber = new Fiber(() {dg_wrap(dg);});
+	_fiber = new Fiber(() {dg_wrap(dg);}, 1024*1024);
       }
       else {
 	_fiber = new Fiber(() {dg_wrap(dg);}, sz);
@@ -4862,7 +4874,15 @@ class BaseTask: Process
   }
 
   protected final override void yield() {
-    _fiber.yield();
+    debug(FIBER) {
+      import std.stdio;
+      writeln("Before Fiber Yield");
+      _fiber.yield();
+      writeln("After  Fiber Yield");
+    }
+    else {
+      _fiber.yield();
+    }
   }
 
   final override void freeLock(bool onlyBarrier=false) {
@@ -4893,7 +4913,7 @@ class BaseTask: Process
     }
   }
   public override final bool isRunnableTask() {
-      return (_state < _DEFUNCT);
+    return (_state < _DEFUNCT);
   }
   public override final bool isRunnableWorker() {
     return false;
@@ -4905,10 +4925,10 @@ class BaseRoutine: Process
 {
   // Fiber _fiber;
   private EventObj _nextTrigger;
-  
+
   private void function() _fn = null;
   private void delegate() _dg = null;
-  
+
   public override void nextTrigger(EventObj event) {
     synchronized(this) {
       _nextTrigger = event;
@@ -5091,7 +5111,7 @@ abstract class Process: Procedure, EventClient
 
   // depends on whether it is a fiber or a thread
   void freeLock(bool onlyBarrier=false);
-  
+
   private final void cleanup() {
     // cleanup gets called only when a process comes to an end
     // as this does not happen frequently, we can freely use synchronization
@@ -5167,7 +5187,7 @@ abstract class Process: Procedure, EventClient
   }
 
   abstract protected void execute();
-  
+
   // make sure that a user can not directly "start" the underlying
   // thread -- somehow it seems @disable does not work alone, the
   // private tag seems to make the effect though
@@ -5187,10 +5207,10 @@ abstract class Process: Procedure, EventClient
     if(_isRunnable()) {
       _state = ProcState.ABORTED;
       if(_state == ProcState.STARTING) {
-  	freeLock(true);
+	freeLock(true);
       }
       else {
-  	call();
+	call();
       }
     }
     debug(PROC) {
@@ -5198,8 +5218,8 @@ abstract class Process: Procedure, EventClient
       writeln("Aborting thread in state:", state);
     }
   }
-	
-	
+
+
   // called at the end of simulation
   final protected void killProcess() {
     if(_isRunnable()) {
@@ -5216,8 +5236,8 @@ abstract class Process: Procedure, EventClient
       writeln("Terminating thread in state:", state);
     }
   }
-	
-	
+
+
   private bool _dontInit      = false;
 
   public final void dontInitialize() {
@@ -5298,7 +5318,7 @@ abstract class Process: Procedure, EventClient
     }
   }
 
-  mixin(hierMixin());
+  mixin HierMixin;
 
   public final void _esdl__addChildObj(NamedObj child) {
     assert(false, "A task can have only processes as childObjs");
@@ -5306,7 +5326,7 @@ abstract class Process: Procedure, EventClient
 
   Random _randGen;
 
-  protected final override ref Random randGen() {
+  public final override ref Random getRandGen() {
     synchronized(this) {
       return _randGen;
     }
@@ -5360,7 +5380,7 @@ abstract class Process: Procedure, EventClient
     return _endedTree;
   }
 
-   class TermException: Throwable
+  class TermException: Throwable
   {
     this() {
       super("Process Terminated");
@@ -5459,7 +5479,7 @@ abstract class Process: Procedure, EventClient
   public void nextTrigger(EventObj event) {
     assert(false, "nextTrigger may be called only by a Routine");
   }
-  
+
   public final void waitSensitive() {
     EventObj event = this.sensitiveTo();
     if(event is null) {
@@ -5784,7 +5804,7 @@ abstract class Process: Procedure, EventClient
 
   // returns true if the task requires explicit termination
   protected void requestAbort(EsdlExecutor x);
-    
+
   protected void requestKill(EsdlExecutor x);
 
   public final bool _isActive() {
@@ -5849,7 +5869,7 @@ class ForkMono: Fork
       super(procs);
     }
   }
-  
+
   public final Process getProcess() {
     synchronized(this) {
       return _proc;
@@ -5886,6 +5906,10 @@ class Fork
     synchronized(this) {
       return _procs;
     }
+  }
+
+  public static Fork self() {
+    return Process.self.thisFork();
   }
 
   public final void joinAll() {
@@ -6002,6 +6026,13 @@ class Fork
       task.enable();
     }
   }
+
+  public final void setAffinity(ParContext context) {
+    foreach(proc; _procs) {
+      assert(proc.state() == ProcState.STARTING);
+      proc._esdl__parConfig = context._esdl__getParConfig();
+    }
+  }
 }
 
 interface ChannelIF
@@ -6018,12 +6049,12 @@ enum UpdateReason: byte
       VERILOG,
       VHDL,
       SYSTEMC
-  }
+      }
 
 class Channel: ChannelIF, NamedObj // Primitive Channel
 {
   UpdateReason _updateReason = UpdateReason.NONE;
-  
+
   this(string name="", EntityIntf parent=null) {
     synchronized(this) {
       // _esdl__getParentProc returns null during elaboration
@@ -6031,7 +6062,7 @@ class Channel: ChannelIF, NamedObj // Primitive Channel
     }
   }
 
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   public void update() {
     assert(false, "method 'update' undefined for " ~
@@ -6063,40 +6094,36 @@ class RootThread: Procedure
   private static RootThread _self;
   public static RootThread self() {return _self;}
 
-  private final void fn_wrap(void function() fn) {
-    // FIXME -- the root thread should stick to the first of the
-    // available threads
-    stickToCpuCore(0);
+  private final void fn_wrap(void function() fn, size_t fcore=0) {
+    stickToCpuCore(fcore);
     _self = this;
     fn();
   }
 
-  private final void dg_wrap(void delegate() dg) {
-    // FIXME -- the root thread should stick to the first of the
-    // available threads
-    stickToCpuCore(0);
+  private final void dg_wrap(void delegate() dg, size_t fcore=0) {
+    stickToCpuCore(fcore);
     _self = this;
     dg();
   }
 
-  this(void function() fn, size_t sz = 0 ) {
+  this(void function() fn, size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
       if(sz is 0) {
-	_thread = new Thread(() {fn_wrap(fn);});
+	_thread = new Thread(() {fn_wrap(fn, fcore);});
       }
       else {
-	_thread = new Thread(() {fn_wrap(fn);}, sz);
+	_thread = new Thread(() {fn_wrap(fn, fcore);}, sz);
       }
     }
   }
 
-  this(void delegate() dg, size_t sz = 0 ) {
+  this(void delegate() dg, size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
       if(sz is 0) {
-	_thread = new Thread(() {dg_wrap(dg);});
+	_thread = new Thread(() {dg_wrap(dg, fcore);});
       }
       else {
-	_thread = new Thread(() {dg_wrap(dg);}, sz);
+	_thread = new Thread(() {dg_wrap(dg, fcore);}, sz);
       }
     }
   }
@@ -6109,7 +6136,7 @@ class RootThread: Procedure
 
   @_esdl__ignore Random _randGen;
 
-  protected final override ref Random randGen() {
+  final override ref Random getRandGen() {
     synchronized(this) {
       return _randGen;
     }
@@ -6147,8 +6174,8 @@ class RootThread: Procedure
 
   // FIXME
   // void kill() {}
-  
-  mixin(hierMixin());
+
+  mixin HierMixin;
 }
 
 
@@ -6162,7 +6189,7 @@ private enum ProcState: byte
       RESUMED = 3,
       ENABLED = 4,
       // _REQUESTS
-      
+
       SUSPENDED = 5,		// user suspended
       DISABLED = 6,		// user disabled
 
@@ -6184,25 +6211,24 @@ private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tas
 class PoolThread: SimThread
 {
 
-  private immutable uint _poolIndex;
+  private immutable size_t _poolIndex;
   static if(!__traits(compiles, _esdl__root)) {
     @_esdl__ignore protected RootEntityIntf _esdl__root;
   }
 
 
-  this(EsdlSimulator sim, uint index, size_t sz = 0 ) {
+  this(EsdlSimulator sim, size_t index, size_t fcore, size_t sz=0 ) {
     synchronized(this) {
       this._esdl__root = sim.getRoot();
-      super(&execTaskProcesses, sz);
+      super({execTaskProcesses(fcore);}, sz);
       _poolIndex = index;
     }
   }
 
-  private final void execTaskProcesses() {
+  private final void execTaskProcesses(size_t fcore=0) {
     // First set affinity
     _esdl__root.simulator()._executor._poolThreadStartBarrier.wait();
-    // FIXME -- stick to the index starting from the available threads
-    stickToCpuCore(_poolIndex);
+    stickToCpuCore(_poolIndex + fcore % CPU_COUNT());
     while(true) {
       // wait for next cycle
       _esdl__root.simulator()._executor._poolThreadBarrier.wait();
@@ -6270,19 +6296,19 @@ enum SimPhase : byte
 enum SimRunPhase: byte
   {   SIMULATE,
       SIMULATE_DONE, // The scheduler has completed the simulation
-                     // time it was asked to simulate
+		     // time it was asked to simulate
       PAUSE,
       STAGE_DONE,
       SIMULATION_DONE,
-  }
+      }
 
-void waitAllRoots() {
-  RootEntityIntf.waitSimAll();
+void joinAllRoots() {
+  RootEntityIntf.joinSimAll();
 }
 
-void startSimAllRoots(T)(T t)
+void forkSimAllRoots(T)(T t)
   if(is(T == Time) || is(T == SimTime)) {
-    RootEntityIntf.startSimAll(t);
+    RootEntityIntf.forkSimAll(t);
   }
 
 void simulateAllRoots(T)(T t)
@@ -6299,15 +6325,15 @@ void terminateAllRoots() {
   RootEntityIntf.terminateAll();
 }
 
-void doElab(T)(T t)
+void forkElab(T)(T t)
 {
   t.getSimulator.elabRootThread(t);
 }
 
 void elaborate(T)(T t)
 {
-  t.doElab();
-  t.waitElab();
+  t.forkElab();
+  t.joinElab();
 }
 
 void execElab(T)(T t)
@@ -6319,7 +6345,7 @@ void execElab(T)(T t)
 
 	// So that getRootEntity returns a legal value even during elaboration
 	_esdl__rootEntity = t;
-	
+
 	// The BUILD Phase
 	// Instantiated modules and events are identified and constructed
 	// (using an explicit call to new operator) if these are not already
@@ -6476,8 +6502,8 @@ class EsdlExecutor: EsdlExecutorIf
     _stageIndex = cast(int) _registeredProcesses.length - 1;
   }
 
-  private final void createPoolThreads(size_t numThreads,
-				    size_t stackSize) {
+  private final void createPoolThreads(size_t numThreads, size_t firstThread,
+				       size_t stackSize) {
     _poolThreads.length = numThreads;
     _runnableTasksGroups.length = numThreads;
     for(uint i=0; i!=numThreads; ++i) {
@@ -6485,7 +6511,8 @@ class EsdlExecutor: EsdlExecutorIf
 	import std.stdio;
 	writeln("Creating Pool Threads: ", i);
       }
-      _poolThreads[i] = new PoolThread(_simulator, i, stackSize);
+      _poolThreads[i] = new PoolThread(_simulator, i,
+				       firstThread, stackSize);
     }
   }
 
@@ -6553,30 +6580,30 @@ class EsdlExecutor: EsdlExecutorIf
 	  _minStage = reqStage;
 	  _registeredProcesses.length = 1;
 	}
-  	else if(reqStage < _minStage) {
-  	  auto delta = _minStage - reqStage;
-  	  _minStage = reqStage;
-  	  _registeredProcesses.length += delta;
-  	  auto len = _registeredProcesses.length;
-  	  for (size_t i=len; i!=0; --i) {
-  	    if(i > delta) {
-  	      _registeredProcesses[i-1] = _registeredProcesses[i-1-delta];
-  	    } else {
-  	      _registeredProcesses[i-1] = [];
-  	    }
-  	  }
-  	}
+	else if(reqStage < _minStage) {
+	  auto delta = _minStage - reqStage;
+	  _minStage = reqStage;
+	  _registeredProcesses.length += delta;
+	  auto len = _registeredProcesses.length;
+	  for (size_t i=len; i!=0; --i) {
+	    if(i > delta) {
+	      _registeredProcesses[i-1] = _registeredProcesses[i-1-delta];
+	    } else {
+	      _registeredProcesses[i-1] = [];
+	    }
+	  }
+	}
       }
       else {
-  	if(reqStage - _minStage < _stageIndex) {
+	if(reqStage - _minStage < _stageIndex) {
 	  import std.conv: to;
-  	  assert(false, "Can not add a process to a phase which"
-  		 " is already over: " ~ reqStage.to!string());
-  	}
+	  assert(false, "Can not add a process to a phase which"
+		 " is already over: " ~ reqStage.to!string());
+	}
       }
       if(reqStage - _minStage >= _registeredProcesses.length) {
-  	auto delta = reqStage - _minStage - _registeredProcesses.length + 1;
-  	_registeredProcesses.length += delta;
+	auto delta = reqStage - _minStage - _registeredProcesses.length + 1;
+	_registeredProcesses.length += delta;
       }
     }
   }
@@ -6641,8 +6668,8 @@ class EsdlExecutor: EsdlExecutorIf
     foreach(proc; expandedList) {
       final switch(proc.requestState) {
       case ProcState.STARTING:
-      case ProcState.RUNNING: assert(false);
-	break;
+      case ProcState.RUNNING:
+	assert(false);
       case ProcState.RESUMED:
 	if(_stage == proc._stage && proc.requestResume()) {
 	  addRunnableProcess(proc);
@@ -6676,9 +6703,8 @@ class EsdlExecutor: EsdlExecutorIf
       case ProcState.FINISHED:
       case ProcState.EXCEPTION:
 	assert(false, "Illegal Process Requested State -- NONE");
-	break;
       }
-      
+
       // If I uncomment the next line, I get a crash :-(
       // proc.requestState = ProcState.NONE;
     }
@@ -6695,7 +6721,7 @@ class EsdlExecutor: EsdlExecutorIf
     if(_termProcs.length > 0) {
       import std.algorithm: filter, count;	// filter
       auto termWorkers = filter!(function bool(Process t)
-			       {return t.isRunnableWorker();})(_termProcs);
+				 {return t.isRunnableWorker();})(_termProcs);
 
       _procBarrier.reset(cast(uint) count(termWorkers) + 1);
 
@@ -6839,44 +6865,45 @@ class EsdlExecutor: EsdlExecutorIf
     debug(EXECUTOR) {
       import std.stdio: writeln;
       writeln("******* About to execute ",
-	      _runnableWorkers.length, " tasks");
+	      _runnableWorkers.length, " workers");
     }
 
 
-    foreach(ref task; this._runnableWorkers) {
+    foreach(ref worker; this._runnableWorkers) {
       debug(EXECUTOR) {
 	import std.stdio: writeln;
 	writeln("******* About to execute ",
-		task.procID, " (ID) ", task.state, "(status)");
+		worker.procID, " (ID) ", worker.state, "(status)");
       }
-      task.preExecute();
-      if(task._stage == ProcState.RUNNING) {
-	runProcs ~= task;
+      worker.preExecute();
+      if(worker._stage == ProcState.RUNNING ||
+	 worker._stage == ProcState.STARTING) {
+	runProcs ~= worker;
       }
     }
 
     auto procs = runProcs;
-    
+
     this._runnableWorkers.length = 0;
 
     _procBarrier.reset(cast(uint)runProcs.length + 1);
 
     while(runProcs.length != 0) {
-      Process[] tasks = runProcs;
+      Process[] workers = runProcs;
       runProcs.length = 0;
-      foreach(ref task; tasks) {
+      foreach(ref worker; workers) {
 	this._procSemaphore.wait();
-	if(task._esdl__parLock is null ||
-	   task._esdl__parLock.tryWait) {
-	  task.execute();
+	if(worker._esdl__parLock is null ||
+	   worker._esdl__parLock.tryWait) {
+	  worker.execute();
 	}
 	else {			// postpone
-	  runProcs ~= task;
+	  runProcs ~= worker;
 	  this._procSemaphore.notify();
 	  debug(EXECUTOR) {
 	    import std.stdio: writeln;
 	    writeln("######## Could not get lock -- Postponing Process ",
-		    runProcs.length, " tasks");
+		    runProcs.length, " workers");
 	  }
 	}
       }
@@ -6884,14 +6911,14 @@ class EsdlExecutor: EsdlExecutorIf
 
     debug(EXECUTOR) {
       import std.stdio: writeln;
-      writeln("All tasks executing");
+      writeln("All workers executing");
     }
 
     this._procBarrier.wait();
 
     debug(EXECUTOR) {
       import std.stdio: writeln;
-      writeln("All tasks done with executing");
+      writeln("All workers done with executing");
     }
     return procs;
   }
@@ -6972,7 +6999,7 @@ class EsdlHeapScheduler : EsdlScheduler
     _noticeHeap.clear();
     _noticeHeap.assume(_noticeQueue, 0);
   }
-  
+
   final public SimTime simTime() {
     synchronized(this) {
       return _simTime;
@@ -7089,7 +7116,7 @@ class EsdlHeapScheduler : EsdlScheduler
       return this._noticeHeap.front().atTime();
     }
   }
-  
+
   public final void triggerDeltaEvents() {
     ++_deltaCount;
     debug(SCHEDULER) {
@@ -7213,32 +7240,32 @@ interface RootEntityIntf: EntityIntf
   // to set thread static variables.
   public void initProcess();
 
-  static void startSimAll(T)(T t)
+  static void forkSimAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.startSim(t);
+	root.forkSim(t);
       }
     }
-  static void startSimAllUpto(T)(T t)
+  static void forkSimAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
       foreach(root; allRoots()) {
-	root.startSimUpto(t);
+	root.forkSimUpto(t);
       }
     }
-  static void waitSimAll() {
+  static void joinSimAll() {
     foreach(root; allRoots()) {
-      root.waitSim();
+      root.joinSim();
     }
   }
   static void simulateAll(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      startSimAll(t);
-      waitSimAll();
+      forkSimAll(t);
+      joinSimAll();
     }
   static void simulateAllUpto(T)(T t)
     if(is(T == Time) || is(T == SimTime)) {
-      startSimAllUpto(t);
-      waitSimAll();
+      forkSimAllUpto(t);
+      joinSimAll();
     }
   static void terminateAll() {
     foreach(root; allRoots()) {
@@ -7250,73 +7277,96 @@ interface RootEntityIntf: EntityIntf
 
   public SimTime getSimTime();
 
+  public uint getNumPoolThreads();
+
+  public ulong getNumFirstCore();
+  public ulong getNumMultiCore();
+  
   public void setTimePrecision(Time precision);
   public Time getTimePrecision();
   public bool timePrecisionSet();
   public void timePrecisionSet(bool s);
 
-  // This function shall return 0 if some delta event/or channel update is pending 
+  // This function shall return 0 if some delta event/or channel update is pending
   final public SimTime nextSimTime() {
     return getSimulator.nextSimTime();
   }
-  
+
   final void simulate(Time t) {
-    startSim(t);
-    waitSim();
+    forkSim(t);
+    joinSim();
   }
   final void simulate(SimTime st = MAX_SIMULATION_TIME) {
-    startSim(st);
-    waitSim();
+    forkSim(st);
+    joinSim();
   }
   final void simulateUpto(Time t) {
-    startSimUpto(t);
-    waitSim();
+    forkSimUpto(t);
+    joinSim();
   }
   final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
-    startSimUpto(st);
-    waitSim();
+    forkSimUpto(st);
+    joinSim();
   }
-  final public void waitSim() {
-    this.getSimulator.waitSim();
+  final public void joinSim() {
+    this.getSimulator.joinSim();
   }
-  final public void waitElab() {
-    this.getSimulator.waitElab();
+  final public void join() {
+    this.getSimulator.joinSim();
+  }
+  final public void joinElab() {
+    this.getSimulator.joinElab();
     addRoot(this);
   }
-  final void startSim(Time t) {
+  final void fork(Time t) {
+    forkSim(t);
+  }
+  final void forkSim(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSim(t);
+    getSimulator.forkSim(t);
   }
-  final void startSim(SimTime st = MAX_SIMULATION_TIME) {
+  final void fork(SimTime st = MAX_SIMULATION_TIME) {
+    forkSim(st);
+  }
+  final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSim(st);
+    getSimulator.forkSim(st);
   }
-  final void startSimUpto(Time t) {
+  final void forkSimUpto(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSimUpto(t);
+    getSimulator.forkSimUpto(t);
   }
-  final void startSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+  final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
     _esdl__rootEntity = this;
-    getSimulator.startSimUpto(st);
+    getSimulator.forkSimUpto(st);
   }
-  final public void waitSimEnd() {
-    this.getSimulator.waitSimEnd();
+  final public void joinSimEnd() {
+    this.getSimulator.joinSimEnd();
   }
   final public void finish() {
-    this.abortTree();
+    this.killTree();
     this.getSimulator.termStage();
     // To handle the situation where the finish call gets made during a PAUSE
     if(simPhase() == SimPhase.PAUSE) {
       this.simulate(0.nsec);
     }
+    version(COSIM_VERILOG) {
+      // pragma(msg, "Compiling COSIM_VERILOG version!");
+      import esdl.intf.vpi;
+      vpi_control(vpiFinish, 1);
+    }
+    // now if this thread is one of the tasks, it must stop
+    Process self = Process.self();
+    if(cast(BaseTask) self !is null) wait(0);
+    if(cast(BaseWorker) self !is null) wait(0);
   }
   final public void terminate() {
     this.killTree();
@@ -7330,6 +7380,10 @@ interface RootEntityIntf: EntityIntf
       import esdl.intf.vpi;
       vpi_control(vpiFinish, 1);
     }
+    // now if this thread is one of the tasks, it must stop
+    Process self = Process.self();
+    if(cast(BaseTask) self !is null) wait(0);
+    if(cast(BaseWorker) self !is null) wait(0);
   }
 }
 
@@ -7340,7 +7394,7 @@ abstract class RootEntity: RootEntityIntf
     return _simulator;
   }
 
-  mixin(entityMixin());
+  mixin EntityMixin;
 
   this(string name) {
     synchronized(this) {
@@ -7412,22 +7466,44 @@ abstract class RootEntity: RootEntityIntf
   public final override SimTime getSimTime() {
     return _esdl__root.simulator().simTime();
   }
+
+  public final override uint getNumPoolThreads() {
+    return cast(uint) _esdl__root.simulator()._executor._poolThreads.length;
+  }
+
+  ulong _esdl__numFirstCore = 0;	// The first core -- rootthread rides on this
+  ulong _esdl__numMultiCore = 1;	// number of cores to use
+
+  public ulong getNumFirstCore() {
+    return _esdl__numFirstCore;
+  }
+
+  public ulong getNumMultiCore() {
+    return _esdl__numMultiCore;
+  }
+
+  public void multiCore(ulong ncore = CPU_COUNT(), ulong fcore = 0) {
+    assert(CPU_COUNT() >= ncore);
+
+    _esdl__numMultiCore = ncore;
+    _esdl__numFirstCore = fcore;
+  }
 }
 
 class EsdlSimulator: EntityIntf
 {
-  mixin(entityMixin());
+  mixin EntityMixin;
 
   enum SchedPhase: byte
-  {   IMMEDIATE,
-      UPDATE,
-      DELTA,
-      TIMED,
-      EXEC
-      }
+    {   IMMEDIATE,
+	UPDATE,
+	DELTA,
+	TIMED,
+	EXEC
+	}
 
   SchedPhase _sched = SchedPhase.IMMEDIATE;
-  
+
 
   public final SchedPhase schedPhase() {
     synchronized(this)
@@ -7442,7 +7518,6 @@ class EsdlSimulator: EntityIntf
   // Phase is defined in the SimContext interface class
   // enum SimPhase : byte {BUILD, ELABORATE, CONFIGURE, BINDEXEPORTS, BINDPORTS, SIMULATE}
   @_esdl__ignore private long _updateCount = 0;	// increments each time update happens
-  @_esdl__ignore private size_t _threadCount = 1;
 
   private RootThread _rootThread;
   public final RootThread rootThread() {
@@ -7519,14 +7594,6 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  public final void threadCount(size_t count) {
-    synchronized(this) {
-      import std.exception: enforce;
-      enforce(this._phase != SimPhase.SIMULATE);
-      this._threadCount = count;
-    }
-  }
-
   public final long updateCount() {
     synchronized(this) {
       return _updateCount;
@@ -7544,17 +7611,17 @@ class EsdlSimulator: EntityIntf
   }
 
   // private Process[] tasks;
-  final void startSim(Time t) {
+  final void forkSim(Time t) {
     SimTime st = SimTime(this, t);
-    this.startSim(st);
+    this.forkSim(st);
   }
 
-  final void startSimUpto(Time t) {
+  final void forkSimUpto(Time t) {
     SimTime st = SimTime(this, t);
-    this.startSimUpto(st);
+    this.forkSimUpto(st);
   }
 
-  final void startSim(SimTime runTime = MAX_SIMULATION_TIME) {
+  final void forkSim(SimTime runTime = MAX_SIMULATION_TIME) {
     synchronized(this) {
       import std.conv: to;
       // elabDoneLock.wait();
@@ -7566,15 +7633,15 @@ class EsdlSimulator: EntityIntf
 	break;
       default:
 	assert(false, "Can not start a simulator in state: " ~ phase.to!string);
-      // super.join();
+	// super.join();
       }
     }
   }
 
-  final void startSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
-    startSim(runTime-getSimTime());
+  final void forkSimUpto(SimTime runTime = MAX_SIMULATION_TIME) {
+    forkSim(runTime-getSimTime());
   }
-  
+
   final void terminate() {
     synchronized(this) {
       if(phase !is SimPhase.PAUSE) {
@@ -7615,7 +7682,7 @@ class EsdlSimulator: EntityIntf
       runDelta = true;
       timeLeft = false;
     }
-      
+
   simLoop_:
     while(this.phase == SimPhase.SIMULATE) {
       schedPhase = SchedPhase.IMMEDIATE;
@@ -7657,7 +7724,7 @@ class EsdlSimulator: EntityIntf
 	if(_executor.runnableTasksCount)
 	  writeln(" > Got Immediate tasks: ", _executor.runnableTasksCount);
       }
-      
+
       if(_executor.runnableThreadsCount is 0) {
 	if(runDelta is true || timeLeft is true) {
 	  runDelta = false;	// runDelta will trigger only one delta cycle
@@ -7791,15 +7858,15 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  final void waitElab() {
+  final void joinElab() {
     elabDoneLock.wait();
   }
 
-  final void waitSim() {
+  final void joinSim() {
     simDoneLock.wait();
   }
 
-  final void waitSimEnd() {
+  final void joinSimEnd() {
     simTermLock.wait();
   }
 
@@ -7898,29 +7965,11 @@ class EsdlSimulator: EntityIntf
 	import std.exception: enforce;
 	import std.stdio: writeln;
 	this._scheduler = new EsdlHeapScheduler(this);
-	this._executor = new EsdlExecutor(this);
 
 	_elabDoneLock = new Semaphore(0);
 	_simStepLock = new Semaphore(0);
 	_simDoneLock = new Semaphore(0);
 	_simTermLock = new Semaphore(0);
-
-	version(MULTICORE) {
-	  import core.cpuid: threadsPerCPU;
-	  auto count = CPU_COUNT();
-	  _executor.threadCount(count// -1
-				);
-	  _executor.createPoolThreads(count// -1
-				      , 0);
-	}
-	else {
-	  _executor.threadCount(1);
-	  _executor.createPoolThreads(1, 0);
-	}
-	// We do this to make dure that all the routine threads are up
-	// and running before we attempt to create other threads. For
-	// some reason the simulation sometimes gets into a deadlock
-	// if we do not take care of this
       }
       catch(Throwable e) {
 	import std.conv: to;
@@ -7934,6 +7983,18 @@ class EsdlSimulator: EntityIntf
   }
 
   public final void elabRootThread(T)(T t) {
+    auto count = getRoot.getNumMultiCore();
+    auto first = getRoot.getNumFirstCore();
+
+    this._executor = new EsdlExecutor(this);
+
+    _executor.threadCount(count);
+    _executor.createPoolThreads(count, first, 0);
+    // We do this to make dure that all the routine threads are up
+    // and running before we attempt to create other threads. For
+    // some reason the simulation sometimes gets into a deadlock
+    // if we do not take care of this
+
     synchronized(this) {
       _rootThread = new RootThread({
 	  _esdl__rootEntity = t;
@@ -7945,7 +8006,8 @@ class EsdlSimulator: EntityIntf
 	    writeln("Simulation Root Thread threw exception: ", e);
 	    // throw(e);
 	  }
-	}, 64*1024*1024);
+	},
+	getRoot().getNumFirstCore());
       _rootThread._esdl__setParent(this);
       _rootThread._esdl__setName("root");
     }
@@ -8032,9 +8094,308 @@ public void finish() {
     writeln("Somebody called finish");
   }
   getRootEntity.finish();
-  version(COSIM_VERILOG) {
-    // pragma(msg, "Compiling COSIM_VERILOG version!");
-    import esdl.intf.vpi;
-    vpi_control(vpiFinish, 1);
+}
+
+// TimeContext
+
+interface TimeContext
+{
+  public Time getTimeUnit();
+  public ulong getTimeScale();
+}
+
+interface TimeConfigContext: TimeContext
+{
+  public Time getTimeUnit();
+  protected void _esdl__setTimeUnit(Time t);
+  protected void _esdl__setTimePrecision(Time t);
+  public ulong getTimeScale();
+  package void _esdl__setTimeScale(ulong t);
+  public final SimTime tu(ulong val) {
+    return SimTime(val*getTimeScale());
   }
+  // SimTime Time(ulong val, TimeUnit unit);
+  // SimTime Time(string unit="default")(ulong val);
+  // SimTime Time(double val);
+  // SimTime Time(double val, TimeUnit unit);
+  public void fixTimeParameters(ulong scale = 0);
+
+  mixin template TimedMixin()
+  {
+    protected ulong _timeScale = 0;
+
+    override protected void _esdl__setTimeUnit(Time t) {
+      synchronized(this) {
+	if(! t.isZero()) {
+	  Time prec = getRootEntity.getTimePrecision.normalize();
+	  Time tuni = t.normalize();
+	  if(tuni._value !is 0 && prec._value is 0) {
+	    import std.stdio;
+	    prec = tuni;
+	    writeln("********** timePrecision undefined, setting it to top level timeUnit: ", prec);
+	    getRootEntity._esdl__setTimePrecision(prec);
+	  }
+	  if(prec._unit > tuni._unit ||
+	     ((tuni._value * 10L^^(tuni._unit - prec._unit)) %
+	      prec._value) !is 0) {
+	    import std.string: format;
+	    assert(false,
+		   format("setTimeUnit %s incompatible with setTimePrecision %s",
+			  tuni, prec));
+	  }
+	  _timeScale =
+	    tuni._value * (10L^^(tuni._unit - prec._unit)) / prec._value;
+	}
+      }
+    }
+
+    override protected void _esdl__setTimePrecision(Time t) {
+      // if(! getRootEntity.timePrecisionSet()) {
+      //   if(getSimPhase() !is SimPhase.CONFIGURE) {
+      //     assert(false,
+      //	   "_esdl__setTimePrecision should only be called from"
+      //	   " within doConfig method");
+      //   }
+      if(! t.isZero()) {
+	._esdl__setTimePrecision(t.normalize());
+      }
+      // }
+    }
+
+    override public Time getTimeUnit() {
+      synchronized(this) {
+	return this._timeScale * getTimePrecision;
+      }
+    }
+
+    override public ulong getTimeScale() {
+      synchronized(this)
+	{
+	  return this._timeScale;
+	}
+    }
+
+    // returns true if the given number is an exact power of 10
+    private static bool _isPowerOf10(ulong n) {
+      if(n == 0) return false;
+      if(n == 1) return true;
+      if(n % 10L == 0) return _isPowerOf10(n/10L);
+      else return false;
+    }
+
+    private static ubyte _log10(ulong n) {
+      if(n == 1) return 0;
+      else return cast(ubyte)(1 + _log10(n/10L));
+    }
+
+    // unittest {
+    //   assert(TimedObject._isPowerOf10(10) == true);
+    //   assert(TimedObject._isPowerOf10(20) == false);
+    //   assert(TimedObject._isPowerOf10(0) == false);
+    //   assert(TimedObject._isPowerOf10(1) == true);
+    //   assert(TimedObject._log10(1) == 0);
+    //   assert(TimedObject._log10(100) == 2);
+    //   assert(TimedObject._log10(10000) == 4);
+    // }
+  }
+
+}
+
+struct SimTime
+{
+  import std.traits: isIntegral;
+  // Just store simulation time steps
+  private ulong _value;
+
+  public this(ulong value) {
+    this._value = value;
+  }
+
+  public ulong getVal() {
+    return _value;
+  }
+
+  public void opAssign(ulong value) {
+    this._value = value;
+  }
+
+  public void opAssign(SimTime t) {
+    this._value = t._value;
+  }
+
+  public this(TimeConfigContext context, ulong val) {
+    synchronized(context) {
+      this._value = val * context.getTimeScale;
+    }
+  }
+
+  public this(TimeConfigContext context, ulong val, TimeUnit unit) {
+    synchronized(context) {
+      if(getTimePrecisionOrder <= unit) {
+	this._value = val * 10L ^^(unit - getTimePrecisionOrder);
+      }
+      else {
+	this._value = val / 10L ^^(getTimePrecisionOrder - unit);
+      }
+    }
+  }
+
+  public this(TimeConfigContext context, Time t) {
+    synchronized(context) {
+      if(getTimePrecisionOrder <= t._unit) {
+	this._value = t._value * 10L ^^(t._unit - getTimePrecisionOrder);
+      }
+      else {
+	this._value = t._value / 10L ^^(getTimePrecisionOrder - t._unit);
+      }
+    }
+  }
+
+  public int opCmp(SimTime rhs) {
+    if(this._value == rhs._value) return 0;
+    if(this._value < rhs._value) return -1;
+    else return 1;
+  }
+
+  public int opCmp(ulong rhs) {
+    if(this._value == rhs) return 0;
+    if(this._value < rhs) return -1;
+    else return 1;
+  }
+
+  public bool opEquals(SimTime rhs) {
+    return _value == rhs._value;
+  }
+
+  public bool opEquals(ulong rhs) {
+    return _value == rhs;
+  }
+
+  public SimTime opBinary(string op)(SimTime rhs)
+    if(op == "+") {
+      // import std.exception;	// enforce
+      auto result = this._value + rhs._value;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinary(string op)(SimTime rhs)
+    if(op == "-") {
+      // import std.exception;	// enforce
+      // enforce that rhs is not greater
+      // -- since a long can not hold a negative number
+      // enforce(rhs._value <= this._value);
+      auto result = this._value - rhs._value;
+      return SimTime(result);
+    }
+
+  public SimTime opBinary(string op, T)(T rhs)
+    if(isIntegral!T && op == "*") {
+      import std.exception;	// enforce
+      auto result = this._value * rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinaryRight(string op, T)(T rhs)
+    if(isIntegral!T && op == "*") {
+      import std.exception;	// enforce
+      auto result = this._value * rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinary(string op, T)(T rhs)
+    if(isIntegral!T && op == "/") {
+      import std.exception;	// enforce
+      auto result = this._value / rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public SimTime opBinaryRight(string op, T)(T rhs)
+    if(isIntegral!T && op == "/") {
+      import std.exception;	// enforce
+      auto result = this._value / rhs;
+      // enforce to make sure that there has not been any long overflow
+      // enforce(result >= this._value);
+      return SimTime(result);
+    }
+
+  public T to(T)()
+    if(is(T == string)) {
+      import std.conv;
+      return "#" ~ to!string(_value);
+    }
+
+  public T to(T)()
+    if(is(T == ulong) || is(T == long)) {
+      return _value;
+    }
+
+  public bool isZero() {
+    if(_value is 0) return true;
+    else return false;
+  }
+
+  alias to!string toString;
+}
+
+// alias SimTime SimTime;
+immutable SimTime DELTA = SimTime(0L);
+
+immutable SimTime MAX_SIMULATION_TIME = SimTime(ulong.max);
+
+public void _esdl__setTimePrecision(Time t) {
+  _isPowerOf10(t._value) ||
+    assert(false, "timePrecision takes only powers of 10 as arguments");
+  getRootEntity.setTimePrecision(t.normalize);
+}
+
+public Time getTimePrecision() {
+  return getRootEntity.getTimePrecision();
+}
+
+public byte getTimePrecisionOrder() {
+  auto t = getRootEntity.getTimePrecision();
+  auto retval = cast(byte)(t._unit + _log10(t._value));
+  return retval;
+}
+
+private bool _isPowerOf10(ulong n) {
+  if(n == 0) return false;
+  if(n == 1) return true;
+  if(n % 10L == 0) return _isPowerOf10(n/10L);
+  else return false;
+}
+
+private ubyte _log10(ulong n) {
+  if(n == 1) return 0;
+  else return cast(ubyte)(1 + _log10(n/10L));
+}
+
+class Root(T): RootEntity if(is(T: EntityIntf))
+  {
+    this(string name) {
+      super(name);
+    }
+    mixin("Inst!T " ~ T.stringof ~ "Instance;\n");
+}
+
+
+public void simulate(T, string NAME)() {
+  auto root = new Root!T(NAME);
+  root.elaborate();
+  root.simulate();
+}
+
+public auto forkSim(T, string NAME)() {
+  auto root = new Root!T(NAME);
+  root.elaborate();
+  root.forkSim();
+  return root;
 }

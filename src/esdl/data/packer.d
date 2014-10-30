@@ -10,7 +10,7 @@ module esdl.data.packer;
 
 import esdl.data.bstr;
 import esdl.data.bvec;
-import esdl.base.time;
+import esdl.base.core: SimTime;
 
 import std.traits;
 

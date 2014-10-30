@@ -15,7 +15,7 @@ version(COSIM_SYSTEMC) {
   extern(C) byte systemc_time_resolution();
   
   import esdl.base.core: simulateAllRoots, startSimAllRoots, waitAllRoots;
-  import esdl.base.time: Time;
+  import esdl.data.time: Time;
 
   extern(C) void esdlStartSimFor(long t) {
     Time time_ = Time(t, systemc_time_resolution());

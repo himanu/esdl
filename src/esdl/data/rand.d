@@ -165,7 +165,7 @@ struct RandGen
 
   private Random _gen;
 
-  private bvec!32 _bv;
+  private Bit!32 _bv;
 
   private ubyte _bi = 32;
 
@@ -246,7 +246,7 @@ class CstStage {
 
 public class ConstraintEngine {
   // Keep a list of constraints in the class
-  _ESDL__ConstraintBase cstList[];
+  _ESDL__ConstraintBase[] cstList;
   _ESDL__ConstraintBase cstWith;
   bool _cstWithChanged;
   
@@ -258,6 +258,9 @@ public class ConstraintEngine {
   BddDomain[] _domains;
 
   this(uint seed, size_t rnum) {
+    debug(NOCONSTRAINTS) {
+      assert(false, "Constraint engine started");
+    }
     _rgen.seed(seed);
     _buddy = _new!Buddy(400, 400);
     _cstRands.length = rnum;
@@ -509,20 +512,20 @@ public class ConstraintEngine {
 					bddDist);
 
     auto solVecs = solution.toVector();
-    enforce(solVecs.length == 1,
-	    "Expecting exactly one solutions here; got: " ~
-	    to!string(solVecs.length));
 
-    auto bits = solVecs[0];
+    byte[] bits;
+    if(solVecs.length != 0) {
+      bits = solVecs[0];
+    }
 
     foreach(vec; stage._randVecs) {
       vec.value = 0;	// init
       foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
-	if(bits[j] == 1) {
-	  vec.value = vec.value + (1L << i);
-	}
-	if(bits[j] == -1) {
+	if(bits.length == 0 || bits[j] == -1) {
 	  vec.value = vec.value + ((cast(ulong) _rgen.flip()) << i);
+	}
+	else if(bits[j] == 1) {
+	  vec.value = vec.value + (1L << i);
 	}
       }
       // vec.bddvec = null;
@@ -665,39 +668,37 @@ interface RandomizableIntf
     }
   }
 
-  static final string _esdl__randomizable() {
-    return q{
+  mixin template _esdl__randomizable()
+  {
+    alias typeof(this) _esdl__RandType;
+    public _esdl__RandType _esdl__typeID() {
+      return null;
+    }
 
-      alias typeof(this) _esdl__RandType;
-      public _esdl__RandType _esdl__typeID() {
-	return null;
+    public void _esdl__virtualInitCstEng() {
+      _esdl__initCstEng!_esdl__RandType(this);
+    }
+    public bool _esdl__virtualRandomize() {
+      return _esdl__randomize!_esdl__RandType(this);
+    }
+
+    public ConstraintEngine _esdl__cstEng;
+    public uint _esdl__randSeed;
+
+    public void seedRandom(int seed) {
+      _esdl__randSeed = seed;
+      if (_esdl__cstEng !is null) {
+	_esdl__cstEng._rgen.seed(seed);
       }
+    }
+    alias seedRandom srandom;	// for sake of SV like names
 
-      public void _esdl__virtualInitCstEng() {
-	_esdl__initCstEng!_esdl__RandType(this);
-      }
-      public bool _esdl__virtualRandomize() {
-	return _esdl__randomize!_esdl__RandType(this);
-      }
+    public ConstraintEngine getCstEngine() {
+      return _esdl__cstEng;
+    }
 
-      public ConstraintEngine _esdl__cstEng;
-      public uint _esdl__randSeed;
-
-      public void seedRandom (int seed) {
-	_esdl__randSeed = seed;
-	if (_esdl__cstEng !is null) {
-	  _esdl__cstEng._rgen.seed(seed);
-	}
-      }
-      alias seedRandom srandom;	// for sake of SV like names
-
-      public ConstraintEngine getCstEngine() {
-	return _esdl__cstEng;
-      }
-
-      void pre_randomize() {}
-      void post_randomize() {}
-    };
+    void pre_randomize() {}
+    void post_randomize() {}
   }
 
   ConstraintEngine getCstEngine();
@@ -707,7 +708,7 @@ interface RandomizableIntf
 
 class Randomizable: RandomizableIntf
 {
-  mixin(_esdl__randomizable());
+  mixin _esdl__randomizable;
 }
 
 T _new(T, Args...) (Args args) {
@@ -862,7 +863,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, size_t RI=0, T)
 	    }
 	    else {
 	      import esdl.data.bvec;
-	      bvec!64 temp = vecVal.value;
+	      Bit!64 temp = vecVal.value;
 	      t.tupleof[I] = cast(L) temp;
 	    }
 	  }
@@ -2290,7 +2291,7 @@ class CstNotBddExpr: CstBddExpr
 
 class CstBlock: CstBddExpr
 {
-  CstBddExpr _exprs[];
+  CstBddExpr[] _exprs;
 
   override public CstVecPrim[] getPrims() {
     CstVecPrim[] prims;

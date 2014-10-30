@@ -71,10 +71,6 @@ class Root: RootEntity
   this(string name) {
     super(name);
   }
-  override void doConfig() {
-    timeUnit(100.psec);
-    timePrecision(10.psec);
-  }
 
 }
 

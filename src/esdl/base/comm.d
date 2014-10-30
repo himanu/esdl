@@ -351,7 +351,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
     }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -535,7 +535,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
     }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -642,7 +642,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
 //   }
 
 //   // Hierarchy
-//   mixin(namedMixin());
+//   mixin NamedMixin;
 
 // }
 
@@ -747,7 +747,7 @@ class MutexObj: MutexIF, NamedObj
   }
 
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -790,7 +790,7 @@ class MutexObj: MutexIF, NamedObj
   // }
 
   static public Mutex[] opIndex(size_t n) {
-    Mutex mutexs[] = new Mutex[n];
+    Mutex[] mutexs = new Mutex[n];
     foreach(ref mutex;mutexs) {
       synchronized {
 	mutex.init();
@@ -908,7 +908,7 @@ class SemaphoreObj: SemaphoreIF, NamedObj
     }
   }
   // Hierarchy
-  mixin(namedMixin());
+  mixin NamedMixin;
 
   static void _esdl__inst(size_t I=0, U, L)(U u, ref L l)
   {
@@ -1377,7 +1377,7 @@ interface SignalInIF(T)
 
   alias read this;
 
-  static if(is(T == bit) || is(T == logic) || is(T == bool)) {
+  static if(is(T == Bit!1) || is(T == Logic!1) || is(T == bool)) {
     public Event posedge();
     public Event negedge();
     public bool valueChangedPos();
@@ -1416,7 +1416,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
   public this() {
     synchronized(this) {
-      static if(is(T == bool) || is(T == bit) || is(T == logic)) {
+      static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
 	_posedgeEvent.init("_posedgeEvent", this);
 	_negedgeEvent.init("_negedgeEvent", this);
       }
@@ -1593,7 +1593,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 	this.hdlPut();
       }
     }
-    static if(is(T == bool) || is(T == bit) || is(T == logic)) {
+    static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
       if(_posedgeEvent._eventObj !is null) {
 	if(_newVal == true) _posedgeEvent.notify(0);
 	if(_newVal == false) _negedgeEvent.notify(0);
@@ -1602,7 +1602,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     // }
   }
 
-  static if(is(T == bool) || is(T == bit) || is(T == logic)) {
+  static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
     protected Event _posedgeEvent;
     protected Event _negedgeEvent;
 
@@ -1766,7 +1766,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
 	  import esdl.data.bvec;
 
-	  static if(is(T == bool) || is(T == bit) || is(T == logic)) {
+	  static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
 	    _signalObj._posedgeEvent.init();
 	    _signalObj._negedgeEvent.init();
 	  }
@@ -1841,17 +1841,17 @@ template InOut(T)
 template Wire(size_t W)
 if(W > 0) {
   import esdl.data.bvec;
-  alias Signal!(lvec!W) Wire;
+  alias Signal!(Logic!W) Wire;
  }
 
 template WireIn(size_t W)
 if(W > 0) {
   import esdl.data.bvec;
-  alias Input!(lvec!W) Wire;
+  alias Input!(Logic!W) Wire;
  }
 
 template WireOut(size_t W)
 if(W > 0) {
   import esdl.data.bvec;
-  alias Output!(lvec!W) Wire;
+  alias Output!(Logic!W) Wire;
  }

@@ -23,11 +23,11 @@ class Bar: Foo
   private @rand ubyte pop;
   private @rand ubyte bro;
 
-  @rand bit pun3 = 0;
+  @rand Bit!1 pun3 = 0;
   @rand ubyte mom;
   @rand ubyte sis;
 
-  @rand ulvec!18 pun1 = 0;
+  @rand ULogic!18 pun1 = 0;
   @rand ubyte pun2 = 0;
 
   // @rand!(16) ubyte[] bar;
@@ -69,6 +69,7 @@ class Bar: Foo
   } cst01;
 
   Constraint! q{
+    // this is a comment
     foo + bro + sis == 64;
     bro > 40;
     bro < 80;
