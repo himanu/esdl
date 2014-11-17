@@ -6366,7 +6366,7 @@ void execElab(T)(T t)
 	// constructors of the modules. In the CONFIGURE phase, all t
 	// information read in during the configurarion is consolidated and
 	// reflected at the EsdlSimulator level.
-	writeln(">>>>>>>>>> starting Phase: CONFIGURE");
+	writeln(">>>>>>>>>> Starting Phase: CONFIGURE");
 	t.getSimulator.setPhase = SimPhase.CONFIGURE;
 	t._esdl__config!timePrecision(t);
 	t._esdl__config!timeUnit(t);
@@ -6409,12 +6409,7 @@ void execElab(T)(T t)
 
 	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
-	version(MULTICORE) {
-	  writeln(">>>>>>>>>> Start of Simulation (multicore enabled)");
-	}
-	else {
-	  writeln(">>>>>>>>>> Start of Simulation");
-	}
+	writeln(">>>>>>>>>> Start of Simulation");
 	t.getSimulator.elabDoneLock.notify();
       }
     }
@@ -7471,8 +7466,10 @@ abstract class RootEntity: RootEntityIntf
     return cast(uint) _esdl__root.simulator()._executor._poolThreads.length;
   }
 
-  ulong _esdl__numFirstCore = 0;	// The first core -- rootthread rides on this
-  ulong _esdl__numMultiCore = 1;	// number of cores to use
+  // The first core -- rootthread rides on this
+  ulong _esdl__numFirstCore = 0;
+  // number of cores to use
+  ulong _esdl__numMultiCore = 1;
 
   public ulong getNumFirstCore() {
     return _esdl__numFirstCore;
@@ -7483,8 +7480,11 @@ abstract class RootEntity: RootEntityIntf
   }
 
   public void multiCore(ulong ncore = CPU_COUNT(), ulong fcore = 0) {
-    assert(CPU_COUNT() >= ncore);
-
+    if(CPU_COUNT() < ncore) {
+      import std.conv: to;
+      assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
+	     " threads are avaialbe for execution");
+    }
     _esdl__numMultiCore = ncore;
     _esdl__numFirstCore = fcore;
   }
@@ -8387,14 +8387,26 @@ class Root(T): RootEntity if(is(T: EntityIntf))
 }
 
 
-public void simulate(T, string NAME)() {
-  auto root = new Root!T(NAME);
+public void simulate(T)(string name,
+			uint multi=1, uint first=0) {
+  auto root = new Root!T(name);
+  root.multiCore(multi, first);
   root.elaborate();
   root.simulate();
 }
 
-public auto forkSim(T, string NAME)() {
-  auto root = new Root!T(NAME);
+public auto elaborate(T)(string name,
+			 uint multi=1, uint first=0) {
+  auto root = new Root!T(name);
+  root.multiCore(multi, first);
+  root.elaborate();
+  return root;
+}
+
+public auto forkSim(T)(string name,
+		       uint multi=1, uint first=0) {
+  auto root = new Root!T(name);
+  root.multiCore(multi, first);
   root.elaborate();
   root.forkSim();
   return root;

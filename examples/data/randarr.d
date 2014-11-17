@@ -11,7 +11,7 @@ import esdl.data.bvec;
 
 class Foo: Randomizable
 {
-  mixin(randomization());
+  mixin Randomization;
   @rand!8 byte[] foo;
   @rand ubyte baz = 12;
   void display() {}
@@ -36,10 +36,18 @@ class Bar: Foo
   } cstFooLength;
 
   Constraint! q{
-    foreach(i, f; barr) f <= i;
+    foreach(i, f; bar) f <= i;
 
-    foreach(i, f; foo) if(i < 6) f < 24; else f < 18;
-    
+    // this is a comment
+    foreach(i, f; foo) {
+      if(i < 6) {
+	f < 24;
+      }
+      else {
+	f < 18;
+      }
+    }
+
     foreach(i, f; foo) {
       f < 64;
       f > 16;
