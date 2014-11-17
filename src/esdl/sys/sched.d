@@ -81,7 +81,7 @@ public int stickToCpuCore(size_t coreId) {
   // writeln(cpuset.__bits);
   CPU_SET(coreId, &cpuset);
 
-  writeln(cpuset.__bits);
+  // writeln(cpuset.__bits);
 
   pthread_t current_thread = pthread_self();
   return pthread_setaffinity_np(current_thread, cpu_set_t.sizeof, &cpuset);
