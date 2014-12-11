@@ -40,7 +40,7 @@ version(BVEC_NOCHECK) {
  }
 
 template isBitVector(T) {
-  static if(is(T unused == vec!(S, L, N), bool S, bool L, N...))
+  static if(is(T unused == _bvec!(S, L, N), bool S, bool L, N...))
     enum bool isBitVector = true;
   else
   enum bool isBitVector = false;
@@ -417,7 +417,7 @@ template _vecCmpT(T, U)	// return true if T >= U
     else enum bool _vecCmpT = true; // _vecCmpT(T.ELEMTYPE, U.ELEMTYPE);
 }
 
-template vec(T, U, string OP)
+template _bvec(T, U, string OP)
   if(isBitVector!T && isBitVector!U) {
   static if(T.ISSIGNED && U.ISSIGNED) {enum bool S = true;}
   else                                {enum bool S = false;}
@@ -438,14 +438,14 @@ template vec(T, U, string OP)
   static if(OP == "*")                {enum size_t N = T.SIZE + U.SIZE;}
   static if(OP == "/")                {enum size_t N = T.SIZE;}
   static if(OP == "~") {
-    alias vec!(T.ISSIGNED, L, T.SIZE + U.SIZE) vec;
+    alias _bvec!(T.ISSIGNED, L, T.SIZE + U.SIZE) _bvec;
   }
   else {
-    alias vec!(S, L, N) vec;
+    alias _bvec!(S, L, N) _bvec;
   }
 }
 
-struct vec(bool S, bool L, string VAL, size_t RADIX) {
+struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
   enum size_t SIZE = stringBitSize(VAL, RADIX);
 
   private alias VecParams!(SIZE,S).StoreT store_t;
@@ -613,59 +613,59 @@ alias LOGIC_Z _z;
 // http://d.puremagic.com/issues/show_bug.cgi?id=9143
 @property public auto bin(string VAL)() {
   enum bool L = isStr4State(VAL);
-  alias vec!(true, L, stringBitSize(VAL, 2)) vector_t;
-  vector_t result = vector_t(vec!(true, L, VAL, 2)(0));
+  alias _bvec!(true, L, stringBitSize(VAL, 2)) vector_t;
+  vector_t result = vector_t(_bvec!(true, L, VAL, 2)(0));
   return result;
 }
 
 @property public auto oct(string VAL)() {
   enum bool L = isStr4State(VAL);
-  alias vec!(true, L, stringBitSize(VAL, 8)) vector_t;
-  vector_t result = vector_t(vec!(true, L, VAL, 8)(0));
+  alias _bvec!(true, L, stringBitSize(VAL, 8)) vector_t;
+  vector_t result = vector_t(_bvec!(true, L, VAL, 8)(0));
   return result;
 }
 
 @property public auto hex(string VAL)() {
   enum bool L = isStr4State(VAL);
-  alias vec!(true, L, stringBitSize(VAL, 16)) vector_t;
-  vector_t result = vector_t(vec!(true, L, VAL, 16)(0));
+  alias _bvec!(true, L, stringBitSize(VAL, 16)) vector_t;
+  vector_t result = vector_t(_bvec!(true, L, VAL, 16)(0));
   return result;
 }
 
-// alias vec!(false, true, 1) logic;
-// alias vec!(false, false, 1) bit;
+// alias _bvec!(false, true, 1) logic;
+// alias _bvec!(false, false, 1) bit;
 
-template vec(T) if(is(T == bool)) {
-  alias vec!(false, false, 1) vec;
+template _bvec(T) if(is(T == bool)) {
+  alias _bvec!(false, false, 1) _bvec;
 }
 
-template vec(T) if(isIntegral!T) {
-  alias vec!(isSigned!T, false, T.sizeof*8) vec;
+template _bvec(T) if(isIntegral!T) {
+  alias _bvec!(isSigned!T, false, T.sizeof*8) _bvec;
 }
 
-template vec(T) if(isBitVector!T) {
-  alias T vec;
+template _bvec(T) if(isBitVector!T) {
+  alias T _bvec;
 }
 
 template BitVec(N...) if(CheckVecParams!N) {
-  alias vec!(true, false, N) BitVec;
+  alias _bvec!(true, false, N) BitVec;
 }
 
 template UBitVec(N...) if(CheckVecParams!N) {
-  alias vec!(false, false, N) UBitVec;
+  alias _bvec!(false, false, N) UBitVec;
 }
 
 template LogicVec(N...) if(CheckVecParams!N) {
-  alias vec!(true, true, N) LogicVec;
+  alias _bvec!(true, true, N) LogicVec;
 }
 
 template ULogicVec(N...) if(CheckVecParams!N) {
-  alias vec!(false, true, N) ULogicVec;
+  alias _bvec!(false, true, N) ULogicVec;
 }
 
 
 // A tightly packed fixed width vector of bits
-struct vec(bool S, bool L, N...) if(CheckVecParams!N)
+struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
   {
     import esdl.data.time;
     enum size_t SIZE = VecSize!(1,N);
@@ -680,20 +680,20 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     alias SIZE opDollar;
 
-    alias vec!(S, L, N) T;
+    alias _bvec!(S, L, N) T;
 
     enum size_t ELEMSIZE = N[$-1];
     static if(N.length > 1) {
       enum bool MULTIDIM = true;
-      alias vec!(S, L, N[0..$-1]) ELEMTYPE;
+      alias _bvec!(S, L, N[0..$-1]) ELEMTYPE;
     }
     else {
       enum bool MULTIDIM = false;
-      alias vec!(S, L, 1)         ELEMTYPE;
+      alias _bvec!(S, L, 1)         ELEMTYPE;
     }
 
     public static auto min() {
-      alias vec!(S, L, N) _type;
+      alias _bvec!(S, L, N) _type;
       _type retval;
       static if(S) {
 	retval = cast(_type) 1;
@@ -705,7 +705,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     public static auto max() {
-      alias vec!(S, L, N) _type;
+      alias _bvec!(S, L, N) _type;
       _type retval;
       static if(S) {
 	retval = 1;
@@ -720,8 +720,10 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public static auto ones(size_t msb, size_t lsb=0) {
       import std.algorithm;
-      assert(msb <= SIZE && lsb <= SIZE);
-      alias vec!(false, false, N) _type;
+      import std.conv: to;
+
+      assert(msb <= SIZE && lsb <= SIZE, "MSB is: " ~ msb.to!string);
+      alias _bvec!(false, false, N) _type;
       _type a =(cast(_type) 1) << max(msb, lsb);
       _type b =(cast(_type) 1) << min(lsb, msb);
       a -= b;
@@ -751,14 +753,14 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public auto aVal() {
       // http://d.puremagic.com/issues/show_bug.cgi?id=9143
-      // vec!(S, false, N) retVal;
-      vec!(S, false, N) retVal;
+      // _bvec!(S, false, N) retVal;
+      _bvec!(S, false, N) retVal;
       retVal._aval[] = this._aval[];
       return retVal;
     }
 
     public auto bVal() {
-      vec!(S, false, N) retVal;
+      _bvec!(S, false, N) retVal;
       retVal._aval[] = this._bval[];
       return retVal;
     }
@@ -770,9 +772,9 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	static if(isBoolean!V) enum bool _S = false;
 	else static if(isBitVector!V) enum bool _S = V.ISSIGNED;
 	  else enum bool _S = isSigned!V;
-	vec!(_S, false, N) v = t;
+	_bvec!(_S, false, N) v = t;
 	// http://d.puremagic.com/issues/show_bug.cgi?id=9143
-	// vec!(S, false, N) retVal;
+	// _bvec!(S, false, N) retVal;
 	this._aval = v._aval;
       }
 
@@ -784,9 +786,9 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	  static if(isBoolean!V) enum bool _S = false;
 	  else static if(isBitVector!V) enum bool _S = V.ISSIGNED;
 	    else enum bool _S = isSigned!V;
-	  vec!(_S, false, N) v = t;
+	  _bvec!(_S, false, N) v = t;
 	  // http://d.puremagic.com/issues/show_bug.cgi?id=9143
-	  // vec!(S, false, N) retVal;
+	  // _bvec!(S, false, N) retVal;
 	  this._bval = v._aval;
 	}
     }
@@ -815,10 +817,45 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
      else return false;
    }
 
+    static if(SIZE >= 8) {
+      public this()(byte other) {
+	this._from(other);
+      }
+      public void opAssign()(byte other) {
+	this._from(other);
+      }
+    }
+
+    static if(SIZE >= 16) {
+      public this()(short other) {
+	this._from(other);
+      }
+      public void opAssign()(short  other) {
+	this._from(other);
+      }
+    }
+
+    static if(SIZE >= 32) {
+      public this()(int other) {
+	this._from(other);
+      }
+      public void opAssign()(int  other) {
+	this._from(other);
+      }
+    }
+
+    static if(SIZE >= 64) {
+      public this()(long other) {
+	this._from(other);
+      }
+      public void opAssign()(long  other) {
+	this._from(other);
+      }
+    }
 
     public this(V)(V other)
       if((isBitVector!V ||
-	  is(V unused == vec!(S_, L_, _VAL, _RADIX),
+	  is(V unused == _bvec!(S_, L_, _VAL, _RADIX),
 	     bool S_, bool L_, string _VAL, size_t _RADIX)) &&
 	 (NO_CHECK_SIZE || SIZE >= V.SIZE)) {
 	this._from(other);
@@ -1079,7 +1116,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public void opAssign(V)(V other)
       if((isBitVector!V ||
-	  is(V unused == vec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX))
+	  is(V unused == _bvec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX))
 	 && (NO_CHECK_SIZE || SIZE >= V.SIZE)
 	 &&(IS4STATE || !V.IS4STATE)) {
 	this._from(other);
@@ -1087,7 +1124,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     private void _from(V)(V other)
       if(isBitVector!V ||
-	 is(V unused == vec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX)) {
+	 is(V unused == _bvec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX)) {
 	static assert(NO_CHECK_SIZE || SIZE >= V.SIZE);
 	static assert(IS4STATE || !V.IS4STATE,
 		      "Can not implicitly convert LogicVec to BitVec");
@@ -1366,7 +1403,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	assert(i < SIZE);
       }
     body {
-      vec!(false, L, 1) retval;
+      _bvec!(false, L, 1) retval;
       static if(STORESIZE == 1) {
 	retval._aval[0] = cast(ubyte)((this._aval[0] >>> i) & 1LU);
 	static if(L) {
@@ -1470,7 +1507,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public auto opBinary(string op, V)(V other)
       if((isBitVector!V || isIntegral!V) &&
 	 (op == "&" || op == "|" || op == "^")) {
-	vec!(typeof(this), V, op) result = this;
+	_bvec!(typeof(this), V, op) result = this;
 	result.opOpAssign!op(other);
 	return result;
       }
@@ -1479,7 +1516,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public void opOpAssign(string op, V)(V other)
       if(isIntegral!V &&
 	 (op == "&" || op == "|" || op == "^")) {
-	vec!V rhs = other;
+	_bvec!V rhs = other;
 	this.opOpAssign!op(rhs);
       }
 
@@ -1488,7 +1525,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	 (op == "&" || op == "|" || op == "^")) {
 	enum bool _S = V.ISSIGNED;
 	enum bool _L = V.IS4STATE;
-	auto rhs = cast(vec!(_S, _L, SIZE)) other;
+	auto rhs = cast(_bvec!(_S, _L, SIZE)) other;
 	for(size_t i=0; i!=STORESIZE; ++i) {
 	  static if(L) {
 	    static if(_L) {
@@ -1617,7 +1654,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     // mask out has already taken place
     public void maskIn(V)(V other)
       if(isBitVector!V && (!V.IS4STATE ||(V.IS4STATE && IS4STATE))) {
-	auto rhs = cast(vec!(false, V.IS4STATE, SIZE)) other;
+	auto rhs = cast(_bvec!(false, V.IS4STATE, SIZE)) other;
 	for(size_t i=0; i!=STORESIZE; ++i) {
 	  this._aval[i] |= rhs._aval[i];
 	  static if(V.IS4STATE && IS4STATE) {
@@ -1640,7 +1677,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	  import std.exception;
 	  static if(isIntegral!V)
 	    {
-	      alias vec!V _type;
+	      alias _bvec!V _type;
 	      _type rhs = other;
 	    }
 	  else
@@ -1841,8 +1878,8 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public T opSlice(size_t i, size_t j)
       in {
-        assert(i < SIZE && i >= 0 && j < SIZE && j >= 0);
-        assert(i != j);
+        assert(i < SIZE && i >= 0 && j <= SIZE && j >= 0);
+        assert(i < j);
       }
     body {
       T result = this >>> i;
@@ -1870,9 +1907,9 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public auto get(int COUNT)(size_t i) const
       if(COUNT <= SIZE) {
 	assert(i + COUNT <= SIZE);
-	vec!(S,L,N) retval = cast(typeof(this)) this;
+	_bvec!(S,L,N) retval = cast(typeof(this)) this;
 	retval >>= i;
-	return cast(vec!(S,L,COUNT)) retval;
+	return cast(_bvec!(S,L,COUNT)) retval;
       }
 
     // public BitVec!(I, J) slice(size_t I, size_t J=0)() {
@@ -1929,7 +1966,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       if(isBitVector!V &&
 	 _vecCmpT!(typeof(this), V)) {
 	reportX!(file, line)(other);
-	alias vec!(typeof(this), V, "COMPARE") P;
+	alias _bvec!(typeof(this), V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.compare(rhs);
@@ -1939,7 +1976,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 		     size_t line = __LINE__, V)(V other)
       if(isIntegral!V) {
 	reportX!(file, line)(other);
-	alias vec!(typeof(this), vec!V, "COMPARE") P;
+	alias _bvec!(typeof(this), _bvec!V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.compare(rhs);
@@ -1949,7 +1986,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 			 size_t line = __LINE__, V)(V other)
       if(isIntegral!V || isBoolean!V) {
 	reportX!(file, line)(other);
-	alias vec!(typeof(this), vec!V, "COMPARE") P;
+	alias _bvec!(typeof(this), _bvec!V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.isEqual(rhs);
@@ -1959,7 +1996,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 			 size_t line = __LINE__, V)(V other)
       if(isBitVector!V) {
 	reportX!(file, line)(other);
-	alias vec!(typeof(this), V, "COMPARE") P;
+	alias _bvec!(typeof(this), V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.isEqual(rhs);
@@ -1968,7 +2005,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public bool isSame(string file = __FILE__,
 		       size_t line = __LINE__, V)(V other)
       if(isIntegral!V || isBoolean!V) {
-	alias vec!(typeof(this), vec!V, "COMPARE") P;
+	alias _bvec!(typeof(this), _bvec!V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.isLogicEqual(rhs);
@@ -1977,7 +2014,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public bool isSame(string file = __FILE__,
 		       size_t line = __LINE__, V)(V other)
       if(isBitVector!V) {
-	alias vec!(typeof(this), V, "COMPARE") P;
+	alias _bvec!(typeof(this), V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.isLogicEqual(rhs);
@@ -2024,7 +2061,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     // Bitwise Compliment
     public auto opUnary(string op)() if(op == "~") {
       // compliment every bit
-      vec!(S,L,SIZE) result = this;
+      _bvec!(S,L,SIZE) result = this;
       for(size_t i; i != STORESIZE; ++i) {
 	result._aval[i] = ~_aval[i];
       }
@@ -2038,7 +2075,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 			   size_t line = __LINE__, V)(V other)
       if(isIntegral!V &&	(op == "+" || op == "-")) {
 	reportX!(file, line)(other);
-	vec!V rhs = other;
+	_bvec!V rhs = other;
 	this.opOpAssign!op(rhs);
       }
 
@@ -2087,14 +2124,14 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public auto opBinary(string op, V)(V other)
       if(isIntegral!V &&
 	 (op == "+" || op == "-")) {
-	vec!V rhs = other;
+	_bvec!V rhs = other;
 	return this.opBinary!op(rhs);
       }
 
     public auto opBinaryRight(string op, V)(V other)
       if(isIntegral!V &&
 	 (op == "+" || op == "-")) {
-	vec!V rhs = other;
+	_bvec!V rhs = other;
 	return rhs.opBinary!op(this);
       }
 
@@ -2103,17 +2140,17 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
       if(isBitVector!V && (op == "+" || op == "-")) {
 	static if(SIZE >= V.SIZE) {
 	  // typeof(this) result = this;
-	  vec!(S, L, SIZE+1) result = this;
+	  _bvec!(S, L, SIZE+1) result = this;
 	  static if(op == "+") result += other;
 	  else result -= other;
 	  return result;
 	}
 	else {
 	  static if(op == "+") {
-	    vec!(V.ISSIGNED, V.IS4STATE, V.SIZE+1) result = other;
+	    _bvec!(V.ISSIGNED, V.IS4STATE, V.SIZE+1) result = other;
 	  }
 	  else {
-	    vec!(V.IS4STATE, V.IS4STATE, V.SIZE+1) result = -other;
+	    _bvec!(V.IS4STATE, V.IS4STATE, V.SIZE+1) result = -other;
 	  }
 	  result += this;
 	  return result;
@@ -2143,7 +2180,7 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
 	// result is addition of the SIZES
 	enum size_t _SIZE = SIZE + V.SIZE;
 
-	vec!(_S,_L,_SIZE) result = 0;
+	_bvec!(_S,_L,_SIZE) result = 0;
 
 	static if(result.SIZE <= 16) {
 	  result.store_t[] r = result._aval;
@@ -2347,13 +2384,13 @@ struct vec(bool S, bool L, N...) if(CheckVecParams!N)
     public auto opBinary(string op, V)(V other)
       if(isIntegral!V &&
 	 (op == "~")) {
-	vec!V rhs = other;
+	_bvec!V rhs = other;
 	return this ~ rhs;
       }
 
     public auto opBinary(string op, V)(V other)
       if(isBitVector!V && (op == "~")) {
-	vec!(T, V, "~") result = this;
+	_bvec!(T, V, "~") result = this;
 	result <<= V.SIZE;
 	result[0..V.SIZE] = other;
 	return result;
