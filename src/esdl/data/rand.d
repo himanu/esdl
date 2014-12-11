@@ -71,11 +71,11 @@ abstract class _ESDL__ConstraintBase
   }
 
   public void enable() {
-    _enabled = false;
+    _enabled = true;
   }
 
   public void disable() {
-    _enabled = true;
+    _enabled = false;
   }
 
   public BDD getConstraintBDD() {
@@ -654,61 +654,61 @@ interface RandomizableIntf
   {
     import esdl.data.rand:_esdl__initCstEng, _esdl__randomize;
     alias typeof(this) _esdl__RandType;
-    override public _esdl__RandType _esdl__typeID() {
-      return null;
-    }
-    override public void _esdl__virtualInitCstEng() {
-      _esdl__initCstEng!_esdl__RandType(this);
-    }
-    override public bool _esdl__virtualRandomize() {
-      return _esdl__randomize!_esdl__RandType(this);
-    }
-    auto _esdl__randEval(string NAME)() {
-      return mixin(NAME);
-    }
-  }
+    static if(! __traits(compiles, this._esdl__typeID)) {
+      public _esdl__RandType _esdl__typeID() {
+	return null;
+      }
 
-  mixin template _esdl__randomizable()
-  {
-    alias typeof(this) _esdl__RandType;
-    public _esdl__RandType _esdl__typeID() {
-      return null;
-    }
+      public void _esdl__virtualInitCstEng() {
+	_esdl__initCstEng!_esdl__RandType(this);
+      }
+      public bool _esdl__virtualRandomize() {
+	return _esdl__randomize!_esdl__RandType(this);
+      }
 
-    public void _esdl__virtualInitCstEng() {
-      _esdl__initCstEng!_esdl__RandType(this);
-    }
-    public bool _esdl__virtualRandomize() {
-      return _esdl__randomize!_esdl__RandType(this);
-    }
+      public ConstraintEngine _esdl__cstEng;
+      public uint _esdl__randSeed;
 
-    public ConstraintEngine _esdl__cstEng;
-    public uint _esdl__randSeed;
+      public void seedRandom(int seed) {
+	_esdl__randSeed = seed;
+	if (_esdl__cstEng !is null) {
+	  _esdl__cstEng._rgen.seed(seed);
+	}
+      }
+      alias seedRandom srandom;	// for sake of SV like names
 
-    public void seedRandom(int seed) {
-      _esdl__randSeed = seed;
-      if (_esdl__cstEng !is null) {
-	_esdl__cstEng._rgen.seed(seed);
+      public ConstraintEngine getCstEngine() {
+	return _esdl__cstEng;
+      }
+
+      void preRandomize() {}
+      void postRandomize() {}
+    }
+    else {
+      
+      override public _esdl__RandType _esdl__typeID() {
+	return null;
+      }
+      override public void _esdl__virtualInitCstEng() {
+	_esdl__initCstEng!_esdl__RandType(this);
+      }
+      override public bool _esdl__virtualRandomize() {
+	return _esdl__randomize!_esdl__RandType(this);
+      }
+      auto _esdl__randEval(string NAME)() {
+	return mixin(NAME);
       }
     }
-    alias seedRandom srandom;	// for sake of SV like names
-
-    public ConstraintEngine getCstEngine() {
-      return _esdl__cstEng;
-    }
-
-    void pre_randomize() {}
-    void post_randomize() {}
   }
 
   ConstraintEngine getCstEngine();
-  void pre_randomize();
-  void post_randomize();
+  void preRandomize();
+  void postRandomize();
 }
 
 class Randomizable: RandomizableIntf
 {
-  mixin _esdl__randomizable;
+  mixin Randomization;
 }
 
 T _new(T, Args...) (Args args) {
@@ -1020,7 +1020,7 @@ public bool randomize(T) (ref T t)
       return t._esdl__virtualRandomize();
     }
     else {
-      t._esdl__initCstEng();
+      _esdl__initCstEng(t);
       if(t._esdl__cstEng.cstWith !is null) {
 	t._esdl__cstEng.cstWith = null;
 	t._esdl__cstEng._cstWithChanged = true;
@@ -1028,7 +1028,7 @@ public bool randomize(T) (ref T t)
       else {
 	t._esdl__cstEng._cstWithChanged = false;
       }
-      return t._esdl__randomize();
+      return _esdl__randomize(t);
     }
   }
 
@@ -1050,8 +1050,8 @@ public bool _esdl__randomize(T) (T t, _ESDL__ConstraintBase withCst = null)
     import std.exception;
     import std.conv;
 
-    // Call the pre_randomize hook
-    t.pre_randomize();
+    // Call the preRandomize hook
+    t.preRandomize();
 
     auto values = t._esdl__cstEng._cstRands;
 
@@ -1067,8 +1067,8 @@ public bool _esdl__randomize(T) (T t, _ESDL__ConstraintBase withCst = null)
 
     _esdl__setRands(t, values, t._esdl__cstEng._rgen);
 
-    // Call the post_randomize hook
-    t.post_randomize();
+    // Call the postRandomize hook
+    t.postRandomize();
     return true;
   }
 
@@ -1441,7 +1441,8 @@ class CstVecRand: CstVecPrim
       return _value;
     }
     else {
-      assert(false, "Constraint evaluation in wrong stage");
+      import std.conv;
+      assert(false, "Rand variable " ~ _name[2..$] ~ " evaluation in wrong stage: " ~ _stage._id.to!string);
     }
   }
 
