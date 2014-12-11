@@ -4,21 +4,24 @@
 //            http://www.boost.org/LICENSE_1_0.txt)
 // Authors:   Puneet Goel <puneet@coverify.com>
 import esdl.base;
+import esdl.data.bvec;
 import std.stdio;
 
-@timeUnit(1.nsec)
-@timePrecision(1.psec)
 @parallelize(ParallelPolicy.SINGLE)
 class Foo: Entity {
   void hello() {
     writeln("Greetings from: ",
 	    Process.self.getFullName());
+    Bit!233 foo = urandom!(Bit!233);
+    writeln(foo);
   }
   Task!hello greet[2];
 }
+@timeUnit(1.nsec)
+@timePrecision(1.psec)
 class Top: Entity {
   Foo foo[4];
 }
 void main() {
-  simulate!(Top, "root");
+  simulate!Top("root", 4, 0);
 }

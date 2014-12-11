@@ -39,7 +39,7 @@ class Bar: Foo
     writeln("bro: ", bro, " sis: ", sis, " pop: ", pop, " mom: ", mom, " foo: ", foo, " pun3: ", pun3, " pun1: ", pun1, " pun2: ", pun2);
   }
 
-  override void pre_randomize() {
+  override void preRandomize() {
     foo++;
   }
 

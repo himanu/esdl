@@ -17,6 +17,7 @@ import core.thread: Thread, Fiber;
 
 public import esdl.data.time;
 public import esdl.base.comm;
+import esdl.data.bvec: isBitVector;
 
 // use atomicStore and atomicLoad
 // This would get redundant later when share construct gets functional
@@ -4144,12 +4145,19 @@ private ref Random getRandGen() {
 }
 
 public T urandom(T=uint)() {
-  auto seed = uniform!T(getRandGen());
-  debug(SEED) {
-    import std.stdio;
-    writeln("URANDOM returns: ", seed);
+  static if(isBitVector!T) {
+    T v;
+    v.randomize(getRandGen());
+    return v;
   }
-  return seed;
+  else {
+    auto v = uniform!T(getRandGen());
+    debug(SEED) {
+      import std.stdio;
+      writeln("URANDOM returns: ", v);
+    }
+    return v;
+  }
 }
 
 public T urandom(string BOUNDARY="[]", T=uint)(T min, T max) {
