@@ -50,6 +50,8 @@ class Bar: Foo
   Constraint! q{
     foo + pop + mom == 64;
 
+    pun1[0..3] == 0;
+
     // foo + pop + mom == 64 ? pop > 40 : mom > 24;
 
     (foo + pop + mom == 64 && pop > 40) || (foo + pop + mom != 64 && mom > 24);
