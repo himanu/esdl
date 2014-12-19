@@ -50,9 +50,8 @@ class Bar: Foo
 
     foreach(i, f; foo) {
       f < 64;
-      f > 16;
+      foo[i] > 16;
     }
-    
   } cstFoo;
 
 }
