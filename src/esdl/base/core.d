@@ -63,7 +63,7 @@ struct _esdl__component {};
 
 enum ParallelPolicy: byte
   {   MULTI = byte.min,
-      NONE = -1,
+      _UNDEFINED_ = -1,
       INHERIT = 0,
       SINGLE = 1,
       }
@@ -83,6 +83,9 @@ struct parallelize
   // When the user does not provide any _poolIndex, a _poolIndex would
   // be automatically generated
   uint _poolIndex = uint.max;	// relevant only if _parallel is 1
+  bool isUndefined() {
+    return _parallel == ParallelPolicy._UNDEFINED_;
+  }
 }
 
 struct timeUnit
@@ -103,17 +106,17 @@ struct timePrecision
 // with them. Since for any given class object in C++ as well as D
 // also has symbolic names associated with them, this symbolic naming
 // hierarchy should possibly be reused for maintaining instance names
-// for simulation purposes. A NamedObj and associated functionality
+// for simulation purposes. A NamedComp and associated functionality
 // provide a way to reflect the compile time symbolic object names
 // during the simulation. This base class also makes it possible for
 // the objects to identify their parent (enclosing) objects as well as
 // the root and simulator objects.
 
-// At NamedObj level, we store only the name as a string and the
+// At NamedComp level, we store only the name as a string and the
 // parent object handle. The root and the simulator objects are
 // identified by traversing the hierarchy up and reach a HierComp that
 // keeps a reference to the root and simulator components. Since a
-// plain NamedObj may not have any child objects associated with it
+// plain NamedComp may not have any child objects associated with it
 
 // Now something about the nameing conventions -- We use _esdl__ as
 // prefix with the methods that need to be exposed (declared public),
@@ -122,18 +125,18 @@ struct timePrecision
 // by making these private, but since that does not seem possible in
 // the current scheme of things, we use such prefix.
 
-// NamedObj is an interface and not a class. This is a design decision
+// NamedComp is an interface and not a class. This is a design decision
 // to allow a user declared entity to inherit from another class and
-// to just use EntityIntf to along with EntityMixin. Similarly if one
-// wants to create a NamedObj, he needs to implement NamedObj
+// to just use EntityIntf to along with Elaboration. Similarly if one
+// wants to create a NamedComp, he needs to implement NamedComp
 // interface and for that purpose, the NamedMixin is provided.
 
-package interface NamedObj: EsdlObj, TimeContext
+package interface NamedComp: EsdlObj, TimeContext
 {
   // Elaboration and Hierarchy related interface functions
-  public void _esdl__setParent(NamedObj parent);
+  public void _esdl__setParent(NamedComp parent);
   public void _esdl__setName(string name);
-  public NamedObj getParent();
+  public NamedComp getParent();
   public string getName();
   public RootEntityIntf getRoot();
   public EsdlSimulator getSimulator();
@@ -171,19 +174,22 @@ package interface NamedObj: EsdlObj, TimeContext
     }
 
     // The default getParent will be null, but on elaboration every
-    // (pseudo static) NamedObj is going to have this value set
+    // (pseudo static) NamedComp is going to have this value set
     // after elaboration. The RootEntityIntf would have its self as
     // parent. Dynamically spawned processes with identify their
     // parent by looking at the thread that spawns the given
     // thread.
     static if(!__traits(compiles, _esdl__parent)) {
-      @_esdl__ignore protected NamedObj _esdl__parent;
+      union {
+	@_esdl__ignore protected NamedComp _esdl__parent;
+	@_esdl__ignore protected HierComp _esdl__hier_parent;
+      }
     }
 
     // Returns null if the process is not a child process of another
     // process or of a routine. Otherwise return the Routine or the
     // Process
-    private static NamedObj _esdl__getParentProc() {
+    private static NamedComp _esdl__getParentProc() {
       auto p = Process.self;
       return p;
     }
@@ -205,7 +211,7 @@ package interface NamedObj: EsdlObj, TimeContext
 	//     return rootProc.getRoot;
 	// }
 	assert(false,
-	       "Can not determine root of a NamedObj with null Parent");
+	       "Can not determine root of a NamedComp with null Parent");
       }
     }
 
@@ -215,13 +221,16 @@ package interface NamedObj: EsdlObj, TimeContext
     }
 
     // This function is called only during the elaboration phase
-    public final override void _esdl__setParent(NamedObj parent) {
-      synchronized(this) {
-	if(this._esdl__parent !is null && this._esdl__parent !is parent) {
-	  assert(false, "Attempt to modify parent object for object: " ~ _esdl__name);
-	}
-	else {
-	  this._esdl__parent = parent;
+    // check if defined in the HierMixin
+    static if(__traits(isAbstractFunction, _esdl__setParent)) {
+      public override void _esdl__setParent(NamedComp parent) {
+	synchronized(this) {
+	  if(this._esdl__parent !is null && this._esdl__parent !is parent) {
+	    assert(false, "Attempt to modify parent object for object: " ~ _esdl__name);
+	  }
+	  else {
+	    this._esdl__parent = parent;
+	  }
 	}
       }
     }
@@ -243,9 +252,9 @@ package interface NamedObj: EsdlObj, TimeContext
     }
 
     // Return the parent object and if it not set, signal an error
-    public final override NamedObj getParent() {
+    public final override NamedComp getParent() {
       if(_esdl__parent !is null) return _esdl__parent;
-      assert(false, "Tried to seek parent for a NamedObj "
+      assert(false, "Tried to seek parent for a NamedComp "
 	     "which does not have it set");
       // synchronized(this) {
       //   _esdl__parent = _esdl__getParentProc();
@@ -289,7 +298,7 @@ package interface NamedObj: EsdlObj, TimeContext
     // immutable
 
 
-    // a plain NamedObj does not have getTimeUnit, and so
+    // a plain NamedComp does not have getTimeUnit, and so
     // seek the getTimeUnit from the parent and return it.
     static if(! __traits(compiles, _timeScale)) {
       public final override ulong getTimeScale() {
@@ -323,8 +332,8 @@ private void _esdl__setCompId(T)(T t) if(is(T: HierComp)) {
  }
 
 static shared uint _esdl__objCount;
-private void _esdl__setObjId(T)(T t) if(is(T: NamedObj)) {
-  synchronized(typeid(NamedObj)) {
+private void _esdl__setObjId(T)(T t) if(is(T: NamedComp)) {
+  synchronized(typeid(NamedComp)) {
     if(t._esdl__objId is uint.max) {
       t._esdl__objId = _esdl__objCount;
       _esdl__objCount = _esdl__objCount + 1;
@@ -338,7 +347,7 @@ private void _esdl__setObjId(T)(T t) if(is(T: NamedObj)) {
 public auto _esdl__get_parallelism(L)(L l) {
   enum int Q = _esdl__attr!(parallelize, L);
   static if(Q is -1) {
-    enum par = parallelize(ParallelPolicy.NONE,
+    enum par = parallelize(ParallelPolicy._UNDEFINED_,
 			   uint.max); // inherit from parent
   }
   else {
@@ -359,7 +368,7 @@ public auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
   static if(P is -1) {
     // check if the entity definition has a parallelize tag
     static if(Q is -1) {
-      enum par = parallelize(ParallelPolicy.NONE,
+      enum par = parallelize(ParallelPolicy._UNDEFINED_,
 			     uint.max); // inherit from parent
     }
     else {
@@ -385,7 +394,7 @@ public auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
   return par;
 }
 
-public interface HierComp: NamedObj, ParContext
+public interface HierComp: NamedComp, ParContext
 {
   import core.sync.semaphore: CoreSemaphore = Semaphore;
 
@@ -395,8 +404,10 @@ public interface HierComp: NamedObj, ParContext
   // methods return object hierarchy that is set in stone during the
   // elaboration -- as a result the returned array does not include
   // any dynamic process or routine
-  public NamedObj[] getChildObjs();
-  public NamedObj[] getChildObjsHier();
+  public void _esdl__setHierParent(HierComp parent);
+  override public HierComp getParent();
+  public NamedComp[] getChildObjs();
+  public NamedComp[] getChildObjsHier();
   public Process[]  getChildTasks();
   public Process[]  getChildTasksHier();
   public HierComp[] getChildComps();
@@ -420,7 +431,7 @@ public interface HierComp: NamedObj, ParContext
 
   // The next set of functions are used only during the elaboration
   // phase
-  public void _esdl__addChildObj(NamedObj child);
+  public void _esdl__addChildObj(NamedComp child);
   public void _esdl__addChildTask(Process child);
   public void _esdl__addChildComp(HierComp child);
   public void _esdl__setIndices(uint[] indices);;
@@ -581,7 +592,7 @@ public interface HierComp: NamedObj, ParContext
     // This variable is set and used only during the elaboration
     // phase
     static if(!__traits(compiles, _esdl__parInfo)) {
-      parallelize _esdl__parInfo = parallelize(ParallelPolicy.NONE,
+      parallelize _esdl__parInfo = parallelize(ParallelPolicy._UNDEFINED_,
 					       uint.max); // default value
       public final override parallelize _esdl__getParInfo() {
 	return _esdl__parInfo;
@@ -599,7 +610,7 @@ public interface HierComp: NamedObj, ParContext
     // during the elaboration phase.
     public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
 						     parallelize linfo, parallelize plinfo) {
-      if(linfo._parallel == ParallelPolicy.NONE) {
+      if(linfo._parallel == ParallelPolicy._UNDEFINED_) {
 	// take hier information
 	_esdl__parInfo = plinfo;
 	if(plinfo._parallel == ParallelPolicy.MULTI) {
@@ -642,7 +653,7 @@ public interface HierComp: NamedObj, ParContext
 
     public final void _esdl__setParConfig(ParConfig parentCfg,
 					  parallelize linfo, parallelize plinfo) {
-      if(linfo._parallel == ParallelPolicy.NONE) { // take hier information
+      if(linfo._parallel == ParallelPolicy._UNDEFINED_) { // take hier information
 	_esdl__parInfo = plinfo;
       }
       else {
@@ -666,6 +677,52 @@ public interface HierComp: NamedObj, ParContext
     //////////////////////////////////////////////////////
     // Implementation of the hierarchy/elaboration methods
     //////////////////////////////////////////////////////
+
+    public final override void _esdl__setHierParent(HierComp parent) {
+      synchronized(this) {
+	if(this._esdl__hier_parent !is null &&
+	   this._esdl__hier_parent !is parent) {
+	  assert(false, "Attempt to modify parent object for object: " ~
+		 _esdl__name);
+	}
+	else {
+	  this._esdl__hier_parent = parent;
+	}
+      }
+    }
+
+    public final override void _esdl__setParent(NamedComp parent) {
+      synchronized(this) {
+	if(this._esdl__hier_parent !is null &&
+	   this._esdl__hier_parent !is parent) {
+	  assert(false, "Attempt to modify parent object for object: " ~
+		 _esdl__name);
+	}
+	else {
+	  HierComp _parent = cast(HierComp) parent;
+	  if(_parent is null) {
+	    assert(false, "Only a HierComp can be a parent of HierComp");
+	  }
+	  this._esdl__hier_parent = _parent;
+	}
+      }
+    }
+
+    public final override HierComp getParent() {
+      if(_esdl__hier_parent !is null) {
+	// HierComp parent = cast(HierComp) _esdl__parent;
+	// if(parent is null) {
+	//   assert(false, "A NamedComp can not be parent to a HierComp");
+	// }
+	return _esdl__hier_parent;
+      }
+      assert(false, "Tried to seek parent for a NamedComp "
+	     "which does not have it set");
+      // synchronized(this) {
+      //   _esdl__parent = _esdl__getParentProc();
+      //   return _esdl__parent;
+      // }
+    }
 
     // _esdl__root is set in the elaboration phase and are used (but
     // not modified) in the simulation phase, as a result these
@@ -718,7 +775,7 @@ public interface HierComp: NamedObj, ParContext
     static if(__traits(compiles, _esdl__childProcs)) {}
     else {
       static if(!__traits(compiles, _esdl__childObjs)) {
-	@_esdl__ignore protected NamedObj[] _esdl__childObjs;
+	@_esdl__ignore protected NamedComp[] _esdl__childObjs;
       }
 
       static if(!__traits(compiles, _esdl__childTasks)) {
@@ -730,7 +787,7 @@ public interface HierComp: NamedObj, ParContext
       }
 
       static if(__traits(isAbstractFunction, getChildObjs)) {
-	public final override NamedObj[] getChildObjs() {
+	public final override NamedComp[] getChildObjs() {
 	  // _esdl__childObjs is effectively immutable
 	  return this._esdl__childObjs;
 	}
@@ -740,8 +797,8 @@ public interface HierComp: NamedObj, ParContext
     // Returns only the static(frozen during elaboration)
     // hierarchical objects
     static if(__traits(isAbstractFunction, getChildObjsHier)) {
-      public final override NamedObj[] getChildObjsHier() {
-	NamedObj[] children = getChildObjs();
+      public final override NamedComp[] getChildObjsHier() {
+	NamedComp[] children = getChildObjs();
 	foreach(child; getChildComps()) {
 	  children ~= child.getChildObjsHier();
 	}
@@ -819,7 +876,7 @@ public interface HierComp: NamedObj, ParContext
       // Add object as child of this parent. This function is called
       // only during the elaboration phase for the purpose of
       // creation of object hierarchy.
-      public final override void _esdl__addChildObj(NamedObj child) {
+      public final override void _esdl__addChildObj(NamedComp child) {
 	synchronized(this) {
 	  bool add = true;
 	  debug(DUPLICATE_CHILD) {
@@ -1001,9 +1058,7 @@ public interface HierComp: NamedObj, ParContext
 	}
       }
     }
-
     mixin NamedMixin;
-
   }
 }
 
@@ -1151,13 +1206,13 @@ void _esdl__configArray(FOO, size_t I, T, L)(T t, ref L l, uint[] indices=null)
 // during the hierarchy navigation is itself an ESDL Object that needs
 // to be elaborated too.
 // An ESDL object could be ..
-// 1. any class object of type NamedObj
+// 1. any class object of type NamedComp
 // 2. a struct instnace that is tacgged with _esdl__component UDP
 // 3. an array of objects with elements of either of the two types as
 //    listed above.
 template CheckEsdlObj(L)
 {
-  static if(is(L == class) && is(L unused: NamedObj)) {
+  static if(is(L == class) && is(L unused: NamedComp)) {
     enum bool CheckEsdlObj = true;
   }
   else static if(is(L == struct) &&
@@ -1174,7 +1229,7 @@ template CheckEsdlObj(L)
 }
 
 void _esdl__elabMems(size_t I=0, size_t CI=0, T)(T t)
-  if(is(T : NamedObj) && is(T == class)) {
+  if(is(T : NamedComp) && is(T == class)) {
     static if(I < t.tupleof.length) {
       import std.string;
       // ignore the ESDL that have been tagged as _esdl__ignore
@@ -1331,7 +1386,7 @@ void _esdl__connect(T)(T t) {
 // elaboration phase. The Dynamic processes and routines are handled
 // separately(in the process/routine constructor)
 void _esdl__register(T, L)(T t, ref L l)
-  if(is(T : NamedObj) && is(T == class)) {
+  if(is(T : NamedComp) && is(T == class)) {
     static if((is(L : BaseWorker)) && (is(L == class))) {
       synchronized(l) {
 	// Dynamic tasks get registered by the constructor --
@@ -1421,7 +1476,7 @@ void _esdl__register(T, L)(T t, ref L l)
 //	}
 
 //   // else static if(is(L == class) &&
-//   //		     is(L c: NamedObj) &&
+//   //		     is(L c: NamedComp) &&
 //   //		     ! is(L: RootThread))
 //   //	     {
 //   //	       // static if(is(L f == Worker!(S, T), alias S, T...) ||
@@ -1577,7 +1632,6 @@ public interface ElabContext: HierComp
       writeln("** ElabContext: Elaborating RootEntity **");
     }
     synchronized(l) {
-      import core.sync.semaphore: Semaphore;
       auto linfo = _esdl__get_parallelism(l);
       l.doBuild();
       l._esdl__postBuild();
@@ -1609,7 +1663,7 @@ public interface ElabContext: HierComp
       }
       l._esdl__nomenclate!(I, S)(t, indices);
       l._esdl__setObjId();
-      l._esdl__setParent(t);
+      l._esdl__setHierParent(t);
       l._esdl__setRoot(t.getRoot);
       l._esdl__setIndices(indices);
       l.doBuild();
@@ -1706,6 +1760,23 @@ public interface ElabContext: HierComp
     }
     // _Random_ Generator
     // public Random _r;
+
+    alias typeof(this) _esdl__elab_type;
+    _esdl__elab_type _esdl__elab_typeID() {
+      return null;
+    }
+
+    void _esdl__config_timePrecision() {
+      this._esdl__config!timePrecision(this);
+    }
+
+    void _esdl__config_timeUnit() {
+      this._esdl__config!timeUnit(this);
+    }
+  
+    void _esdl__elab_virtual() {
+      this._esdl__elab(this);
+    }
   }
 }
 
@@ -1786,11 +1857,11 @@ public class NotificationObj(T): EventObj
   // data is copied over to _dataTriggered when an event is triggered
   private T _dataTriggered;
 
-  public this(NamedObj parent=null) {
+  public this(NamedComp parent=null) {
     super(parent);
   }
 
-  public this(SimEvent simEvent, NamedObj parent=null) {
+  public this(SimEvent simEvent, NamedComp parent=null) {
     super(simEvent, parent);
   }
 
@@ -1996,11 +2067,11 @@ public class NotificationObj(T): EventObj
     return notifications;
   }
 
-  public final void init(NamedObj parent=null) {
+  public final void init(NamedComp parent=null) {
     init(null, parent);
   }
 
-  public final void init(string name, NamedObj parent=null) {
+  public final void init(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for NotificationObj being "
@@ -2045,7 +2116,7 @@ public class NotificationObj(T): EventObj
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setParent(t);
+      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -2328,13 +2399,13 @@ public class NotificationQueueObj(T): NotificationObj!T
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setParent(t);
+      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
 
 // FIXME -- create a freelist for events
-public class EventObj: EventAgent, NamedObj
+public class EventObj: EventAgent, NamedComp
   // , private EventClient
 {
   private SimEvent _simEvent;
@@ -2353,11 +2424,11 @@ public class EventObj: EventAgent, NamedObj
   // Processes that are waiting for this event to trigger
   private Process[] _clientProcesses;
 
-  protected this(NamedObj parent=null) {
+  protected this(NamedComp parent=null) {
     this(null, parent);
   }
 
-  protected this(SimEvent simEvent, NamedObj parent=null) {
+  protected this(SimEvent simEvent, NamedComp parent=null) {
     synchronized(this) {
       if(parent is null) parent = _esdl__getParentProc();
       if(parent !is null) this._esdl__parent = parent;
@@ -2721,11 +2792,11 @@ public class EventObj: EventAgent, NamedObj
     return events;
   }
 
-  public final void init(NamedObj parent=null) {
+  public final void init(NamedComp parent=null) {
     init(null, parent);
   }
 
-  public final void init(string name, NamedObj parent=null) {
+  public final void init(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for EventObj being "
@@ -2760,7 +2831,7 @@ public class EventObj: EventAgent, NamedObj
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setParent(t);
+      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -3032,7 +3103,7 @@ public class EventQueueObj: EventObj
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setParent(t);
+      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -4125,7 +4196,7 @@ public void unlockStage() {
 // interface. The interface is implemented by EsdlSimulator and by
 // Entity. The Entity just passes the messages to the
 // EsdlSimulator via the 'getSimulator'.
-interface SimContext: NamedObj { }
+interface SimContext: NamedComp { }
 
 // Each process, routine and the root process have their own random
 // generator. This is done to enable random stability.
@@ -4312,20 +4383,41 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
   }
 
   // EntityIntf Constructor
-  mixin template EntityMixin()
+  mixin template Elaboration()
   {
-    mixin TimedMixin;
-    mixin ConfigTimeMixin;
-    mixin HierMixin;
-    mixin HierContextMixin;
+    static if (! __traits(compiles, _esdl__Elaboration)) {
+      enum _esdl__Elaboration;
+      mixin TimedMixin;
+      mixin ConfigTimeMixin;
+      mixin HierMixin;
+      mixin HierContextMixin;
+    }
+    else {
+      alias typeof(this) _esdl__elab_type;
+      override _esdl__elab_type _esdl__elab_typeID() {
+	return null;
+      }
+
+      override void _esdl__config_timePrecision() {
+	this._esdl__config!timePrecision(this);
+      }
+
+      override void _esdl__config_timeUnit() {
+	this._esdl__config!timeUnit(this);
+      }
+  
+      override void _esdl__elab_virtual() {
+	this._esdl__elab(this);
+      }
+    }
   }
 }
 
 // Entity class -- alternate is to inherit from EntityIntf and use the
-// EntityMixin
+// Elaboration
 class Entity: EntityIntf
 {
-  mixin EntityMixin;
+  mixin Elaboration;
 }
 
 
@@ -4384,7 +4476,7 @@ template Worker(alias F, int R=0, size_t S=0)
 	  l._esdl__nomenclate!I(t, indices);
 	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
-	  l._esdl__setParent(t);
+	  l._esdl__setHierParent(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
 	  l._esdl__parLock = t._esdl__getParLock;
@@ -4450,7 +4542,7 @@ template Task(alias F, int R=0, size_t S=0)
 	  l._esdl__nomenclate!I(t, indices);
 	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
-	  l._esdl__setParent(t);
+	  l._esdl__setHierParent(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
 	  l._esdl__parLock = t._esdl__getParLock;
@@ -4513,7 +4605,7 @@ template Routine(alias F, int R=0)
 	  l._esdl__nomenclate!I(t, indices);
 	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
-	  l._esdl__setParent(t);
+	  l._esdl__setHierParent(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
 	  l._esdl__parLock = t._esdl__getParLock;
@@ -5312,7 +5404,7 @@ abstract class Process: Procedure, EventClient
     synchronized(this) {
       if(Process.self) { // only dynamic procedures
 	Procedure _parent = Procedure.self;
-	this._esdl__setParent(_parent);
+	this._esdl__setHierParent(_parent);
 	this._esdl__setRoot(_parent.getRoot());
 	// if(_parent._esdl__getParLock is null) {
 	//   // For the time being all the dynamic tasks would run one-at-a-time
@@ -5328,7 +5420,7 @@ abstract class Process: Procedure, EventClient
 
   mixin HierMixin;
 
-  public final void _esdl__addChildObj(NamedObj child) {
+  public final void _esdl__addChildObj(NamedComp child) {
     assert(false, "A task can have only processes as childObjs");
   }
 
@@ -5699,7 +5791,7 @@ abstract class Process: Procedure, EventClient
     return [];
   }
 
-  public final override NamedObj[] getChildObjs() {
+  public final override NamedComp[] getChildObjs() {
     return [];
   }
 
@@ -6059,7 +6151,7 @@ enum UpdateReason: byte
       SYSTEMC
       }
 
-class Channel: ChannelIF, NamedObj // Primitive Channel
+class Channel: ChannelIF, NamedComp // Primitive Channel
 {
   UpdateReason _updateReason = UpdateReason.NONE;
 
@@ -6175,7 +6267,7 @@ class RootThread: Procedure
       }
       l._esdl__nomenclate!I(t, indices);
       l._esdl__setObjId();
-      l._esdl__setParent(t);
+      l._esdl__setHierParent(t);
       _esdl__elabMems(l);
     }
   }
@@ -6366,7 +6458,8 @@ void execElab(T)(T t)
 	// At some stage we would like to include Tasks too.
 	writeln(">>>>>>>>>> Starting Phase: ELABORATE");
 	t.getSimulator.setPhase = SimPhase.ELABORATE;
-	t._esdl__elab(t);
+
+ 	t._esdl__elab(t);
 
 	// Each module is allowed to override the config() method
 	// which is declared in the Entity class. The config methods
@@ -7397,7 +7490,7 @@ abstract class RootEntity: RootEntityIntf
     return _simulator;
   }
 
-  mixin EntityMixin;
+  mixin Elaboration;
 
   this(string name) {
     synchronized(this) {
@@ -7408,7 +7501,7 @@ abstract class RootEntity: RootEntityIntf
       _esdl__root = this;
       _esdl__parent = this;
       _simulator._esdl__setRoot(this);
-      _simulator._esdl__setParent(this);
+      _simulator._esdl__setHierParent(this);
       _simulator._esdl__setName("_simulator");
     }
   }
@@ -7500,7 +7593,7 @@ abstract class RootEntity: RootEntityIntf
 
 class EsdlSimulator: EntityIntf
 {
-  mixin EntityMixin;
+  mixin Elaboration;
 
   enum SchedPhase: byte
     {   IMMEDIATE,
@@ -8016,7 +8109,7 @@ class EsdlSimulator: EntityIntf
 	  }
 	},
 	getRoot().getNumFirstCore());
-      _rootThread._esdl__setParent(this);
+      _rootThread._esdl__setHierParent(this);
       _rootThread._esdl__setName("root");
     }
     this.triggerElab();

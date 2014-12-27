@@ -330,8 +330,6 @@ public class ConstraintEngine {
   // list of constraint statements to solve at a given stage
   public void addCstStage(CstVecPrim prim, ref CstStage[] cstStages) {
     if(prim !is null) {
-      import std.stdio;
-      writeln("Adding stage for @rand: ", prim.name());
       if(prim.stage() is null) {
 	CstStage stage = new CstStage();
 	cstStages ~= stage;
@@ -410,7 +408,6 @@ public class ConstraintEngine {
 	if(vec.domIndex == uint.max) {
 	  import std.stdio;
 	  vec.domIndex = domIndex++;
-	  writeln("Added vec: ", vec.name, " as ", domIndex);
 	  domList ~= vec.bitcount;
 	}
       }
@@ -547,8 +544,6 @@ public class ConstraintEngine {
     foreach(vec; stage._randVecs) {
       if(vec.stage is stage) {
 	if(vec.bddvec is null) {
-	  import std.stdio;
-	  writeln(vec.domIndex);
 	  vec.bddvec = _buddy.buildVec(_domains[vec.domIndex], vec.signed);
 	}
 	BDD primBdd = vec.getPrimBdd(_buddy);
@@ -662,7 +657,6 @@ public size_t _esdl__countRands(size_t I=0, size_t C=0, T)(T t)
 		     findRandArrayAttr!(I, t) != -1) {
 	  return _esdl__countRands!(I+1, C+1)(t);
 	}
-      // ToDo -- Fixme -- Add code for array randomization here
 	else {
 	  return _esdl__countRands!(I+1, C)(t);
 	}
