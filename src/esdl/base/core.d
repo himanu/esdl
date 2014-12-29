@@ -4855,21 +4855,13 @@ class BaseWorker: Process
     }
   }
 
-  protected final override void execute() {
-    if(_state == ProcState.RUNNING) {
-      if(_thread._hasStarted) {
-	_thread.call();
-      }
-      else {
-	_thread.start();
-      }
-      return;
-    }
-    assert(false, "Unexpected Process State: " ~ _state);
-  }
-
   protected final override void call() {
-    _thread.call();
+    if(_thread._hasStarted) {
+      _thread.call();
+    }
+    else {
+      _thread.start();
+    }
   }
 
   protected final override void yield() {
@@ -4880,29 +4872,6 @@ class BaseWorker: Process
     this.getSimulator.freeLock(this, onlyBarrier);
   }
 
-  protected override final void requestAbort(EsdlExecutor x) {
-    if(_isDefunct()) return;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.ABORTED;
-    }
-    else {
-      _state = ProcState.ABORTED;
-      x._termProcs ~= this;
-    }
-  }
-
-  protected override final void requestKill(EsdlExecutor x) {
-    if(_isDefunct()) return;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.KILLED;
-    }
-    else {
-      _state = ProcState.KILLED;
-      x._termProcs ~= this;
-    }
-  }
   public override final bool isRunnableTask() {
     return false;
   }
@@ -4939,14 +4908,6 @@ class BaseTask: Process
     }
   }
 
-  protected final override void execute() {
-    if(_state == ProcState.RUNNING) {
-      this.call();
-      return;
-    }
-    assert(false, "Unexpected Process State: " ~ _state);
-  }
-
   protected final override void call() {
     Process._self = this;
     _fiber.call();
@@ -4966,35 +4927,14 @@ class BaseTask: Process
   }
 
   final override void freeLock(bool onlyBarrier=false) {
-    // do nothing for a fiber
+    // do nothing for a task
   }
 
-  protected override final void requestAbort(EsdlExecutor x) {
-    if(_isDefunct()) return;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.ABORTED;
-    }
-    else {
-      _state = ProcState.ABORTED;
-      x._termProcs ~= this;
-    }
-  }
 
-  protected override final void requestKill(EsdlExecutor x) {
-    if(_isDefunct()) return;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.KILLED;
-    }
-    else {
-      _state = ProcState.KILLED;
-      x._termProcs ~= this;
-    }
-  }
   public override final bool isRunnableTask() {
     return (_state < _DEFUNCT);
   }
+  
   public override final bool isRunnableWorker() {
     return false;
   }
@@ -5003,7 +4943,6 @@ class BaseTask: Process
 
 class BaseRoutine: Process
 {
-  // Fiber _fiber;
   private EventObj _nextTrigger;
 
   private void function() _fn = null;
@@ -5027,14 +4966,6 @@ class BaseRoutine: Process
       _dg = dg;
       super(dg, stage);
     }
-  }
-
-  protected final override void execute() {
-    if(_state == ProcState.RUNNING) {
-      this.call();
-      return;
-    }
-    assert(false, "Unexpected Process State: " ~ _state);
   }
 
   protected final override void call() {
@@ -5064,30 +4995,6 @@ class BaseRoutine: Process
     // do nothing for a routine
   }
 
-  protected override final void requestAbort(EsdlExecutor x) {
-    if(_isDefunct()) return;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.ABORTED;
-    }
-    else {
-      _state = ProcState.ABORTED;
-      x._termProcs ~= this;
-    }
-  }
-
-  protected override final void requestKill(EsdlExecutor x) {
-    if(_isDefunct()) return;
-    // a starting process does not neet termination
-    if(_state == ProcState.STARTING) {
-      _state = ProcState.KILLED;
-    }
-    else {
-      _state = ProcState.KILLED;
-      x._termProcs ~= this;
-    }
-  }
-
   public override final bool isRunnableTask() {
     return (_state < _DEFUNCT);
   }
@@ -5100,6 +5007,7 @@ class BaseRoutine: Process
     super.preExecute();
     _nextTrigger = null;
   }
+
 }
 
 
@@ -5266,7 +5174,13 @@ abstract class Process: Procedure, EventClient
     }
   }
 
-  abstract protected void execute();
+  private final void execute() {
+    if(_state == ProcState.RUNNING) {
+      this.call();
+      return;
+    }
+    assert(false, "Unexpected Process State: " ~ _state);
+  }
 
   // make sure that a user can not directly "start" the underlying
   // thread -- somehow it seems @disable does not work alone, the
@@ -5883,9 +5797,29 @@ abstract class Process: Procedure, EventClient
   }
 
   // returns true if the task requires explicit termination
-  protected void requestAbort(EsdlExecutor x);
+  private final void requestAbort(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.ABORTED;
+    }
+    else {
+      _state = ProcState.ABORTED;
+      x._termProcs ~= this;
+    }
+  }
 
-  protected void requestKill(EsdlExecutor x);
+  private final void requestKill(EsdlExecutor x) {
+    if(_isDefunct()) return;
+    // a starting process does not neet termination
+    if(_state == ProcState.STARTING) {
+      _state = ProcState.KILLED;
+    }
+    else {
+      _state = ProcState.KILLED;
+      x._termProcs ~= this;
+    }
+  }
 
   public final bool _isActive() {
     return (_state <= _ACTIVE);
