@@ -362,24 +362,11 @@ public auto _esdl__get_parallelism(L)(L l) {
   return par;
 }
 
-public auto _esdl__get_parallelism(size_t I, T, L)(T t, ref L l) {
+public auto _esdl__get_parallelism(size_t I, T)(T t) {
   enum int P = _esdl__attr!(parallelize, t, I);
-  enum int Q = _esdl__attr!(parallelize, L);
   static if(P is -1) {
-    // check if the entity definition has a parallelize tag
-    static if(Q is -1) {
-      enum par = parallelize(ParallelPolicy._UNDEFINED_,
-			     uint.max); // inherit from parent
-    }
-    else {
-      static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			 parallelize)) {
-	enum par = parallelize(byte.min, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, L)[Q];
-      }
-    }
+    enum par = parallelize(ParallelPolicy._UNDEFINED_,
+			   uint.max); // inherit from parent
   }
   else {
     // first check if the attribute is just @parallelize
@@ -454,8 +441,7 @@ public interface HierComp: NamedComp, ParContext
   // Interface functions for enabling parallelize UDP
   public CoreSemaphore _esdl__getParLock();
   public parallelize _esdl__getParInfo();
-  public void _esdl__setEntityMutex(CoreSemaphore parentLock,
-				    parallelize linfo, parallelize plinfo);
+  public void _esdl__setEntityMutex(parallelize linfo);
 
   static Time _esdl__get_timeUnit(L)(L l) {
     enum int Q = _esdl__attr!(timeUnit, L);
@@ -475,24 +461,10 @@ public interface HierComp: NamedComp, ParContext
     return par;
   }
 
-  static Time _esdl__get_timeUnit(size_t I, T, L)(T t, ref L l) {
+  static Time _esdl__get_timeUnit(size_t I, T)(T t) {
     enum int P = _esdl__attr!(timeUnit, t, I);
-    enum int Q = _esdl__attr!(timeUnit, L);
     static if(P is -1) {
-      // check if the entity definition has a timeUnit tag
-      static if(Q is -1) {
-	enum Time par = 0.sec; // inherit from parent
-      }
-      else {
-	static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			   timeUnit)) {
-	  static assert(false, "Must supply a Time value with @timeUnit");
-	}
-	else {
-	  enum attr = __traits(getAttributes, L)[Q];
-	  enum Time par = attr._unit;
-	}
-      }
+      enum Time par = 0.sec; // inherit from parent
     }
     else {
       // first check if the attribute is just @timeUnit
@@ -526,24 +498,10 @@ public interface HierComp: NamedComp, ParContext
     return par;
   }
 
-  static Time _esdl__get_timePrecision(size_t I, T, L)(T t, ref L l) {
+  static Time _esdl__get_timePrecision(size_t I, T)(T t) {
     enum int P = _esdl__attr!(timePrecision, t, I);
-    enum int Q = _esdl__attr!(timePrecision, L);
     static if(P is -1) {
-      // check if the entity definition has a timePrecision tag
-      static if(Q is -1) {
-	enum Time par = 0.sec; // inherit from parent
-      }
-      else {
-	static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			   timePrecision)) {
-	  static assert(false, "Must supply a Time value with @timePrecision");
-	}
-	else {
-	  enum attr = __traits(getAttributes, L)[Q];
-	  enum Time par = attr._precision;
-	}
-      }
+      enum Time par = 0.sec; // inherit from parent
     }
     else {
       // first check if the attribute is just @timePrecision
@@ -608,8 +566,15 @@ public interface HierComp: NamedComp, ParContext
     // Create a new Semaphore for a given HierComp when required,
     // based on the UDP option @parallelize. This function is called
     // during the elaboration phase.
-    public final override void _esdl__setEntityMutex(CoreSemaphore parentLock,
-						     parallelize linfo, parallelize plinfo) {
+    public final override void _esdl__setEntityMutex(parallelize linfo) {
+      // defaults for root
+      CoreSemaphore parentLock = null;
+      parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
+      // but if not root then get from parent
+      if(getParent !is this && getParent !is null) {
+	parentLock = getParent._esdl__getParLock;
+	plinfo = getParent._esdl__getParInfo;
+      }
       if(linfo._parallel == ParallelPolicy._UNDEFINED_) {
 	// take hier information
 	_esdl__parInfo = plinfo;
@@ -651,8 +616,14 @@ public interface HierComp: NamedComp, ParContext
       return _esdl__compId;
     }
 
-    public final void _esdl__setParConfig(ParConfig parentCfg,
-					  parallelize linfo, parallelize plinfo) {
+    public final void _esdl__setParConfig(parallelize linfo) {
+      // default for root
+      ParConfig parentCfg = null;
+      parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
+      if(getParent !is this && getParent !is null) {
+	parentCfg = getParent._esdl__getParConfig;
+	plinfo = getParent._esdl__getParInfo;
+      }
       if(linfo._parallel == ParallelPolicy._UNDEFINED_) { // take hier information
 	_esdl__parInfo = plinfo;
       }
@@ -1131,6 +1102,7 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
       import std.string;
       // ignore the ESDL that have been tagged as _esdl__ignore
       static if(_esdl__attr!(_esdl__ignore, t, I) == -1) {
+	auto l = t.tupleof[I];
 	alias typeof(t.tupleof[I]) L;
 	static if(CheckInstObj!L) {
 	  // multidimensional arrays would need special (recursive)
@@ -1141,13 +1113,36 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
 	  }
 	  else {
 	    // neither ignored, nor an array, so fooorate the object
-	    t.tupleof[I]._esdl__config!(FOO, I)(t, t.tupleof[I]);
-	    debug(ATTRCONFIG) {
-	      // debug message for listing the fooorated objects
-	      import std.stdio;
-	      writeln("Fooorated " ~ typeof(t.tupleof[I]).stringof ~ " : ",
-		      I, "/", t.tupleof.length);
+	    static if(is(FOO == timePrecision)) {
+	      auto tpinfo = t._esdl__get_timePrecision!(I)(t);
+	      static if(is(typeof(l._esdl__elab_typeID): L)) {
+		l._esdl__config_timePrecision(tpinfo);
+	      }
+	      else {
+		l._esdl__config!(timePrecision)(l, tpinfo);
+	      }
+	      debug(ATTRCONFIG) {
+		// debug message for listing the fooorated objects
+		import std.stdio;
+		writeln("Fooorated " ~ typeof(t.tupleof[I]).stringof ~ " : ",
+			I, "/", t.tupleof.length);
+	      }
 	    }
+	    static if(is(FOO == timeUnit)) {
+	      auto tuinfo = t._esdl__get_timeUnit!I(t);
+	      static if(is(typeof(l._esdl__elab_typeID): L)) {
+		l._esdl__config_timeUnit(tuinfo);
+	      }
+	      else {
+		l._esdl__config!(timeUnit)(l, tuinfo);
+	      }
+	      debug(ATTRCONFIG) {
+		// debug message for listing the fooorated objects
+		import std.stdio;
+		writeln("Fooorated " ~ typeof(t.tupleof[I]).stringof ~ " : ",
+			I, "/", t.tupleof.length);
+	      }
+	    }	    
 	  }
 	}
 	else {
@@ -1580,8 +1575,7 @@ public interface ElabContext: HierComp
     }
   }
 
-  static void _esdl__config(FOO, L)
-    (L l) {
+  static void _esdl__config(FOO, L)(L l, Time time) {
     // debug(ATTRCONFIG) {
     //   import std.stdio;
     //   writeln("** ElabContext: Fooorating " ~ l.tupleof[I].stringof ~ ":" ~
@@ -1592,53 +1586,42 @@ public interface ElabContext: HierComp
 		    "Only ElabContext components are allowed to instantiate "
 		    "other ElabContext components");
       static if(is(FOO == timePrecision)) {
-	auto tpinfo = _esdl__get_timePrecision(l);
+	Time tpinfo;
+	if(time.isZero) {
+	  tpinfo = _esdl__get_timePrecision(l);
+	}
+	else {
+	  tpinfo = time;
+	}
 	l._esdl__setTimePrecision(tpinfo);
       }
       static if(is(FOO == timeUnit)) {
-	auto tuinfo = _esdl__get_timeUnit(l);
+	Time tuinfo;
+	if(time.isZero) {
+	  tuinfo = _esdl__get_timeUnit(l);
+	}
+	else {
+	  tuinfo = time;
+	}
 	l._esdl__setTimeUnit(tuinfo);
       }
       _esdl__configMems!(FOO)(l);
     }
   }
 
-  static void _esdl__config(FOO, size_t I, T, L)
-    (T t, L l, uint[] indices=null) {
-    debug(ATTRCONFIG) {
-      import std.stdio;
-      writeln("** ElabContext: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
-	      typeof(l).stringof);
-    }
-    synchronized(l) {
-      static assert(is(T unused: ElabContext),
-		    "Only ElabContext components are allowed to instantiate "
-		    "other ElabContext components");
-      static if(is(FOO == timePrecision)) {
-	auto tpinfo = _esdl__get_timePrecision!I(t, l);
-	l._esdl__setTimePrecision(tpinfo);
-      }
-      static if(is(FOO == timeUnit)) {
-	auto tuinfo = _esdl__get_timeUnit!I(t, l);
-	l._esdl__setTimeUnit(tuinfo);
-      }
-      _esdl__configMems!(FOO)(l);
-    }
-  }
-
-  static void _esdl__elab(L) (L l) {
+  static void _esdl__elab(L) (L l, parallelize linfo) {
     debug(ELABORATE) {
       import std.stdio;
       writeln("** ElabContext: Elaborating RootEntity **");
     }
     synchronized(l) {
-      auto linfo = _esdl__get_parallelism(l);
+      if(linfo.isUndefined) {
+	linfo = _esdl__get_parallelism(l);
+      }
       l.doBuild();
       l._esdl__postBuild();
-      l._esdl__setEntityMutex(null, linfo, parallelize(ParallelPolicy.MULTI,
-						       uint.max));
-      l._esdl__setParConfig(null, linfo, parallelize(ParallelPolicy.MULTI,
-						     uint.max));
+      l._esdl__setEntityMutex(linfo);
+      l._esdl__setParConfig(linfo);
       _esdl__elabMems(l);
       l._esdl__postElab();
     }
@@ -1666,15 +1649,12 @@ public interface ElabContext: HierComp
       l._esdl__setHierParent(t);
       l._esdl__setRoot(t.getRoot);
       l._esdl__setIndices(indices);
-      l.doBuild();
-      l._esdl__postBuild();
-      auto linfo = _esdl__get_parallelism!I(t, l);
-      l._esdl__setEntityMutex(t._esdl__getParLock, linfo,
-			      t._esdl__parInfo);
-      l._esdl__setParConfig(t._esdl__parConfig, linfo,
-			    t._esdl__parInfo);
-      _esdl__elabMems(l);
-      l._esdl__postElab();
+      static if(is(typeof(l._esdl__elab_typeID): L)) {
+	l._esdl__elab_virtual(_esdl__get_parallelism!I(t));
+      }
+      else {
+	l._esdl__elab(l, _esdl__get_parallelism!I(t));
+      }
     }
   }
 
@@ -1766,16 +1746,16 @@ public interface ElabContext: HierComp
       return null;
     }
 
-    void _esdl__config_timePrecision() {
-      this._esdl__config!timePrecision(this);
+    void _esdl__config_timePrecision(Time time) {
+      this._esdl__config!timePrecision(this, time);
     }
 
-    void _esdl__config_timeUnit() {
-      this._esdl__config!timeUnit(this);
+    void _esdl__config_timeUnit(Time time) {
+      this._esdl__config!timeUnit(this, time);
     }
   
-    void _esdl__elab_virtual() {
-      this._esdl__elab(this);
+    void _esdl__elab_virtual(parallelize linfo) {
+      this._esdl__elab(this, linfo);
     }
   }
 }
@@ -4285,7 +4265,7 @@ public void srandom(uint _seed) {
       }
 
       static void _esdl__config(FOO, L) (L l) {
-	l._esdl__objRef._esdl__config(l._esdl__objRef);
+	l._esdl__objRef._esdl__config!(FOO, I)(l._esdl__objRef);
       }
 
       static void _esdl__config(FOO, size_t I, T, L)
@@ -4398,16 +4378,16 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 	return null;
       }
 
-      override void _esdl__config_timePrecision() {
+      override void _esdl__config_timePrecision(Time time) {
 	this._esdl__config!timePrecision(this);
       }
 
-      override void _esdl__config_timeUnit() {
+      override void _esdl__config_timeUnit(Time time) {
 	this._esdl__config!timeUnit(this);
       }
   
-      override void _esdl__elab_virtual() {
-	this._esdl__elab(this);
+      override void _esdl__elab_virtual(parent linfo) {
+	this._esdl__elab(this, linfo);
       }
     }
   }
@@ -6459,7 +6439,7 @@ void execElab(T)(T t)
 	writeln(">>>>>>>>>> Starting Phase: ELABORATE");
 	t.getSimulator.setPhase = SimPhase.ELABORATE;
 
- 	t._esdl__elab(t);
+ 	t._esdl__elab(t, parallelize(ParallelPolicy._UNDEFINED_, ubyte.max));
 
 	// Each module is allowed to override the config() method
 	// which is declared in the Entity class. The config methods
@@ -6469,8 +6449,8 @@ void execElab(T)(T t)
 	// reflected at the EsdlSimulator level.
 	writeln(">>>>>>>>>> Starting Phase: CONFIGURE");
 	t.getSimulator.setPhase = SimPhase.CONFIGURE;
-	t._esdl__config!timePrecision(t);
-	t._esdl__config!timeUnit(t);
+	t._esdl__config!timePrecision(t, 0.nsec);
+	t._esdl__config!timeUnit(t, 0.nsec);
 
 	// _esdl__config(t);
 
