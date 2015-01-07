@@ -9,6 +9,8 @@ import esdl.data.rand;
 import esdl.data.obdd;
 import esdl.data.bvec;
 
+int FFFF = 20;
+
 class Foo: Randomizable
 {
   mixin Randomization;
@@ -32,7 +34,8 @@ class Bar: Foo
 
   Constraint! q{
     foo.length > 2;
-    baz < 16;
+    baz < 32;
+    FFFF + baz == 50;
   } cstFooLength;
 
   Constraint! q{
@@ -53,6 +56,10 @@ class Bar: Foo
       foo[i] > 16;
     }
   } cstFoo;
+
+  override void preRandomize() {
+    FFFF++;
+  }
 
 }
 
