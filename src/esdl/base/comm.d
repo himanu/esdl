@@ -1093,12 +1093,14 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   }
 
  public:
-  this() {
+  this(string name="", NamedComp parent=null) {
     synchronized(this) {
       _readEvent.init(this);
       _writeEvent.init(this);
       static if(N == 0) {_buffer.length = 4;}
       _free = _buffer.length;
+      _esdl__setName(name);
+      _esdl__setParent(parent);
     }
   }
 

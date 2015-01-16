@@ -255,7 +255,7 @@ package interface NamedComp: EsdlObj, TimeContext
     public final override NamedComp getParent() {
       if(_esdl__parent !is null) return _esdl__parent;
       assert(false, "Tried to seek parent for a NamedComp "
-	     "which does not have it set");
+	     "which does not have it set: " ~ _esdl__name);
       // synchronized(this) {
       //   _esdl__parent = _esdl__getParentProc();
       //   return _esdl__parent;
@@ -1096,30 +1096,38 @@ template CheckInstObj(L)
     }
 }
 
-void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
+void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
   if(is(T : ElabContext) && is(T == class)) {
     static if(I < t.tupleof.length) {
       import std.string;
       // ignore the ESDL that have been tagged as _esdl__ignore
       static if(_esdl__attr!(_esdl__ignore, t, I) == -1) {
-	auto l = t.tupleof[I];
+	// don't do that -- fails for Events
+	// auto l = t.tupleof[I];
 	alias typeof(t.tupleof[I]) L;
 	static if(CheckInstObj!L) {
 	  // multidimensional arrays would need special (recursive)
 	  // handling, therefor arrays are handled by a separate
 	  // function
+	  static if(is(FOO == timePrecision)) {
+	    auto tinfo = t._esdl__get_timePrecision!(I)(t);
+	  }
+	  else {
+	    auto tinfo = t._esdl__get_timeUnit!I(t);
+	  }
 	  static if(isArray!L) {
-	    _esdl__configArray!(FOO, I)(t, t.tupleof[I]);
+	    _esdl__configArray!(FOO)(t.tupleof[I], tinfo);
 	  }
 	  else {
 	    // neither ignored, nor an array, so fooorate the object
 	    static if(is(FOO == timePrecision)) {
-	      auto tpinfo = t._esdl__get_timePrecision!(I)(t);
-	      static if(is(typeof(l._esdl__elab_typeID): L)) {
-		l._esdl__config_timePrecision(tpinfo);
+	      static if(is(typeof(t.tupleof[I]._esdl__elab_typeID): L)) {
+		// call the virtual function
+		t.tupleof[I]._esdl__config_timePrecision(tinfo);
 	      }
 	      else {
-		l._esdl__config!(timePrecision)(l, tpinfo);
+		// call generic fucntion
+		t.tupleof[I]._esdl__config!(timePrecision)(t.tupleof[I], tinfo);
 	      }
 	      debug(ATTRCONFIG) {
 		// debug message for listing the fooorated objects
@@ -1129,12 +1137,11 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
 	      }
 	    }
 	    static if(is(FOO == timeUnit)) {
-	      auto tuinfo = t._esdl__get_timeUnit!I(t);
-	      static if(is(typeof(l._esdl__elab_typeID): L)) {
-		l._esdl__config_timeUnit(tuinfo);
+	      static if(is(typeof(t.tupleof[I]._esdl__elab_typeID): L)) {
+		t.tupleof[I]._esdl__config_timeUnit(tinfo);
 	      }
 	      else {
-		l._esdl__config!(timeUnit)(l, tuinfo);
+		t.tupleof[I]._esdl__config!(timeUnit)(t.tupleof[I], tinfo);
 	      }
 	      debug(ATTRCONFIG) {
 		// debug message for listing the fooorated objects
@@ -1182,17 +1189,18 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(T t)
       }
   }
 
-void _esdl__configArray(FOO, size_t I, T, L)(T t, ref L l, uint[] indices=null)
+void _esdl__configArray(FOO, L)(ref L l, Time tinfo// , uint[] indices=null
+				)
 {
   for(size_t j = 0; j < l.length; ++j) {
     // pragma(msg, "Adding: ", typeof(l[j]));
     static if(isArray!(typeof(l[j]))) {
-      _esdl__configArray!(FOO, I)(t, l[j],
-				  indices ~ cast(uint) j);
+      _esdl__configArray!(FOO)(l[j], tinfo//, indices ~ cast(uint) j
+			       );
     }
     else {
-      l[j]._esdl__config!(FOO, I)(t, l[j],
-				  indices ~ cast(uint) j);
+      l[j]._esdl__config!(FOO)(l[j], tinfo// , indices ~ cast(uint) j
+			       );
     }
   }
 }
@@ -4265,12 +4273,16 @@ public void srandom(uint _seed) {
       }
 
       static void _esdl__config(FOO, L) (L l) {
-	l._esdl__objRef._esdl__config!(FOO, I)(l._esdl__objRef);
+	l._esdl__objRef._esdl__config!(FOO)(l._esdl__objRef);
       }
 
+      static void _esdl__config(FOO, L)(ref L l, Time time) {
+	l._esdl__objRef._esdl__config!(FOO)(l._esdl__objRef, time);
+      }
+      
       static void _esdl__config(FOO, size_t I, T, L)
-	(T t, L l, uint[] indices=null) {
-	l._esdl__objRef._esdl__config!(FOO, I)(t, l._esdl__objRef, indices);
+	(ref T t, ref L l, uint[] indices=null) {
+	l._esdl__objRef._esdl__config!(FOO)(t, l._esdl__objRef, indices);
       }
 
       static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
@@ -6291,7 +6303,10 @@ class PoolThread: SimThread
   }
 
   public final override RootEntityIntf getRoot() {
-    assert(false, "getRoot not available in PoolThread");
+    // no lock required since _esdl__root is effectively immutable
+    // synchronized(this) {
+    return _esdl__root;
+    // }
   }
 }
 
@@ -6358,7 +6373,7 @@ void execElab(T)(T t)
 	import std.exception: enforce;
 
 	// So that getRootEntity returns a legal value even during elaboration
-	_esdl__rootEntity = t;
+	setRootEntity(t);
 
 	// The BUILD Phase
 	// Instantiated modules and events are identified and constructed
@@ -7334,7 +7349,7 @@ interface RootEntityIntf: EntityIntf
   final void forkSim(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
-    _esdl__rootEntity = this;
+    setRootEntity(this);
     getSimulator.forkSim(t);
   }
   final void fork(SimTime st = MAX_SIMULATION_TIME) {
@@ -7343,19 +7358,19 @@ interface RootEntityIntf: EntityIntf
   final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
-    _esdl__rootEntity = this;
+    setRootEntity(this);
     getSimulator.forkSim(st);
   }
   final void forkSimUpto(Time t) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
-    _esdl__rootEntity = this;
+    setRootEntity(this);
     getSimulator.forkSimUpto(t);
   }
   final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
     // So that the simulation root thread too returns a legal value for
     // getRootEntity
-    _esdl__rootEntity = this;
+    setRootEntity(this);
     getSimulator.forkSimUpto(st);
   }
   final public void joinSimEnd() {
@@ -7408,6 +7423,7 @@ abstract class RootEntity: RootEntityIntf
 
   this(string name) {
     synchronized(this) {
+      _esdl__rootEntity = this;
       if(name == "") assert(false,
 			    "Must provide a valid name to the Root Entiry");
       this._esdl__setName(name);
@@ -7467,11 +7483,7 @@ abstract class RootEntity: RootEntityIntf
     _esdl__noUnboundExePorts = false;
   }
 
-  public override void initProcess() {
-    _esdl__rootEntity = this;
-    _esdl__timeScale = Process.self.getTimeScale();
-    _esdl__simPhase = SimPhase.SIMULATE;
-  }
+  public override void initProcess() {}
 
   public final override SimTime getSimTime() {
     return _esdl__root.simulator().simTime();
@@ -7589,7 +7601,6 @@ class EsdlSimulator: EntityIntf
   public final void setPhase(SimPhase _phase) {
     synchronized(this) {
       this._phase = _phase;
-      _esdl__simPhase = _phase;
     }
   }
 
@@ -8012,7 +8023,7 @@ class EsdlSimulator: EntityIntf
 
     synchronized(this) {
       _rootThread = new RootThread({
-	  _esdl__rootEntity = t;
+	  setRootEntity(t);
 	  try {
 	    simLoop(t);
 	  }
@@ -8035,7 +8046,7 @@ class EsdlSimulator: EntityIntf
   // with other simulators till the time the simulation is explicitly
   // terminated.
   final void simLoop(T)(T t) {
-    _esdl__rootEntity = t;
+    setRootEntity(t);
     t.execElab();
     // inclrementally run simulation
     while(this.phase !is SimPhase.SIMULATION_DONE) {
@@ -8045,23 +8056,33 @@ class EsdlSimulator: EntityIntf
 }
 
 private static RootEntityIntf _esdl__rootEntity;
-private static ulong _esdl__timeScale;
-private static SimPhase _esdl__simPhase;
 
 public SimTime getSimTime() {
-  return _esdl__rootEntity.getSimTime();
+  return getRootEntity.getSimTime();
 }
 
 public RootEntityIntf getRootEntity() {
+  if(_esdl__rootEntity is null) {
+    _esdl__rootEntity = Process.self.getRoot();
+  }
   return _esdl__rootEntity;
 }
 
+private void setRootEntity(RootEntityIntf root) {
+  if(_esdl__rootEntity is null) {
+    _esdl__rootEntity = root;
+  }
+  else {
+    assert(_esdl__rootEntity == root);
+  }
+}
+
 public ulong getTimeScale() {
-  return _esdl__timeScale;
+  return Process.self.getTimeScale();
 }
 
 public SimPhase getSimPhase() {
-  return _esdl__simPhase;
+  return getRootEntity().simulator()._phase;
 }
 
 template _esdl__attr(alias A, T)
