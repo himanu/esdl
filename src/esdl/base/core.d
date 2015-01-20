@@ -3609,14 +3609,14 @@ final class EventNotice
       writeln("Creating Timed Event at time ", t.getVal);
     }
     EventNotice f;
-    if(SimThread.self._eventNoticeList !is null) {
-      f = SimThread.self._eventNoticeList;
-      SimThread.self._eventNoticeList = f.next;
+    if(PoolThread.self._eventNoticeList !is null) {
+      f = PoolThread.self._eventNoticeList;
+      PoolThread.self._eventNoticeList = f.next;
       f.time = t;
       f._event = event;
     }
     else {
-      f = new EventNotice(t, event, SimThread.self);
+      f = new EventNotice(t, event, PoolThread.self);
     }
     return f;
   }
@@ -3638,10 +3638,10 @@ final class EventNotice
   }
 
   static void dealloc(EventNotice f) {
-    auto simThread = f._simThread;
+    auto poolThread = f._poolThread;
     f._event = null;
-    f.next = simThread._eventNoticeList;
-    simThread._eventNoticeList = f;
+    f.next = poolThread._eventNoticeList;
+    poolThread._eventNoticeList = f;
   }
 
   // _time is effectively immutable
@@ -3665,13 +3665,13 @@ final class EventNotice
     }
   }
 
-  private SimThread _simThread;
+  private PoolThread _poolThread;
   // make new not callable directly -- private
-  private this(SimTime t, TimedEvent event, SimThread simThread) {
+  private this(SimTime t, TimedEvent event, PoolThread poolThread) {
     synchronized(this) {
       this.time = t;
       this._event = event;
-      this._simThread = simThread;
+      this._poolThread = poolThread;
     }
   }
 
@@ -4043,12 +4043,12 @@ private void _nextTriggerEvent(EventObj event) {
 }
 
 public Process worker(DelegateThunk dg, int stage = 0, size_t sz = 0) {
-  Process f = new BaseWorker(dg, stage, sz);
+  Process f = new BaseWorker(getRootEntity(), dg, stage, sz);
   return f;
 }
 
 public Process worker(FunctionThunk fn, int stage = 0, size_t sz = 0) {
-  Process f = new BaseWorker(fn, stage, sz);
+  Process f = new BaseWorker(getRootEntity(), fn, stage, sz);
   return f;
 }
 
@@ -4438,7 +4438,7 @@ template Worker(alias F, int R=0, size_t S=0)
       enum ulong _STACKSIZE = S;
 
       protected this(void delegate() dg, int stage, size_t stackSize) {
-	super(dg, stage, stackSize);
+	super(getRootEntity(), dg, stage, stackSize);
       }
 
       static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
@@ -4740,36 +4740,32 @@ class PersistFlag
   }
 }
 
-class SimThread: Thread
+class EsdlThread: Thread
 {
-  import core.sync.semaphore: Semaphore;
-
-  private static SimThread _self;
-
-  private EventNotice _eventNoticeList;
-
-  public static SimThread self() {
+  private static EsdlThread _self;
+  public static EsdlThread self() {
     return _self;
   }
 
-  this( void function() fn, size_t sz = 0 ) {
-    synchronized(this) {
-      super(() {_self = this; fn();}, sz);
-      _waitLock = new Semaphore(0);
-    }
-  }
-
-  this( void delegate() dg, size_t sz = 0 ) {
-    synchronized(this) {
-      super({_self = this; dg();}, sz);
-      _waitLock = new Semaphore(0);
-    }
-  }
-
   static if(!__traits(compiles, _esdl__root)) {
-    @_esdl__ignore protected RootEntityIntf _esdl__root;	// The EsdlSimulator
+    @_esdl__ignore protected RootEntityIntf _esdl__root;
   }
 
+  this(RootEntityIntf root, void function() fn, size_t sz = 0 ) {
+    assert(root !is null);
+    synchronized(this) {
+      _esdl__root = root;
+      super(() {_self = this; fn();}, sz);
+    }
+  }
+
+  this(RootEntityIntf root, void delegate() dg, size_t sz = 0 ) {
+    assert(root !is null);
+    synchronized(this) {
+      _esdl__root = root;
+      super({_self = this; dg();}, sz);
+    }
+  }
 
   protected RootEntityIntf getRoot() {
     synchronized(this) {
@@ -4780,20 +4776,37 @@ class SimThread: Thread
   protected EsdlSimulator getSimulator() {
     return getRoot().simulator();
   }
+}
 
-  // final protected void waitBarrier() {
-  //   // synchronized(this)
-  //   //	{
-  //   freeLock();
-  //   // }
-  // }
+class SimThread: EsdlThread
+{
+  import core.sync.semaphore: Semaphore;
 
-  // final protected void freeThreadSlot() {
-  //   // synchronized(this)
-  //   //	{
-  //   this.getSimulator.freeThreadSlot();
-  //   // }
-  // }
+  private static SimThread _self;
+
+  public static SimThread self() {
+    return _self;
+  }
+
+  static if(!__traits(compiles, _esdl__root)) {
+    @_esdl__ignore protected RootEntityIntf _esdl__root;
+  }
+
+  this(RootEntityIntf root, void function() fn, size_t sz = 0 ) {
+    synchronized(this) {
+      _esdl__root = root;
+      super(root, () {_self = this; fn();}, sz);
+      _waitLock = new Semaphore(0);
+    }
+  }
+
+  this(RootEntityIntf root, void delegate() dg, size_t sz = 0 ) {
+    synchronized(this) {
+      _esdl__root = root;
+      super(root, () {_self = this; dg();}, sz);
+      _waitLock = new Semaphore(0);
+    }
+  }
 
   private Semaphore _waitLock;
 
@@ -4843,26 +4856,28 @@ class BaseWorker: Process
 {
   SimThread _thread;
 
-  this(void function() fn, int stage = 0, size_t sz = 0 ) {
+  this(RootEntityIntf root, void function() fn,
+       int stage = 0, size_t sz = 0 ) {
     synchronized(this) {
       super(fn, stage);
       if(sz is 0) {
-	_thread = new SimThread(() {fn_wrap(fn);});
+	_thread = new SimThread(root, () {fn_wrap(fn);});
       }
       else {
-	_thread = new SimThread(() {fn_wrap(fn);}, sz);
+	_thread = new SimThread(root, () {fn_wrap(fn);}, sz);
       }
     }
   }
 
-  this(void delegate() dg, int stage = 0, size_t sz = 0 ) {
+  this(RootEntityIntf root, void delegate() dg,
+       int stage = 0, size_t sz = 0 ) {
     synchronized(this) {
       super(dg, stage);
       if(sz is 0) {
-	_thread = new SimThread(() {dg_wrap(dg);});
+	_thread = new SimThread(root, () {dg_wrap(dg);});
       }
       else {
-	_thread = new SimThread(() {dg_wrap(dg);}, sz);
+	_thread = new SimThread(root, () {dg_wrap(dg);}, sz);
       }
     }
   }
@@ -6115,10 +6130,12 @@ class Channel: ChannelIF, NamedComp // Primitive Channel
 
 class RootThread: Procedure
 {
-  Thread _thread;
+  EsdlThread _thread;
 
   private static RootThread _self;
-  public static RootThread self() {return _self;}
+  public static RootThread self() {
+    return _self;
+  }
 
   private final void fn_wrap(void function() fn, size_t fcore=0) {
     stickToCpuCore(fcore);
@@ -6132,24 +6149,29 @@ class RootThread: Procedure
     dg();
   }
 
-  this(void function() fn, size_t fcore=0, size_t sz = 0 ) {
+
+  this(RootEntityIntf root, void function() fn,
+       size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
+      _esdl__root = root;
       if(sz is 0) {
-	_thread = new Thread(() {fn_wrap(fn, fcore);});
+	_thread = new EsdlThread(root, () {fn_wrap(fn, fcore);});
       }
       else {
-	_thread = new Thread(() {fn_wrap(fn, fcore);}, sz);
+	_thread = new EsdlThread(root, () {fn_wrap(fn, fcore);}, sz);
       }
     }
   }
 
-  this(void delegate() dg, size_t fcore=0, size_t sz = 0 ) {
+  this(RootEntityIntf root, void delegate() dg,
+       size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
+      _esdl__root = root;
       if(sz is 0) {
-	_thread = new Thread(() {dg_wrap(dg, fcore);});
+	_thread = new EsdlThread(root, () {dg_wrap(dg, fcore);});
       }
       else {
-	_thread = new Thread(() {dg_wrap(dg, fcore);}, sz);
+	_thread = new EsdlThread(root, () {dg_wrap(dg, fcore);}, sz);
       }
     }
   }
@@ -6238,15 +6260,21 @@ class PoolThread: SimThread
 {
 
   private immutable size_t _poolIndex;
-  static if(!__traits(compiles, _esdl__root)) {
-    @_esdl__ignore protected RootEntityIntf _esdl__root;
+
+  private EventNotice _eventNoticeList;
+
+  private static PoolThread _self;
+
+  public static PoolThread self() {
+    return _self;
   }
 
-
-  this(EsdlSimulator sim, size_t index, size_t fcore, size_t sz=0 ) {
+  this(RootEntityIntf root, size_t index, size_t fcore, size_t sz=0 ) {
     synchronized(this) {
-      this._esdl__root = sim.getRoot();
-      super({execTaskProcesses(fcore);}, sz);
+      super(root, {
+	  _self = this;
+	  execTaskProcesses(fcore);
+	}, sz);
       _poolIndex = index;
     }
   }
@@ -6536,7 +6564,7 @@ class EsdlExecutor: EsdlExecutorIf
 	import std.stdio;
 	writeln("Creating Pool Threads: ", i);
       }
-      _poolThreads[i] = new PoolThread(_simulator, i,
+      _poolThreads[i] = new PoolThread(_simulator.getRoot(), i,
 				       firstThread, stackSize);
     }
   }
@@ -8022,7 +8050,7 @@ class EsdlSimulator: EntityIntf
     // if we do not take care of this
 
     synchronized(this) {
-      _rootThread = new RootThread({
+      _rootThread = new RootThread(t, {
 	  setRootEntity(t);
 	  try {
 	    simLoop(t);
@@ -8061,10 +8089,28 @@ public SimTime getSimTime() {
   return getRootEntity.getSimTime();
 }
 
+// return the current PoolThread, otherwise null
+public PoolThread getPoolThread() {
+  auto _thread = Thread.getThis();
+  return cast(PoolThread) _thread;
+}
+
 public RootEntityIntf getRootEntity() {
+  // first handle the case for call within the
+  // simulation tasks and routines
+  // These need to be handled in the fastest possible manner
   if(_esdl__rootEntity is null) {
-    _esdl__rootEntity = Process.self.getRoot();
+    auto proc = Procedure.self();
+    if(proc !is null) {
+      _esdl__rootEntity = Procedure.self.getRoot();
+    }
   }
+  // if still null, get the root entity from the EsdlThread
+  if(_esdl__rootEntity is null) {
+    EsdlThread _thread = cast(EsdlThread) Thread.getThis();
+    _esdl__rootEntity = _thread.getRoot();
+  }
+  // A null could still be returned for non-Esdl Threads
   return _esdl__rootEntity;
 }
 

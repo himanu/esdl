@@ -16,6 +16,11 @@ class Foo: Entity {
     writeln(foo);
   }
   Task!hello greet[2];
+  Worker!hello greetWorld[2];
+  static this() {
+    import std.stdio;
+    writeln("hehe");
+  }
 }
 @timeUnit(1.nsec)
 @timePrecision(1.psec)
