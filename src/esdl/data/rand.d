@@ -1592,71 +1592,97 @@ mixin template EnumConstraints(T) {
 }  
 
 // T represents the type of the Enum
-class RndVec(T): RndVecVar
+class RndVec(T...): RndVecVar
 {
-  T* _var;
-  public this(string name, long value, bool signed,
-	      uint bitcount, bool isRand, T* var) {
-    super(name, value, signed, bitcount, isRand);
-    _var = var;
-    import std.stdio;
-    writeln("var is ", var);
-    if(_var !is null) {
-      writeln("var value is ", *_var);
+  alias L=T[0];
+  mixin EnumConstraints!L;
+  static if(T.length == 1) {
+    L* _var;
+    public this(string name, long value, bool signed,
+		uint bitcount, bool isRand, L* var) {
+      super(name, value, signed, bitcount, isRand);
+      _var = var;
+      import std.stdio;
+      writeln("var is ", var);
+      if(_var !is null) {
+	writeln("var value is ", *_var);
+      }
     }
   }
-  mixin EnumConstraints!T;
-};
-
-class RndVecIndxd(T): RndVecVar
-{
-  RndVecArrVar _parent;
-  ulong _index;
+  else {
+    alias P=T[1..$];
+    RndVecArr!P _parent;
+    ulong _index;
   
-  public this(string name, long value, bool signed,
-	      uint bitcount, bool isRand, RndVecArrVar parent,
-	      ulong index) {
-    super(name, value, signed, bitcount, isRand);
-    _parent = parent;
-    _index = index;
-    import std.stdio;
-    writeln("index is ", index);
+    public this(string name, long value, bool signed,
+		uint bitcount, bool isRand, RndVecArr!P parent,
+		ulong index) {
+      super(name, value, signed, bitcount, isRand);
+      _parent = parent;
+      _index = index;
+      import std.stdio;
+      writeln("index is ", index);
+    }
   }
-
-  mixin EnumConstraints!T;
 };
 
-// To be used for multidime
-class RndVecArrIndxd(T): RndVecArrVar
+class RndVecArr(T...): RndVecArrVar
 {
-  RndVecArrVar _parent;
-  ulong _index;
+  static assert(T.length > 0);
+
+  static if(T.length == 1) {
+    alias L=T[0];
+    L* _var;
+    public this(string name, long maxLength,
+		bool signed, uint bitcount, bool isRand,
+		bool elemSigned, uint elemBitcount, bool elemIsRand, L* var) {
+      super(name, maxLength, signed, bitcount, isRand,
+	    elemSigned, elemBitcount, elemIsRand);
+      _var = var;
+      import std.stdio;
+      writeln(*_var);
+    }
+    void build(ref L l) {
+      import std.traits;
+      import std.range;
+      alias ElementType!L E;
+      static assert(isIntegral!E || isBitVector!E);
+      _elems.length = maxLength();
+      for (size_t i=0; i!=maxLength; ++i) {
+	if(this[i] is null) {
+	  import std.conv: to;
+	  auto init = (E).init;
+	  if(i < l.length) {
+	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
+					     cast(long) l[i], _elemSigned,
+					     _elemBitcount, true, this, i);
+	  }
+	  else {
+	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
+					     cast(long) init, _elemSigned,
+					     _elemBitcount, true, this, i);
+	  }
+	  assert(this[i] !is null);
+	}
+      }
+    }
+  }
+  else {
+    RndVecArrVar _parent;
+    ulong _index;
   
-  public this(string name, long maxLength,
-	      bool signed, uint bitcount, bool isRand,
-	      bool elemSigned, uint elemBitcount, bool elemIsRand,
-	      RndVecArrVar parent, ulong index) {
-    super(name, maxLength, signed, bitcount, isRand,
-	  elemSigned, elemBitcount, elemIsRand);
-    _parent = parent;
-    _index = index;
-    import std.stdio;
-    writeln("index is ", index);
-  }
-};
-
-class RndVecArr(T): RndVecArrVar
-{
-  T* _var;
-  public this(string name, long maxLength,
-	      bool signed, uint bitcount, bool isRand,
-	      bool elemSigned, uint elemBitcount, bool elemIsRand, T* var) {
-    super(name, maxLength, signed, bitcount, isRand,
-	  elemSigned, elemBitcount, elemIsRand);
-    _var = var;
-    import std.stdio;
-    writeln(*_var);
-  }
+    public this(string name, long maxLength,
+		bool signed, uint bitcount, bool isRand,
+		bool elemSigned, uint elemBitcount, bool elemIsRand,
+		RndVecArrVar parent, ulong index) {
+      super(name, maxLength, signed, bitcount, isRand,
+	    elemSigned, elemBitcount, elemIsRand);
+      _parent = parent;
+      _index = index;
+      import std.stdio;
+      writeln("index is ", index);
+    }
+  }    
 };
 			
 abstract class RndVecArrVar: RndVecPrim
@@ -1800,30 +1826,6 @@ abstract class RndVecArrVar: RndVecPrim
     // _elems.length = maxLength;
   }
 
-  void build(L) (ref L l) {
-    import std.traits;
-    import std.range;
-    alias ElementType!L E;
-    static assert(isIntegral!E || isBitVector!E);
-    _elems.length = maxLength();
-    for (size_t i=0; i!=maxLength; ++i) {
-      if(this[i] is null) {
-	import std.conv: to;
-	auto init = (E).init;
-	if(i < l.length) {
-	  this[i] = new RndVecIndxd!E(_name ~ "[" ~ i.to!string() ~ "]",
-				      cast(long) l[i], _elemSigned,
-				      _elemBitcount, true, this, i);
-	}
-	else {
-	  this[i] = new RndVecIndxd!E(_name ~ "[" ~ i.to!string() ~ "]",
-				      cast(long) init, _elemSigned,
-				      _elemBitcount, true, this, i);
-	}
-	assert(this[i] !is null);
-      }
-    }
-  }
 }
 
 // This class represents an unrolled Foreach loop at vec level
@@ -2942,7 +2944,7 @@ public auto _esdl__rndArrElem(string VAR, size_t I,
   }
   else {
     auto rndVecPrim = t._esdl__cstEng._rnds[CI];
-    auto rndVecArr = cast(RndVecArrVar) rndVecPrim;
+    auto rndVecArr = cast(RndVecArr!L) rndVecPrim;
     if(rndVecArr is null && rndVecPrim !is null) {
       assert(false, "Non-array RndVecPrim for an Array");
     }
