@@ -1416,9 +1416,7 @@ abstract class RndVecVar: RndVecPrim
   BddVec _bddvec;
   uint _domIndex = uint.max;
   long _value;
-  uint _bitcount;
   CstStage _stage = null;
-  bool _signed;
   bool _isRand;
   string _name;
 
@@ -1426,12 +1424,9 @@ abstract class RndVecVar: RndVecPrim
     return _name;
   }
 
-  public this(string name, long value, bool signed,
-	      uint bitcount, bool isRand) {
+  public this(string name, long value, bool isRand) {
     _name = name;
     _value = value;
-    _signed = signed;
-    _bitcount = bitcount;
     _isRand = isRand;
   }
 
@@ -1498,14 +1493,6 @@ abstract class RndVecVar: RndVecPrim
     _domIndex = s;
   }
 
-  override public uint bitcount() {
-    return _bitcount;
-  }
-
-  override public bool signed() {
-    return _signed;
-  }
-
   override public BddVec bddvec() {
     return _bddvec;
   }
@@ -1539,14 +1526,11 @@ class RndVecArrLen: RndVecVar
   size_t _maxLength;
   RndVecLoopVar _loopVar;
   
-  public this(string name, long maxLength, bool signed,
-	      uint bitcount, bool isRand) {
-    super(name, maxLength, signed, bitcount, isRand);
+  public this(string name, long maxLength, bool isRand) {
+    super(name, maxLength, isRand);
     _name = name;
     _value = maxLength;
     _maxLength = maxLength;
-    _signed = signed;
-    _bitcount = bitcount;
     _isRand = isRand;
   }
 
@@ -1570,6 +1554,14 @@ class RndVecArrLen: RndVecVar
       _loopVar = new RndVecLoopVar(this);
     }
     return _loopVar;
+  }
+
+  override uint bitcount() {
+    return 32;
+  }
+
+  override bool signed() {
+    return false;
   }
 
 }
@@ -1598,9 +1590,8 @@ class RndVec(T...): RndVecVar
   mixin EnumConstraints!L;
   static if(T.length == 1) {
     L* _var;
-    public this(string name, long value, bool signed,
-		uint bitcount, bool isRand, L* var) {
-      super(name, value, signed, bitcount, isRand);
+    public this(string name, long value, bool isRand, L* var) {
+      super(name, value, isRand);
       _var = var;
       import std.stdio;
       writeln("var is ", var);
@@ -1614,14 +1605,25 @@ class RndVec(T...): RndVecVar
     RndVecArr!P _parent;
     ulong _index;
   
-    public this(string name, long value, bool signed,
-		uint bitcount, bool isRand, RndVecArr!P parent,
+    public this(string name, long value, bool isRand, RndVecArr!P parent,
 		ulong index) {
-      super(name, value, signed, bitcount, isRand);
+      super(name, value, isRand);
       _parent = parent;
       _index = index;
       import std.stdio;
       writeln("index is ", index);
+    }
+  }
+  override uint bitcount() {
+    static if(isIntegral!L)        return L.sizeof * 8;
+    else static if(isBitVector!L)  return L.SIZE;
+  }
+  override bool signed() {
+    static if(isVarSigned!L) {
+      return true;
+    }
+    else  {
+      return false;
     }
   }
 };
@@ -1634,9 +1636,9 @@ class RndVecArr(T...): RndVecArrVar
     alias L=T[0];
     L* _var;
     public this(string name, long maxLength,
-		bool signed, uint bitcount, bool isRand,
-		bool elemSigned, uint elemBitcount, bool elemIsRand, L* var) {
-      super(name, maxLength, signed, bitcount, isRand,
+		bool isRand, bool elemSigned, uint elemBitcount,
+		bool elemIsRand, L* var) {
+      super(name, maxLength, isRand,
 	    elemSigned, elemBitcount, elemIsRand);
       _var = var;
       import std.stdio;
@@ -1654,13 +1656,11 @@ class RndVecArr(T...): RndVecArrVar
 	  auto init = (E).init;
 	  if(i < l.length) {
 	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
-					     cast(long) l[i], _elemSigned,
-					     _elemBitcount, true, this, i);
+					cast(long) l[i], true, this, i);
 	  }
 	  else {
 	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
-					     cast(long) init, _elemSigned,
-					     _elemBitcount, true, this, i);
+					     cast(long) init, true, this, i);
 	  }
 	  assert(this[i] !is null);
 	}
@@ -1672,10 +1672,9 @@ class RndVecArr(T...): RndVecArrVar
     ulong _index;
   
     public this(string name, long maxLength,
-		bool signed, uint bitcount, bool isRand,
-		bool elemSigned, uint elemBitcount, bool elemIsRand,
-		RndVecArrVar parent, ulong index) {
-      super(name, maxLength, signed, bitcount, isRand,
+		bool isRand, bool elemSigned, uint elemBitcount,
+		bool elemIsRand, RndVecArrVar parent, ulong index) {
+      super(name, maxLength, isRand,
 	    elemSigned, elemBitcount, elemIsRand);
       _parent = parent;
       _index = index;
@@ -1814,11 +1813,10 @@ abstract class RndVecArrVar: RndVecPrim
   }
 
   public this(string name, long maxLength,
-	      bool signed, uint bitcount, bool isRand,
-	      bool elemSigned, uint elemBitcount, bool elemIsRand) {
+	      bool isRand, bool elemSigned, uint elemBitcount,
+	      bool elemIsRand) {
     // super(name, maxLength, signed, bitcount, isRand);
-    _length = new RndVecArrLen(name, maxLength,
-			       signed, bitcount, isRand);
+    _length = new RndVecArrLen(name, maxLength, isRand);
     _name = name;
     _elemSigned = elemSigned;
     _elemBitcount = elemBitcount;
@@ -2799,7 +2797,7 @@ public auto _esdl__rnd(string VAR, size_t I,
     if(rndVecPrim is null) {
       rndVecPrim =
 	new RndVecArr!L(t.tupleof[I].stringof, RLENGTH,
-			false, 32, DYNAMIC, signed, bitcount, true,
+			DYNAMIC, signed, bitcount, true,
 			&(t.tupleof[I]));
       t._esdl__cstEng._rnds[CI] = rndVecPrim;
     }
@@ -2825,7 +2823,7 @@ public auto _esdl__rnd(string VAR, size_t I,
       if(rndVecPrim is null) {
 	rndVecPrim = new RndVec!L(t.tupleof[I].stringof,
 				  cast(long) t.tupleof[I],
-				  signed, bitcount, true, &(t.tupleof[I]));
+				  true, &(t.tupleof[I]));
 	t._esdl__cstEng._rnds[CI] = rndVecPrim;
       }
       return rndVecPrim;
@@ -2910,9 +2908,8 @@ public auto _esdl__rndArrLen(string VAR, size_t I,
   auto rndVecPrim = t._esdl__cstEng._rnds[CI];
   if(rndVecPrim is null) {
     auto rndVecArr =
-      new RndVecArr!L(t.tupleof[I].stringof, RLENGTH,
-		      false, 32, DYNAMIC, signed, bitcount, true,
-		      &(t.tupleof[I]));
+      new RndVecArr!L(t.tupleof[I].stringof, RLENGTH, DYNAMIC,
+		      signed, bitcount, true, &(t.tupleof[I]));
     t._esdl__cstEng._rnds[CI] = rndVecArr;
     return rndVecArr.length;
   }
@@ -2962,7 +2959,7 @@ public auto _esdl__rndArrElem(string VAR, size_t I,
     if(rndVecArr is null) {
       rndVecArr =
 	new RndVecArr!L(t.tupleof[I].stringof, RLENGTH,
-			false, 32, DYNAMIC, signed, bitcount, true,
+			DYNAMIC, signed, bitcount, true,
 			&(t.tupleof[I]));
       t._esdl__cstEng._rnds[CI] = rndVecArr;
     }
