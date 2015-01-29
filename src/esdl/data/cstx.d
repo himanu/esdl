@@ -685,13 +685,13 @@ struct ConstraintParser {
     if(index.length != 0) {
       VarPair x;
       x.varName = index;
-      x.xLat = "_esdl__cstRandArrIndex!q{" ~ array ~ "}(_outer)";
+      x.xLat = "_esdl__rndArrIndex!q{" ~ array ~ "}(_outer)";
       varMap ~= x;
     }
 
     VarPair x;
     x.varName = elem;
-    x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
+    x.xLat = "_esdl__rndArrElem!q{" ~ array ~ "}(_outer)";
     varMap ~= x;
 
     if(CST[srcCursor] is '{') {
@@ -884,7 +884,7 @@ struct ConstraintParser {
 	if(idChain[2] == -1) {
 	  int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
 	  if(idx == -1) {
-	    fill("_esdl__cstRand!q{");
+	    fill("_esdl__rnd!q{");
 	    fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
 	    fill("}(_outer)");
 	  }
@@ -893,7 +893,7 @@ struct ConstraintParser {
 	  }
 	}
 	else {
-	  fill("_esdl__cstRand!q{");
+	  fill("_esdl__rnd!q{");
 	  for (size_t i=0; i != MaxHierDepth-1; ++i) {
 	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
 	    if(idChain[2*i+2] == -1) break;
@@ -905,14 +905,14 @@ struct ConstraintParser {
       else {
 	srcTag = parseLiteral();
 	if(srcCursor > srcTag) {
-	  fill("_esdl__cstRand(");
+	  fill("_esdl__rnd(");
 	  fill(CST[srcTag..srcCursor]);
 	  fill(", _outer)");
 	}
 	else {
 	  srcTag = parseWithArg();
 	  if(srcCursor > srcTag) {
-	    fill("_esdl__cstArg!(");
+	    fill("_esdl__arg!(");
 	    fill(CST[srcTag+1..srcCursor]);
 	    fill(") (_outer)");
 	  }
