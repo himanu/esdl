@@ -14,9 +14,17 @@ int FFFF = 20;
 class Foo: Randomizable
 {
   mixin Randomization;
-  @rand!8 byte[] foo;
-  @rand ubyte baz = 12;
-  void display() {}
+  @rand!(8) byte[] foo;
+  // @rand ubyte baz = 12;
+  void display() {
+    import std.stdio;
+    writeln(foo);
+  }
+  Constraint! q{
+    foo.length > 2;
+    // baz < 32;
+    // FFFF + baz == 50;
+  } cstFooLength;
 }
 
 class Bar: Foo
@@ -29,13 +37,13 @@ class Bar: Foo
   override void display() {
     writeln("foo: ", foo);
     writeln("bar: ", bar);
-    writeln("baz: ", baz);
+    // writeln("baz: ", baz);
   }
 
   Constraint! q{
     foo.length > 2;
-    baz < 32;
-    FFFF + baz == 50;
+    // baz < 32;
+    // FFFF + baz == 50;
   } cstFooLength;
 
   Constraint! q{
@@ -44,10 +52,10 @@ class Bar: Foo
     // this is a comment
     foreach(i, f; foo) {
       if(i < 6) {
-	f < 24;
+  	f < 24;
       }
       else {
-	f < 18;
+  	f < 18;
       }
     }
 
@@ -64,7 +72,7 @@ class Bar: Foo
 }
 
 void main() {
-  Foo foo = new Bar;
+  Foo foo = new Foo;
   for (size_t i=0; i!=16; ++i) {
     foo.randomize();
     foo.display();

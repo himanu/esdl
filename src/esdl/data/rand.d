@@ -298,7 +298,12 @@ public class ConstraintEngine {
       assert(false, "Constraint engine started");
     }
     _rgen.seed(seed);
-    _buddy = _new!Buddy(400, 400);
+    version(USE_EMPLACE) {
+      _buddy = _new!Buddy(400, 400);
+    }
+    else {
+      _buddy = new Buddy(400, 400);
+    }
     _rnds.length = rnum;
   }
 
@@ -659,7 +664,6 @@ public class ConstraintEngine {
 
     auto solution = solveBDD.randSatOne(this._rgen.get(),
 					bddDist);
-
     auto solVecs = solution.toVector();
 
     byte[] bits;
@@ -791,6 +795,11 @@ interface RandomizableIntf
       public ConstraintEngine _esdl__cstEng;
       public uint _esdl__randSeed;
 
+      void useThisBuddy() {
+	assert(_esdl__cstEng !is null);
+	useBuddy(_esdl__cstEng._buddy);
+      }
+
       public void seedRandom(int seed) {
 	_esdl__randSeed = seed;
 	if (_esdl__cstEng !is null) {
@@ -834,21 +843,52 @@ class Randomizable: RandomizableIntf
   mixin Randomization;
 }
 
-T _new(T, Args...) (Args args) {
-  version(NO_EMPLACE) {
-    T obj = new T(args);
-  }
-  else {
+version(USE_EMPLACE) {
+  T _new(T, Args...) (Args args) {
     import std.stdio, std.conv, core.memory;
     size_t objSize = __traits(classInstanceSize, T);
     void* tmp = GC.malloc(objSize);
     if (!tmp) throw new Exception("Memory allocation failed");
     void[] mem = tmp[0..objSize];
     T obj = emplace!(T, Args)(mem, args);
+    return obj;
   }
-  return obj;
 }
 
+void _esdl__initRnds(size_t I=0, size_t CI=0, T, S)(T t, S s)
+  if(is(T: RandomizableIntf) && is(T == class) &&
+     is(S: RandomizableIntf) && is(S == class)) {
+    static if (I < t.tupleof.length) {
+      _esdl__initRnd!(I, CI)(t, s);
+      _esdl__initRnds!(I+1, CI+1) (t, s);
+    }
+    else static if(is(T B == super)
+		   && is(B[0] : RandomizableIntf)
+		   && is(B[0] == class)) {
+	B[0] b = t;
+	_esdl__initRnds!(0, CI) (b, s);
+      }
+  }
+
+
+void _esdl__initRnd(size_t I=0, size_t CI=0, T, S) (T t, S s) {
+  import std.traits;
+  import std.conv;
+  import std.string;
+
+  auto l = t.tupleof[I];
+  alias typeof(l) L;
+  enum string NAME = chompPrefix (t.tupleof[I].stringof, "t.");
+  static if (is (L f == Constraint!C, immutable (char)[] C)) {
+    l = new Constraint!(C, NAME, T, S)(t, s, NAME);
+    t._esdl__cstEng._rnds ~= l;
+  }
+  else {
+    synchronized (t) {
+      // Do nothing
+    }
+  }
+}
 // I is the index within the class
 // CI is the cumulative index -- starts from the most derived class
 // and increases as we move up in the class hierarchy
@@ -930,7 +970,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
 	  }
 	  foreach(idx, ref v; t.tupleof[I]) {
 	    import std.range;
-	    if(vecVal is null || vecVal[idx] is null) {
+	    if(vecVal is null || (! vecVal.built()) || vecVal[idx] is null) {
 	      // v = rgen.gen!(ElementType!L);
 	      rgen.gen(v);
 
@@ -1170,6 +1210,7 @@ public void _esdl__initCstEng(T) (T t)
     if (t._esdl__cstEng is null) {
       t._esdl__cstEng = new ConstraintEngine(t._esdl__randSeed,
 					     _esdl__countRands(t));
+      // _esdl__initRnds(t, t);
       _esdl__initCsts(t, t);
     }
   }
@@ -1180,6 +1221,7 @@ public bool _esdl__randomize(T) (T t, _ESDL__ConstraintBase withCst = null)
     import std.exception;
     import std.conv;
 
+    t.useThisBuddy();
     // Call the preRandomize hook
     t.preRandomize();
 
@@ -1199,6 +1241,7 @@ public bool _esdl__randomize(T) (T t, _ESDL__ConstraintBase withCst = null)
 
     // Call the postRandomize hook
     t.postRandomize();
+    exitBuddy();
     return true;
   }
 
@@ -1369,6 +1412,8 @@ abstract class RndVecExpr
   {
     return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICAND);
   }
+
+  public string name();
 }
 
 abstract class RndVecPrim: RndVecExpr
@@ -1387,7 +1432,7 @@ abstract class RndVecPrim: RndVecExpr
   abstract public bool signed();
   abstract public BddVec bddvec();
   abstract public void bddvec(BddVec b);
-  abstract public string name();
+  abstract override public string name();
 
   // public RndVecArrLen length() {
   //   assert(false, "length may only be called for a RndVecArrVar");
@@ -1512,7 +1557,7 @@ class RndVecArrLen(T...): RndVecVar
 {
   
   // This bdd has the constraint on the max length of the array
-  bdd _primBdd;
+  BDD _primBdd;
   size_t _maxArrLen;
   RndVecLoopVar _loopVar;
 
@@ -1527,7 +1572,7 @@ class RndVecArrLen(T...): RndVecVar
   }
 
   override public BDD getPrimBdd(Buddy buddy) {
-    if(! _primBdd.isInitialized()) {
+    if(_primBdd.isZero()) {
       _primBdd = this.bddvec.lte(buddy.buildVec(_maxArrLen));
     }
     return _primBdd;
@@ -1572,7 +1617,7 @@ mixin template EnumConstraints(T) {
     override public BDD getPrimBdd(Buddy buddy) {
       // return this.bddvec.lte(buddy.buildVec(_maxValue));
       import std.traits;
-      if(! _primBdd.isInitialized()) {
+      if(_primBdd.isZero()) {
 	_primBdd = buddy.zero();
 	foreach(e; EnumMembers!T) {
 	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
@@ -1594,11 +1639,6 @@ class RndVec(T...): RndVecVar
     public this(string name, bool isRand, L* var) {
       super(name, isRand);
       _var = var;
-      import std.stdio;
-      writeln("var is ", var);
-      if(_var !is null) {
-	writeln("var value is ", *_var);
-      }
     }
 
     override public long value() {
@@ -1619,8 +1659,6 @@ class RndVec(T...): RndVecVar
       super(name, isRand);
       _parent = parent;
       _index = index;
-      import std.stdio;
-      writeln("index is ", index);
     }
     
     override long value() {
@@ -1661,8 +1699,9 @@ class RndVecArr(T...): RndVecArrVar
       super(name, maxArrLen, isRand, elemIsRand);
       _var = var;
       _arrLen = new RndVecArrLen!T(name, maxArrLen, isRand, this);
-      import std.stdio;
-      writeln(*_var);
+    }
+    override bool built() {
+      return _elems.length != 0;
     }
     void build(ref L l) {
       alias ElementType!L E;
@@ -1753,8 +1792,6 @@ class RndVecArr(T...): RndVecArrVar
       _parent = parent;
       _index = index;
       _arrLen = new RndVecArrLen!T(name, maxArrLen, isRand, this);
-      import std.stdio;
-      writeln("index is ", index);
     }
 
     public long getLen(I...)(I idx) {
@@ -1911,6 +1948,8 @@ abstract class RndVecArrVar: RndVecPrim
     // _elems.length = maxArrLen;
   }
 
+  bool built();
+
 }
 
 // This class represents an unrolled Foreach loop at vec level
@@ -2030,7 +2069,7 @@ class RndVecObjVar: RndVecPrim
   RndVecPrim[] _elems;
 
   // override public BDD getPrimBdd(Buddy buddy) {
-  //   if(! _primBdd.isInitialized()) {
+  //   if(_primBdd.isZero()) {
   //     _primBdd = this.bddvec.lte(buddy.buildVec(_maxArrLen));
   //   }
   //   return _primBdd;
@@ -2056,11 +2095,15 @@ class RndVecObjVar: RndVecPrim
 
 class RndVecConst: RndVecPrim
 {
+  import std.conv;
+
   long _value;			// the value of the constant
   bool _signed;
+  string _name;
 
   public this(long value, bool signed) {
     _value = value;
+    _name = value.to!string();
     _signed = signed;
   }
 
@@ -2125,7 +2168,7 @@ class RndVecConst: RndVecPrim
   }
 
   override public string name() {
-    return "RndVecConst";
+    return _name;
   }
 }
 
@@ -2133,9 +2176,15 @@ class RndVecConst: RndVecPrim
 // only after processing those two nodes
 class RndVec2VecExpr: RndVecExpr
 {
+  import std.conv;
+
   RndVecExpr _lhs;
   RndVecExpr _rhs;
   CstBinVecOp _op;
+
+  override public string name() {
+    return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " )";
+  }
 
   override public RndVecPrim[] getPrims() {
     if(_op !is CstBinVecOp.LOOPINDEX) {
@@ -2266,6 +2315,9 @@ class RndVecSliceExpr: RndVecExpr
   RndVecExpr _lhs;
   RndVecExpr _rhs;
 
+  override public string name() {
+    return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
+  }
   override public RndVecPrim[] getPrims() {
     if(_rhs is null) {
       return _vec.getPrims() ~ _lhs.getPrims();
@@ -2374,6 +2426,9 @@ class RndVecSliceExpr: RndVecExpr
 
 class CstNotVecExpr: RndVecExpr
 {
+  override public string name() {
+    return "CstNotVecExpr";
+  }
 }
 
 enum CstBddOp: byte
@@ -2384,6 +2439,7 @@ enum CstBddOp: byte
 
 abstract class CstBddExpr
 {
+  public string name();
 
   // In case this expr is unRolled, the _loopVars here would be empty
   RndVecLoopVar[] _loopVars;
@@ -2495,9 +2551,15 @@ abstract class CstBddExpr
 
 class CstBdd2BddExpr: CstBddExpr
 {
+  import std.conv;
+
   CstBddExpr _lhs;
   CstBddExpr _rhs;
   CstBddOp _op;
+
+  override public string name() {
+    return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
+  }
 
   override public RndVecPrim[] getPrims() {
     return _lhs.getPrims() ~ _rhs.getPrims();
@@ -2586,13 +2648,22 @@ class CstBdd2BddExpr: CstBddExpr
 
 class CstIteBddExpr: CstBddExpr
 {
+  override public string name() {
+    return "CstIteBddExpr"; 
+  }
 }
 
 class RndVec2BddExpr: CstBddExpr
 {
+  import std.conv;
+
   RndVecExpr _lhs;
   RndVecExpr _rhs;
   CstBinBddOp _op;
+
+  override public string name() {
+    return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
+  }
 
   override public CstStage[] getStages() {
     import std.exception;
@@ -2675,6 +2746,10 @@ class CstNotBddExpr: CstBddExpr
 {
   CstBddExpr _expr;
 
+  override public string name() {
+    return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
+  }
+
   override public RndVecPrim[] getPrims() {
     return _expr.getPrims();
   }
@@ -2717,6 +2792,14 @@ class CstNotBddExpr: CstBddExpr
 class CstBlock: CstBddExpr
 {
   CstBddExpr[] _exprs;
+
+  override public string name() {
+    string name_ = "";
+    foreach(expr; _exprs) {
+      name_ ~= " & " ~ expr.name() ~ "\n";
+    }
+    return name_;
+  }
 
   override public RndVecPrim[] getPrims() {
     RndVecPrim[] prims;

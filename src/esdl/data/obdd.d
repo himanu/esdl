@@ -263,107 +263,86 @@ abstract class BddVec
   public BddVec opSlice(size_t i, size_t j);
 
 }
-
-// only addref
-struct Bdd
-{
-  private BDD _bdd_;
-
-  public BDD _bdd() {
-    return _bdd_;
-  }
-  
-  alias _bdd this;
-
-  this(BDD b) {
-    _bdd_ = b;
-  }
-
-  void opAssign(BDD b) {
-    _bdd_ = b;
-  }
-}
-
-// addref as well as delref
-struct bdd
-{
-  private BDD _bdd_;
-
-  public BDD _bdd() {
-    return _bdd_;
-  }
-  
-  alias _bdd this;
-
-  this(BDD b) {
-    _bdd_ = b;
-  }
-
-  void opAssign(BDD b) {
-    _bdd_ = b;
-  }
-}
+version(BUDDY_ROOT) {
+   void useBuddy(Buddy buddy) {}
+   void exitBuddy() {}
+ }
+ else {
+   void useBuddy(Buddy buddy) {
+     BDD._buddy = buddy;
+   }
+   void exitBuddy() {
+     BDD._buddy = null;
+   }
+ }
 
 struct BDD
 {
   uint _index;
 
-  Buddy _root;
+  version(BUDDY_ROOT) {
+    Buddy _buddy;
+    const bool opEquals(ref const BDD other) {
+      return (this._index == other._index &&
+	      this._buddy is other._buddy);
+    }
+  }
+  else {
+    static Buddy _buddy;
+    const bool opEquals(ref const BDD other) {
+      return (this._index == other._index);
+    }
+  }
 
-  const bool opEquals(ref const BDD other) {
-    return (this._index == other._index &&
-	    this._root is other._root);
+  size_t toHash() const nothrow @safe {
+    return _index;
   }
-  
-  public bool isInitialized() {
-    if(_root is null) return false;
-    else return true;
-  }
-  
-  @property public Buddy root()
+
+  @property public Buddy buddy()
   {
-    return _root;
+    return _buddy;
   }
-
-  // public void free()
-  // {
-  // }
 
   public ~this()
   {
-    if (root !is null && _index !is 0) root.delRef(_index);
+    if (_buddy !is null && _index !is 0) _buddy.delRef(_index);
   }
 
-  // static uint count = 0;
-  // this(uint _buddyID) {
-  //   buddyID = _buddyID;
-  // }
-
-  this(int index, Buddy root)
-  {
-    // writeln(count++);
-    this._index = index;
-    this._root = root;
-    _root.addRef(_index);
+  version(BUDDY_ROOT) {
+    this(int index, Buddy buddy)
+      {
+	// writeln(count++);
+	this._index = index;
+	this._buddy = buddy;
+	_buddy.addRef(_index);
+      }
   }
-    
+  else {
+    this(int index, Buddy buddy)
+      {
+	// writeln(count++);
+	assert(_buddy is buddy);
+	this._index = index;
+	_buddy.addRef(_index);
+      }
+  }
   this(this)
   {
-    if(_index != 0 && _root !is null) {
-      _root.addRef(_index);
+    if(_index != 0 && _buddy !is null) {
+      _buddy.addRef(_index);
     }
   }
     
   void opAssign(BDD that) {
-    if (_root !is null && _index !is 0) _root.delRef(_index);
-    this._root = that._root;
+    if (_buddy !is null && _index !is 0) _buddy.delRef(_index);
+    this._buddy = that._buddy;
     this._index = that._index;
-    _root.addRef(_index);
+    _buddy.addRef(_index);
   }
 
   BDD makeBdd(int index)
   {
-    return BDD(index, this._root);
+    return BDD(index, this._buddy);
   }
 
   public bool isZero()
@@ -378,22 +357,22 @@ struct BDD
 
   public int var()
   {
-    return root.bdd_var(_index);
+    return buddy.bdd_var(_index);
   }
 
   public int level()
   {
-    return root.var2Level(this.var);
+    return buddy.var2Level(this.var);
   }
 
   public BDD high()
   {
-    return makeBdd(root.HIGH(_index));
+    return makeBdd(buddy.HIGH(_index));
   }
 
   public BDD low()
   {
-    return makeBdd(root.LOW(_index));
+    return makeBdd(buddy.LOW(_index));
   }
 
   // public BDD id()
@@ -413,7 +392,7 @@ struct BDD
 
   public BDD not()
   {
-    return makeBdd(root.bdd_not(_index));
+    return makeBdd(buddy.bdd_not(_index));
   }
 
   public bool opEquals(BDD rhs)
@@ -552,7 +531,7 @@ struct BDD
     uint x = _index;
     uint y = thenBDD._index;
     uint z = elseBDD._index;
-    return makeBdd(root.bdd_ite(x, y, z));
+    return makeBdd(buddy.bdd_ite(x, y, z));
   }
 
   // compare with bvec_ite
@@ -563,7 +542,7 @@ struct BDD
 	bdd_error(BddError.BVEC_SIZE);
       }
 
-    BddVec res = root.buildVec(b.size, false);
+    BddVec res = buddy.buildVec(b.size, false);
 
     for(size_t n = 0 ; n < b.size ; ++n)
       {
@@ -578,68 +557,68 @@ struct BDD
     uint x = _index;
     uint y = that._index;
     uint z = var._index;
-    return makeBdd(root.bdd_relprod(x, y, z));
+    return makeBdd(buddy.bdd_relprod(x, y, z));
   }
 
   public BDD compose(BDD g, int var)
   {
     uint x = _index;
     uint y = g._index;
-    return makeBdd(root.bdd_compose(x, y, var));
+    return makeBdd(buddy.bdd_compose(x, y, var));
   }
 
   public BDD veccompose(BddPair pair)
   {
     uint x = _index;
-    return makeBdd(root.bdd_veccompose(x, pair));
+    return makeBdd(buddy.bdd_veccompose(x, pair));
   }
 
   public BDD constrain(BDD that)
   {
     uint x = _index;
     uint y = that._index;
-    return makeBdd(root.bdd_constrain(x, y));
+    return makeBdd(buddy.bdd_constrain(x, y));
   }
 
   public BDD exist(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_exist(x, y));
+    return makeBdd(buddy.bdd_exist(x, y));
   }
 
   public BDD forAll(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_forall(x, y));
+    return makeBdd(buddy.bdd_forall(x, y));
   }
 
   public BDD unique(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_unique(x, y));
+    return makeBdd(buddy.bdd_unique(x, y));
   }
 
   public BDD restrict(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_restrict(x, y));
+    return makeBdd(buddy.bdd_restrict(x, y));
   }
 
   public BDD simplify(BDD d)
   {
     uint x = _index;
     uint y = d._index;
-    return makeBdd(root.bdd_simplify(x, y));
+    return makeBdd(buddy.bdd_simplify(x, y));
   }
 
   public BDD support()
   {
     uint x = _index;
-    return makeBdd(root.bdd_support(x));
+    return makeBdd(buddy.bdd_support(x));
   }
 
   public BDD apply(BDD that, BddOp opr)
@@ -647,7 +626,7 @@ struct BDD
     uint x = _index;
     uint y = that._index;
     // BddOp z = opr.dup;
-    return makeBdd(root.bdd_apply(x, y, opr));
+    return makeBdd(buddy.bdd_apply(x, y, opr));
   }
 
   public BDD applyAll(BDD that, BddOp opr, BDD var)
@@ -656,7 +635,7 @@ struct BDD
     uint y = that._index;
     // BddOp z = opr.dup;
     uint a = var._index;
-    return makeBdd(root.bdd_appall(x, y, opr, a));
+    return makeBdd(buddy.bdd_appall(x, y, opr, a));
   }
 
   public BDD applyEx(BDD that, BddOp opr, BDD var)
@@ -665,7 +644,7 @@ struct BDD
     uint y = that._index;
     // BddOp z = opr.dup;
     uint a = var._index;
-    return makeBdd(root.bdd_appex(x, y, opr, a));
+    return makeBdd(buddy.bdd_appex(x, y, opr, a));
   }
 
   public BDD applyUni(BDD that, BddOp opr, BDD var)
@@ -674,24 +653,24 @@ struct BDD
     uint y = that._index;
     // BddOp z = opr.dup;
     uint a = var._index;
-    return makeBdd(root.bdd_appuni(x, y, opr, a));
+    return makeBdd(buddy.bdd_appuni(x, y, opr, a));
   }
 
   public BDD satOne()
   {
     uint x = _index;
-    return makeBdd(root.bdd_satone(x));
+    return makeBdd(buddy.bdd_satone(x));
   }
 
   public BDD randSatOne(double rand, double[uint] dist)
   {
-    return makeBdd(root.bdd_randsatone(rand, dist, _index));
+    return makeBdd(buddy.bdd_randsatone(rand, dist, _index));
   }
 
   public BDD fullSatOne()
   {
     uint x = _index;
-    return makeBdd(root.bdd_fullsatone(x));
+    return makeBdd(buddy.bdd_fullsatone(x));
   }
 
   public BDD satOne(BDD var, bool pol)
@@ -699,14 +678,14 @@ struct BDD
     uint x = _index;
     uint y = var._index;
     int z = pol ? 1 : 0;
-    return makeBdd(root.bdd_satoneset(x, y, z));
+    return makeBdd(buddy.bdd_satoneset(x, y, z));
   }
 
   public byte[][] allSat()
   {
     uint x = _index;
     byte[][] result;
-    root.bdd_allsat(x, result);
+    buddy.bdd_allsat(x, result);
     return result;
   }
 
@@ -719,7 +698,7 @@ struct BDD
 	return varset;
       }
 
-    bdd n = this.dup();
+    BDD n = this.dup();
     // TBD This should be more efficient for D
     version(BDDD_FIX1)
       {
@@ -733,7 +712,7 @@ struct BDD
       int num = 0;
       do {
 	num++;
-	bdd n2 = n.high();
+	BDD n2 = n.high();
 	n = n2;
       } while(!n.isZero() && !n.isOne());
 
@@ -743,7 +722,7 @@ struct BDD
       n = this.dup();
       do {
 	varset[num++] = n.var();
-	bdd n2 = n.high();
+	BDD n2 = n.high();
 	n = n2;
       } while(!n.isZero() && !n.isOne());
     }
@@ -766,9 +745,9 @@ struct BDD
 
     version(BDDD_FIX2)
       {
-	for(n = 0; n < root.numberOfDomains(); n++)
+	for(n = 0; n < buddy.numberOfDomains(); n++)
 	  {
-	    BddDomain dom = root.getDomain(n);
+	    BddDomain dom = buddy.getDomain(n);
 	    int[] ivar = dom.vars();
 	    bool found = false;
 	    for(m = 0; m < dom.varNum() && !found; m++)
@@ -784,9 +763,9 @@ struct BDD
 	      }
 	  }
       } else {
-      for(n = 0, num = 0; n < root.numberOfDomains(); n++)
+      for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
-	  BddDomain dom = root.getDomain(n);
+	  BddDomain dom = buddy.getDomain(n);
 	  int[] ivar = dom.vars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
@@ -805,9 +784,9 @@ struct BDD
       // varset = new int[num];
       varset.length = num;
 
-      for(n = 0, num = 0; n < root.numberOfDomains(); n++)
+      for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
-	  BddDomain dom = root.getDomain(n);
+	  BddDomain dom = buddy.getDomain(n);
 	  int[] ivar = dom.vars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
@@ -847,31 +826,31 @@ struct BDD
     if(this.isZero())
       return null;
 
-    int _varNum = root.varNum();
+    int _varNum = buddy.varNum();
     store = new bool[_varNum];
 
-    bdd p = this.dup();
+    BDD p = this.dup();
     while(!p.isOne() && !p.isZero())
       {
-	bdd lo = p.low();
+	BDD lo = p.low();
 	if(!lo.isZero())
 	  {
 	    store[p.var()] = false;
-	    bdd p2 = p.low();
+	    BDD p2 = p.low();
 	    p = p2;
 	  } else {
 	  store[p.var()] = true;
-	  bdd p2 = p.high();
+	  BDD p2 = p.high();
 	  p = p2;
 	}
       }
 
-    int fdvarnum = root.numberOfDomains();
+    int fdvarnum = buddy.numberOfDomains();
     res.length = fdvarnum;
 
     for(n = 0; n < fdvarnum; n++)
       {
-	BddDomain dom = root.getDomain(n);
+	BddDomain dom = buddy.getDomain(n);
 	int[] ivar = dom.vars();
 
 	long val = 0;
@@ -890,11 +869,11 @@ struct BDD
   private static int[] varset2levels(BDD r)
   {
     int size = 0;
-    bdd p = r.dup();
+    BDD p = r.dup();
     while(!p.isOne() && !p.isZero())
       {
 	++size;
-	bdd p2 = p.high();
+	BDD p2 = p.high();
 	p = p2;
       }
     int[] result = new int[size];
@@ -903,7 +882,7 @@ struct BDD
     while(!p.isOne() && !p.isZero())
       {
 	result[++size] = p.level();
-	bdd p2 = p.high();
+	BDD p2 = p.high();
 	p = p2;
       }
     return result;
@@ -912,7 +891,7 @@ struct BDD
   public BDD replace(BddPair pair)
   {
     uint x = _index;
-    return makeBdd(root.bdd_replace(x, pair));
+    return makeBdd(buddy.bdd_replace(x, pair));
   }
 
   public void printSet()
@@ -937,8 +916,8 @@ struct BDD
     int[BDD] map;
     // HashMap map = new HashMap();
 
-    map[root.zero()] = 0;
-    map[root.one()] = 1;
+    map[buddy.zero()] = 0;
+    map[buddy.one()] = 1;
 
     printdot_rec(stdout, 1, visited, map);
     writeln("}");
@@ -961,8 +940,8 @@ struct BDD
     // TODO: support labelling of vars.
     f.writeln(ri, " [label=\"", this.var(), "\"];");
 
-    bdd l = this.low();
-    bdd h = this.high();
+    BDD l = this.low();
+    BDD h = this.high();
     int li = map[l];
 
     if((l in map) is null)
@@ -991,34 +970,34 @@ struct BDD
 
   public int nodeCount()
   {
-    return root.bdd_nodecount(_index);
+    return buddy.bdd_nodecount(_index);
   }
 
   public double pathCount()
   {
-    return root.bdd_pathcount(_index);
+    return buddy.bdd_pathcount(_index);
   }
 
   public void satDist(out double[uint] dist)
   {
-    root.bdd_satdist(_index, dist);
+    buddy.bdd_satdist(_index, dist);
   }
 
   public double satCount()
   {
-    return root.bdd_satcount(_index);
+    return buddy.bdd_satcount(_index);
   }
 
   public double satCount(BDD varset)
   {
-    double unused = root.varNum();
+    double unused = buddy.varNum();
 
     if(varset.isZero() || varset.isOne() || isZero()) /* empty set */
       return 0.;
 
-    bdd n = varset.dup();
+    BDD n = varset.dup();
     do {
-      bdd n2 = n.high();
+      BDD n2 = n.high();
       n = n2;
       unused--;
     } while(!n.isOne() && !n.isZero());
@@ -1042,7 +1021,7 @@ struct BDD
   public int[] varProfile()
   {
     uint x = _index;
-    return root.bdd_varprofile(x);
+    return buddy.bdd_varprofile(x);
   }
 
   public bool equals(BDD that)
@@ -1059,7 +1038,7 @@ struct BDD
   public string toString()
   {
     if(_index < 2) return _index == 0 ? "F" : "T";
-    byte[] set = new byte[](root.varNum());
+    byte[] set = new byte[](buddy.varNum());
     // StringBuffer sb = new StringBuffer();
     string sb;
     bdd_printset_rec(sb, this, set);
@@ -1081,23 +1060,23 @@ struct BDD
 	      {
 		if(!first) sb ~= ", ";
 		first = false;
-		sb ~= text(root.level2Var(n), ':', set[n] == 2 ? '1' : '0');
+		sb ~= text(buddy.level2Var(n), ':', set[n] == 2 ? '1' : '0');
 	      }
 	  }
 	sb ~= '>';
       }
     else
       {
-	// set[root.var2Level(r.var())] = 1;
-	set[root.LEVEL(r._index)] = 1;
+	// set[buddy.var2Level(r.var())] = 1;
+	set[buddy.LEVEL(r._index)] = 1;
 	bdd_printset_rec(sb, r.low(), set);
 
-	// set[root.var2Level(r.var())] = 2;
-	set[root.LEVEL(r._index)] = 2;
+	// set[buddy.var2Level(r.var())] = 2;
+	set[buddy.LEVEL(r._index)] = 2;
 	bdd_printset_rec(sb, r.high(), set);
 
-	// set[root.var2Level(r.var())] = 0;
-	set[root.LEVEL(r._index)] = 0;
+	// set[buddy.var2Level(r.var())] = 0;
+	set[buddy.LEVEL(r._index)] = 0;
       }
   }
 
@@ -1118,8 +1097,8 @@ struct BDD
 	  }
       }
 
-    // set = new byte[](root.varNum());
-    set.length = root.varNum();
+    // set = new byte[](buddy.varNum());
+    set.length = buddy.varNum();
     set[] = -1;
     bdd_tovec_rec(res, this, set);
     return res;
@@ -1133,26 +1112,26 @@ struct BDD
     }
     else
       {
-	set[root.LEVEL(r._index)] = 0;
+	set[buddy.LEVEL(r._index)] = 0;
 	bdd_tovec_rec(res, r.low(), set);
-	set[root.LEVEL(r._index)] = 1;
+	set[buddy.LEVEL(r._index)] = 1;
 	bdd_tovec_rec(res, r.high(), set);
-	set[root.LEVEL(r._index)] = -1;
+	set[buddy.LEVEL(r._index)] = -1;
       }
   }
 
   public int[] getIndices(uint index)
   {
-    BddDomain domain_n = root.getDomain(index);
+    BddDomain domain_n = buddy.getDomain(index);
     return domain_n.vars();
   }
 
   // public T getVal(T)(short index)
   // {
-  //   int fdvarnum = root.numberOfDomains();
+  //   int fdvarnum = buddy.numberOfDomains();
   //   import std.stdio;
   //   writeln("There are number of domains: ", fdvarnum);
-  //   BddDomain domain_n = root.getDomain(index);
+  //   BddDomain domain_n = buddy.getDomain(index);
   //   int[] vars = domain_n.vars();
 
   //   writeln(vars);
@@ -1165,14 +1144,14 @@ struct BDD
     if(this.isOne()) return "T";
 
     string sb;
-    int[] set = new int[](root.varNum());
+    int[] set = new int[](buddy.varNum());
     fdd_printset_rec(sb, this, set);
     return sb;
   }
 
   private void fdd_printset_rec(ref string sb, BDD r, int[] set)
   {
-    int fdvarnum = root.numberOfDomains();
+    int fdvarnum = buddy.numberOfDomains();
 
     bool used = false;
     bool first;
@@ -1190,7 +1169,7 @@ struct BDD
 	    bool firstval = true;
 	    used = false;
 
-	    BddDomain domain_n = root.getDomain(n);
+	    BddDomain domain_n = buddy.getDomain(n);
 
 	    int[] vars = domain_n.vars();
 	    size_t binsize = vars.length;
@@ -1230,16 +1209,16 @@ struct BDD
       }
     else
       {
-	// set[root.var2Level(r.var())] = 1;
-	set[root.LEVEL(r._index)] = 1;
+	// set[buddy.var2Level(r.var())] = 1;
+	set[buddy.LEVEL(r._index)] = 1;
 	fdd_printset_rec(sb, r.low(), set);
 
-	// set[root.var2Level(r.var())] = 2;
-	set[root.LEVEL(r._index)] = 2;
+	// set[buddy.var2Level(r.var())] = 2;
+	set[buddy.LEVEL(r._index)] = 2;
 	fdd_printset_rec(sb, r.high(), set);
 
-	// set[root.var2Level(r.var())] = 0;
-	set[root.LEVEL(r._index)] = 0;
+	// set[buddy.var2Level(r.var())] = 0;
+	set[buddy.LEVEL(r._index)] = 0;
       }
   }
 }
@@ -1824,10 +1803,10 @@ class Buddy
 
   public BDD buildCube(int value, BDD[] variables)
   {
-    bdd result = one();
+    BDD result = one();
     foreach_reverse(ref var; variables)
       {
-	bdd v;
+	BDD v;
 	if((value & 0x1) != 0) v = var.dup();
 	else                   v = var.not();
 
@@ -1840,10 +1819,10 @@ class Buddy
   // in place of bdd_ibuildcube
   public BDD buildCube(int value, int[] variables)
   {
-    bdd result = one();
+    BDD result = one();
     foreach_reverse(ref var; variables)
       {
-	bdd v;
+	BDD v;
 	if((value & 0x1) != 0) v = ithVar(var);
 	else                   v = nithVar(var);
 	result = result.and(v);
@@ -1854,7 +1833,7 @@ class Buddy
 
   public BDD makeSet(int[] varset)
   {
-    bdd res = one();
+    BDD res = one();
     int varnum = cast(int) varset.length;
     for(int v = varnum-1 ; v >= 0 ; --v) {
       res = res.and(ithVar(varset[v]));
@@ -2368,7 +2347,8 @@ class Buddy
 	res = apply_rec(l, r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -4361,8 +4341,7 @@ class Buddy
       }
   }
 
-  version(NO_EMPLACE) {}
-  else {
+  version(USE_EMPLACE) {
     bool _enableDestroy = false;
     size_t _allRefCount = 0;
   }
@@ -4379,8 +4358,8 @@ class Buddy
       return bdd_error(BddError.BDD_ILLBDD);
 
     INCREF(root);
-    version(NO_EMPLACE) {}
-    else {
+
+    version(USE_EMPLACE) {
       ++_allRefCount;
     }
     debug {writeln("INCREF(", root, ") = ",GETREF(root));}
@@ -4403,8 +4382,8 @@ class Buddy
       bdd_error(BddError.BDD_BREAK); /* distinctive */
 
     DECREF(root);
-    version(NO_EMPLACE) {}
-    else {
+
+    version(USE_EMPLACE) {
       if(--_allRefCount is 0 && _enableDestroy) {
 	this._delete;
       }
@@ -4415,8 +4394,8 @@ class Buddy
   }
 
   public void destroyBuddy() {
-    version(NO_EMPLACE) {}
-    else {
+
+    version(USE_EMPLACE) {
       _enableDestroy = true;
       if(_allRefCount is 0) {
 	this._delete();
@@ -4971,7 +4950,7 @@ class Buddy
 	    {
 	      if(any) sb ~= ", ";
 	      any = true;
-	      bdd b = BDD(result[i], this.outer);
+	      BDD b = BDD(result[i], this.outer);
 	      sb ~= text(_level2Var[i], " = ", b);
 	    }
 	}
@@ -8004,7 +7983,7 @@ class Buddy
    */
   public BDD makeSet(BddDomain[] v)
   {
-    bdd res = one();
+    BDD res = one();
 
     for(size_t n = 0; n < v.length; ++n) {
       res = res.and(v[n].set());
@@ -8169,7 +8148,7 @@ class Buddy
 
       /* Encode V<=X-1. V is the variables in 'var' and X is the domain size */
       long val = size() - 1;
-      bdd d = one();
+      BDD d = one();
       int[] ivar = vars();
       for(int n = 0; n < this.varNum(); n++)
 	{
@@ -8205,17 +8184,17 @@ class Buddy
 
       if(value == 0L)
 	{
-	  bdd result = one();
+	  BDD result = one();
 	  int n;
 	  for(n = 0; n < bits; n++)
 	    {
-	      bdd b = ithVar(this.ivar[n]);
+	      BDD b = ithVar(this.ivar[n]);
 	      b = b.biimp(ithVar(that.ivar[n]));
 	      result = result.and(b);
 	    }
 	  for( ; n < max(this.varNum(), that.varNum()); n++)
 	    {
-	      bdd b =(n < this.varNum()) ? nithVar(this.ivar[n]) : one();
+	      BDD b =(n < this.varNum()) ? nithVar(this.ivar[n]) : one();
 	      b = b.and((n < that.varNum()) ? nithVar(that.ivar[n]) : one());
 	      result = result.and(b);
 	    }
@@ -8233,16 +8212,16 @@ class Buddy
       // System.arraycopy(that.ivar, 0, thatvars, 0, thatvars.length);
       thatvars =(this.ivar[0..bits]).dup;
       BddVec x = buildVec(thatvars);
-      bdd result = one();
+      BDD result = one();
       int n;
       for(n = 0; n < x.size(); n++)
 	{
-	  bdd b = x.bitvec[n].biimp(z.bitvec[n]);
+	  BDD b = x.bitvec[n].biimp(z.bitvec[n]);
 	  result = result.and(b);
 	}
       for( ; n < max(this.varNum(), that.varNum()); n++)
 	{
-	  bdd b =(n < this.varNum()) ? nithVar(this.ivar[n]) : one();
+	  BDD b =(n < this.varNum()) ? nithVar(this.ivar[n]) : one();
 	  b = b.and((n < that.varNum()) ? nithVar(that.ivar[n]) : one());
 	  result = result.and(b);
 	}
@@ -8258,15 +8237,15 @@ class Buddy
 				      that.size(), ")"));
 	}
 
-      bdd e = one();
+      BDD e = one();
 
       int[] this_ivar = this.vars();
       int[] that_ivar = that.vars();
 
       for(int n = 0; n < this.varNum(); n++)
 	{
-	  bdd a = ithVar(this_ivar[n]);
-	  bdd b = ithVar(that_ivar[n]);
+	  BDD a = ithVar(this_ivar[n]);
+	  BDD b = ithVar(that_ivar[n]);
 	  a = a.biimp(b);
 	  e = e.and(a);
 	}
@@ -8286,7 +8265,7 @@ class Buddy
 	  throw new BddException(text(val, " is out of range"));
 	}
 
-      bdd v = one();
+      BDD v = one();
       int[] ivar = this.vars();
       for(int n = 0; n < ivar.length; n++)
 	{
@@ -8308,11 +8287,11 @@ class Buddy
 				      hi, "> is invalid"));
 	}
 
-      bdd result = zero();
+      BDD result = zero();
       int[] ivar = this.vars();
       while(lo <= hi)
 	{
-	  bdd v = one();
+	  BDD v = one();
 	  for(int n = cast(int) ivar.length - 1; ; n--)
 	    {
 	      if(lo &(1 << n)) {
@@ -8373,7 +8352,7 @@ class Buddy
 	}
       this._ivar = new_ivar;
       //System.out.println("Domain "+this+" old var = "+var);
-      bdd nvar = one();
+      BDD nvar = one();
       for(int i = 0; i < ivar.length; ++i)
 	{
 	  nvar = nvar.and(ithVar(ivar[i]));
@@ -8809,7 +8788,7 @@ class Buddy
       size_t minsize = min(a.size, b.size);
       size_t maxsize = max(a.size, b.size);
 
-      bdd c = zero();
+      BDD c = zero();
       BddVec res = createVec(maxsize+1);
       res._signed = true;
 
@@ -8820,9 +8799,9 @@ class Buddy
 	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a.bitvec[n] | b.bitvec[n];
+	  BDD c1 = a.bitvec[n] | b.bitvec[n];
 	  c1 = c1 & c;
-	  bdd c2 = a.bitvec[n] & b.bitvec[n];
+	  BDD c2 = a.bitvec[n] & b.bitvec[n];
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8831,16 +8810,16 @@ class Buddy
       for(size_t n = minsize; n < a.size; n++)
 	{
 	  // sign extend
-	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
+	  BDD ext = b.signed ? b.bitvec[$-1] : zero();
 
 	  /* this[n] = l[n] ^ r[n] ^ c; */
 	  res.bitvec[n] = a.bitvec[n] ^ ext;
 	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a.bitvec[n] | ext;
+	  BDD c1 = a.bitvec[n] | ext;
 	  c1 = c1 & c;
-	  bdd c2 = a.bitvec[n] & ext;
+	  BDD c2 = a.bitvec[n] & ext;
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8849,16 +8828,16 @@ class Buddy
       for(size_t n = minsize; n < b.size; n++)
 	{
 	  // sign extend
-	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
+	  BDD ext = a.signed ? a.bitvec[$-1] : zero();
 
 	  /* this[n] = l[n] ^ r[n] ^ c; */
 	  res.bitvec[n] = ext ^ b.bitvec[n];
 	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = ext | b.bitvec[n];
+	  BDD c1 = ext | b.bitvec[n];
 	  c1 = c1 & c;
-	  bdd c2 = ext & b.bitvec[n];
+	  BDD c2 = ext & b.bitvec[n];
 	  c2 = c2 | c1;
 	  c = c2;
 	}
@@ -8906,7 +8885,7 @@ class Buddy
       size_t minsize = min(size, that.size);
       size_t maxsize = max(size, that.size);
 
-      bdd c = zero();
+      BDD c = zero();
       BddVec res = createVec(maxsize+1);
 
       for(int n = 0; n < minsize; n++)
@@ -8916,8 +8895,8 @@ class Buddy
 	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that.bitvec[n] | c;
-	  bdd tmp2 = this.bitvec[n].lth(tmp1);
+	  BDD tmp1 = that.bitvec[n] | c;
+	  BDD tmp2 = this.bitvec[n].lth(tmp1);
 	  tmp1 = this.bitvec[n] & that.bitvec[n];
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
@@ -8928,14 +8907,14 @@ class Buddy
       for(size_t n = minsize; n < size; n++)
 	{
 	  // sign extend
-	  bdd ext = that.signed ? that.bitvec[$-1] : zero();
+	  BDD ext = that.signed ? that.bitvec[$-1] : zero();
 	  /* this[n] = l[n] ^ r[n] ^ c; */
 	  res.bitvec[n] = this.bitvec[n] ^ ext;
 	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = ext | c;
-	  bdd tmp2 = this.bitvec[n].lth(tmp1);
+	  BDD tmp1 = ext | c;
+	  BDD tmp2 = this.bitvec[n].lth(tmp1);
 	  tmp1 = this.bitvec[n] & ext;
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
@@ -8945,14 +8924,14 @@ class Buddy
       for(size_t n = minsize; n < that.size; n++)
 	{
 	  // sign extend
-	  bdd ext = signed ? this.bitvec[$-1] : zero();
+	  BDD ext = signed ? this.bitvec[$-1] : zero();
 	  /* this[n] = l[n] ^ r[n] ^ c; */
 	  res.bitvec[n] = ext ^ that.bitvec[n];
 	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
 
 	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that.bitvec[n] | c;
-	  bdd tmp2 = ext.lth(tmp1);
+	  BDD tmp1 = that.bitvec[n] | c;
+	  BDD tmp2 = ext.lth(tmp1);
 	  tmp1 = ext & that.bitvec[n];
 	  tmp1 = tmp1 & c;
 	  tmp1 = tmp1 | tmp2;
@@ -8997,7 +8976,7 @@ class Buddy
 	  BddVec added = result.add(leftshift);
 	  for(size_t m=0; m < bitnum; ++m)
 	    {
-	      bdd tmpres = r.ite(added.bitvec[m], result.bitvec[m]);
+	      BDD tmpres = r.ite(added.bitvec[m], result.bitvec[m]);
 	      result.bitvec[m] = tmpres;
 	    }
 	  for(size_t m = bitnum-1; m >= 1; --m)
@@ -9012,7 +8991,7 @@ class Buddy
     public override void div_rec(BddVec divisor, BddVec remainder,
 				 BddVec result, long step)
     {
-      bdd isSmaller = divisor.lte(remainder);
+      BDD isSmaller = divisor.lte(remainder);
       BddVec newResult = result.shl(1, isSmaller);
       BddVec zero = buildVec(divisor.size, false);
       BddVec sub = buildVec(divisor.size, false);
@@ -9088,12 +9067,12 @@ class Buddy
 
       for(size_t n = 0; n < rhs.size + 1; ++n)
 	{
-	  bdd divLteRem = div.lte(rem);
+	  BDD divLteRem = div.lte(rem);
 	  BddVec remSubDiv = rem.sub(div);
 
 	  for(size_t m = 0; m < bitnum; ++m)
 	    {
-	      bdd remtmp = divLteRem.ite(remSubDiv.bitvec[m], rem.bitvec[m]);
+	      BDD remtmp = divLteRem.ite(remSubDiv.bitvec[m], rem.bitvec[m]);
 	      rem.bitvec[m] = remtmp;
 	    }
 
@@ -9141,7 +9120,7 @@ class Buddy
     public override BddVec shl(BddVec r, BDD c)
     {
       BddVec val;
-      bdd tmp1, tmp2, rEquN;
+      BDD tmp1, tmp2, rEquN;
 
       BddVec res = buildVec(this.size, false);
 
@@ -9200,7 +9179,7 @@ class Buddy
     public override BddVec shr(BddVec r, BDD c)
     {
       BddVec val;
-      bdd tmp1, tmp2, rEquN;
+      BDD tmp1, tmp2, rEquN;
 
       BddVec res = buildVec(this.size, false);
 
@@ -9248,7 +9227,7 @@ class Buddy
 
     public override BDD less(BddVec that, bool equalP)
     {
-      bdd p = equalP ? one() : zero();
+      BDD p = equalP ? one() : zero();
 
       if(this.size == 0  ||  that.size == 0)
 	return zero;
@@ -9268,10 +9247,10 @@ class Buddy
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = a.bitvec[n].lth(b.bitvec[n]);
-	  bdd tmp2 = a.bitvec[n].biimp(b.bitvec[n]);
-	  bdd tmp3 = tmp2 & p;
-	  bdd tmp4 = tmp1 | tmp3;
+	  BDD tmp1 = a.bitvec[n].lth(b.bitvec[n]);
+	  BDD tmp2 = a.bitvec[n].biimp(b.bitvec[n]);
+	  BDD tmp3 = tmp2 & p;
+	  BDD tmp4 = tmp1 | tmp3;
 	  p = tmp4;
 	}
 
@@ -9279,15 +9258,15 @@ class Buddy
       for(size_t n=minsize; n < a.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
+	  BDD ext = b.signed ? b.bitvec[$-1] : zero();
 
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = a.bitvec[n].lth(ext);
-	  bdd tmp2 = a.bitvec[n].biimp(ext);
-	  bdd tmp3 = tmp2 & p;
-	  bdd tmp4 = tmp1 | tmp3;
+	  BDD tmp1 = a.bitvec[n].lth(ext);
+	  BDD tmp2 = a.bitvec[n].biimp(ext);
+	  BDD tmp3 = tmp2 & p;
+	  BDD tmp4 = tmp1 | tmp3;
 	  p = tmp4;
 	}
 
@@ -9295,14 +9274,14 @@ class Buddy
       for(size_t n=minsize; n < b.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
+	  BDD ext = a.signed ? a.bitvec[$-1] : zero();
 	  /* p =(!l[n] & that[n]) |
 	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
-	  bdd tmp1 = ext.lth(b.bitvec[n]);
-	  bdd tmp2 = ext.biimp(b.bitvec[n]);
-	  bdd tmp3 = tmp2 & p;
-	  bdd tmp4 = tmp1 | tmp3;
+	  BDD tmp1 = ext.lth(b.bitvec[n]);
+	  BDD tmp2 = ext.biimp(b.bitvec[n]);
+	  BDD tmp3 = tmp2 & p;
+	  BDD tmp4 = tmp1 | tmp3;
 	  p = tmp4;
 	}
 
@@ -9328,7 +9307,7 @@ class Buddy
 
     public override BDD equ(BddVec r)
     {
-      bdd p = one;
+      BDD p = one;
 
       if(this.size == 0  ||  r.size == 0)
 	return zero;
@@ -9349,7 +9328,7 @@ class Buddy
       for(size_t n=minsize; n < size; ++n)
 	{
 	  // sign extend
-	  bdd ext = r.signed ? r.bitvec[$-1] : zero();
+	  BDD ext = r.signed ? r.bitvec[$-1] : zero();
 	  p = p & this.bitvec[n].biimp(ext);
 	}
 
@@ -9357,7 +9336,7 @@ class Buddy
       for(size_t n=minsize; n < r.size; ++n)
 	{
 	  // sign extend
-	  bdd ext = signed ? this.bitvec[$-1] : zero();
+	  BDD ext = signed ? this.bitvec[$-1] : zero();
 	  p = p & ext.biimp(r.bitvec[n]);
 	}
       return p;
@@ -9365,22 +9344,22 @@ class Buddy
 
     public override BDD gth(BddVec r)
     {
-      bdd tmp = this.lte(r);
-      bdd p = tmp.not();
+      BDD tmp = this.lte(r);
+      BDD p = tmp.not();
       return p;
     }
 
     public override BDD gte(BddVec r)
     {
-      bdd tmp = this.lth(r);
-      bdd p = tmp.not();
+      BDD tmp = this.lth(r);
+      BDD p = tmp.not();
       return p;
     }
 
     public override BDD neq(BddVec r)
     {
-      bdd tmp = this.equ(r);
-      bdd p = tmp.not();
+      BDD tmp = this.equ(r);
+      BDD p = tmp.not();
       return p;
     }
 
