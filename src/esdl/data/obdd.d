@@ -14,6 +14,7 @@ import std.datetime;
 import std.array;
 import std.math;
 import std.bigint;
+import std.container: Array;
 import std.algorithm;
 import std.conv;
 import core.memory: GC;
@@ -64,14 +65,14 @@ class BddPair
       this.set(oldvar[n], newvar[n]);
   }
 
-  public void set(int[] oldvar, BDD[] newvar)
-  {
-    if(oldvar.length != newvar.length)
-      throw new BddException("Sizes of the BDD Arrays do not match");
+  // public void set(int[] oldvar, BDD[] newvar)
+  // {
+  //   if(oldvar.length != newvar.length)
+  //     throw new BddException("Sizes of the BDD Arrays do not match");
 
-    for(int n = 0; n != newvar.length; ++n)
-      this.set(oldvar[n], newvar[n]);
-  }
+  //   for(int n = 0; n != newvar.length; ++n)
+  //     this.set(oldvar[n], newvar[n]);
+  // }
 
   public void set(BddDomain p1, BddDomain p2)
   {
@@ -510,11 +511,17 @@ struct BddDomain
 struct BddVec
 {
 
-  private BDD[] _bitvec;	// FIXBDD
+  version(BDDVEC_DYNARR) {
+    private BDD[] _bitvec;	// FIXBDD
+  }
+  else {
+    private Array!BDD _bitvec;
+  }
+  
   private bool _signed = false;
 
   bool isNull() {
-    return (_bitvec is null);
+    return (_bitvec.length == 0);
   }
 
   public bool signed()
@@ -522,22 +529,41 @@ struct BddVec
     return _signed;
   }
 
-  public BDD[] bitvec()
+  public auto bitvec()
   {
     return _bitvec;
+  }
+    
+
+  public @property size_t length()
+  {
+    return _bitvec.length;
   }
 
   public @property size_t size()
   {
-    return _bitvec.length;
+    return length;
   }
 
   protected this(size_t bitnum, bool signed = false)
   {
     _signed = signed;
     _bitvec.length = bitnum;
+
+    // _bitvec = cast(BDD*) GC.malloc(bitnum * BDD.sizeof);
+    // _length = bitnum;
+    // BDD.disable_delref();
+    // for (size_t i=0; i!=_length; ++i) {
+    // 	_bitvec[i] = BDD.init;
+    // }
+    // BDD.enable_delref();
   }
 
+  version(BDDVEC_DYNARR) {
+    // ~this() {
+    //   GC.free(cast(void*) _bitvec);
+    // }
+  }
 
   final public BddVec opBinary(string op)(long rhs)
     if(op == "<<" || op == ">>" || op == "*" || op == "/")
@@ -641,39 +667,41 @@ struct BddVec
       }
 
   public size_t opDollar() {
-    return _bitvec.length;
+    return length;
   }
   
   public void initialize(bool isTrue)
   {
-    foreach(ref b; _bitvec)
-      if(isTrue)
-	b = one();
-      else
-	b = zero();
+    for (size_t i=0; i!=length; ++i)
+      {
+	if(isTrue)
+	  _bitvec[i] = one();
+	else
+	  _bitvec[i] = zero();
+      }
   }
 
 
   public void initialize(int val)
   {
-    foreach(ref b; _bitvec)
+    for (size_t i=0; i!=length; ++i)
       {
 	if((val & 0x1) != 0)
-	  b = one();
+	  _bitvec[i] = one();
 	else
-	  b = zero();
+	  _bitvec[i] = zero();
 	val >>= 1;
       }
   }
 
   public void initialize(long val)
   {
-    foreach(ref b; _bitvec)
+    for (size_t i=0; i!=length; ++i)
       {
 	if((val & 0x1) != 0)
-	  b = one();
+	  _bitvec[i] = one();
 	else
-	  b = zero();
+	  _bitvec[i] = zero();
 	val >>= 1;
       }
   }
@@ -705,10 +733,11 @@ struct BddVec
   {
     BddVec dst = BddVec(size, false);
     dst._signed = this._signed;
-    dst.bitvec[0..$] = this.bitvec[0..$];
 
-    // for(int n = 0; n < size; n++)
-    // 	dst[n] = this[n].dup();
+    // dst.bitvec[0..$] = this.bitvec[0..$];
+
+    for(int n = 0; n < size; n++)
+      dst.bitvec[n] = this.bitvec[n].dup();
 
     return dst;
   }
@@ -719,8 +748,11 @@ struct BddVec
     else
       {
 	BddVec dst = BddVec(size+1, true);
-	dst.bitvec[0..$-1] = this.bitvec[0..$];
-	dst.bitvec[$-1] = zero();
+	// dst.bitvec[0..$-1] = this.bitvec[0..$];
+	for(int n = 0; n < size; n++) {
+	  dst.bitvec[n] = this.bitvec[n].dup();
+	}
+	dst.bitvec[dst.size-1] = zero();
 	return dst;
       }
   }
@@ -742,9 +774,9 @@ struct BddVec
 
   public bool isConst()
   {
-    foreach(ref b; _bitvec)
+    for (size_t i=0; i!=size; ++i)
       {
-	if(!b.isOne() && !b.isZero()) return false;
+	if(!_bitvec[i].isOne() && !_bitvec[i].isZero()) return false;
       }
     return true;
   }
@@ -766,7 +798,7 @@ struct BddVec
   public void remove()
   {
     // size = 0;
-    _bitvec = null;
+    _bitvec.length = 0;
   }
 
   // public bvec addref(bvec v)
@@ -844,7 +876,7 @@ struct BddVec
     for(size_t n = minsize; n < a.size; n++)
       {
 	// sign extend
-	BDD ext = b.signed ? b.bitvec[$-1] : zero();
+	BDD ext = b.signed ? b.bitvec[b.size-1] : zero();
 
 	/* this[n] = l[n] ^ r[n] ^ c; */
 	res.bitvec[n] = a.bitvec[n] ^ ext;
@@ -862,7 +894,7 @@ struct BddVec
     for(size_t n = minsize; n < b.size; n++)
       {
 	// sign extend
-	BDD ext = a.signed ? a.bitvec[$-1] : zero();
+	BDD ext = a.signed ? a.bitvec[a.size-1] : zero();
 
 	/* this[n] = l[n] ^ r[n] ^ c; */
 	res.bitvec[n] = ext ^ b.bitvec[n];
@@ -878,13 +910,13 @@ struct BddVec
 
     if(a.signed)
       {
-	c = a.bitvec[$-1].ite(c.not(), c);
+	c = a.bitvec[a.size-1].ite(c.not(), c);
       }
     if(b.signed)
       {
-	c = b.bitvec[$-1].ite(c.not(), c);
+	c = b.bitvec[b.size-1].ite(c.not(), c);
       }
-    res.bitvec[$-1] = c;
+    res.bitvec[res.size-1] = c;
 
     // if(a.signed && b.signed)
     // 	{
@@ -941,7 +973,7 @@ struct BddVec
     for(size_t n = minsize; n < size; n++)
       {
 	// sign extend
-	BDD ext = that.signed ? that.bitvec[$-1] : zero();
+	BDD ext = that.signed ? that.bitvec[that.size-1] : zero();
 	/* this[n] = l[n] ^ r[n] ^ c; */
 	res.bitvec[n] = this.bitvec[n] ^ ext;
 	res.bitvec[n] = res.bitvec[n] ^ c.dup();
@@ -958,7 +990,7 @@ struct BddVec
     for(size_t n = minsize; n < that.size; n++)
       {
 	// sign extend
-	BDD ext = signed ? this.bitvec[$-1] : zero();
+	BDD ext = signed ? this.bitvec[this.size-1] : zero();
 	/* this[n] = l[n] ^ r[n] ^ c; */
 	res.bitvec[n] = ext ^ that.bitvec[n];
 	res.bitvec[n] = res.bitvec[n] ^ c.dup();
@@ -971,7 +1003,7 @@ struct BddVec
 	tmp1 = tmp1 | tmp2;
 	c = tmp1;
       }
-    res.bitvec[$-1] = c;
+    res.bitvec[res.size-1] = c;
     return res;
   }
 
@@ -1005,12 +1037,12 @@ struct BddVec
 
     BddVec leftshift = leftshifttmp.coerce(bitnum);
 
-    foreach(ref r; rhs.bitvec[0..$])
+    for (size_t i=0; i!=rhs.size; ++i)
       {
 	BddVec added = result.add(leftshift);
 	for(size_t m=0; m < bitnum; ++m)
 	  {
-	    BDD tmpres = r.ite(added.bitvec[m], result.bitvec[m]);
+	    BDD tmpres = rhs.bitvec[i].ite(added.bitvec[m], result.bitvec[m]);
 	    result.bitvec[m] = tmpres;
 	  }
 	for(size_t m = bitnum-1; m >= 1; --m)
@@ -1060,7 +1092,7 @@ struct BddVec
       {
 	BddVec divisor = getBuddy.buildVec(size, c);
 	BddVec tmp = getBuddy.buildVec(size, false);
-	BddVec tmpremainder = tmp.shl(1, this.bitvec[$-1]);
+	BddVec tmpremainder = tmp.shl(1, this.bitvec[size-1]);
 	BddVec result = this.shl(1, zero());
 	BddVec remainder;
 
@@ -1292,7 +1324,7 @@ struct BddVec
     for(size_t n=minsize; n < a.size; ++n)
       {
 	// sign extend
-	BDD ext = b.signed ? b.bitvec[$-1] : zero();
+	BDD ext = b.signed ? b.bitvec[b.size-1] : zero();
 
 	/* p =(!l[n] & that[n]) |
 	 *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
@@ -1308,7 +1340,7 @@ struct BddVec
     for(size_t n=minsize; n < b.size; ++n)
       {
 	// sign extend
-	BDD ext = a.signed ? a.bitvec[$-1] : zero();
+	BDD ext = a.signed ? a.bitvec[a.size-1] : zero();
 	/* p =(!l[n] & that[n]) |
 	 *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
 
@@ -1319,8 +1351,8 @@ struct BddVec
 	p = tmp4;
       }
 
-    p = (a.bitvec[$-1] & (b.bitvec[$-1].not())).ite(one(), p);
-    p = ((a.bitvec[$-1].not()) & b.bitvec[$-1]).ite(zero(), p);
+    p = (a.bitvec[a.size-1] & (b.bitvec[b.size-1].not())).ite(one(), p);
+    p = ((a.bitvec[a.size-1].not()) & b.bitvec[b.size-1]).ite(zero(), p);
     // if both this and that are either signed or unsigned, what we
     // have done till now is sufficient
 
@@ -1362,7 +1394,7 @@ struct BddVec
     for(size_t n=minsize; n < size; ++n)
       {
 	// sign extend
-	BDD ext = r.signed ? r.bitvec[$-1] : zero();
+	BDD ext = r.signed ? r.bitvec[r.size-1] : zero();
 	p = p & this.bitvec[n].biimp(ext);
       }
 
@@ -1370,7 +1402,7 @@ struct BddVec
     for(size_t n=minsize; n < r.size; ++n)
       {
 	// sign extend
-	BDD ext = signed ? this.bitvec[$-1] : zero();
+	BDD ext = signed ? this.bitvec[size-1] : zero();
 	p = p & ext.biimp(r.bitvec[n]);
       }
     return p;
@@ -1421,8 +1453,8 @@ struct BddVec
 
   public BddVec opSlice(size_t n, size_t m) {
     if(n >= m) throw new BddException();
-    if(n >= bitvec.length) throw new BddException();
-    if(m > bitvec.length) throw new BddException();
+    if(n >= size) throw new BddException();
+    if(m > size) throw new BddException();
     BddVec res = getBuddy.buildVec(cast (int) (m - n), false);
     for(size_t i = 0; i < m - n; ++i) {
       res.bitvec[i] = this.bitvec[n+i].dup();
@@ -1431,7 +1463,7 @@ struct BddVec
   }
 
   public BDD opIndex(size_t i) {
-    if(i >= bitvec.length) throw new BddException();
+    if(i >= size) throw new BddException();
     return bitvec[i].dup;
   }
 }
@@ -1458,6 +1490,16 @@ struct BDD
 {
   uint _index;
 
+  static bool _delref_enabled = true;
+
+  static disable_delref() {
+    _delref_enabled = false;
+  }
+
+  static enable_delref() {
+    _delref_enabled = true;
+  }
+
   version(BUDDY_ROOT) {
     Buddy _buddy;
     const bool opEquals(ref const BDD other) {
@@ -1483,7 +1525,8 @@ struct BDD
 
   public ~this()
   {
-    if (_buddy !is null && _index !is 0) _buddy.delRef(_index);
+    if (_buddy !is null && _index !is 0 && _delref_enabled)
+      _buddy.delRef(_index);
   }
 
   version(BUDDY_ROOT) {
@@ -1512,7 +1555,8 @@ struct BDD
   }
     
   void opAssign(BDD that) {
-    if (_buddy !is null && _index !is 0) _buddy.delRef(_index);
+    if (_buddy !is null && _index !is 0 && _delref_enabled)
+      _buddy.delRef(_index);
     this._buddy = that._buddy;
     this._index = that._index;
     _buddy.addRef(_index);
@@ -2979,20 +3023,20 @@ class Buddy
     return BDD(bddTrue, this);
   }
 
-  public BDD buildCube(int value, BDD[] variables)
-  {
-    BDD result = one();
-    foreach_reverse(ref var; variables)
-      {
-	BDD v;
-	if((value & 0x1) != 0) v = var.dup();
-	else                   v = var.not();
+  // public BDD buildCube(int value, BDD[] variables)
+  // {
+  //   BDD result = one();
+  //   foreach_reverse(ref var; variables)
+  //     {
+  // 	BDD v;
+  // 	if((value & 0x1) != 0) v = var.dup();
+  // 	else                   v = var.not();
 
-	result = result.and(v);
-	value >>= 1;
-      }
-    return result;
-  }
+  // 	result = result.and(v);
+  // 	value >>= 1;
+  //     }
+  //   return result;
+  // }
 
   // in place of bdd_ibuildcube
   public BDD buildCube(int value, int[] variables)
@@ -3067,10 +3111,12 @@ class Buddy
   {
     if(!isRunning())
       bdd_error(BddError.BDD_RUNNING);
-    else if(r < 0 || r >= _nodeSize)
+    else if(r < 0 || r >= _nodeSize) {
       bdd_error(BddError.BDD_ILLBDD);
-    else if(r >= 2 && LOW(r) == INVALID_BDD)
+    }
+    else if(r >= 2 && LOW(r) == INVALID_BDD) {
       bdd_error(BddError.BDD_ILLBDD);
+    }
   }
 
   void CHECKa(int r, int x)
@@ -3081,8 +3127,9 @@ class Buddy
   int bdd_var(int r)
   {
     CHECK(r);
-    if(r < 2)
+    if(r < 2) {
       bdd_error(BddError.BDD_ILLBDD);
+    }
 
     return(_level2Var[LEVEL(r)]);
   }
@@ -3090,8 +3137,9 @@ class Buddy
   int bdd_low(int r)
   {
     CHECK(r);
-    if(r < 2)
+    if(r < 2) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     return(LOW(r));
   }
@@ -3099,8 +3147,9 @@ class Buddy
   int bdd_high(int r)
   {
     CHECK(r);
-    if(r < 2)
+    if(r < 2) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     return(HIGH(r));
   }
@@ -5530,10 +5579,12 @@ class Buddy
       bdd_error(BddError.BDD_BREAK); /* distinctive */
     if(root < 2 || !isRunning())
       return root;
-    if(root >= _nodeSize)
+    if(root >= _nodeSize) {
       return bdd_error(BddError.BDD_ILLBDD);
-    if(LOW(root) == INVALID_BDD)
+    }
+    if(LOW(root) == INVALID_BDD) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     INCREF(root);
 
@@ -5550,10 +5601,12 @@ class Buddy
       bdd_error(BddError.BDD_BREAK); /* distinctive */
     if(root < 2 || !isRunning())
       return root;
-    if(root >= _nodeSize)
+    if(root >= _nodeSize) {
       return bdd_error(BddError.BDD_ILLBDD);
-    if(LOW(root) == INVALID_BDD)
+    }
+    if(LOW(root) == INVALID_BDD) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     /* if the following line is present, fails there much earlier */
     if(!HASREF(root))
@@ -8344,16 +8397,16 @@ class Buddy
     bdd_fprintorder(stdout);
   }
 
-  public int nodeCount(BDD[] arr)
-  {
-    int[] a = new int[](arr.length);
-    int j = 0;
-    foreach(ref r; arr)
-      {
-	a[j++] = r._index;
-      }
-    return bdd_anodecount(a);
-  }
+  // public int nodeCount(BDD[] arr)
+  // {
+  //   int[] a = new int[](arr.length);
+  //   int j = 0;
+  //   foreach(ref r; arr)
+  //     {
+  // 	a[j++] = r._index;
+  //     }
+  //   return bdd_anodecount(a);
+  // }
 
   public int getNodeTableSize()
   {
