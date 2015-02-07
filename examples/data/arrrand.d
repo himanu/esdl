@@ -73,7 +73,7 @@ class Bar: Foo
 
 void main() {
   Foo foo = new Foo;
-  for (size_t i=0; i!=16; ++i) {
+  for (size_t i=0; i!=16000; ++i) {
     foo.randomize();
     foo.display();
   }

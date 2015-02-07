@@ -35,7 +35,7 @@ class Bar: Foo
   Constraint! q{
     foo.length > 2;
     baz < 32;
-    FFFF + baz == 50;
+    // FFFF + baz == 50;
   } cstFooLength;
 
   Constraint! q{
@@ -65,7 +65,7 @@ class Bar: Foo
 
 void main() {
   Foo foo = new Bar;
-  for (size_t i=0; i!=16; ++i) {
+  for (size_t i=0; i!=1024; ++i) {
     foo.randomize();
     foo.display();
   }

@@ -279,8 +279,9 @@ public class ConstraintEngine {
   RandGen _rgen;
   Buddy _buddy;
 
-  BddDomain[] _domains;
-
+  // BddDomain[] _domains;
+  BddDomain* _domains;
+  
   ConstraintEngine _parent = null;
 
   this(uint seed, size_t rnum, ConstraintEngine parent) {
@@ -313,7 +314,8 @@ public class ConstraintEngine {
     cstWith          = null;
     _cstWithChanged  = true;
     _rnds.length = 0;
-    _domains.length  = 0;
+
+    // _domains.length  = 0;
     // GC.collect();
     _buddy.destroyBuddy();
   }
@@ -515,7 +517,8 @@ public class ConstraintEngine {
     // import std.stdio;
     // writeln("Solving BDD for number of contraints = ", cstList.length);
 
-    if(_domains.length is 0 || _cstWithChanged is true) {
+    // if(_domains.length == 0 || _cstWithChanged is true) {
+    if(_domains is null || _cstWithChanged is true) {
       initDomains(t);
     }
 
@@ -636,7 +639,7 @@ public class ConstraintEngine {
 
     foreach(vec; stage._rndVecs) {
       if(vec.stage is stage) {
-	if(vec.bddvec is null) {
+	if(vec.bddvec.isNull()) {
 	  vec.bddvec = _buddy.buildVec(_domains[vec.domIndex], vec.signed);
 	}
 	BDD primBdd = vec.getPrimBdd(_buddy);

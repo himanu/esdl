@@ -16,7 +16,7 @@ import std.math;
 import std.bigint;
 import std.algorithm;
 import std.conv;
-
+import core.memory: GC;
 
 enum uint bddTrue = 1;
 enum uint bddFalse = 0;
@@ -75,8 +75,8 @@ class BddPair
 
   public void set(BddDomain p1, BddDomain p2)
   {
-    int[] ivar1 = p1.vars();
-    int[] ivar2 = p2.vars();
+    int[] ivar1 = p1.get_ivars();
+    int[] ivar2 = p2.get_ivars();
     this.set(ivar1, ivar2);
   }
 
@@ -172,10 +172,12 @@ struct BddDomain
     _ivar = iv;
   }
 
-  public int[] ivar()
-  {
-    return _ivar;
-  }
+  // public int[] ivar()
+  // {
+  //   import std.stdio;
+  //   writeln("getting in ivar: >> ", _ivar);
+  //   return _ivar;
+  // }
 
   public void var(BDD v)
   {
@@ -242,7 +244,7 @@ struct BddDomain
     /* Encode V<=X-1. V is the variables in 'var' and X is the domain size */
     long val = size() - 1;
     BDD d = getBuddy.one();
-    int[] ivar = vars();
+    int[] ivar = get_ivars();
     for(int n = 0; n < this.varNum(); n++)
       {
 	if(val & 1)		// test LSB
@@ -281,29 +283,27 @@ struct BddDomain
 	int n;
 	for(n = 0; n < bits; n++)
 	  {
-	    BDD b = ithVar(this.ivar[n]);
-	    b = b.biimp(ithVar(that.ivar[n]));
+	    BDD b = ithVar(this._ivar[n]);
+	    b = b.biimp(ithVar(that._ivar[n]));
 	    result = result.and(b);
 	  }
 	for( ; n < max(this.varNum(), that.varNum()); n++)
 	  {
-	    BDD b =(n < this.varNum()) ? getBuddy.nithVar(this.ivar[n]) : getBuddy.one();
-	    b = b.and((n < that.varNum()) ? getBuddy.nithVar(that.ivar[n]) : getBuddy.one());
+	    BDD b =(n < this.varNum()) ? getBuddy.nithVar(this._ivar[n]) : getBuddy.one();
+	    b = b.and((n < that.varNum()) ? getBuddy.nithVar(that._ivar[n]) : getBuddy.one());
 	    result = result.and(b);
 	  }
 	return result;
       }
 
     int[] vars = new int[](bits);
-    // System.arraycopy(this.ivar, 0, vars, 0, vars.length);
-    vars =(this.ivar[0..bits]).dup;
+    vars =(this._ivar[0..bits]).dup;
     BddVec y = getBuddy.buildVec(vars);
     BddVec v = getBuddy.buildVec(bits, value);
     BddVec z = y.add(v);
 
     int[] thatvars = new int[](bits);
-    // System.arraycopy(that.ivar, 0, thatvars, 0, thatvars.length);
-    thatvars =(this.ivar[0..bits]).dup;
+    thatvars =(this._ivar[0..bits]).dup;
     BddVec x = getBuddy.buildVec(thatvars);
     BDD result = getBuddy.one();
     int n;
@@ -314,8 +314,8 @@ struct BddDomain
       }
     for( ; n < max(this.varNum(), that.varNum()); n++)
       {
-	BDD b =(n < this.varNum()) ? getBuddy.nithVar(this.ivar[n]) : getBuddy.one();
-	b = b.and((n < that.varNum()) ? getBuddy.nithVar(that.ivar[n]) : getBuddy.one());
+	BDD b =(n < this.varNum()) ? getBuddy.nithVar(this._ivar[n]) : getBuddy.one();
+	b = b.and((n < that.varNum()) ? getBuddy.nithVar(that._ivar[n]) : getBuddy.one());
 	result = result.and(b);
       }
     return result;
@@ -332,8 +332,8 @@ struct BddDomain
 
     BDD e = getBuddy.one();
 
-    int[] this_ivar = this.vars();
-    int[] that_ivar = that.vars();
+    int[] this_ivar = this.get_ivars();
+    int[] that_ivar = that.get_ivars();
 
     for(int n = 0; n < this.varNum(); n++)
       {
@@ -359,7 +359,7 @@ struct BddDomain
       }
 
     BDD v = getBuddy.one();
-    int[] ivar = this.vars();
+    int[] ivar = this.get_ivars();
     for(int n = 0; n < ivar.length; n++)
       {
 	if(val & 1)
@@ -381,7 +381,7 @@ struct BddDomain
       }
 
     BDD result = getBuddy.zero();
-    int[] ivar = this.vars();
+    int[] ivar = this.get_ivars();
     while(lo <= hi)
       {
 	BDD v = getBuddy.one();
@@ -408,11 +408,11 @@ struct BddDomain
 
   public int varNum()
   {
-    return cast(int) this.ivar.length;
+    return cast(int) this._ivar.length;
   }
-  public int[] vars()
+  public int[] get_ivars()
   {
-    return this.ivar;
+    return this._ivar;
   }
 
   public int ensureCapacity(size_t range)
@@ -421,7 +421,7 @@ struct BddDomain
     if(range < 0)
       throw new BddException();
     if(range < realsize)
-      return cast(int) ivar.length;
+      return cast(int) _ivar.length;
     this._realsize = range + 1;
     int binsize = 1;
     while(calcsize <= range)
@@ -429,29 +429,24 @@ struct BddDomain
 	binsize++;
 	calcsize = calcsize << 1;
       }
-    if(ivar.length == binsize) return binsize;
+    if(_ivar.length == binsize) return binsize;
 
     // int[] new_ivar = new int[binsize];
-    // System.arraycopy(ivar, 0, new_ivar, 0, ivar.length);
-    int[] new_ivar = ivar.dup;
+    int[] new_ivar = _ivar.dup;
     new_ivar.length = binsize;
-    for(size_t i = ivar.length; i < new_ivar.length; ++i)
+    for(size_t i = _ivar.length; i < new_ivar.length; ++i)
       {
-	//System.out.println("Domain "+this+" Duplicating var#"+new_ivar[i-1]);
 	int newVar = getBuddy.duplicateVar(new_ivar[i-1]);
 	getBuddy.incr_firstbddvar();
 	new_ivar[i] = newVar;
-	//System.out.println("Domain "+this+" var#"+i+" = "+newVar);
       }
     this._ivar = new_ivar;
-    //System.out.println("Domain "+this+" old var = "+var);
     BDD nvar = getBuddy.one();
-    for(int i = 0; i < ivar.length; ++i)
+    for(int i = 0; i < _ivar.length; ++i)
       {
-	nvar = nvar.and(ithVar(ivar[i]));
+	nvar = nvar.and(ithVar(_ivar[i]));
       }
     this._var = nvar;
-    //System.out.println("Domain "+this+" new var = "+var);
     return binsize;
   }
 
@@ -512,16 +507,14 @@ struct BddDomain
 
 
 
-class BddVec
+struct BddVec
 {
 
   private BDD[] _bitvec;	// FIXBDD
   private bool _signed = false;
 
-  private bool _destroy = true;
-
-  public void dontDestroy() {
-    _destroy = false;
+  bool isNull() {
+    return (_bitvec is null);
   }
 
   public bool signed()
@@ -694,7 +687,7 @@ class BddVec
 
   public void initialize(BddDomain d)
   {
-    initialize(d.vars());
+    initialize(d.get_ivars());
   }
 
   public void initialize(int[] var)
@@ -710,7 +703,7 @@ class BddVec
 
   public BddVec copy()
   {
-    BddVec dst = getBuddy.createVec(size);
+    BddVec dst = BddVec(size, false);
     dst._signed = this._signed;
     dst.bitvec[0..$] = this.bitvec[0..$];
 
@@ -725,7 +718,7 @@ class BddVec
     if(signed) return copy();
     else
       {
-	BddVec dst = getBuddy.createVec(size+1, true);
+	BddVec dst = BddVec(size+1, true);
 	dst.bitvec[0..$-1] = this.bitvec[0..$];
 	dst.bitvec[$-1] = zero();
 	return dst;
@@ -734,7 +727,7 @@ class BddVec
 
   public BddVec coerce(size_t bitnum)
   {
-    BddVec dst = getBuddy.createVec(bitnum, this._signed);
+    BddVec dst = BddVec(bitnum, this._signed);
     ulong minnum = min(bitnum, size);
     uint n;
     for(n = 0; n < minnum; n++)
@@ -770,7 +763,7 @@ class BddVec
     return val;
   }
 
-  public void free()
+  public void remove()
   {
     // size = 0;
     _bitvec = null;
@@ -796,7 +789,7 @@ class BddVec
     // 	// throw new BddException();
     // 	bdd_error(BddError.BVEC_SIZE);
 
-    BddVec res = getBuddy.createVec(maxsize, _signed);
+    BddVec res = BddVec(maxsize, _signed);
     for(size_t n=0 ; n < minsize ; n++)
       res.bitvec[n] = this.bitvec[n].apply(that.bitvec[n], op);
 
@@ -811,7 +804,7 @@ class BddVec
 
   public BddVec opCom()
   {
-    BddVec res = getBuddy.createVec(size);
+    BddVec res = BddVec(size, false);
     for(int n=0 ; n < size ; n++)
       res.bitvec[n] = this.bitvec[n].not();
     return res;
@@ -830,7 +823,7 @@ class BddVec
     size_t maxsize = max(a.size, b.size);
 
     BDD c = zero();
-    BddVec res = getBuddy.createVec(maxsize+1);
+    BddVec res = BddVec(maxsize+1, false);
     res._signed = true;
 
     for(size_t n = 0; n < minsize; n++)
@@ -927,7 +920,7 @@ class BddVec
     size_t maxsize = max(size, that.size);
 
     BDD c = zero();
-    BddVec res = getBuddy.createVec(maxsize+1);
+    BddVec res = BddVec(maxsize+1, false);
 
     for(int n = 0; n < minsize; n++)
       {
@@ -1056,7 +1049,7 @@ class BddVec
     if(size != that.size)
       // throw new BddException();
       bdd_error(BddError.BVEC_SIZE);
-    free();
+    remove();
     this._bitvec = that.bitvec;
   }
 
@@ -1085,8 +1078,8 @@ class BddVec
   }
 
   public BddVec div(BddVec rhs) {
-    BddVec result = new BddVec(size, _signed);
-    BddVec remainder = new BddVec(size, _signed);
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
     div(rhs, result, remainder);
     return result;
   }
@@ -1933,7 +1926,7 @@ struct BDD
 	for(n = 0; n < buddy.numberOfDomains(); n++)
 	  {
 	    BddDomain dom = buddy.getDomain(n);
-	    int[] ivar = dom.vars();
+	    int[] ivar = dom.get_ivars();
 	    bool found = false;
 	    for(m = 0; m < dom.varNum() && !found; m++)
 	      {
@@ -1951,7 +1944,7 @@ struct BDD
       for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
 	  BddDomain dom = buddy.getDomain(n);
-	  int[] ivar = dom.vars();
+	  int[] ivar = dom.get_ivars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
 	    {
@@ -1972,7 +1965,7 @@ struct BDD
       for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
 	  BddDomain dom = buddy.getDomain(n);
-	  int[] ivar = dom.vars();
+	  int[] ivar = dom.get_ivars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
 	    {
@@ -2036,7 +2029,7 @@ struct BDD
     for(n = 0; n < fdvarnum; n++)
       {
 	BddDomain dom = buddy.getDomain(n);
-	int[] ivar = dom.vars();
+	int[] ivar = dom.get_ivars();
 
 	long val = 0;
 	for(int m = dom.varNum() - 1; m >= 0; m--)
@@ -2308,7 +2301,7 @@ struct BDD
   public int[] getIndices(uint index)
   {
     BddDomain domain_n = buddy.getDomain(index);
-    return domain_n.vars();
+    return domain_n.get_ivars();
   }
 
   // public T getVal(T)(short index)
@@ -2317,7 +2310,7 @@ struct BDD
   //   import std.stdio;
   //   writeln("There are number of domains: ", fdvarnum);
   //   BddDomain domain_n = buddy.getDomain(index);
-  //   int[] vars = domain_n.vars();
+  //   int[] vars = domain_n.get_ivars();
 
   //   writeln(vars);
   //   return T.min;
@@ -2356,7 +2349,7 @@ struct BDD
 
 	    BddDomain domain_n = buddy.getDomain(n);
 
-	    int[] vars = domain_n.vars();
+	    int[] vars = domain_n.get_ivars();
 	    size_t binsize = vars.length;
 	    for(int m=0 ; m<binsize ; m++)
 	      if(set[vars[m]] != 0)
@@ -6070,7 +6063,7 @@ class Buddy
   BddPair pairs; /* List of all replacement pairs in use */
   int pairsid; /* Pair identifier */
 
-  static final void free(Object o)
+  static final void remove(Object o)
   {
   }
 
@@ -6218,7 +6211,7 @@ class Buddy
 
 	    reorder_block(top, method);
 	    vartree = top.nextlevel;
-	    free(top);
+	    remove(top);
 
 	    usednum_after = _nodeSize - _freeNum;
 
@@ -7006,7 +6999,15 @@ class Buddy
   {
     int _nodes = getNodeTableSize();
     int cache = getCacheSize();
-    _domains.length = 0;
+
+    // FIXMALLOC
+    // _domains.length = 0;
+    if(_domains !is null) {
+      GC.free(cast(void*)_domains);
+      _domains = null;
+    }
+    _domainsLen = 0;
+    
     fdvarnum = 0;
     firstbddvar = 0;
     done();
@@ -7500,7 +7501,7 @@ class Buddy
     bddtree_del(t.nextlevel);
     bddtree_del(t.next);
     t.seq.length = 0;
-    free(t);
+    remove(t);
   }
 
   void bdd_clrvarblocks()
@@ -8313,7 +8314,7 @@ class Buddy
 	mtx.rows[n].length = 0;
       }
     mtx.rows.length = 0;
-    free(mtx);
+    remove(mtx);
   }
 
   public void addVarBlock(BDD var, bool fixed)
@@ -8952,7 +8953,11 @@ class Buddy
 
   /**** FINITE DOMAINS ****/
 
-  protected BddDomain[] _domains;
+  // FIXMALLOC
+  // protected BddDomain[] _domains;
+  protected BddDomain* _domains;
+  protected size_t _domainsLen;
+  
   protected int fdvarnum;
   protected int firstbddvar;
 
@@ -8974,7 +8979,7 @@ class Buddy
     return extDomain(domains)[0];
   }
 
-  public BddDomain[] extDomain(int[] dom)
+  public BddDomain* extDomain(int[] dom)
   {
     size_t[] a = new size_t[](dom.length);
     for(int i = 0; i < a.length; ++i) {
@@ -8983,26 +8988,50 @@ class Buddy
     return extDomain(a);
   }
 
-  public BddDomain[] extDomain(size_t[] domainSizes)
+  public BddDomain* extDomain(size_t[] domainSizes)
   {
     int offset = fdvarnum;
     int binoffset;
     int extravars = 0;
     int n, bn;
     bool more;
-    int num = cast(int) domainSizes.length;
+    size_t num = domainSizes.length;
 
     /* Build _domains table */
-    if(_domains.length == 0) /* First time */ {
-      _domains.length = num;
+    // FIXMALLOC
+    // if(_domains.length == 0) /* First time */ {
+    //   _domains.length = num;
+    if(_domainsLen == 0) /* First time */ {
+      _domains = cast(BddDomain*) GC.malloc(BddDomain.sizeof * num);
+      for (size_t i=0; i!=num; ++i) {
+    	_domains[i] = BddDomain.init;
+      }
+      _domainsLen = num;
     } else /* Allocated before */ {
-      if(fdvarnum + num > _domains.length)
+      // FIXMALLOC
+      // if(fdvarnum + num > _domains.length)
+      if(fdvarnum + num > _domainsLen)
 	{
-	  int fdvaralloc = cast(int)(_domains.length + max(num, _domains.length));
+	  // FIXMALLOC
+	  // auto fdvaralloc = _domains.length + max(num, _domains.length);
+	  auto fdvaralloc = _domainsLen + max(num, _domainsLen);
+
 	  // BddDomain[] d2 = _domains.dup;
 	  // d2.length = fdvaralloc;
 	  // _domains = d2;
-	  _domains.length = fdvaralloc;
+
+	  // FIXMALLOC
+	  // _domains.length = fdvaralloc;
+	  BddDomain* d2 = cast(BddDomain*) GC.malloc(BddDomain.sizeof * fdvaralloc);
+	  for (size_t i=0; i!=_domainsLen; ++i) {
+	    d2[i] = _domains[i];
+	  }
+	  for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
+	    d2[i] = BddDomain.init;
+	  }
+	  GC.free(cast(void*)_domains);
+	  _domains = d2;
+	  _domainsLen = fdvaralloc;
 	}
     }
 
@@ -9030,7 +9059,7 @@ class Buddy
 	    if(bn < _domains[n + fdvarnum].varNum())
 	      {
 		more = true;
-		_domains[n + fdvarnum].ivar[bn] = binoffset++;
+		_domains[n + fdvarnum].get_ivars[bn] = binoffset++;
 	      }
 	  }
       }
@@ -9038,14 +9067,17 @@ class Buddy
     for(n = 0; n < num; n++)
       {
 	_domains[n + fdvarnum].var =
-	  makeSet(_domains[n + fdvarnum].ivar);
+	  makeSet(_domains[n + fdvarnum].get_ivars);
       }
 
     fdvarnum += num;
     firstbddvar += extravars;
 
-    BddDomain[] r = _domains[offset..offset+num];
-    return r;
+    // FIXMALLOC
+    // BddDomain[] r = _domains[offset..offset+num];
+    // return r.ptr;
+
+    return _domains + offset;
   }
 
   /**
@@ -9060,11 +9092,27 @@ class Buddy
     BddDomain d;
     int n;
 
-    int fdvaralloc = cast(int) _domains.length;
+    // FIXMALLOC
+    // auto fdvaralloc = _domains.length;
+    auto fdvaralloc = _domainsLen;
     if(fdvarnum + 1 > fdvaralloc)
       {
 	fdvaralloc += fdvaralloc;
-	_domains.length = fdvaralloc;
+
+	// FIXMALLOC
+	// _domains.length = fdvaralloc;
+	BddDomain* dom = cast(BddDomain*) GC.malloc(BddDomain.sizeof * fdvaralloc);
+	for (size_t i=0; i!=_domainsLen; ++i) {
+	  dom[i] = _domains[i];
+	}
+	for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
+	  dom[i] = BddDomain.init;
+	}
+	if(_domains !is null) {
+	  GC.free(cast(void*)_domains);
+	}
+	_domains = dom;
+	_domainsLen = fdvaralloc;
       }
 
     d = _domains[fdvarnum];
@@ -9072,11 +9120,11 @@ class Buddy
     d.ivar = new int[d1.varNum() + d2.varNum()];
 
     for(n = 0; n < d1.varNum(); n++)
-      d.ivar[n] = d1.ivar[n];
+      d.get_ivars[n] = d1.get_ivars[n];
     for(n = 0; n < d2.varNum(); n++)
-      d.ivar[d1.varNum() + n] = d2.ivar[n];
+      d.get_ivars[d1.varNum() + n] = d2.get_ivars[n];
 
-    d.var = makeSet(d.ivar);
+    d.var = makeSet(d.get_ivars);
     //addRef(d.var);
 
     fdvarnum++;
@@ -9110,7 +9158,14 @@ class Buddy
    */
   public void clearAllDomains()
   {
-    _domains.length = 0;
+    // FIXMALLOC
+    // _domains.length = 0;
+    if(_domains !is null) {
+      GC.free(cast(void*)_domains);
+      _domains = null;
+    }
+    _domainsLen = 0;
+    
     fdvarnum = 0;
     firstbddvar = 0;
   }
@@ -9251,7 +9306,7 @@ class Buddy
 	      {
 		int di = d.getIndex();
 		int local = localOrders[di][bitNumber];
-		if(local >= d.vars().length)
+		if(local >= d.get_ivars().length)
 		  {
 		    writeln("bug!");
 		  }
@@ -9259,7 +9314,7 @@ class Buddy
 		  {
 		    writeln("bug2!");
 		  }
-		varorder[bitIndex++] = d.vars()[local];
+		varorder[bitIndex++] = d.get_ivars()[local];
 	      }
 	  }
       }
@@ -9270,19 +9325,19 @@ class Buddy
 
   public BddVec createVec(size_t a, bool signed = false)
   {
-    return new BddVec(a, signed);
+    return BddVec(a, signed);
   }
 
   public BddVec buildVec(size_t bitnum, bool b, bool signed = false)
   {
-    BddVec v = createVec(bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(b);
     return v;
   }
 
   public BddVec buildVec(size_t bitnum, long val, bool signed = false)
   {
-    BddVec v = createVec(bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(val);
     return v;
   }
@@ -9305,21 +9360,21 @@ class Buddy
 
   public BddVec buildVec(size_t bitnum, int offset, int step, bool signed = false)
   {
-    BddVec v = createVec(bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(offset, step);
     return v;
   }
 
   public BddVec buildVec(BddDomain d, bool signed = false)
   {
-    BddVec v = createVec(d.varNum(), signed);
+    BddVec v = BddVec(d.varNum(), signed);
     v.initialize(d);
     return v;
   }
 
   public BddVec buildVec(int[] var, bool signed = false)
   {
-    BddVec v = createVec(var.length, signed);
+    BddVec v = BddVec(var.length, signed);
     v.initialize(var);
     return v;
   }
@@ -9363,9 +9418,19 @@ class Buddy
     INSTANCE._level2Var = this._level2Var.dup;
     INSTANCE._varSet = this._varSet.dup;
 
-    // INSTANCE._domains = new BddDomain[](this._domains.length);
-    INSTANCE._domains = this._domains.dup;
-    for(int i = 0; i < INSTANCE._domains.length; ++i)
+    // FIXMALLOC
+    // INSTANCE._domains = this._domains.dup;
+    BddDomain* d2 = cast(BddDomain*) GC.malloc(BddDomain.sizeof * this._domainsLen);
+    for (size_t i=0; i!=this._domainsLen; ++i) {
+      d2[i] = this._domains[i];
+    }
+    INSTANCE._domainsLen = this._domainsLen;
+    INSTANCE._domains = d2;
+
+    
+    // FIXMALLOC
+    for(int i = 0; i < INSTANCE._domainsLen; ++i)
+      // for(int i = 0; i < INSTANCE._domains.length; ++i)
       {
 	INSTANCE._domains[i] = INSTANCE.createDomain(i, this._domains[i].realsize);
       }
@@ -9686,6 +9751,14 @@ class Buddy
   public CacheStats getCacheStats()
   {
     return _cacheStats;
+  }
+
+  // FIXMALLOC
+  ~this() {
+    if(_domains !is null) {
+      // GC.free(cast(void*)_domains);
+      // _domains = null;
+    }
   }
 }
 
