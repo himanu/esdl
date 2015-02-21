@@ -36,11 +36,13 @@ class Bar: Foo
 
   void display() {
     import std.stdio;
-    writeln("bro: ", bro, " sis: ", sis, " pop: ", pop, " mom: ", mom, " foo: ", foo, " pun3: ", pun3, " pun1: ", pun1, " pun2: ", pun2);
+    writeln("bro: ", bro, " sis: ", sis, " pop: ", pop, " mom: ", mom,
+	    " foo: ", foo, " pun3: ", pun3, " pun1: ", pun1, " pun2: ", pun2);
   }
 
   override void preRandomize() {
-    foo++;
+    if(foo == 20) foo = 0;
+    else foo++;
   }
 
   // void post_randomize() {
@@ -108,7 +110,7 @@ class Bar: Foo
 void main()
 {
   auto foo = new Bar;
-  for (size_t i=0; i!=32; ++i)
+  for (size_t i=0; i!=320; ++i)
     {
       foo.randomize();
       foo.display();

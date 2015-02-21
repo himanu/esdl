@@ -858,6 +858,10 @@ version(USE_EMPLACE) {
   }
 }
 
+
+// Initialize all random elements, arrays and objects. Do not yet
+// initialize the elements of the array. These would be initialized
+// only if these are referred to in the constraints.
 void _esdl__initRnds(size_t I=0, size_t CI=0, T, S)(T t, S s)
   if(is(T: RandomizableIntf) && is(T == class) &&
      is(S: RandomizableIntf) && is(S == class)) {
@@ -881,16 +885,18 @@ void _esdl__initRnd(size_t I=0, size_t CI=0, T, S) (T t, S s) {
 
   auto l = t.tupleof[I];
   alias typeof(l) L;
-  enum string NAME = chompPrefix (t.tupleof[I].stringof, "t.");
-  static if (is (L f == Constraint!C, immutable (char)[] C)) {
-    l = new Constraint!(C, NAME, T, S)(t, s, NAME);
-    t._esdl__cstEng._rnds ~= l;
-  }
-  else {
-    synchronized (t) {
-      // Do nothing
-    }
-  }
+  enum string NAME = t.tupleof[I].stringof[2..$];
+  // Look for @rand attribute
+  
+  // static if (is (L f == Constraint!C, immutable (char)[] C)) {
+  //   l = new Constraint!(C, NAME, T, S)(t, s, NAME);
+  //   t._esdl__cstEng._rnds ~= l;
+  // }
+  // else {
+  //   synchronized (t) {
+  //     // Do nothing
+  //   }
+  // }
 }
 // I is the index within the class
 // CI is the cumulative index -- starts from the most derived class
@@ -917,7 +923,7 @@ void _esdl__initCst(size_t I=0, size_t CI=0, T, S) (T t, S s) {
 
   auto l = t.tupleof[I];
   alias typeof(l) L;
-  enum string NAME = chompPrefix (t.tupleof[I].stringof, "t.");
+  enum string NAME = t.tupleof[I].stringof[2..$];
   static if (is (L f == Constraint!C, immutable (char)[] C)) {
     l = new Constraint!(C, NAME, T, S)(t, s, NAME);
     t._esdl__cstEng.cstList ~= l;
@@ -969,7 +975,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
 	    t.tupleof[I].length = rgen.gen(0, RLENGTH+1);
 	  }
 	  else {
-	    t.tupleof[I].length = vecVal.value;
+	    t.tupleof[I].length = vecVal._arrLen.value;
 	  }
 	  foreach(idx, ref v; t.tupleof[I]) {
 	    import std.range;
@@ -1213,7 +1219,7 @@ public void _esdl__initCstEng(T) (T t)
     if (t._esdl__cstEng is null) {
       t._esdl__cstEng = new ConstraintEngine(t._esdl__randSeed,
 					     _esdl__countRands(t));
-      // _esdl__initRnds(t, t);
+      _esdl__initRnds(t, t);
       _esdl__initCsts(t, t);
     }
   }
@@ -1345,7 +1351,7 @@ abstract class RndVecExpr
     return new RndVecSliceExpr(this, index);
   }
 
-  public RndVecVar opIndex(size_t other)
+  public RndVecPrim opIndex(size_t other)
   {
     assert(false, "Index operation defined only for Arrays");
   }
@@ -1441,10 +1447,10 @@ abstract class RndVecPrim: RndVecExpr
   //   assert(false, "length may only be called for a RndVecArrVar");
   // }
   public void loopVar(RndVecLoopVar var) {
-    assert(false, "loopVar may only be called for a RndVecArrVar");
+    assert(false, "loopVar may only be called for a RndVecArrLen");
   }
   public RndVecLoopVar loopVar() {
-    assert(false, "loopVar may only be called for a RndVecArrVar");
+    assert(false, "loopVar may only be called for a RndVecArrLen");
   }
   public RndVecLoopVar makeLoopVar() {
     assert(false, "makeLoopVar may only be called for a RndVecArrLen");
@@ -1556,7 +1562,7 @@ abstract class RndVecVar: RndVecPrim
 
 }
 
-class RndVecArrLen(T...): RndVecVar
+class RndVecArrLen: RndVecVar
 {
   
   // This bdd has the constraint on the max length of the array
@@ -1564,9 +1570,9 @@ class RndVecArrLen(T...): RndVecVar
   size_t _maxArrLen;
   RndVecLoopVar _loopVar;
 
-  RndVecArr!T _parent;
+  RndVecArrVar _parent;
   
-  public this(string name, long maxArrLen, bool isRand, RndVecArr!T parent) {
+  public this(string name, long maxArrLen, bool isRand, RndVecArrVar parent) {
     super(name, isRand);
     _name = name;
     _maxArrLen = maxArrLen;
@@ -1591,7 +1597,7 @@ class RndVecArrLen(T...): RndVecVar
 
   override public RndVecLoopVar makeLoopVar() {
     if(_loopVar is null) {
-      _loopVar = new RndVecLoopVar(this);
+      _loopVar = new RndVecLoopVar(_parent);
     }
     return _loopVar;
   }
@@ -1701,7 +1707,7 @@ class RndVecArr(T...): RndVecArrVar
 		bool isRand, bool elemIsRand, L* var) {
       super(name, maxArrLen, isRand, elemIsRand);
       _var = var;
-      _arrLen = new RndVecArrLen!T(name, maxArrLen, isRand, this);
+      _arrLen = new RndVecArrLen(name, maxArrLen, isRand, this);
     }
     override bool built() {
       return _elems.length != 0;
@@ -1727,15 +1733,15 @@ class RndVecArr(T...): RndVecArrVar
       }
     }
 
-    static private long getLen(A, I...)(ref A arr, I idx)
+    static private long getLen_(A, I...)(ref A arr, I idx)
       if(isArray!A) {
 	static if(I.length == 0) return arr.length;
 	else {
-	  return getLen(arr[idx[0]], idx[1..$]);
+	  return getLen_(arr[idx[0]], idx[1..$]);
 	}
       }
     
-    static private void setLen(A, I...)(ref A arr, long v, I idx)
+    static private void setLen_(A, I...)(ref A arr, long v, I idx)
       if(isArray!A) {
 	static if(I.length == 0) {
 	  static if(isDynamicArray!A) {
@@ -1746,7 +1752,7 @@ class RndVecArr(T...): RndVecArrVar
 	  }
 	}
 	else {
-	  setLen(arr[idx[0]], v, idx[1..$]);
+	  setLen_(arr[idx[0]], v, idx[1..$]);
 	}
       }
     
@@ -1769,12 +1775,20 @@ class RndVecArr(T...): RndVecArrVar
 	}
       }
     
-    public long getLen(I...)(I idx) {
-      return getLen(*_var, idx);
+    public long getLen_(I...)(I idx) {
+      return getLen_(*_var, idx);
     }
 
-    public void setLen(I...)(long v, I idx) {
-      setLen(*_var, v, idx);
+    public void setLen_(I...)(long v, I idx) {
+      setLen_(*_var, v, idx);
+    }
+
+    override public long getLen() {
+      return getLen_(*_var);
+    }
+
+    override public void setLen(long v) {
+      setLen_(*_var, v);
     }
 
     public long getVal(I...)(I idx) {
@@ -1794,7 +1808,7 @@ class RndVecArr(T...): RndVecArrVar
       super(name, maxArrLen, isRand, elemIsRand);
       _parent = parent;
       _index = index;
-      _arrLen = new RndVecArrLen!T(name, maxArrLen, isRand, this);
+      _arrLen = new RndVecArrLen(name, maxArrLen, isRand, this);
     }
 
     public long getLen(I...)(I idx) {
@@ -1814,76 +1828,6 @@ class RndVecArr(T...): RndVecArrVar
     }
   }    
 
-  RndVecArrLen!T _arrLen;
-
-  size_t maxArrLen() {
-    return _arrLen._maxArrLen;
-  }
-
-  public RndVecArrLen!T arrLen() {
-    return _arrLen;
-  }
-  
-  override public RndVecPrim[] getPrims() {
-    return _arrLen.getPrims();
-  }
-
-  override public CstStage[] getStages() {
-    return _arrLen.getStages();
-  }
-  
-  override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    return _arrLen.getBDD(stage, buddy);
-  }
-  
-  override public long evaluate() {
-    return _arrLen.evaluate();
-  }
-
-  override public bool isRand() {
-    return _arrLen.isRand();
-  }
-
-  override public long value() {
-    return _arrLen.value();
-  }
-
-  override public void value(long v) {
-    _arrLen.value(v);
-  }
-
-  override public CstStage stage() {
-    return _arrLen.stage();
-  }
-
-  override public void stage(CstStage s) {
-    _arrLen.stage(s);
-  }
-
-  override public uint domIndex() {
-    return _arrLen.domIndex();
-  }
-
-  override public void domIndex(uint s) {
-    _arrLen.domIndex(s);
-  }
-
-  override public uint bitcount() {
-    return _arrLen.bitcount();
-  }
-
-  override public bool signed() {
-    return _arrLen.signed();
-  }
-
-  override public BddVec bddvec() {
-    return _arrLen.bddvec();
-  }
-
-  override public void bddvec(BddVec b) {
-    _arrLen.bddvec(b);
-  }
-
 
 };
 			
@@ -1894,17 +1838,19 @@ abstract class RndVecArrVar: RndVecPrim
 
   // Also has an array of RndVecVar to map all the elements of the
   // array
-  RndVecVar[] _elems;
+  RndVecPrim[] _elems;
   bool _elemIsRand;
 
   string _name;
+
+  RndVecArrLen _arrLen;
 
   override public string name() {
     return _name;
   }
 
   override public void reset() {
-    stage = null;
+    _arrLen.stage = null;
     foreach(elem; _elems) {
       if(elem !is null) {
 	elem.reset();
@@ -1912,16 +1858,12 @@ abstract class RndVecArrVar: RndVecPrim
     }
   }
 
-  public RndVecPrim[] getArrPrims() {
-    RndVecPrim[] elems;
-    foreach (elem; _elems) {
-      elems ~= elem;
-    }
-    return elems;
+  override public RndVecPrim[] getPrims() {
+    return _elems.dup;
   }
 
   override public RndVecArrVar[] arrVars() {
-    if(isRand()) return [this];
+    if(_arrLen.isRand()) return [this];
     else return [];
   }
 
@@ -1935,7 +1877,7 @@ abstract class RndVecArrVar: RndVecPrim
     return new RndVec2VecExpr(this, idx, CstBinVecOp.LOOPINDEX);
   }
 
-  override public RndVecVar opIndex(size_t idx) {
+  override public RndVecPrim opIndex(size_t idx) {
     return _elems[idx];
   }
 
@@ -1953,15 +1895,86 @@ abstract class RndVecArrVar: RndVecPrim
 
   bool built();
 
+  size_t maxArrLen() {
+    return _arrLen._maxArrLen;
+  }
+
+  public RndVecArrLen arrLen() {
+    return _arrLen;
+  }
+  
+  abstract long getLen();
+  abstract void setLen(long len);
+
+  // override public RndVecPrim[] getPrims() {
+  //   return _arrLen.getPrims();
+  // }
+
+  override public CstStage[] getStages() {
+    assert(false, "getStages not implemented for RndVecArrVar");
+  }
+  
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    assert(false, "getBDD not implemented for RndVecArrVar");
+  }
+  
+  override public long evaluate() {
+    assert(false, "evaluate not implemented for RndVecArrVar");
+  }
+
+  override public bool isRand() {
+    assert(false, "isRand not implemented for RndVecArrVar");
+  }
+
+  override public long value() {
+    assert(false, "value not implemented for RndVecArrVar");
+  }
+
+  override public void value(long v) {
+    assert(false, "value not implemented for RndVecArrVar");
+  }
+
+  override public CstStage stage() {
+    assert(false, "stage not implemented for RndVecArrVar");
+  }
+
+  override public void stage(CstStage s) {
+    assert(false, "stage not implemented for RndVecArrVar");
+  }
+
+  override public uint domIndex() {
+    assert(false, "domIndex not implemented for RndVecArrVar");
+  }
+
+  override public void domIndex(uint s) {
+    assert(false, "domIndex not implemented for RndVecArrVar");
+  }
+
+  override public uint bitcount() {
+    assert(false, "bitcount not implemented for RndVecArrVar");
+  }
+
+  override public bool signed() {
+    assert(false, "signed not implemented for RndVecArrVar");
+  }
+
+  override public BddVec bddvec() {
+    assert(false, "bddvec not implemented for RndVecArrVar");
+  }
+
+  override public void bddvec(BddVec b) {
+    assert(false, "bddvec not implemented for RndVecArrVar");
+  }
+
 }
 
 // This class represents an unrolled Foreach loop at vec level
 class RndVecLoopVar: RndVecPrim
 {
   // _loopVar will point to the array this RndVecLoopVar is tied to
-  RndVecPrim _arrVar;
+  RndVecArrVar _arrVar;
 
-  RndVecPrim arrVar() {
+  RndVecArrVar arrVar() {
     return _arrVar;
   }
 
@@ -1970,7 +1983,7 @@ class RndVecLoopVar: RndVecPrim
       assert(false, "Can not find maxVal since the "
 	     "Loop Variable is unrollable");
     }
-    return cast(uint) arrVar().value;
+    return cast(uint) arrVar._arrLen.value;
   }
 
   override RndVecLoopVar[] loopVars() {
@@ -1983,12 +1996,12 @@ class RndVecLoopVar: RndVecPrim
     return [];
   }
 
-  this(RndVecPrim arrVar) {
+  this(RndVecArrVar arrVar) {
     _arrVar = arrVar;
-    arrVar.loopVar(this);
+    arrVar._arrLen.loopVar(this);
   }
 
-  bool isUnrollable(RndVecVar arrVar) {
+  bool isUnrollable(RndVecArrVar arrVar) {
     if(arrVar is _arrVar) {
       return true;
     }
@@ -1998,20 +2011,20 @@ class RndVecLoopVar: RndVecPrim
   }
 
   bool isUnrollable() {
-    if(! _arrVar.isRand()) return true;
-    if(_arrVar.stage !is null &&
-       _arrVar.stage.solved()) return true;
+    if(! _arrVar._arrLen.isRand()) return true;
+    if(_arrVar._arrLen.stage !is null &&
+       _arrVar._arrLen.stage.solved()) return true;
     else return false;
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
   override public RndVecPrim[] getPrims() {
-    return arrVar.getPrims();
+    return arrVar._arrLen.getPrims();
   }
 
   // get the list of stages this expression should be avaluated in
   override public CstStage[] getStages() {
-    return arrVar.getStages();
+    return arrVar._arrLen.getStages();
   }
 
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -2023,40 +2036,40 @@ class RndVecLoopVar: RndVecPrim
   }
 
   override public bool isRand() {
-    return arrVar.isRand();
+    return arrVar._arrLen.isRand();
   }
   override public long value() {
-    return arrVar.value();
+    return arrVar._arrLen.value();
   }
   override public void value(long v) {
-    arrVar.value(v);
+    arrVar._arrLen.value(v);
   }
   override public CstStage stage() {
-    return arrVar.stage();
+    return arrVar._arrLen.stage();
   }
   override public void stage(CstStage s) {
-    arrVar.stage(s);
+    arrVar._arrLen.stage(s);
   }
   override public uint domIndex() {
-    return arrVar.domIndex;
+    return arrVar._arrLen.domIndex;
   }
   override public void domIndex(uint s) {
-    arrVar.domIndex(s);
+    arrVar._arrLen.domIndex(s);
   }
   override public uint bitcount() {
-    return arrVar.bitcount();
+    return arrVar._arrLen.bitcount();
   }
   override public bool signed() {
-    return arrVar.signed();
+    return arrVar._arrLen.signed();
   }
   override public BddVec bddvec() {
-    return arrVar.bddvec();
+    return arrVar._arrLen.bddvec();
   }
   override public void bddvec(BddVec b) {
     arrVar.bddvec(b);
   }
   override public string name() {
-    return arrVar.name();
+    return arrVar._arrLen.name();
   }
   override public RndVecPrim unroll(RndVecLoopVar l, uint n) {
     if(this !is l) return this;
@@ -2064,21 +2077,26 @@ class RndVecLoopVar: RndVecPrim
   }
 }
 
-class RndVecObjVar: RndVecPrim
+abstract class RndVecObjVar: RndVecPrim
 {
-  string _name;
-  // An array of RndVecPrim to map all the elements of the
-  // Random object
-  RndVecPrim[] _elems;
+  // Base class object shall be used for constraining the length part
+  // of the array.
 
-  // override public BDD getPrimBdd(Buddy buddy) {
-  //   if(_primBdd.isZero()) {
-  //     _primBdd = this.bddvec.lte(buddy.buildVec(_maxArrLen));
-  //   }
-  //   return _primBdd;
-  // }
+  // Also has an array of RndVecVar to map all the elements of the
+  // array
+  RndVecPrim[] _elems;
+  bool _elemIsRand;
+
+  string _name;
+
+  // RndVecArrLen _arrLen;
+
+  override public string name() {
+    return _name;
+  }
 
   override public void reset() {
+    // _arrLen.stage = null;
     foreach(elem; _elems) {
       if(elem !is null) {
 	elem.reset();
@@ -2086,14 +2104,88 @@ class RndVecObjVar: RndVecPrim
     }
   }
 
-  public RndVecPrim[] getArrPrims() {
-    RndVecPrim[] elems = _elems.dup;
-    return elems;
+  override public RndVecPrim[] getPrims() {
+    RndVecPrim[] prims;
+    foreach(elem; _elems) {
+      prims ~= elem.getPrims();
+    }
+    return prims;
+  }
+
+  override public RndVecArrVar[] arrVars() {
+    RndVecArrVar[] arrs;
+    foreach(elem; _elems) {
+      arrs ~= elem.arrVars();
+    }
+    return arrs;
   }
 
   public this(string name) {
     _name = name;
   }
+
+  bool built();
+
+  // override public RndVecPrim[] getPrims() {
+  //   return _arrLen.getPrims();
+  // }
+
+  override public CstStage[] getStages() {
+    assert(false, "getStages not implemented for RndVecObjVar");
+  }
+  
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    assert(false, "getBDD not implemented for RndVecObjVar");
+  }
+  
+  override public long evaluate() {
+    assert(false, "evaluate not implemented for RndVecObjVar");
+  }
+
+  override public bool isRand() {
+    assert(false, "isRand not implemented for RndVecObjVar");
+  }
+
+  override public long value() {
+    assert(false, "value not implemented for RndVecObjVar");
+  }
+
+  override public void value(long v) {
+    assert(false, "value not implemented for RndVecObjVar");
+  }
+
+  override public CstStage stage() {
+    assert(false, "stage not implemented for RndVecObjVar");
+  }
+
+  override public void stage(CstStage s) {
+    assert(false, "stage not implemented for RndVecObjVar");
+  }
+
+  override public uint domIndex() {
+    assert(false, "domIndex not implemented for RndVecObjVar");
+  }
+
+  override public void domIndex(uint s) {
+    assert(false, "domIndex not implemented for RndVecObjVar");
+  }
+
+  override public uint bitcount() {
+    assert(false, "bitcount not implemented for RndVecObjVar");
+  }
+
+  override public bool signed() {
+    assert(false, "signed not implemented for RndVecObjVar");
+  }
+
+  override public BddVec bddvec() {
+    assert(false, "bddvec not implemented for RndVecObjVar");
+  }
+
+  override public void bddvec(BddVec b) {
+    assert(false, "bddvec not implemented for RndVecObjVar");
+  }
+
 }
 
 class RndVecConst: RndVecPrim
@@ -2203,7 +2295,7 @@ class RndVec2VecExpr: RndVecExpr
 	return [lhs[_rhs.evaluate()]];
       }
       else {
-	return lhs.getArrPrims();
+	return lhs.getPrims();
       }
     }
   }
@@ -2232,19 +2324,28 @@ class RndVec2VecExpr: RndVecExpr
 	     " before attempting to solve BDD");
     }
 
-    auto lvec = _lhs.getBDD(stage, buddy);
-    auto rvec = _rhs.getBDD(stage, buddy);
+    // auto lvec = _lhs.getBDD(stage, buddy);
+    // auto rvec = _rhs.getBDD(stage, buddy);
 
     final switch(_op) {
-    case CstBinVecOp.AND: return lvec &  rvec;
-    case CstBinVecOp.OR:  return lvec |  rvec;
-    case CstBinVecOp.XOR: return lvec ^  rvec;
-    case CstBinVecOp.ADD: return lvec +  rvec;
-    case CstBinVecOp.SUB: return lvec -  rvec;
-    case CstBinVecOp.MUL: return lvec *  rvec;
-    case CstBinVecOp.DIV: return lvec /  rvec;
-    case CstBinVecOp.LSH: return lvec << rvec;
-    case CstBinVecOp.RSH: return lvec >> rvec;
+    case CstBinVecOp.AND: return _lhs.getBDD(stage, buddy) &  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.OR:  return _lhs.getBDD(stage, buddy) |  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.XOR: return _lhs.getBDD(stage, buddy) ^  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.ADD: return _lhs.getBDD(stage, buddy) +  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.SUB: return _lhs.getBDD(stage, buddy) -  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.MUL: return _lhs.getBDD(stage, buddy) *  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.DIV: return _lhs.getBDD(stage, buddy) /  
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.LSH: return _lhs.getBDD(stage, buddy) << 
+	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.RSH: return _lhs.getBDD(stage, buddy) >> 
+	_rhs.getBDD(stage, buddy);
     case CstBinVecOp.LOOPINDEX:
       return _lhs[_rhs.evaluate()].getBDD(stage, buddy);
     case CstBinVecOp.BITINDEX:
