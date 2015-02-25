@@ -291,6 +291,7 @@ public class ConstraintEngine {
     _rgen.seed(seed);
     // _buddy = _new!Buddy(400, 400);
     _rnds.length = rnum;
+    _buddy = _parent._buddy;
     _parent = parent;
   }
 
@@ -431,6 +432,7 @@ public class ConstraintEngine {
   //	}
   //     }
   //   }
+
   // I is the tuple index in the given T
   // CI is the incremental index over the base classes
   // CI is the index in the list of @rand elements
@@ -438,51 +440,6 @@ public class ConstraintEngine {
   // domain index sequence has to match with _esdl__setRands and
   // _esdl__randNamedApply
 
-  // For the moment we store the domain index in the RndVecPrim
-  // structure. Later we can remove this element altogether since the
-  // order of traversal in the three above mentioned functions would
-  // be kept same.
-
-  void initDomains(size_t I, size_t C, T)(T t)
-    if(is(T unused: RandomizableIntf))  {
-      static if(I == t.tupleof.length) {
-	static if(is(T B == super)
-		  && is(B[0] : RandomizableIntf)
-		  && is(B[0] == class)) {
-	  B[0] b = t;
-	  return initDomains!(0, C)(b);
-	}
-	else {
-	  // no super class and not another element in the current
-	  // class -- we are done
-	  return;
-	}
-      }
-      else {
-	import std.traits;
-	import std.range;
-	// check for the integral members
-	alias typeof(t.tupleof[I]) L;
-	static if((isIntegral!L || isBitVector!L) &&
-		  findRandElemAttr!(I, t) != -1) {
-	  // found an integral element, create a domain and continue
-	  initDomains!(I+1, C+1)(t);
-	}
-	else static if(isStaticArray!L && (isIntegral!(ElementType!L) ||
-					   isBitVector!(ElementType!L)) &&
-		       findRandElemAttr!(I, t) != -1) {
-	    initDomains!(I+1, C+1)(t);
-	  }
-	else static if(isDynamicArray!L && (isIntegral!(ElementType!L) ||
-					    isBitVector!(ElementType!L)) &&
-		       findRandArrayAttr!(I, t) != -1) {
-	    initDomains!(I+1, C+1)(t);
-	  }
-	  else {
-	    _esdl__countRands!(I+1, C)(t);
-	  }
-      }
-    }
 
   void initDomains(T)(T t) {
     uint domIndex = 0;
@@ -555,7 +512,7 @@ public class ConstraintEngine {
     // Ok before we start looking at the constraints, we create a
     // stage for each and every @rand that we have at hand
     foreach(rnd; _rnds) {
-      if(rnd !is null && cast(RndVecArrVar) rnd is null &&
+      if(rnd !is null && cast(RndVecVar) rnd !is null &&
 	 rnd.domIndex != uint.max) {
 	addCstStage(rnd, usStages);
       }
