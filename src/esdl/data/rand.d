@@ -891,27 +891,6 @@ void _esdl__initCst(size_t I=0, size_t CI=0, T, S) (T t, S s) {
   }
 }
 
-auto _esdl__namedApply(string VAR, alias F, size_t I=0, size_t CI=0, T)(T t)
-  if(is(T unused: RandomizableIntf) && is(T == class)) {
-    static if (I < t.tupleof.length) {
-      static if ("t."~_esdl__randVar!VAR.prefix == t.tupleof[I].stringof) {
-	return F!(VAR, I, CI)(t);
-      }
-      else {
-	return _esdl__namedApply!(VAR, F, I+1, CI+1) (t);
-      }
-    }
-    else static if(is(T B == super)
-		   && is(B[0] : RandomizableIntf)
-		   && is(B[0] == class)) {
-	B[0] b = t;
-	return _esdl__namedApply!(VAR, F, 0, CI) (b);
-      }
-      else {
-	static assert(false, "Can not map variable: " ~ VAR);
-      }
-  }
-
 void _esdl__setRands(size_t I=0, size_t CI=0, T)
   (T t, RndVecPrim[] vecVals, ref RandGen rgen)
   if(is(T unused: RandomizableIntf) && is(T == class)) {
@@ -1175,6 +1154,12 @@ public void _esdl__initCstEng(T) (T t)
     if (t._esdl__cstEng is null) {
       t._esdl__cstEng = new ConstraintEngine(t._esdl__randSeed,
 					     _esdl__countRands(t));
+
+      // Gather all the random variable information and the constraints
+      // Put them in an array inside the constraint engine
+
+      // We shall start with:
+      // 1. merging the two functions into one
       _esdl__initRnds(t, t);
       _esdl__initCsts(t, t);
     }
@@ -2921,6 +2906,8 @@ auto _esdl__randNamedApply(string VAR, alias F, T)(T t)
     return _esdl__randNamedApplyExec!(VAR, F, 0, 0, T)(t, t);
   }
 
+
+// CI depicts the index of the rand variable in the list
 auto _esdl__randNamedApplyExec(string VAR, alias F, size_t I=0,
 			       size_t CI=0, T, U)(T t, U u)
   if(is(T unused: RandomizableIntf) && is(T == class)) {
