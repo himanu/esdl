@@ -823,8 +823,13 @@ void _esdl__initRnds(size_t I=0, size_t CI=0, T, S)(T t, S s)
   if(is(T: RandomizableIntf) && is(T == class) &&
      is(S: RandomizableIntf) && is(S == class)) {
     static if (I < t.tupleof.length) {
-      _esdl__initRnd!(I, CI)(t);
-      _esdl__initRnds!(I+1, CI+1) (t, s);
+      static if (findRandAttr!(I, t)) {
+	_esdl__rnd!(I, CI)(t);
+	_esdl__initRnds!(I+1, CI+1) (t, s);
+      }
+      else {
+	_esdl__initRnds!(I+1, CI) (t, s);
+      }
     }
     else static if(is(T B == super)
 		   && is(B[0] : RandomizableIntf)
@@ -833,26 +838,6 @@ void _esdl__initRnds(size_t I=0, size_t CI=0, T, S)(T t, S s)
 	_esdl__initRnds!(0, CI) (b, s);
       }
   }
-
-
-void _esdl__initRnd(size_t I=0, size_t CI=0, T) (T t) {
-  import std.traits;
-  import std.conv;
-  import std.string;
-
-  auto l = t.tupleof[I];
-  alias typeof(l) L;
-
-  // Look for @rand attribute
-  static if (findRandAttr!(I, t)) {
-    _esdl__rnd!(I, CI)(t);
-  }
-  else {
-    synchronized (t) {
-      // Do nothing
-    }
-  }
-}
 
 // I is the index within the class
 // CI is the cumulative index -- starts from the most derived class
@@ -932,7 +917,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
 	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
 	}
 	else {
-	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
+	  _esdl__setRands!(I+1, CI) (t, vecVals, rgen);
 	}
       }
       else {
@@ -985,7 +970,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
 	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
 	}
 	else {
-	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
+	  _esdl__setRands!(I+1, CI) (t, vecVals, rgen);
 	}
       }
     }
@@ -2920,7 +2905,7 @@ auto _esdl__randNamedApplyExec(string VAR, alias F, size_t I=0,
 	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1) (t, u);
 	}
 	else {
-	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1) (t, u);
+	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI) (t, u);
 	}
       }
     }
