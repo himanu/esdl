@@ -828,7 +828,7 @@ void _esdl__initRnds(size_t I=0, size_t CI=0, T, S)(T t, S s)
 	_esdl__initRnds!(I+1, CI+1) (t, s);
       }
       else {
-	_esdl__initRnds!(I+1, CI) (t, s);
+	_esdl__initRnds!(I+1, CI+1) (t, s);
       }
     }
     else static if(is(T B == super)
@@ -917,7 +917,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
 	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
 	}
 	else {
-	  _esdl__setRands!(I+1, CI) (t, vecVals, rgen);
+	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
 	}
       }
       else {
@@ -970,7 +970,7 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
 	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
 	}
 	else {
-	  _esdl__setRands!(I+1, CI) (t, vecVals, rgen);
+	  _esdl__setRands!(I+1, CI+1) (t, vecVals, rgen);
 	}
       }
     }
@@ -2905,7 +2905,7 @@ auto _esdl__randNamedApplyExec(string VAR, alias F, size_t I=0,
 	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1) (t, u);
 	}
 	else {
-	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI) (t, u);
+	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1) (t, u);
 	}
       }
     }
