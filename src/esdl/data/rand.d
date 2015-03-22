@@ -823,7 +823,7 @@ void _esdl__initRnds(size_t I=0, size_t CI=0, T, S)(T t, S s)
   if(is(T: RandomizableIntf) && is(T == class) &&
      is(S: RandomizableIntf) && is(S == class)) {
     static if (I < t.tupleof.length) {
-      static if (findRandAttr!(I, t)) {
+      static if (hasRandAttr!(I, t)) {
 	_esdl__rnd!(I, CI)(t);
 	_esdl__initRnds!(I+1, CI+1) (t, s);
       }
@@ -982,12 +982,12 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
       }
   }
 
-template findRandAttr(size_t I, alias t) {
+template hasRandAttr(size_t I, alias t) {
   enum int randAttr =
     findRandElemAttrIndexed!(0, -1, __traits(getAttributes, t.tupleof[I]));
   enum int randsAttr =
     findRandArrayAttrIndexed!(0, -1, 0, __traits(getAttributes, t.tupleof[I]));
-  enum bool findRandAttr = randAttr != -1 || randsAttr != -1;
+  enum bool hasRandAttr = randAttr != -1 || randsAttr != -1;
 }
 
 template findRandElemAttr(size_t I, alias t) {
@@ -1369,6 +1369,14 @@ abstract class RndVecPrim: RndVecExpr
   abstract public void bddvec(BddVec b);
   abstract override public string name();
 
+  public RndVecArrLen arrLen() {
+    assert(false, "arrLen is available only for rndVecArr type");
+  }
+
+  public void build() {
+    assert(false, "build is available only for rndVecArr type");
+  }
+  
   // public RndVecArrLen length() {
   //   assert(false, "length may only be called for a RndVecArrVar");
   // }
@@ -1638,15 +1646,16 @@ class RndVecArr(T...): RndVecArrVar
     override bool built() {
       return _elems.length != 0;
     }
-    void build(ref L l) {
+    override void build() {
       alias ElementType!L E;
       static assert(isIntegral!E || isBitVector!E);
       _elems.length = maxArrLen();
+      // if(! built()) {
       for (size_t i=0; i!=maxArrLen; ++i) {
 	if(this[i] is null) {
 	  import std.conv: to;
 	  auto init = (E).init;
-	  if(i < l.length) {
+	  if(i < (*_var).length) {
 	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
@@ -1657,6 +1666,7 @@ class RndVecArr(T...): RndVecArrVar
 	  assert(this[i] !is null);
 	}
       }
+      // }
     }
 
     static private long getLen_(A, I...)(ref A arr, I idx)
@@ -1825,7 +1835,7 @@ abstract class RndVecArrVar: RndVecPrim
     return _arrLen._maxArrLen;
   }
 
-  public RndVecArrLen arrLen() {
+  override public RndVecArrLen arrLen() {
     return _arrLen;
   }
 
@@ -2886,6 +2896,35 @@ class CstBlock: CstBddExpr
 
 }
 
+long _esdl__randLookup(string VAR, size_t I=0, size_t CI=0, T)(T t)
+{
+  static if (I < t.tupleof.length) {
+    static if (_esdl__randVar!VAR.prefix == t.tupleof[I].stringof[2..$]) {
+      static if(hasRandAttr!(I, t)) {
+	return CI;
+      }
+      else {
+	return -1;
+      }
+    }
+    else static if(hasRandAttr!(I, t)) {
+	return _esdl__randLookup!(VAR, I+1, CI+1)(t);
+      }
+      else {
+	return _esdl__randLookup!(VAR, I+1, CI+1)(t);
+      }
+  }
+  else static if(is(T B == super)
+		 && is(B[0] : RandomizableIntf)
+		 && is(B[0] == class)) {
+      return _esdl__randLookup!(VAR, 0, CI, B[0])(t);
+    }
+    else {
+      // Ok so the variable could not be mapped
+      return -1;
+    }
+}
+
 auto _esdl__randNamedApply(string VAR, alias F, T)(T t)
   if(is(T unused: RandomizableIntf) && is(T == class)) {
     return _esdl__randNamedApplyExec!(VAR, F, 0, 0, T)(t, t);
@@ -2898,10 +2937,15 @@ auto _esdl__randNamedApplyExec(string VAR, alias F, size_t I=0,
   if(is(T unused: RandomizableIntf) && is(T == class)) {
     static if (I < t.tupleof.length) {
       static if ("t."~_esdl__randVar!VAR.prefix == t.tupleof[I].stringof) {
-	return F!(I, CI)(t);
+	static if(hasRandAttr!(I, t)) {
+	  return F!(I, CI)(t);
+	}
+	else {
+	  return null;
+	}
       }
       else {
-	static if(findRandAttr!(I, t)) {
+	static if(hasRandAttr!(I, t)) {
 	  return _esdl__randNamedApplyExec!(VAR, F, I+1, CI+1) (t, u);
 	}
 	else {
@@ -2919,6 +2963,7 @@ auto _esdl__randNamedApplyExec(string VAR, alias F, size_t I=0,
 	// Ok so the variable could not be mapped -- now try general
 	// evaluation in the scope of the object
 	return _esdl__rnd(u._esdl__randEval!VAR(), u);
+	// return null;
       }
   }
 
@@ -2939,18 +2984,29 @@ public RndVecConst _esdl__rnd(INT, T)(INT var, ref T t)
   }
 
 
-public auto _esdl__rnd(string VAR, T)(ref T t)
+public RndVecPrim _esdl__rnd(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
     enum IDX = _esdl__delim(VAR);
     enum LOOKUP = VAR[0..IDX];
-    static if(IDX == VAR.length) {
-      return _esdl__randNamedApply!(LOOKUP, _esdl__rnd)(t);
+    long INDEX = _esdl__randLookup!LOOKUP(t);
+    if(INDEX == -1) {
+      auto var = t._esdl__randEval!VAR();
+      alias V = typeof(var);
+      static if(isIntegral!V || isBitVector!V) {
+	return _esdl__rnd(t._esdl__randEval!VAR(), t);
+      }
+      else {
+	assert(false, "Can not evaluate " ~ VAR);
+      }
     }
+    else static if(IDX == VAR.length) {
+      	return t._esdl__cstEng._rnds[INDEX];
+      }
     else static if(VAR[IDX..$] == ".length") {
-	return _esdl__randNamedApply!(LOOKUP, _esdl__rndArrLen)(t);
+	return t._esdl__cstEng._rnds[INDEX].arrLen;
       }
     else static if(VAR[IDX] == '.') {
-	return _esdl__randNamedApply!(VAR, _esdl__rnd)(t);
+	assert(false, "Nested @rand not yet handled");
       }
     else static if(VAR[IDX] == '[') {
 	// hmmmm
@@ -2965,10 +3021,15 @@ public auto _esdl__rnd(string VAR, T)(ref T t)
       }
   }
 
+
 public auto _esdl__rnd(size_t I, size_t CI, T)(ref T t) {
   import std.traits;
   import std.range;
   import esdl.data.bvec;
+
+  debug(RAND_CODE) {
+    static assert(hasRandAttr!(I, t));
+  }
 
   // need to know the size and sign for creating a bddvec
   alias typeof(t.tupleof[I]) L;
@@ -2986,9 +3047,6 @@ public auto _esdl__rnd(size_t I, size_t CI, T)(ref T t) {
 	static assert(findRandElemAttr!(I, t) != -1);
 	enum bool DYNAMIC = false;
       }
-      else {
-	static assert("Can not use .length with non-arrays");
-      }
 
     auto rndVecPrim = t._esdl__cstEng._rnds[CI];
     if(rndVecPrim is null) {
@@ -3003,19 +3061,13 @@ public auto _esdl__rnd(size_t I, size_t CI, T)(ref T t) {
     static assert(isIntegral!L || isBitVector!L,
 		  "Unsupported type: " ~ L.stringof);
 
-    // pragma(msg, t.tupleof[I].stringof);
-    static if(findRandElemAttr!(I, t) == -1) {
-      return _esdl__rnd(t.tupleof[I], t);
+    auto rndVecPrim = t._esdl__cstEng._rnds[CI];
+    if(rndVecPrim is null) {
+      rndVecPrim = new RndVec!L(t.tupleof[I].stringof,
+				true, &(t.tupleof[I]));
+      t._esdl__cstEng._rnds[CI] = rndVecPrim;
     }
-    else {
-      auto rndVecPrim = t._esdl__cstEng._rnds[CI];
-      if(rndVecPrim is null) {
-	rndVecPrim = new RndVec!L(t.tupleof[I].stringof,
-				  true, &(t.tupleof[I]));
-	t._esdl__cstEng._rnds[CI] = rndVecPrim;
-      }
-      return rndVecPrim;
-    }
+    return rndVecPrim;
   }
 }
 
@@ -3072,7 +3124,7 @@ public auto _esdl__rndArrLen(size_t I, size_t CI, T)(ref T t) {
   alias ElementType!L E;
   static assert(isIntegral!E || isBitVector!E);
 
-  static if(! findRandAttr!(I, t)) { // no @rand attr
+  static if(! hasRandAttr!(I, t)) { // no @rand attr
     return _esdl__rnd(t.tupleof[I].length, t);
   }
   static if(isDynamicArray!L) { // @rand!N form
@@ -3110,7 +3162,7 @@ public auto _esdl__rndArrElem(size_t I, size_t CI, T)(ref T t) {
   alias ElementType!L E;
   static assert(isIntegral!E || isBitVector!E);
 
-  static if(! findRandAttr!(I, t)) { // no @rand attr
+  static if(! hasRandAttr!(I, t)) { // no @rand attr
     static assert(false,
 		  "Foreach constraint can be applied only on @rand arrays: " ~
 		  t.tupleof[I].stringof);
@@ -3139,24 +3191,32 @@ public auto _esdl__rndArrElem(size_t I, size_t CI, T)(ref T t) {
 			DYNAMIC, true,	&(t.tupleof[I]));
       t._esdl__cstEng._rnds[CI] = rndVecArr;
     }
-    rndVecArr.build(t.tupleof[I]);
+    rndVecArr.build();
     return rndVecArr;
   }
 }
 
 public RndVecLoopVar _esdl__rndArrIndex(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
-    return _esdl__randNamedApply!(VAR, _esdl__rndArrIndex)(t);
+    enum IDX = _esdl__delim(VAR);
+    enum LOOKUP = VAR[0..IDX];
+    long INDEX = _esdl__randLookup!LOOKUP(t);
+    return t._esdl__cstEng._rnds[INDEX].arrLen.makeLoopVar();
   }
 
-public RndVecLoopVar _esdl__rndArrIndex(size_t I, size_t CI, T)(ref T t) {
-  auto lvar = _esdl__rndArrLen!(I, CI, T)(t);
-  return lvar.makeLoopVar();
-}
+// public RndVecLoopVar _esdl__rndArrIndex(size_t I, size_t CI, T)(ref T t) {
+//   auto lvar = _esdl__rndArrLen!(I, CI, T)(t);
+//   return lvar.makeLoopVar();
+// }
 
 public RndVecExpr _esdl__rndArrElem(string VAR, T)(ref T t)
   if(is(T f: RandomizableIntf) && is(T == class)) {
-    auto arr = _esdl__randNamedApply!(VAR, _esdl__rndArrElem)(t);
+    enum IDX = _esdl__delim(VAR);
+    enum LOOKUP = VAR[0..IDX];
+    long INDEX = _esdl__randLookup!LOOKUP(t);
+    auto arr = t._esdl__cstEng._rnds[INDEX];
+    // auto arr = _esdl__randNamedApply!(VAR, _esdl__rndArrElem)(t);
     auto idx = arr.arrLen.makeLoopVar();
+    arr.build();
     return arr[idx];
   }
