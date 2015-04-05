@@ -923,7 +923,13 @@ struct ConstraintParser {
       }
 
       srcTag = parseRightParens();
-      fill(CST[srcTag..srcCursor]);
+      if(srcCursor > srcTag && CST[srcCursor-1] == ']') {
+	fill(CST[srcTag..srcCursor-1]);
+	fill(")");
+      }
+      else {
+	fill(CST[srcTag..srcCursor]);
+      }
 
       srcTag = srcCursor;
       OpToken opToken = parseOperator();
@@ -1185,6 +1191,7 @@ struct CstParser {
   size_t numParen  = 0;
 
   size_t numIndex  = 0;
+  size_t[] indexTag;
 
   VarPair[] varMap = [];
 
@@ -1599,6 +1606,7 @@ struct CstParser {
 	}
 	if(srcCursor < CST.length && CST[srcCursor] == ']') {
 	  if(numIndex is 0) break;
+	  indexTag.length -= 1;
 	  --numIndex;
 	  ++srcCursor;
 	  continue;
@@ -1608,8 +1616,47 @@ struct CstParser {
 	}
       }
     }
+    
     return start;
   }
+
+  size_t moveToRightParens() {
+    auto start = srcCursor;
+    while(srcCursor < CST.length) {
+      auto srcTag = srcCursor;
+
+      parseLineComment();
+      parseBlockComment();
+      parseNestedComment();
+      parseWhiteSpace();
+
+      if(srcCursor > srcTag) {
+	fill(CST[srcTag..srcCursor]);
+	continue;
+      }
+      else {
+	if(srcCursor < CST.length && CST[srcCursor] == ')') {
+	  if(numParen is 0) break;
+	  --numParen;
+	  ++srcCursor;
+	  fill(")");
+	  continue;
+	}
+	if(srcCursor < CST.length && CST[srcCursor] == ']') {
+	  if(numIndex is 0) break;
+	  --numIndex;
+	  ++srcCursor;
+	  fill(")");
+	  continue;
+	}
+	else {
+	  break;
+	}
+      }
+    }
+    
+    return start;
+  }  
 
   size_t parseSpace() {
     auto start = srcCursor;
@@ -2038,8 +2085,9 @@ struct CstParser {
 	}
       }
 
-      srcTag = parseRightParens();
-      fill(CST[srcTag..srcCursor]);
+      srcTag = moveToRightParens();
+      
+      // fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
       OpToken opToken = parseOperator();
@@ -2147,38 +2195,43 @@ struct CstParser {
 	fill(")._esdl__gth (");
 	break;
       case OpToken.AND:
-	fill("&");
+	fill(" & ");
 	break;
       case OpToken.OR:
-	fill("|");
+	fill(" | ");
 	break;
       case OpToken.XOR:
-	fill("^");
+	fill(" ^ ");
 	break;
       case OpToken.ADD:
-	fill("+");
+	fill(" + ");
 	break;
       case OpToken.SUB:
-	fill("-");
+	fill(" - ");
 	break;
       case OpToken.MUL:
-	fill("*");
+	fill(" * ");
 	break;
       case OpToken.DIV:
-	fill("/");
+	fill(" / ");
 	break;
       case OpToken.LSH:
-	fill("<<");
+	fill(" << ");
 	break;
       case OpToken.RSH:
-	fill(">>");
+	fill(" >> ");
 	break;
       case OpToken.INDEX:
-	fill("[");
+	indexTag ~= outCursor;
+	fill(".opIndex(");
 	++numIndex;
 	break;
       case OpToken.SLICE:
-	fill("..");
+	if(!dryRun) {
+	  size_t tag = indexTag[$-1];
+	  outBuffer[tag..tag+8] = ".opSlice";
+	}
+	fill(",");
 	break;
       }
     }

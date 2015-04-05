@@ -1,14 +1,11 @@
 import std.stdio;
 import esdl.data.rand;
 
-class Base: Randomizable {
-  mixin Randomization;
-}
-
-class Simple: Base {
+class Simple: Randomizable {
   mixin Randomization;
   @rand uint a;
-  Constraint! q{ a < 10; } csta;
+  @rand uint b;
+  Constraint! q{ a[0..5]  > 10; } csta;
 }
 
 void main()
@@ -16,7 +13,8 @@ void main()
   Simple simple = new Simple();
   for (size_t i=0; i!=4; ++i)
     {
-      simple.randomize();
-      writeln(simple.a);
+      // simple.randomize();
+      simple.randomise();
+      writeln(simple.a, " ", simple.b);
     }
 }

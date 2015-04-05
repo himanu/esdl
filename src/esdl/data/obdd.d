@@ -5568,11 +5568,6 @@ class Buddy
       }
   }
 
-  version(USE_EMPLACE) {
-    bool _enableDestroy = false;
-    size_t _allRefCount = 0;
-  }
-
   int addRef(int root)
   {
     if(root == INVALID_BDD)
@@ -5588,9 +5583,6 @@ class Buddy
 
     INCREF(root);
 
-    version(USE_EMPLACE) {
-      ++_allRefCount;
-    }
     debug {writeln("INCREF(", root, ") = ",GETREF(root));}
     return root;
   }
@@ -5614,24 +5606,12 @@ class Buddy
 
     DECREF(root);
 
-    version(USE_EMPLACE) {
-      if(--_allRefCount is 0 && _enableDestroy) {
-	this._delete;
-      }
-    }
-    
     debug {writeln("DECREF(", root, ") = ", GETREF(root));}
     return root;
   }
 
   public void destroyBuddy() {
 
-    version(USE_EMPLACE) {
-      _enableDestroy = true;
-      if(_allRefCount is 0) {
-	this._delete();
-      }
-    }
   }
 
   void bdd_mark(int i)
