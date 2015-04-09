@@ -2186,10 +2186,24 @@ template _esdl__Rand(T, alias R)
   alias _esdl__Rand=RndVec!(T);
 }
 
-class RndVec(T...): RndVecPrim
+template ElementTypeLevel(T, int N=0)
+{
+  import std.range;		// ElementType
+  static if(N==0) {
+    alias ElementTypeLevel = T;
+  }
+  else {
+    alias ElementTypeLevel = ElementTypeLevel!(ElementType!T, N-1);
+  }
+}
+  
+// T represents the type of the declared array/non-array member
+// N represents the level of the array-elements we have to traverse
+// for the given element
+class RndVec(T, int N=0): RndVecPrim
 {
   import esdl.data.bvec;
-  alias L=T[0];
+  alias L=ElementTypeLevel!(T, N);
   mixin EnumConstraints!L;
 
   BddVec _bddvec;
@@ -2260,8 +2274,8 @@ class RndVec(T...): RndVecPrim
     _bddvec = b;
   }
 
-  public T to(T)()
-    if(is(T == string)) {
+  public S to(S)()
+    if(is(S == string)) {
       import std.conv;
       if(isRand) {
 	return "RAND-" ~ "#" ~ _name ~ ":" ~ value().to!string();
@@ -2276,7 +2290,7 @@ class RndVec(T...): RndVecPrim
   }
 
 
-  static if(T.length == 1) {
+  static if(N == 0) {
     L* _var;
     public this(string name, bool isRand, L* var) {
       super(_name);
@@ -2293,7 +2307,7 @@ class RndVec(T...): RndVecPrim
     }
   }
   else {
-    alias P=T[1..$];
+    alias P=ElementTypeLevel!(T, N-1);
     RndVecArr!P _parent;
     ulong _index;
 
@@ -2329,14 +2343,13 @@ class RndVec(T...): RndVecPrim
   }
 };
 
-class RndVecArr(T...): RndVecArrVar
+class RndVecArr(T, int N=0): RndVecArrVar
 {
   import std.traits;
   import std.range;
-  static assert(T.length > 0);
 
-  static if(T.length == 1) {
-    alias L=T[0];
+  static if(N == 0) {
+    alias L=T;
     L* _var;
     public this(string name, long maxArrLen,
 		bool isRand, bool elemIsRand, L* var) {
@@ -2357,11 +2370,11 @@ class RndVecArr(T...): RndVecArrVar
 	  import std.conv: to;
 	  auto init = (E).init;
 	  if(i < (*_var).length) {
-	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(T, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  else {
-	    this[i] = new RndVec!(E, T)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(T, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  assert(this[i] !is null);
@@ -2437,11 +2450,12 @@ class RndVecArr(T...): RndVecArrVar
     }
   }
   else {
-    RndVecArr!(T[1..$]) _parent;
+    alias P=ElementTypeLevel!(T, N-1);
+    P _parent;
     ulong _index;
 
     public this(string name, long maxArrLen, bool isRand, bool elemIsRand,
-		RndVecArr!(T[1..$]) parent, ulong index) {
+		P parent, ulong index) {
       super(name, maxArrLen, isRand, elemIsRand);
       _parent = parent;
       _index = index;
