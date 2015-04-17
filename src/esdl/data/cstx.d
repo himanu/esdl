@@ -1854,13 +1854,13 @@ struct CstParser {
     if(index.length != 0) {
       VarPair x;
       x.varName = index;
-      x.xLat = "_esdl__rndArrIndex!q{" ~ array ~ "}(_outer)";
+      x.xLat = array ~ ".iterator()";
       varMap ~= x;
     }
 
     VarPair x;
     x.varName = elem;
-    x.xLat = "_esdl__rndArrElem!q{" ~ array ~ "}(_outer)";
+    x.xLat = array ~ ".elements()";
     varMap ~= x;
 
     if(CST[srcCursor] is '{') {
@@ -2060,13 +2060,13 @@ struct CstParser {
 	  }
 	}
 	else {
-	  fill("_esdl__rnd!q{");
+	  // fill("_esdl__rnd!q{");
 	  for (size_t i=0; i != MaxHierDepth-1; ++i) {
 	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
 	    if(idChain[2*i+2] == -1) break;
 	    else fill(".");
 	  }
-	  fill("}(_outer)");
+	  // fill("}(_outer)");
 	}
       }
       else {

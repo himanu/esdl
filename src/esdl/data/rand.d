@@ -42,6 +42,7 @@ template rand(N...) {
     {
       static if(N.length > 0) {
 	enum maxBounds = TypeTuple!N;
+	alias ElementRand = rand!(N[0..$-1]);
       }
     }
   }
@@ -486,6 +487,8 @@ public class ConstraintEngine {
 	 rnd.domIndex != uint.max) {
 	addCstStage(rnd, unsolvedStages);
       }
+      else {
+      }
     }
 
     while(unsolvedExprs.length > 0 || unsolvedStages.length > 0) {
@@ -495,7 +498,7 @@ public class ConstraintEngine {
       cstStages = unsolvedStages;
       unsolvedStages.length = 0;
 
-
+      
       if(! allArrayLengthsResolved) {
 	allArrayLengthsResolved = true;
 	foreach(expr; urExprs) {
@@ -941,10 +944,9 @@ template _esdl__ListRands(T, int I=0) {
     alias _esdl__ListRands = TypeTuple!();
   }
   else {
-    // check for the integral members
     alias typeof(T.tupleof[I]) L;
     enum NAME = T.tupleof[I].stringof;
-    static if(hasRandAttr!(I, T)) {
+    static if(hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
       alias _esdl__ListRands = TypeTuple!(T, I, _esdl__ListRands!(T, I+1));
     }
     else {
@@ -975,31 +977,31 @@ template _esdl__ListContraints(T, int I=0) {
 
 // generates the code for rand structure inside the class object getting
 // randomized
-template _esdl__ListRandsRec(T, int I=0, int N=0) {
-  import std.typetuple;
-  static if(I == T.tupleof.length) {
-    static if(is(T B == super)
-	      && is(B[0] == class)) {
-      alias _esdl__ListRandsRec = _esdl__ListRandsRec!(B[0], 0, N+1);
-    }
-    else {
-      alias _esdl__ListRandsRec = TypeTuple!();
-    }
-  }
-  else {
-    // check for the integral members
-    alias typeof(T.tupleof[I]) L;
-    enum NAME = T.tupleof[I].stringof;
-    static if(isRandomizable!(L) &&
-	      hasRandAttr!(I, T) &&
-	      (NAME.length < 7 || NAME[0..7] != "_esdl__")) {
-      alias _esdl__ListRandsRec = TypeTuple!(T, I, N, _esdl__ListRandsRec!(T, I+1, N));
-    }
-    else {
-      alias _esdl__ListRandsRec = _esdl__ListRandsRec!(T, I+1, N);
-    }
-  }
-}
+// template _esdl__ListRandsRec(T, int I=0, int N=0) {
+//   import std.typetuple;
+//   static if(I == T.tupleof.length) {
+//     static if(is(T B == super)
+// 	      && is(B[0] == class)) {
+//       alias _esdl__ListRandsRec = _esdl__ListRandsRec!(B[0], 0, N+1);
+//     }
+//     else {
+//       alias _esdl__ListRandsRec = TypeTuple!();
+//     }
+//   }
+//   else {
+//     // check for the integral members
+//     alias typeof(T.tupleof[I]) L;
+//     enum NAME = T.tupleof[I].stringof;
+//     static if(isRandomizable!(L) &&
+// 	      hasRandAttr!(I, T) &&
+// 	      (NAME.length < 7 || NAME[0..7] != "_esdl__")) {
+//       alias _esdl__ListRandsRec = TypeTuple!(T, I, N, _esdl__ListRandsRec!(T, I+1, N));
+//     }
+//     else {
+//       alias _esdl__ListRandsRec = _esdl__ListRandsRec!(T, I+1, N);
+//     }
+//   }
+// }
 
 
 // Base class for the randoms
@@ -1188,7 +1190,7 @@ class Randomizable: RandomizableIntf
 void _esdl__initRnds(size_t I=0, size_t CI=0, T)(T t)
   if(is(T: RandomizableIntf) && is(T == class)) {
     static if (I < t.tupleof.length) {
-      static if (hasRandAttr!(I, T)) {
+      static if (hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
 	_esdl__rnd!(I, CI)(t);
 	_esdl__initRnds!(I+1, CI+1) (t);
       }
@@ -1346,13 +1348,26 @@ void _esdl__setRands(size_t I=0, size_t CI=0, T)
       }
   }
 
-template hasRandAttr(size_t I, T) {
-  enum int randAttr =
-    findRandElemAttrIndexed!(0, -1, __traits(getAttributes, T.tupleof[I]));
-  enum int randsAttr =
-    findRandArrayAttrIndexed!(0, -1, 0, __traits(getAttributes, T.tupleof[I]));
-  enum bool hasRandAttr = randAttr != -1 || randsAttr != -1;
+template hasRandAttr(A...) {
+  static if(A.length == 0) {
+    enum bool hasRandAttr = false;
+  }
+  else static if(__traits(isSame, A[0], rand) ||
+		 is(A[0] unused: rand!M, M...)) {
+      enum bool hasRandAttr = true;
+    }
+    else {
+      enum bool hasRandAttr = hasRandAttr!(A[1..$]);
+    }
 }
+
+// template hasRandAttr(size_t I, T) {
+//   enum int randAttr =
+//     findRandElemAttrIndexed!(0, -1, __traits(getAttributes, T.tupleof[I]));
+//   enum int randsAttr =
+//     findRandArrayAttrIndexed!(0, -1, 0, __traits(getAttributes, T.tupleof[I]));
+//   enum bool hasRandAttr = randAttr != -1 || randsAttr != -1;
+// }
 
 template findRandElemAttr(size_t I, T) {
   enum int randAttr =
@@ -1535,20 +1550,18 @@ public void _esdl__initCstEng(T) (T t)
 // }
 
 public bool _esdl__randomise(T) (T t, _esdl__ConstraintBase withCst = null) {
-  t._esdl__initSolver;
+  t._esdl__initSolver();
   if(t._esdl__solverInst._esdl__cstWith !is null) {
     t._esdl__solverInst._esdl__cstWith = null;
     t._esdl__solverInst._esdl__cstWithChanged = true;
   }
   else {
-    import std.stdio;
     t._esdl__solverInst._esdl__cstWithChanged = false;
   }
   useBuddy(t._esdl__solverInst._buddy);
   t.preRandomize();
 
   foreach(rnd; t._esdl__solverInst._esdl__randsList) {
-    import std.stdio;
     rnd.reset();
   }
 
@@ -2183,27 +2196,33 @@ mixin template EnumConstraints(T) {
 
 template _esdl__Rand(T, alias R)
 {
-  alias _esdl__Rand=RndVec!(T);
+  import std.traits;
+  static if(isArray!T) {
+    alias _esdl__Rand=RndVecArr!(T, R);
+  }
+  else {
+    alias _esdl__Rand=RndVec!(T, R);
+  }
 }
 
-template ElementTypeLevel(T, int N=0)
+template ElementTypeN(T, int N=0)
 {
   import std.range;		// ElementType
   static if(N==0) {
-    alias ElementTypeLevel = T;
+    alias ElementTypeN = T;
   }
   else {
-    alias ElementTypeLevel = ElementTypeLevel!(ElementType!T, N-1);
+    alias ElementTypeN = ElementTypeN!(ElementType!T, N-1);
   }
 }
   
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the given element
-class RndVec(T, int N=0): RndVecPrim
+class RndVec(T, alias R, int N=0): RndVecPrim
 {
   import esdl.data.bvec;
-  alias L=ElementTypeLevel!(T, N);
+  alias L=ElementTypeN!(T, N);
   mixin EnumConstraints!L;
 
   BddVec _bddvec;
@@ -2307,11 +2326,11 @@ class RndVec(T, int N=0): RndVecPrim
     }
   }
   else {
-    alias P=ElementTypeLevel!(T, N-1);
-    RndVecArr!P _parent;
+    alias P = RndVecArr!(T, R, N-1);
+    P _parent;
     ulong _index;
 
-    public this(string name, bool isRand, RndVecArr!P parent,
+    public this(string name, bool isRand, P parent,
 		ulong index) {
       super(_name);
       _isRand = isRand;
@@ -2343,7 +2362,7 @@ class RndVec(T, int N=0): RndVecPrim
   }
 };
 
-class RndVecArr(T, int N=0): RndVecArrVar
+class RndVecArr(T, alias R, int N=0): RndVecArrVar
 {
   import std.traits;
   import std.range;
@@ -2351,12 +2370,32 @@ class RndVecArr(T, int N=0): RndVecArrVar
   static if(N == 0) {
     alias L=T;
     L* _var;
-    public this(string name, long maxArrLen,
-		bool isRand, bool elemIsRand, L* var) {
-      super(name, maxArrLen, isRand, elemIsRand);
-      _var = var;
-      _arrLen = new RndVecArrLen(name, maxArrLen, isRand, this);
+
+    static if(is(R: rand!M, M...)) {
+      enum int maxLen = M[0];
+      enum bool elemIsRand = true;
+      public this(string name, bool isRand, L* var) {
+	super(name, maxLen, isRand, elemIsRand);
+	_var = var;
+	_arrLen = new RndVecArrLen(name, maxLen, isRand, this);
+      }
+      auto elements() {
+	this.build();
+	auto idx = arrLen.makeLoopVar();
+	return this[idx];
+      }
+      auto iterator() {
+	this.build();
+	auto idx = arrLen.makeLoopVar();
+	return idx;
+      }
     }
+    // public this(string name, long maxArrLen,
+    // 		bool isRand, bool elemIsRand, L* var) {
+    //   super(name, maxArrLen, isRand, elemIsRand);
+    //   _var = var;
+    //   _arrLen = new RndVecArrLen(name, maxArrLen, isRand, this);
+    // }
     override bool built() {
       return _elems.length != 0;
     }
@@ -2370,11 +2409,11 @@ class RndVecArr(T, int N=0): RndVecArrVar
 	  import std.conv: to;
 	  auto init = (E).init;
 	  if(i < (*_var).length) {
-	    this[i] = new RndVec!(T, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(T, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  else {
-	    this[i] = new RndVec!(T, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(T, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  assert(this[i] !is null);
@@ -2450,7 +2489,7 @@ class RndVecArr(T, int N=0): RndVecArrVar
     }
   }
   else {
-    alias P=ElementTypeLevel!(T, N-1);
+    alias P=ElementTypeN!(T, N-1);
     P _parent;
     ulong _index;
 
@@ -2546,6 +2585,10 @@ abstract class RndVecArrVar: RndVecPrim
 
   size_t maxArrLen() {
     return _arrLen._maxArrLen;
+  }
+
+  public RndVecArrLen length() {
+    return _arrLen;
   }
 
   override public RndVecArrLen arrLen() {
@@ -2935,7 +2978,7 @@ class RndVec2VecExpr: RndVecExpr
       // LOOP
       // first make sure that the _lhs is an array
       auto lhs = cast(RndVecArrVar) _lhs;
-      // FIXME -- what if the LOOPINDEX is use with non-rand array?
+      // FIXME -- what if the LOOPINDEX is used with non-rand array?
       assert(lhs !is null, "LOOPINDEX can not work with non-arrays");
       if(_rhs.loopVars.length is 0) {
 	return [lhs[_rhs.evaluate()]];
@@ -3542,6 +3585,7 @@ class CstNotBddExpr: CstBddExpr
 class CstBlock: CstBddExpr
 {
   CstBddExpr[] _exprs;
+  bool[] _booleans;
 
   override public string name() {
     string name_ = "";
@@ -3591,6 +3635,11 @@ class CstBlock: CstBddExpr
     assert(false, "getBDD not implemented for CstBlock");
   }
 
+  public void opOpAssign(string op)(bool other)
+    if(op == "~") {
+      _booleans ~= other;
+    }
+
   public void opOpAssign(string op)(CstBddExpr other)
     if(op == "~") {
       _exprs ~= other;
@@ -3606,6 +3655,9 @@ class CstBlock: CstBddExpr
       foreach(expr; other._exprs) {
 	_exprs ~= expr;
       }
+      foreach(boolean; other._booleans) {
+	_booleans ~= boolean;
+      }
     }
 
 }
@@ -3614,14 +3666,14 @@ long _esdl__randLookup(string VAR, size_t I=0, size_t CI=0, T)(T t)
 {
   static if (I < t.tupleof.length) {
     static if (_esdl__randVar!VAR.prefix == t.tupleof[I].stringof[2..$]) {
-      static if(hasRandAttr!(I, T)) {
+      static if(hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
 	return CI;
       }
       else {
 	return -1;
       }
     }
-    else static if(hasRandAttr!(I, T)) {
+    else static if(hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
 	return _esdl__randLookup!(VAR, I+1, CI+1)(t);
       }
       else {
@@ -3700,7 +3752,7 @@ public auto _esdl__rnd(size_t I, size_t CI, T)(ref T t) {
   import esdl.data.bvec;
 
   debug(RAND_CODE) {
-    static assert(hasRandAttr!(I, T));
+    static assert(hasRandAttr!(__traits(getAttributes, T.tupleof[I])));
   }
 
   // need to know the size and sign for creating a bddvec
@@ -3754,7 +3806,7 @@ public auto _esdl__rndArrLen(size_t I, size_t CI, T)(ref T t) {
   alias ElementType!L E;
   static assert(isIntegral!E || isBitVector!E);
 
-  static if(! hasRandAttr!(I, T)) { // no @rand attr
+  static if(! hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) { // no @rand attr
     return _esdl__rnd(t.tupleof[I].length, t);
   }
   static if(isDynamicArray!L) { // @rand!N form
@@ -3792,7 +3844,7 @@ public auto _esdl__rndArrElem(size_t I, size_t CI, T)(ref T t) {
   alias ElementType!L E;
   static assert(isIntegral!E || isBitVector!E);
 
-  static if(! hasRandAttr!(I, T)) { // no @rand attr
+  static if(! hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) { // no @rand attr
     static assert(false,
 		  "Foreach constraint can be applied only on @rand arrays: " ~
 		  t.tupleof[I].stringof);
