@@ -9787,12 +9787,12 @@ class Buddy
   }
 
   // FIXMALLOC
-  ~this() {
-    if(_domains !is null) {
-      // GC.free(cast(void*)_domains);
-      // _domains = null;
-    }
-  }
+  // ~this() {
+  //   if(_domains !is null) {
+  //     // GC.free(cast(void*)_domains);
+  //     // _domains = null;
+  //   }
+  // }
 }
 
 private bool bitIsSet(uint n, uint i) {return (n & (1 << i)) != 0;}

@@ -43,7 +43,7 @@ class Bar: Foo
 	    " foo: ", foo, " pun3: ", pun3, " pun1: ", pun1, " pun2: ", pun2);
   }
 
-  override void preRandomize() {
+  void preRandomize() {
     if(foo == 20) foo = 0;
     else foo++;
   }
@@ -115,7 +115,7 @@ void main()
   auto foo = new Bar;
   for (size_t i=0; i!=320; ++i)
     {
-      foo.randomise();
+      foo.randomize();
       foo.display();
     }
 }

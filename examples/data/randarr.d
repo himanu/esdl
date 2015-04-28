@@ -11,7 +11,7 @@ import esdl.data.bvec;
 
 int FFFF = 20;
 
-class Foo: Randomizable
+class Foo
 {
   mixin Randomization;
   @rand!8 byte[] foo;
@@ -19,9 +19,10 @@ class Foo: Randomizable
   void display() {}
 }
 
-class Bar: Foo
+class Bar : Foo
 {
   mixin Randomization;
+
   @rand ubyte[8] bar;
 
 
@@ -34,7 +35,7 @@ class Bar: Foo
   Constraint! q{
     foo.length > 2;
     baz < 32;
-    // FFFF + baz == 50;
+    FFFF + baz == 50;
   } cstFooLength;
 
   Constraint! q{
@@ -56,16 +57,22 @@ class Bar: Foo
     }
   } cstFoo;
 
-  override void preRandomize() {
+  void preRandomize() {
+    FFFF += 2;
+  }
+
+  void postRandomize() {
     FFFF++;
   }
 
 }
 
 void main() {
-  Foo foo = new Bar;
-  for (size_t i=0; i!=1024; ++i) {
+  Bar foo = new Bar;
+  for (size_t i=0; i!=4; ++i) {
     foo.randomize();
     foo.display();
   }
+  import std.stdio;
+  writeln("End of program");
 }
