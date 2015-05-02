@@ -67,7 +67,11 @@ mixin template Randomization()
 
   class _esdl__Solver: _esdl__SolverUpcast!_esdl__T
   {
-    public this(uint seed, string name) {    super(seed, name);  };
+    public this(uint seed, string name, _esdl__SolverBase parent=null) {
+      super(seed, name, parent);
+      _esdl__initRands();
+      _esdl__initCsts();
+    };
     class _esdl__Constraint(string _esdl__CstString):
       Constraint!_esdl__CstString
     {
@@ -94,8 +98,6 @@ mixin template Randomization()
   public void _esdl__initSolver()() {
     if (_esdl__solverInst is null) {
       _esdl__solverInst = new _esdl__Solver(_esdl__randSeed, _esdl__T.stringof);
-      _esdl__solverInst._esdl__initRands();
-      _esdl__solverInst._esdl__initCsts();
     }
   }
 
@@ -114,6 +116,7 @@ mixin template Randomization()
     _esdl__Solver _esdl__solverInst;
     public uint _esdl__randSeed;
     void useThisBuddy() {
+      import esdl.data.obdd;
       useBuddy(_esdl__solverInst._esdl__buddy);
     }
     public void seedRandom(int seed) {

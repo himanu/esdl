@@ -278,6 +278,12 @@ abstract class _esdl__SolverBase: RndVecObjVar {
     _esdl__buddy.destroyBuddy();
   }
 
+  override public void _esdl__reset() {
+    foreach(rnd; _esdl__randsList) {
+      rnd._esdl__reset();
+    }
+  }
+
   public void _esdl__initRands() {}
   public void _esdl__initCsts() {}
 
@@ -373,7 +379,7 @@ abstract class _esdl__SolverBase: RndVecObjVar {
     uint domIndex = 0;
     int[] domList;
 
-    _esdl__cstStatements.reset(); // start empty
+    _esdl__cstStatements._esdl__reset(); // start empty
 
     // take all the constraints -- even if disabled
     foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
@@ -409,7 +415,7 @@ abstract class _esdl__SolverBase: RndVecObjVar {
 
     CstStage[] cstStages;
 
-    _esdl__cstStatements.reset(); // start empty
+    _esdl__cstStatements._esdl__reset(); // start empty
 
     // take all the constraints -- even if disabled
     foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
@@ -726,11 +732,23 @@ template _esdl__RandInits(T, int I=0)
     alias RAND = getRandAttr!(T, I);
     static if(! __traits(isSame, RAND, _esdl__norand)) {
       enum NAME = T.tupleof[I].stringof;
-      enum _esdl__RandInits =
-	"    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
-	")(\"" ~ NAME ~ "\", true, &(this.outer." ~ NAME ~ "));\n" ~
-	"    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
-	_esdl__RandInits!(T, I+1);
+      alias L = typeof(T.tupleof[I]);
+      static if(is(L == class)) {
+	enum _esdl__RandInits =
+	  "    assert(this.outer." ~ NAME ~ " !is null);\n    _esdl__" ~
+	  NAME ~ " = this.outer." ~ NAME ~ ".new typeof(_esdl__" ~
+	  NAME ~ ")(_esdl__randSeed, \"" ~ NAME ~
+	  "\", this);\n    _esdl__randsList ~= _esdl__" ~
+	  NAME ~ "._esdl__randsList;\n" ~
+	  _esdl__RandInits!(T, I+1);
+      }
+      else {
+	enum _esdl__RandInits =
+	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
+	  ")(\"" ~ NAME ~ "\", true, &(this.outer." ~ NAME ~ "));\n" ~
+	  "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
+	  _esdl__RandInits!(T, I+1);
+      }
     }
     else {
       enum _esdl__RandInits = _esdl__RandInits!(T, I+1);
@@ -817,18 +835,22 @@ template _esdl__CstInits(T, int I=0)
   }
   else {
     alias L = typeof(T.tupleof[I]);
-    enum NAME = T.tupleof[I].stringof;
+    enum string NAME = T.tupleof[I].stringof;
     static if(is(L f == Constraint!C, immutable (char)[] C)) {
-      enum _esdl__CstInits =
-	"    " ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
+      enum string _esdl__CstInits =
+ 	"    this.outer." ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
 	~ I.stringof ~ "))(\"" ~
-	NAME ~ "\");\n    _esdl__cstsList ~= " ~ NAME ~
+	NAME ~ "\");\n    _esdl__cstsList ~= this.outer." ~ NAME ~
 	// ";\n    this.outer." ~ NAME ~ " = " ~ NAME ~ 
 	";\n" ~ _esdl__CstInits!(T, I+1);
     }
-    else {
-      enum _esdl__CstInits = _esdl__CstInits!(T, I+1);
-    }
+    else static if(hasRandAttr!(T, I) && is(L == class)) {
+	enum string _esdl__CstInits = "    _esdl__cstsList ~= " ~ NAME ~
+	  "._esdl__cstsList;\n" ~ _esdl__CstInits!(T, I+1);
+      }
+      else {
+	enum string _esdl__CstInits = _esdl__CstInits!(T, I+1);
+      }
   }
 }
 
@@ -925,6 +947,10 @@ template isVarSigned(L) {
 //   }
 
 public bool _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
+  static if(__traits(compiles, t.preRandomize())) {
+    t.preRandomize();
+  }
+
   t._esdl__initSolver();
   if(t._esdl__solverInst._esdl__cstWith !is null) {
     t._esdl__solverInst._esdl__cstWith = null;
@@ -935,12 +961,8 @@ public bool _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
   }
   useBuddy(t._esdl__solverInst._esdl__buddy);
 
-  static if(__traits(compiles, t.preRandomize())) {
-    t.preRandomize();
-  }
-
   foreach(rnd; t._esdl__solverInst._esdl__randsList) {
-    rnd.reset();
+    rnd._esdl__reset();
   }
 
   t._esdl__solverInst.solve(t);
@@ -1244,7 +1266,7 @@ abstract class RndVecPrim: RndVecExpr
   abstract public void value(long v);
   abstract public CstStage stage();
   abstract public void stage(CstStage s);
-  public void reset() {
+  public void _esdl__reset() {
     stage = null;
   }
   abstract public uint domIndex();
@@ -1548,11 +1570,15 @@ template _esdl__Rand(T, alias R)
 {
   import std.traits;
   static if(isArray!T) {
-    alias _esdl__Rand=RndVecArr!(T, R);
+    alias _esdl__Rand = RndVecArr!(T, R);
   }
-  else {
-    alias _esdl__Rand=RndVec!(T, R);
+  else static if(isBitVector!T || isIntegral!T) {
+    alias _esdl__Rand = RndVec!(T, R);
   }
+  else static if(is(T == class)) {
+      static assert(__traits(isSame, R, rand));
+      alias _esdl__Rand = T._esdl__Solver;
+    }
 }
 
 template ElementTypeN(T, int N=0)
@@ -1897,11 +1923,11 @@ abstract class RndVecArrVar: RndVecPrim
     return _name;
   }
 
-  override public void reset() {
+  override public void _esdl__reset() {
     _arrLen.stage = null;
     foreach(elem; _elems) {
       if(elem !is null) {
-	elem.reset();
+	elem._esdl__reset();
       }
     }
   }
@@ -2145,11 +2171,11 @@ abstract class RndVecObjVar: RndVecPrim
     return _name;
   }
 
-  override public void reset() {
+  override public void _esdl__reset() {
     // _arrLen.stage = null;
     foreach(elem; _elems) {
       if(elem !is null) {
-	elem.reset();
+	elem._esdl__reset();
       }
     }
   }
@@ -2954,7 +2980,7 @@ class CstBlock: CstBddExpr
     return name_;
   }
 
-  public void reset() {
+  public void _esdl__reset() {
     _exprs.length = 0;
   }
 
