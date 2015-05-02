@@ -233,7 +233,7 @@ class CstStage {
   }
 }
 
-abstract class _esdl__SolverBase: RndVecObjVar {
+abstract class _esdl__SolverBase {
   // Keep a list of constraints in the class
   protected _esdl__ConstraintBase[] _esdl__cstsList;
   protected _esdl__ConstraintBase _esdl__cstWith;
@@ -252,7 +252,6 @@ abstract class _esdl__SolverBase: RndVecObjVar {
   CstBlock _esdl__cstStatements;
 
   this(uint seed, string name, _esdl__SolverBase parent=null) {
-    super(name);
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
     }
@@ -276,12 +275,6 @@ abstract class _esdl__SolverBase: RndVecObjVar {
     // _domains.length  = 0;
     // GC.collect();
     _esdl__buddy.destroyBuddy();
-  }
-
-  override public void _esdl__reset() {
-    foreach(rnd; _esdl__randsList) {
-      rnd._esdl__reset();
-    }
   }
 
   public void _esdl__initRands() {}
