@@ -16,7 +16,7 @@ template _esdl__SolverUpcast(T) {
     alias U = B[0];
     // check if the base class has Randomization
     static if(__traits(compiles, U._esdl__Solver)) {
-      alias _esdl__SolverUpcast = U._esdl__Solver;
+      alias _esdl__SolverUpcast = U._esdl__SolverRand!U;
     }
     else {
       alias _esdl__SolverUpcast = _esdl__SolverBase;
@@ -34,20 +34,23 @@ string _esdl__randsMixin(T)() {
   // alias RANDS = _esdl__ListRands!(T);
   // alias CONSTRAINTS = _esdl__ListConstraints!(T);
   string randsMixin;
-//   string rand_header = "
-// class _esdl__Solver: _esdl__SolverUpcast!(typeof(this))" ~
-//     " {\n  alias _esdl__T=typeof(this.outer);
-//   public this(uint seed) {\n    super(seed);\n  }\n";
+  //   string rand_header = "
+  // class _esdl__Solver: _esdl__SolverUpcast!(typeof(this))" ~
+  //     " {\n  alias _esdl__T=typeof(this.outer);
+  //   public this(uint seed) {\n    super(seed);\n  }\n";
+
+  // _esdl__initRands and _esdl__initCsts are templatized to make sure
+  // that it is not overridable
   string rand_inits =
-    "  public override void _esdl__initRands() {\n    super._esdl__initRands();\n" ~
+    "  public void _esdl__initRands()() {\n" ~
     _esdl__RandInits!T ~ "  }\n";
   string cst_inits =
-    "  public override void _esdl__initCsts() {\n    super._esdl__initCsts();\n" ~
+    "  public void _esdl__initCsts()() {\n" ~
     _esdl__CstInits!T ~ "  }\n";
   string rand_decls = _esdl__RandDeclFuncs!T ~ _esdl__RandDeclVars!T;
-  // string cst_decls = _esdl__ConstraintsDecl!T;
+  string cst_decls = _esdl__ConstraintsDecl!T;
   // string rand_trailer = "}\n";
-  randsMixin = rand_decls ~ rand_inits ~ cst_inits; // ~ cst_decls;
+  randsMixin = rand_decls ~ rand_inits ~ cst_inits ~ cst_decls;
   return randsMixin;
 }
 
@@ -63,12 +66,21 @@ mixin template Randomization()
 {
   private import esdl.data.randcore;
   enum bool _esdl__hasRandomization = true;
-  alias _esdl__T = typeof(this);
+  alias _esdl__Type = typeof(this);
 
-  class _esdl__Solver: _esdl__SolverUpcast!_esdl__T
+  alias _esdl__Solver = _esdl__SolverRand!_esdl__Type;
+  
+  static class _esdl__SolverRand(_esdl__T): _esdl__SolverUpcast!_esdl__T
   {
-    public this(uint seed, string name, _esdl__SolverBase parent=null) {
-      super(seed, name, parent);
+    _esdl__T _esdl__outer;
+    public this(uint seed, string name, _esdl__T _outer, _esdl__SolverBase parent=null) {
+      _esdl__outer = _outer;
+      static if(_esdl__T._esdl__baseHasRandomization) {
+	super(seed, name, _outer, parent);
+      }
+      else {
+	super(seed, name, parent);
+      }
       _esdl__initRands();
       _esdl__initCsts();
     };
@@ -97,7 +109,8 @@ mixin template Randomization()
 
   public void _esdl__initSolver()() {
     if (_esdl__solverInst is null) {
-      _esdl__solverInst = new _esdl__Solver(_esdl__randSeed, _esdl__T.stringof);
+      _esdl__solverInst = new _esdl__Solver(_esdl__randSeed,
+					    _esdl__Type.stringof, this);
     }
   }
 

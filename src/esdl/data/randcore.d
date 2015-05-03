@@ -728,17 +728,18 @@ template _esdl__RandInits(T, int I=0)
       alias L = typeof(T.tupleof[I]);
       static if(is(L == class)) {
 	enum _esdl__RandInits =
-	  "    assert(this.outer." ~ NAME ~ " !is null);\n    _esdl__" ~
-	  NAME ~ " = this.outer." ~ NAME ~ ".new typeof(_esdl__" ~
-	  NAME ~ ")(_esdl__randSeed, \"" ~ NAME ~
-	  "\", this);\n    _esdl__randsList ~= _esdl__" ~
-	  NAME ~ "._esdl__randsList;\n" ~
-	  _esdl__RandInits!(T, I+1);
+	  "    assert(this._esdl__outer." ~ NAME ~
+	  " !is null);\n    _esdl__" ~ NAME ~
+	  " = new typeof(_esdl__" ~ NAME ~
+	  ")(this._esdl__outer._esdl__randSeed, \"" ~
+	  NAME ~ "\", this._esdl__outer." ~ NAME ~
+	  ", this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
+	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
       }
       else {
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
-	  ")(\"" ~ NAME ~ "\", true, &(this.outer." ~ NAME ~ "));\n" ~
+	  ")(\"" ~ NAME ~ "\", true, &(this._esdl__outer." ~ NAME ~ "));\n" ~
 	  "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
 	  _esdl__RandInits!(T, I+1);
       }
@@ -799,7 +800,7 @@ template _esdl__RandDeclFuncs(T, int I=0)
     }
     else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
 	enum _esdl__RandDeclFuncs =
-	  "  const auto " ~ NAME ~ "() { return this.outer." ~ NAME ~ "; }\n" ~
+	  "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
 	  _esdl__RandDeclFuncs!(T, I+1);
       }
       else {
@@ -809,6 +810,27 @@ template _esdl__RandDeclFuncs(T, int I=0)
       }
   }
 }
+
+template _esdl__ConstraintsDecl(T, int I=0)
+{
+  static if(I == T.tupleof.length) {
+    enum _esdl__ConstraintsDecl = "";
+  }
+  else {
+    alias L = typeof(T.tupleof[I]);
+    enum NAME = T.tupleof[I].stringof;
+    // skip the constraints and _esdl__ variables
+    static if(is(L f == Constraint!C, immutable (char)[] C)) {
+      enum _esdl__ConstraintsDecl =
+	"  Constraint!(_esdl__constraintString!(_esdl__T, " ~ I.stringof ~ ")) " ~
+	NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
+    }
+    else {
+      enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
+    }
+  }
+}
+
 
 template _esdl__constraintString(T, int I)
 {
@@ -831,10 +853,10 @@ template _esdl__CstInits(T, int I=0)
     enum string NAME = T.tupleof[I].stringof;
     static if(is(L f == Constraint!C, immutable (char)[] C)) {
       enum string _esdl__CstInits =
- 	"    this.outer." ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
+ 	"    " ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
 	~ I.stringof ~ "))(\"" ~
-	NAME ~ "\");\n    _esdl__cstsList ~= this.outer." ~ NAME ~
-	// ";\n    this.outer." ~ NAME ~ " = " ~ NAME ~ 
+	NAME ~ "\");\n    _esdl__cstsList ~= " ~ NAME ~
+	// ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~ 
 	";\n" ~ _esdl__CstInits!(T, I+1);
     }
     else static if(hasRandAttr!(T, I) && is(L == class)) {
