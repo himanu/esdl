@@ -739,7 +739,7 @@ template _esdl__RandInits(T, int I=0)
       else {
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
-	  ")(\"" ~ NAME ~ "\", true, &(this._esdl__outer." ~ NAME ~ "));\n" ~
+	  ")(\"" ~ NAME ~ "\", true, this);\n" ~
 	  "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
 	  _esdl__RandInits!(T, I+1);
       }
@@ -803,9 +803,8 @@ template _esdl__RandDeclVars(T, int I=0)
     }
     else {
       enum _esdl__RandDeclVars =
-	"  _esdl__Rand!(_esdl__RandTypeAttr!(_esdl__T, " ~ I.stringof ~
-	")) _esdl__" ~ T.tupleof[I].stringof ~
-	";\n" ~ _esdl__RandDeclVars!(T, I+1);
+	"  _esdl__Rand!(_esdl__T, " ~ I.stringof ~ ") _esdl__" ~
+	T.tupleof[I].stringof ~	";\n" ~ _esdl__RandDeclVars!(T, I+1);
     }
 }
 
@@ -1605,18 +1604,18 @@ mixin template EnumConstraints(T) {
   }
 }
 
-template _esdl__Rand(T, alias R)
+template _esdl__Rand(T, int I)
 {
   import std.traits;
-  static if(isArray!T) {
-    alias _esdl__Rand = RndVecArr!(T, R);
+  alias L = typeof(T.tupleof[I]);
+  static if(isArray!L) {
+    alias _esdl__Rand = RndVecArr!(T, I);
   }
-  else static if(isBitVector!T || isIntegral!T) {
-    alias _esdl__Rand = RndVec!(T, R);
+  else static if(isBitVector!L || isIntegral!L) {
+    alias _esdl__Rand = RndVec!(T, I);
   }
-  else static if(is(T == class)) {
-      static assert(__traits(isSame, R, rand));
-      alias _esdl__Rand = T._esdl__Solver;
+  else static if(is(L == class)) {
+      alias _esdl__Rand = L._esdl__Solver;
     }
 }
 
@@ -1634,10 +1633,13 @@ template ElementTypeN(T, int N=0)
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the given element
-class RndVec(L, alias R, int N=0): RndVecPrim
+class RndVec(T, int I, int N=0): RndVecPrim
 {
+  alias L = typeof(T.tupleof[I]);
+  alias R = getRandAttr!(T, I);
+  
   import esdl.data.bvec;
-  alias E=ElementTypeN!(L, N);
+  alias E = ElementTypeN!(L, N);
   mixin EnumConstraints!E;
 
   BddVec _bddvec;
@@ -1725,23 +1727,24 @@ class RndVec(L, alias R, int N=0): RndVecPrim
 
 
   static if(N == 0) {
-    E* _var;
-    public this(string name, bool isRand, E* var) {
+    T._esdl__Solver _solver;
+    
+    public this(string name, bool isRand, T._esdl__Solver solver) {
       super(name);
       _isRand = isRand;
-      _var = var;
+      _solver = solver;
     }
 
     override public long value() {
-      return cast(long) (*_var);
+      return cast(long) (_solver._esdl__outer.tupleof[I]);
     }
 
     override public void value(long v) {
-      *_var = cast(E) toBitVec(v);
+      _solver._esdl__outer.tupleof[I] = cast(L) toBitVec(v);
     }
   }
   else {
-    alias P = RndVecArr!(L, R, N-1);
+    alias P = RndVecArr!(T, I, N-1);
     P _parent;
     ulong _index;
 
@@ -1765,6 +1768,7 @@ class RndVec(L, alias R, int N=0): RndVecPrim
   override uint bitcount() {
     static if(isIntegral!E)        return E.sizeof * 8;
     else static if(isBitVector!E)  return E.SIZE;
+      else static assert(false, "bitcount can not operate on: " ~ E.stringof);
   }
 
   override bool signed() {
@@ -1777,30 +1781,32 @@ class RndVec(L, alias R, int N=0): RndVecPrim
   }
 };
 
-class RndVecArr(L, alias R, int N=0): RndVecArrVar
+class RndVecArr(T, int I, int N=0): RndVecArrVar
 {
   import std.traits;
   import std.range;
 
+  alias L = typeof(T.tupleof[I]);
+  alias R = getRandAttr!(T, I);
+
   static if(N == 0) {
-    L* _var;
+    T._esdl__Solver _solver;
 
     static if(__traits(isSame, R, rand)) {
       static assert(isStaticArray!L);
-      public this(string name, bool elemIsRand, L* var) {
-	L t;
+      public this(string name, bool elemIsRand, T._esdl__Solver solver) {
 	size_t maxLen = L.length;
 	super(name, maxLen, false, elemIsRand);
-	_var = var;
+	_solver = solver;
 	_arrLen = new RndVecArrLen(name, maxLen, false, this);
       }
     }
 
     static if(is(R: rand!M, M...)) {
       enum int maxLen = M[0];
-      public this(string name, bool elemIsRand, L* var) {
+      public this(string name, bool elemIsRand, T._esdl__Solver solver) {
 	super(name, maxLen, true, elemIsRand);
-	_var = var;
+	_solver = solver;
 	_arrLen = new RndVecArrLen(name, maxLen, true, this);
       }
     }
@@ -1834,12 +1840,12 @@ class RndVecArr(L, alias R, int N=0): RndVecArrVar
 	if(this[i] is null) {
 	  import std.conv: to;
 	  auto init = (E).init;
-	  if(i < (*_var).length) {
-	    this[i] = new RndVec!(L, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
+	  if(i < (_solver._esdl__outer.tupleof[I]).length) {
+	    this[i] = new RndVec!(T, I, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  else {
-	    this[i] = new RndVec!(L, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(T, I, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  assert(this[i] !is null);
@@ -1891,27 +1897,27 @@ class RndVecArr(L, alias R, int N=0): RndVecArrVar
       }
 
     public long getLen_(I...)(I idx) {
-      return getLen_(*_var, idx);
+      return getLen_(_solver._esdl__outer.tupleof[I], idx);
     }
 
     public void setLen_(I...)(long v, I idx) {
-      setLen_(*_var, v, idx);
+      setLen_(_solver._esdl__outer.tupleof[I], v, idx);
     }
 
     override public long getLen() {
-      return getLen_(*_var);
+      return getLen_(_solver._esdl__outer.tupleof[I]);
     }
 
     override public void setLen(long v) {
-      setLen_(*_var, v);
+      setLen_(_solver._esdl__outer.tupleof[I], v);
     }
 
-    public long getVal(I...)(I idx) {
-      return getVal(*_var, idx);
+    public long getVal(J...)(J idx) {
+      return getVal(_solver._esdl__outer.tupleof[I], idx);
     }
 
-    public void setVal(I...)(long v, I idx) {
-      setVal(*_var, v, idx);
+    public void setVal(J...)(long v, J idx) {
+      setVal(_solver._esdl__outer.tupleof[I], v, idx);
     }
   }
   else {

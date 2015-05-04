@@ -77,9 +77,10 @@ mixin template Randomization()
     _esdl__T _esdl__outer;
 
     public void _esdl__setOuter()(_esdl__T _outer) {
-      assert(_esdl__outer is _outer,
-	     "Dynamically changing @rand objects not yet supported: " ~
-	     _esdl__T.stringof);
+      _esdl__outer = _outer;
+      // assert(_esdl__outer is _outer,
+      // 	     "Dynamically changing @rand objects not yet supported: " ~
+      // 	     _esdl__T.stringof);
     }
     
     public this(uint seed, string name, _esdl__T _outer, _esdl__SolverBase parent=null) {
