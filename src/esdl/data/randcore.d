@@ -750,6 +750,30 @@ template _esdl__RandInits(T, int I=0)
   }
 }
 
+template _esdl__RandSetOuter(T, int I=0)
+{
+  static if(I == T.tupleof.length) {
+    enum _esdl__RandSetOuter = "";
+  }
+  else static if(! __traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
+      enum NAME = T.tupleof[I].stringof;
+      alias L = typeof(T.tupleof[I]);
+      static if(is(L == class)) {
+	enum _esdl__RandSetOuter =
+	  "    assert(this._esdl__outer." ~ NAME ~
+	  " !is null);\n    _esdl__" ~ NAME ~
+	  "._esdl__setOuter(this._esdl__outer." ~ NAME ~
+	  ");\n" ~ _esdl__RandSetOuter!(T, I+1);
+      }
+      else {
+	enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+      }
+    }
+    else {
+      enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+    }
+}
+
 
 // Returns a tuple consiting of the type of the rand variable and
 // also the @rand!() attribute it has been tagged with
@@ -1610,11 +1634,11 @@ template ElementTypeN(T, int N=0)
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the given element
-class RndVec(T, alias R, int N=0): RndVecPrim
+class RndVec(L, alias R, int N=0): RndVecPrim
 {
   import esdl.data.bvec;
-  alias L=ElementTypeN!(T, N);
-  mixin EnumConstraints!L;
+  alias E=ElementTypeN!(L, N);
+  mixin EnumConstraints!E;
 
   BddVec _bddvec;
   uint _domIndex = uint.max;
@@ -1701,8 +1725,8 @@ class RndVec(T, alias R, int N=0): RndVecPrim
 
 
   static if(N == 0) {
-    L* _var;
-    public this(string name, bool isRand, L* var) {
+    E* _var;
+    public this(string name, bool isRand, E* var) {
       super(name);
       _isRand = isRand;
       _var = var;
@@ -1713,11 +1737,11 @@ class RndVec(T, alias R, int N=0): RndVecPrim
     }
 
     override public void value(long v) {
-      *_var = cast(L) toBitVec(v);
+      *_var = cast(E) toBitVec(v);
     }
   }
   else {
-    alias P = RndVecArr!(T, R, N-1);
+    alias P = RndVecArr!(L, R, N-1);
     P _parent;
     ulong _index;
 
@@ -1739,12 +1763,12 @@ class RndVec(T, alias R, int N=0): RndVecPrim
   }
 
   override uint bitcount() {
-    static if(isIntegral!L)        return L.sizeof * 8;
-    else static if(isBitVector!L)  return L.SIZE;
+    static if(isIntegral!E)        return E.sizeof * 8;
+    else static if(isBitVector!E)  return E.SIZE;
   }
 
   override bool signed() {
-    static if(isVarSigned!L) {
+    static if(isVarSigned!E) {
       return true;
     }
     else  {
@@ -1753,20 +1777,19 @@ class RndVec(T, alias R, int N=0): RndVecPrim
   }
 };
 
-class RndVecArr(T, alias R, int N=0): RndVecArrVar
+class RndVecArr(L, alias R, int N=0): RndVecArrVar
 {
   import std.traits;
   import std.range;
 
   static if(N == 0) {
-    alias L=T;
     L* _var;
 
     static if(__traits(isSame, R, rand)) {
-      static assert(isStaticArray!T);
+      static assert(isStaticArray!L);
       public this(string name, bool elemIsRand, L* var) {
-	T t;
-	size_t maxLen = T.length;
+	L t;
+	size_t maxLen = L.length;
 	super(name, maxLen, false, elemIsRand);
 	_var = var;
 	_arrLen = new RndVecArrLen(name, maxLen, false, this);
@@ -1812,11 +1835,11 @@ class RndVecArr(T, alias R, int N=0): RndVecArrVar
 	  import std.conv: to;
 	  auto init = (E).init;
 	  if(i < (*_var).length) {
-	    this[i] = new RndVec!(T, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(L, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  else {
-	    this[i] = new RndVec!(T, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
+	    this[i] = new RndVec!(L, R, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
 					true, this, i);
 	  }
 	  assert(this[i] !is null);
@@ -1892,7 +1915,7 @@ class RndVecArr(T, alias R, int N=0): RndVecArrVar
     }
   }
   else {
-    alias P=ElementTypeN!(T, N-1);
+    alias P = ElementTypeN!(L, N-1);
     P _parent;
     ulong _index;
 
