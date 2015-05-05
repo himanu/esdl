@@ -116,7 +116,7 @@ abstract class Constraint(string C): _esdl__ConstraintBase
     super(eng, name, C, index);
   }
 
-  static char[] constraintFunc(string CST) {
+  static char[] constraintXlate(string CST) {
     import esdl.data.cstx;
     CstParser parser = CstParser(CST);
     return parser.translate();
@@ -266,15 +266,10 @@ abstract class _esdl__SolverBase {
   }
 
   ~this() {
-    import core.memory: GC;
     _esdl__cstsList.length   = 0;
     _esdl__cstWith          = null;
     _esdl__cstWithChanged  = true;
     _esdl__randsList.length = 0;
-
-    // _domains.length  = 0;
-    // GC.collect();
-    _esdl__buddy.destroyBuddy();
   }
 
   public void _esdl__initRands() {}
@@ -1492,7 +1487,7 @@ class RndVecArrLen: RndVecPrim
     }
     else {
       import std.conv;
-      assert(false, "Rand variable " ~ _name[2..$] ~ " evaluation in wrong stage: " ~ _stage._id.to!string);
+      assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~ _stage._id.to!string);
     }
   }
 
@@ -1678,7 +1673,8 @@ class RndVec(T, int I, int N=0): RndVecPrim
     }
     else {
       import std.conv;
-      assert(false, "Rand variable " ~ _name[2..$] ~ " evaluation in wrong stage: " ~ _stage._id.to!string);
+      assert(false, "Rand variable " ~ _name ~
+	     " evaluation in wrong stage: " ~ _stage._id.to!string);
     }
   }
 
@@ -2195,117 +2191,6 @@ class RndVecLoopVar: RndVecPrim
     if(this !is l) return this;
     else return new RndVecConst(n, false);
   }
-}
-
-abstract class RndVecObjVar: RndVecPrim
-{
-  // Base class object shall be used for constraining the length part
-  // of the array.
-
-  // Also has an array of RndVecVar to map all the elements of the
-  // array
-  RndVecPrim[] _elems;
-  bool _elemIsRand;
-
-  string _name;
-
-  // RndVecArrLen _arrLen;
-
-  override public string name() {
-    return _name;
-  }
-
-  override public void _esdl__reset() {
-    // _arrLen.stage = null;
-    foreach(elem; _elems) {
-      if(elem !is null) {
-	elem._esdl__reset();
-      }
-    }
-  }
-
-  override public RndVecPrim[] getPrims() {
-    RndVecPrim[] prims;
-    foreach(elem; _elems) {
-      prims ~= elem.getPrims();
-    }
-    return prims;
-  }
-
-  override public RndVecPrim[] arrVars() {
-    RndVecPrim[] arrs;
-    foreach(elem; _elems) {
-      arrs ~= elem.arrVars();
-    }
-    return arrs;
-  }
-
-  public this(string name) {
-    super(name);
-  }
-
-  // bool built() {return true;}
-
-  // override public RndVecPrim[] getPrims() {
-  //   return _arrLen.getPrims();
-  // }
-
-  // override public CstStage[] getStages() {
-  //   assert(false, "getStages not implemented for RndVecObjVar");
-  // }
-
-  override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "getBDD not implemented for RndVecObjVar");
-  }
-
-  override public long evaluate() {
-    assert(false, "evaluate not implemented for RndVecObjVar");
-  }
-
-  override public bool isRand() {
-    assert(false, "isRand not implemented for RndVecObjVar");
-  }
-
-  override public long value() {
-    assert(false, "value not implemented for RndVecObjVar");
-  }
-
-  override public void value(long v) {
-    assert(false, "value not implemented for RndVecObjVar");
-  }
-
-  override public CstStage stage() {
-    assert(false, "stage not implemented for RndVecObjVar");
-  }
-
-  override public void stage(CstStage s) {
-    assert(false, "stage not implemented for RndVecObjVar");
-  }
-
-  override public uint domIndex() {
-    assert(false, "domIndex not implemented for RndVecObjVar");
-  }
-
-  override public void domIndex(uint s) {
-    assert(false, "domIndex not implemented for RndVecObjVar");
-  }
-
-  override public uint bitcount() {
-    assert(false, "bitcount not implemented for RndVecObjVar");
-  }
-
-  override public bool signed() {
-    assert(false, "signed not implemented for RndVecObjVar");
-  }
-
-  override public BddVec bddvec() {
-    assert(false, "bddvec not implemented for RndVecObjVar");
-  }
-
-  override public void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for RndVecObjVar");
-  }
-
 }
 
 class RndVecConst: RndVecPrim

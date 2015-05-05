@@ -31,13 +31,7 @@ template _esdl__SolverUpcast(T) {
 // randomized
 string _esdl__randsMixin(T)() {
   T t;
-  // alias RANDS = _esdl__ListRands!(T);
-  // alias CONSTRAINTS = _esdl__ListConstraints!(T);
   string randsMixin;
-  //   string rand_header = "
-  // class _esdl__Solver: _esdl__SolverUpcast!(typeof(this))" ~
-  //     " {\n  alias _esdl__T=typeof(this.outer);
-  //   public this(uint seed) {\n    super(seed);\n  }\n";
 
   // _esdl__initRands and _esdl__initCsts are templatized to make sure
   // that it is not overridable
@@ -51,7 +45,7 @@ string _esdl__randsMixin(T)() {
   string rand_set_outer = "  public void _esdl__setObjOuter()() {\n" ~
     _esdl__RandSetOuter!T ~ "  }\n";
   string cst_decls = _esdl__ConstraintsDecl!T;
-  // string rand_trailer = "}\n";
+
   randsMixin = rand_decls ~ rand_inits ~ cst_inits ~ cst_decls ~ rand_set_outer;
   return randsMixin;
 }
@@ -62,7 +56,7 @@ template rand(N...) {
 
 template Constraint(string C) {
   static assert(false, "You need to mixin Randomization in order to define Constraints");
-}  
+}
 
 mixin template Randomization()
 {
@@ -71,22 +65,19 @@ mixin template Randomization()
   alias _esdl__Type = typeof(this);
 
   alias _esdl__Solver = _esdl__SolverRand!_esdl__Type;
-  
+
   static class _esdl__SolverRand(_esdl__T): _esdl__SolverUpcast!_esdl__T
   {
     _esdl__T _esdl__outer;
 
-    public void _esdl__setOuter()(_esdl__T _outer) {
-      _esdl__outer = _outer;
-      // assert(_esdl__outer is _outer,
-      // 	     "Dynamically changing @rand objects not yet supported: " ~
-      // 	     _esdl__T.stringof);
+    public void _esdl__setOuter()(_esdl__T outer) {
+      _esdl__outer = outer;
     }
-    
-    public this(uint seed, string name, _esdl__T _outer, _esdl__SolverBase parent=null) {
-      _esdl__outer = _outer;
+
+    public this(uint seed, string name, _esdl__T outer, _esdl__SolverBase parent=null) {
+      _esdl__outer = outer;
       static if(_esdl__T._esdl__baseHasRandomization) {
-	super(seed, name, _outer, parent);
+	super(seed, name, outer, parent);
       }
       else {
 	super(seed, name, parent);
@@ -94,7 +85,7 @@ mixin template Randomization()
       _esdl__initRands();
       _esdl__initCsts();
     }
-    
+
     class _esdl__Constraint(string _esdl__CstString):
       Constraint!_esdl__CstString
     {
@@ -103,12 +94,12 @@ mixin template Randomization()
       }
       // This mixin writes out the bdd functions after parsing the
       // constraint string at compile time
-      mixin(constraintFunc(_esdl__CstString));
+      mixin(constraintXlate(_esdl__CstString));
       debug(CONSTRAINTS) {
-	pragma(msg, constraintFunc(_esdl__CstString));
+	pragma(msg, constraintXlate(_esdl__CstString));
       }
     }
-    
+
     mixin(_esdl__randsMixin!_esdl__T);
 
     debug(CONSTRAINTS) {
@@ -122,8 +113,8 @@ mixin template Randomization()
 
   public void _esdl__initSolver()() {
     if (_esdl__solverInst is null) {
-      _esdl__solverInst = new _esdl__Solver(_esdl__randSeed,
-					    _esdl__Type.stringof, this);
+      _esdl__solverInst =
+	new _esdl__Solver(_esdl__randSeed, _esdl__Type.stringof, this);
     }
     else {
       _esdl__solverInst._esdl__setObjOuter();
@@ -155,4 +146,3 @@ mixin template Randomization()
     alias srandom = seedRandom;	// SV names the similar method srandom
   }
 }
-

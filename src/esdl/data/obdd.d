@@ -5610,10 +5610,6 @@ class Buddy
     return root;
   }
 
-  public void destroyBuddy() {
-
-  }
-
   void bdd_mark(int i)
   {
 
