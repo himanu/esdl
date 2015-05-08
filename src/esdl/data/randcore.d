@@ -236,7 +236,7 @@ class CstStage {
 abstract class _esdl__SolverBase {
   // Keep a list of constraints in the class
   protected _esdl__ConstraintBase[] _esdl__cstsList;
-  protected _esdl__ConstraintBase _esdl__cstWith;
+  public _esdl__ConstraintBase _esdl__cstWith;
   bool _esdl__cstWithChanged;
 
   // ParseTree parseList[];
@@ -376,6 +376,14 @@ abstract class _esdl__SolverBase {
 
     if(_esdl__cstWith !is null) {
       _esdl__cstStatements ~= _esdl__cstWith.getCstExpr();
+    }
+
+    foreach(stmt; _esdl__cstStatements._exprs) {
+      foreach(vec; stmt.getPrims()) {
+	if(vec.domIndex != uint.max) {
+	  vec.domIndex = uint.max;
+	}
+      }
     }
 
     foreach(stmt; _esdl__cstStatements._exprs) {
@@ -618,6 +626,22 @@ template _esdl__isAttrRand(alias R) {
   else {
     enum _esdl__isAttrRand = false;
   }
+}
+
+template _esdl__baseHasRandomization(T) {
+  static if(is(T B == super)
+	    && is(B[0] == class)) {
+    alias U = B[0];
+    static if(__traits(compiles, U._esdl__hasRandomization)) {
+      enum bool _esdl__baseHasRandomization = true;
+    }
+    else {
+      enum bool _esdl__baseHasRandomization = _esdl__baseHasRandomization!U;
+    }
+  }
+    else {
+      enum bool _esdl__baseHasRandomization = false;
+    }
 }
 
 template _esdl__upcast(T, int N=1) {
@@ -956,42 +980,21 @@ template isVarSigned(L) {
     static assert(false, "isVarSigned: Can not determine sign of type " ~ typeid(L));
 }
 
-// public bool randomizeWith(string C, T, V...)(ref T t, V values)
-//   if(is(T v: RandomizableIntf) &&
-//      is(T == class) && allIntengral!V) {
-//     // The idea is that if the end-user has used the randomization
-//     // mixin then _esdl__RandType would be already available as an
-//     // alias and we can use virtual randomize method in such an
-//     // eventuality.
-//     // static if(is(typeof(t._esdl__RandType) == T)) {
-//     if(t._esdl__solverInst._esdl__cstWith is null ||
-//        t._esdl__solverInst._esdl__cstWith._constraint != C) {
-//       auto withCst =
-// 	new Constraint!(C, "_esdl__withCst",
-// 			T, V.length)(t, "_esdl__withCst");
-//       withCst.withArgs(values);
-//       t._esdl__solverInst._esdl__cstWith = withCst;
-//       t._esdl__solverInst._esdl__cstWithChanged = true;
-//     }
-//     else {
-//       t._esdl__solverInst._esdl__cstWithChanged = false;
-//     }
-//     return t._esdl__randomize();
-//   }
 
-public bool _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
+public void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
   static if(__traits(compiles, t.preRandomize())) {
     t.preRandomize();
   }
 
   t._esdl__initSolver();
-  if(t._esdl__solverInst._esdl__cstWith !is null) {
-    t._esdl__solverInst._esdl__cstWith = null;
+  if(withCst is null && t._esdl__solverInst._esdl__cstWith !is null) {
+    t._esdl__solverInst._esdl__cstWith = withCst;
     t._esdl__solverInst._esdl__cstWithChanged = true;
   }
   else {
     t._esdl__solverInst._esdl__cstWithChanged = false;
   }
+
   useBuddy(t._esdl__solverInst._esdl__buddy);
 
   foreach(rnd; t._esdl__solverInst._esdl__randsList) {
@@ -1006,7 +1009,6 @@ public bool _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
   static if(__traits(compiles, t.postRandomize())) {
     t.postRandomize();
   }
-  return true;
 }
 
 // All the operations that produce a BddVec

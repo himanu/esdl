@@ -949,6 +949,7 @@ struct CstParser {
 	else {
 	  srcTag = parseWithArg();
 	  if(srcCursor > srcTag) {
+	    fill("_esdl__arg!");
 	    fill(CST[srcTag+1..srcCursor]);
 	  }
 	  else {

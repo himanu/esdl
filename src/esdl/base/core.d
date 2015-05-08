@@ -40,7 +40,7 @@ private extern (C) void rt_detachDisposeEvent(Object h, DEvent e);
 private import std.typetuple: staticIndexOf;
 private import std.traits: BaseClassesTuple, ParameterTypeTuple; // required for staticIndexOf
 
-// Coerced casting to help in efficiently downcast when we are sure
+// Coerced casting to help in efficiently upcast when we are sure
 // about the given objects type.
 public T staticCast(T, F)(const F from)
   if(is(F == class) && is(T == class)
