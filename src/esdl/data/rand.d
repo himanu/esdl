@@ -58,6 +58,30 @@ template Constraint(string C) {
   static assert(false, "You need to mixin Randomization in order to define Constraints");
 }
 
+class Randomizable {
+  // enum bool _esdl__hasRandomization = true;
+  _esdl__SolverBase _esdl__solverInst;
+  public uint _esdl__randSeed;
+  public _esdl__SolverBase _esdl__getSolver() {
+    return _esdl__solverInst;
+  }
+  public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {}
+  void useThisBuddy() {
+    import esdl.data.obdd;
+    useBuddy(_esdl__solverInst._esdl__buddy);
+  }
+  public void seedRandom(int seed) {
+    _esdl__randSeed = seed;
+    if(_esdl__solverInst !is null) {
+      _esdl__solverInst._esdl__rGen.seed(seed);
+    }
+  }
+  alias srandom = seedRandom;	// SV names the similar method srandom
+  public void _esdl__initSolver() {
+    assert(false, "_esdl__initSolver should never be called for Randomizable object");
+  }
+}
+
 mixin template Randomization()
 {
   private import esdl.data.randcore;
@@ -69,6 +93,7 @@ mixin template Randomization()
   static class _esdl__SolverRand(_esdl__T): _esdl__SolverUpcast!_esdl__T
   {
     _esdl__T _esdl__outer;
+    // alias _esdl__outer this;
 
     public void _esdl__setOuter()(_esdl__T outer) {
       _esdl__outer = outer;
@@ -148,30 +173,30 @@ mixin template Randomization()
     return mixin(NAME);
   }
 
-  public void _esdl__initSolver()() {
-    if (_esdl__solverInst is null) {
-      _esdl__solverInst =
-	new _esdl__Solver(_esdl__randSeed, _esdl__Type.stringof, this);
-    }
-    else {
-      _esdl__solverInst._esdl__setObjOuter();
-    }
-  }
-
-
-  static if(__traits(compiles, _esdl__solverInst)) {
+  static if(is(_esdl__T: Randomizable) ||
+	    __traits(compiles, _esdl__solverInst)) {
     override public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
     }
     override public _esdl__Solver _esdl__getSolver() {
       return staticCast!_esdl__Solver(_esdl__solverInst);
     }
+    override public void _esdl__initSolver() {
+      if (_esdl__solverInst is null) {
+	_esdl__solverInst =
+	  new _esdl__Solver(_esdl__randSeed, _esdl__Type.stringof, this);
+      }
+      else {
+	_esdl__getSolver()._esdl__setObjOuter();
+      }
+    }
+
   }
   else {
-    _esdl__Solver _esdl__solverInst;
+    _esdl__SolverBase _esdl__solverInst;
     public uint _esdl__randSeed;
     public _esdl__Solver _esdl__getSolver() {
-      return _esdl__solverInst;
+      return staticCast!_esdl__Solver(_esdl__solverInst);
     }
     public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
@@ -182,9 +207,21 @@ mixin template Randomization()
     }
     public void seedRandom(int seed) {
       _esdl__randSeed = seed;
-      _esdl__solverInst._esdl__rGen.seed(seed);
+      if(_esdl__solverInst !is null) {
+	_esdl__solverInst._esdl__rGen.seed(seed);
+      }
     }
     alias srandom = seedRandom;	// SV names the similar method srandom
+    public void _esdl__initSolver() {
+      if (_esdl__solverInst is null) {
+	_esdl__solverInst =
+	  new _esdl__Solver(_esdl__randSeed, _esdl__Type.stringof, this);
+      }
+      else {
+	_esdl__getSolver()._esdl__setObjOuter();
+      }
+    }
+
   }
 
   // static if(__traits(compiles,

@@ -1021,7 +1021,7 @@ struct CstParser {
 	  place('(', orDstAnchor);
 	  orRHS = true;
 	}
-	fill(").logicOr(");
+	fill(")._esdl__logicOr(");
 	cmpDstAnchor = fill(" ");
 	andDstAnchor = fill(" ");
 	break;
@@ -1034,7 +1034,7 @@ struct CstParser {
 	  place('(', andDstAnchor);
 	  andRHS = true;
 	}
-	fill(") .logicAnd(");
+	fill(") ._esdl__logicAnd(");
 	cmpDstAnchor = fill(" ");
 	break;
       case OpToken.EQU:

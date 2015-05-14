@@ -42,7 +42,7 @@ template rand(N...) {
   static if(CheckRandParams!N) {
     struct rand
     {
-      static if(N.length > 0) {
+      static if(N.length > 0 && N[0] != false) {
 	enum maxBounds = TypeTuple!N;
 	alias ElementRand = rand!(N[0..$-1]);
       }
@@ -50,24 +50,34 @@ template rand(N...) {
   }
 }
 
-// Make sure that all the parameters are of type size_t
 template CheckRandParams(N...) {
+  static if(N.length == 1 && N[0] == false) {
+    enum bool CheckRandParams = true;
+  }
+  else {
+    enum bool CheckRandParams = CheckRandParamsLoop!N;
+  }
+}
+      
+
+// Make sure that all the parameters are of type size_t
+template CheckRandParamsLoop(N...) {
   static if(N.length > 0) {
     import std.traits;
     static if(!is(typeof(N[0]) == bool) && // do not confuse bool as size_t
 	      is(typeof(N[0]) : size_t)) {
       static assert(N[0] != 0, "Can not have arrays with size 0");
       static assert(N[0] > 0, "Can not have arrays with negative size");
-      enum bool CheckRecurse = CheckRandParams!(N[1..$]);
-      enum bool CheckRandParams = CheckRecurse;
+      enum bool CheckRecurse = CheckRandParamsLoop!(N[1..$]);
+      enum bool CheckRandParamsLoop = CheckRecurse;
     }
     else {
       static assert(false, "Only positive integral values are allowed as array dimensions");
-      enum bool CheckRandParams = false;
+      enum bool CheckRandParamsLoop = false;
     }
   }
   else {
-    enum bool CheckRandParams = true;
+    enum bool CheckRandParamsLoop = true;
   }
 }
 
@@ -657,6 +667,43 @@ template _esdl__upcast(T, int N=1) {
     }
 }
 
+public auto _esdl__logicOr(P, Q)(P p, Q q) {
+  CstBddExpr _p;
+  CstBddExpr _q;
+  static if(is(P == bool)) {
+    _p = new CstBddConst(p);
+  }
+  else {
+    _p = p;
+  }
+  static if(is(Q == bool)) {
+    _q = new CstBddConst(q);
+  }
+  else {
+    _q = q;
+  }
+  return _p.logicOr(_q);
+}
+   
+public auto _esdl__logicAnd(P, Q)(P p, Q q) {
+  CstBddExpr _p;
+  CstBddExpr _q;
+  static if(is(P == bool)) {
+    _p = new CstBddConst(p);
+  }
+  else {
+    _p = p;
+  }
+  static if(is(Q == bool)) {
+    _q = new CstBddConst(q);
+  }
+  else {
+    _q = q;
+  }
+  return p.logicAnd(q);
+}
+   
+
 public auto _esdl__lth(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.lth(q);
@@ -735,6 +782,41 @@ public auto _esdl__neq(P, Q)(P p, Q q) {
   }
 }
 
+template _esdl__RandInitsSpec(T, R...)
+{
+    static if(R.length == 0) {
+      enum _esdl__RandInitsSpec = "";
+    }
+    else {
+      enum string NAME = R[0];
+      alias RAND = getRandAttr!(T, NAME);
+      static if(! (__traits(isSame, RAND, _esdl__norand) ||
+		   is(RAND == rand!false))) {
+	alias L = typeof(__traits(getMember, T, NAME));
+	static if(is(L == class)) {
+	  enum _esdl__RandInitsSpec =
+	    "    assert(this._esdl__outer." ~ NAME ~
+	    " !is null);\n    _esdl__" ~ NAME ~
+	    " = new typeof(_esdl__" ~ NAME ~
+	    ")(this._esdl__outer._esdl__randSeed, \"" ~
+	    NAME ~ "\", this._esdl__outer." ~ NAME ~
+	    ", this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
+	    "._esdl__randsList;\n" ~ _esdl__RandInitsSpec!(T, R[1..$]);
+	}
+	else {
+	  enum _esdl__RandInitsSpec =
+	    "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
+	    ")(\"" ~ NAME ~ "\", true, this);\n" ~
+	    "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
+	    _esdl__RandInitsSpec!(T, R[1..$]);
+	}
+      }
+      else {
+	enum _esdl__RandInitsSpec = _esdl__RandInitsSpec!(T, R[1..$]);
+      }
+    }
+}
+
 template _esdl__RandInits(T, int I=0)
 {
   static if(I == T.tupleof.length) {
@@ -742,7 +824,8 @@ template _esdl__RandInits(T, int I=0)
   }
   else {
     alias RAND = getRandAttr!(T, I);
-    static if(! __traits(isSame, RAND, _esdl__norand)) {
+    static if(! (__traits(isSame, RAND, _esdl__norand) ||
+		 is(getRandAttr!(T, I) == rand!false))) {
       enum NAME = T.tupleof[I].stringof;
       alias L = typeof(T.tupleof[I]);
       static if(is(L == class)) {
@@ -769,11 +852,41 @@ template _esdl__RandInits(T, int I=0)
   }
 }
 
+template _esdl__RandSetOuterSpec(T, R...)
+{
+  static if(R.length == 0) {
+    enum _esdl__RandSetOuterSpec = "";
+  }
+  else static if(is(getRandAttr!(T, R[0]) == rand!false)) {
+      enum string _esdl__RandSetOuterSpec = _esdl__RandSetOuterSpec!(T, R[1..$]);
+    }
+  else static if(! __traits(isSame, getRandAttr!(T, R[0]), _esdl__norand)) {
+      enum NAME = R[0];
+      alias L = typeof(__traits(getMember, T, NAME));
+      static if(is(L == class)) {
+	enum _esdl__RandSetOuterSpec =
+	  "    assert(this._esdl__outer." ~ NAME ~
+	  " !is null);\n    _esdl__" ~ NAME ~
+	  "._esdl__setOuter(this._esdl__outer." ~ NAME ~
+	  ");\n" ~ _esdl__RandSetOuterSpec!(T, R[1..$]);
+      }
+      else {
+	enum _esdl__RandSetOuterSpec = _esdl__RandSetOuterSpec!(T, R[1..$]);
+      }
+    }
+    else {
+      enum _esdl__RandSetOuterSpec = _esdl__RandSetOuterSpec!(T, R[1..$]);
+    }
+}
+
 template _esdl__RandSetOuter(T, int I=0)
 {
   static if(I == T.tupleof.length) {
     enum _esdl__RandSetOuter = "";
   }
+  else static if(is(getRandAttr!(T, I) == rand!false)) {
+      enum string _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+    }
   else static if(! __traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
       enum NAME = T.tupleof[I].stringof;
       alias L = typeof(T.tupleof[I]);
@@ -796,20 +909,38 @@ template _esdl__RandSetOuter(T, int I=0)
 
 // Returns a tuple consiting of the type of the rand variable and
 // also the @rand!() attribute it has been tagged with
-template _esdl__RandTypeAttr(T, int I)
+// template _esdl__RandTypeAttr(T, int I)
+// {
+//   import std.typetuple;
+//   alias _esdl__randAttrList = Filter!(_esdl__isAttrRand,
+// 				      __traits(getAttributes, T.tupleof[I]));
+//   static if(_esdl__randAttrList.length != 1) {
+//     static assert(false, "Expected exactly one @rand attribute on variable " ~
+// 		  T.tupleof[I].stringof ~ " of class " ~ T.stringof ~
+// 		  ". But found " ~ _esdl__randAttrList.length.stringof);
+//   }
+//   else {
+//     alias _esdl__RandTypeAttr = TypeTuple!(typeof(T.tupleof[I]),
+// 					   _esdl__randAttrList[0]);
+//   }
+// }
+
+template _esdl__RandDeclVarsSpec(T, R...)
 {
-  import std.typetuple;
-  alias _esdl__randAttrList = Filter!(_esdl__isAttrRand,
-					__traits(getAttributes, T.tupleof[I]));
-  static if(_esdl__randAttrList.length != 1) {
-    static assert(false, "Expected exactly one @rand attribute on variable " ~
-		  T.tupleof[I].stringof ~ " of class " ~ T.stringof ~
-		  ". But found " ~ _esdl__randAttrList.length.stringof);
+  static if(R.length == 0) {
+    enum _esdl__RandDeclVarsSpec = "";
   }
-  else {
-    alias _esdl__RandTypeAttr = TypeTuple!(typeof(T.tupleof[I]),
-					   _esdl__randAttrList[0]);
-  }
+  else static if(is(getRandAttr!(T, R[0]) == rand!false)) {
+      enum string _esdl__RandDeclVarsSpec = _esdl__RandDeclVarsSpec!(T, R[1..$]);
+    }
+  else static if(__traits(isSame, getRandAttr!(T, R[0]), _esdl__norand)) {
+      enum _esdl__RandDeclVarsSpec = _esdl__RandDeclVarsSpec!(T, R[1..$]);
+    }
+    else {
+      enum _esdl__RandDeclVarsSpec =
+	"  _esdl__Rand!(_esdl__T, " ~ I.stringof ~ ") _esdl__" ~
+	R[0] ~	";\n" ~ _esdl__RandDeclVarsSpec!(T, R[1..$]);
+    }
 }
 
 template _esdl__RandDeclVars(T, int I=0)
@@ -817,8 +948,11 @@ template _esdl__RandDeclVars(T, int I=0)
   static if(I == T.tupleof.length) {
     enum _esdl__RandDeclVars = "";
   }
+  else static if(is(getRandAttr!(T, I) == rand!false)) {
+      enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
+    }
   else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
-    enum _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
+      enum _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
     }
     else {
       enum _esdl__RandDeclVars =
@@ -827,30 +961,70 @@ template _esdl__RandDeclVars(T, int I=0)
     }
 }
 
+template _esdl__RandDeclFuncsSpec(T, R...)
+{
+  static if(R.length == 0) {
+    enum _esdl__RandDeclFuncsSpec = "";
+  }
+  else static if(is(getRandAttr!(T, R[0]) == rand!false)) {
+      enum string _esdl__RandDeclFuncsSpec = _esdl__RandDeclFuncsSpec!(T, R[1..$]);
+    }
+    else {
+      alias L = typeof(__traits(getMember, T, R[0]));
+      enum NAME = R[0];
+      // skip the constraints and _esdl__ variables
+      static if(is(L f == Constraint!C, immutable (char)[] C) ||
+		(NAME.length > 8 && NAME[0..7] == "_esdl__")) {
+	enum _esdl__RandDeclFuncsSpec = _esdl__RandDeclFuncsSpec!(T, R[1..$]);
+      }
+      else static if(is(getRandAttr!(T, R[0]) == rand!false)) {
+	  enum _esdl__RandDeclFuncsSpec =
+	    _esdl__RandDeclFuncsSpec!(T, R[1..$]);
+	}
+      else static if(__traits(isSame, getRandAttr!(T, R[0]), _esdl__norand)) {
+	  enum _esdl__RandDeclFuncsSpec =
+	    "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
+	    _esdl__RandDeclFuncsSpec!(T, R[1..$]);
+	}
+	else {
+	  enum _esdl__RandDeclFuncsSpec =
+	    "  auto " ~ NAME ~ "() { return _esdl__" ~ NAME ~ "; }\n" ~
+	    _esdl__RandDeclFuncsSpec!(T, R[1..$]);
+	}
+    }
+}
+
 template _esdl__RandDeclFuncs(T, int I=0)
 {
   static if(I == T.tupleof.length) {
     enum _esdl__RandDeclFuncs = "";
   }
-  else {
-    alias L = typeof(T.tupleof[I]);
-    enum NAME = T.tupleof[I].stringof;
-    // skip the constraints and _esdl__ variables
-    static if(is(L f == Constraint!C, immutable (char)[] C) ||
-	      (NAME.length > 8 && NAME[0..7] == "_esdl__")) {
-      enum _esdl__RandDeclFuncs = _esdl__RandDeclFuncs!(T, I+1);
+  else static if(is(getRandAttr!(T, I) == rand!false)) {
+      enum string _esdl__RandDeclFuncs = _esdl__RandDeclFuncs!(T, I+1);
     }
-    else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
-	enum _esdl__RandDeclFuncs =
-	  "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
-	  _esdl__RandDeclFuncs!(T, I+1);
+    else {
+      alias L = typeof(T.tupleof[I]);
+      enum NAME = T.tupleof[I].stringof;
+      // skip the constraints and _esdl__ variables
+      static if(is(L f == Constraint!C, immutable (char)[] C) ||
+		(NAME.length > 8 && NAME[0..7] == "_esdl__")) {
+	enum _esdl__RandDeclFuncs = _esdl__RandDeclFuncs!(T, I+1);
       }
-      else {
-	enum _esdl__RandDeclFuncs =
-	  "  auto " ~ NAME ~ "() { return _esdl__" ~ NAME ~ "; }\n" ~
-	  _esdl__RandDeclFuncs!(T, I+1);
-      }
-  }
+      else static if(is(getRandAttr!(T, I) == rand!false)) {
+	  enum _esdl__RandDeclFuncs =
+	    _esdl__RandDeclFuncs!(T, I+1);
+	}
+      else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
+	  enum _esdl__RandDeclFuncs =
+	    "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
+	    _esdl__RandDeclFuncs!(T, I+1);
+	}
+	else {
+	  enum _esdl__RandDeclFuncs =
+	    "  auto " ~ NAME ~ "() { return _esdl__" ~ NAME ~ "; }\n" ~
+	    _esdl__RandDeclFuncs!(T, I+1);
+	}
+    }
 }
 
 template _esdl__ConstraintsDecl(T, int I=0)
@@ -858,31 +1032,34 @@ template _esdl__ConstraintsDecl(T, int I=0)
   static if(I == T.tupleof.length) {
     enum _esdl__ConstraintsDecl = "";
   }
-  else {
-    alias L = typeof(T.tupleof[I]);
-    enum NAME = T.tupleof[I].stringof;
-    // skip the constraints and _esdl__ variables
-    static if(is(L f == Constraint!C, immutable (char)[] C)) {
-      enum _esdl__ConstraintsDecl =
-	"  Constraint!(_esdl__constraintString!(_esdl__T, " ~ I.stringof ~ ")) " ~
-	NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
+  else static if(is(getRandAttr!(T, I) == rand!false)) {
+      enum string _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
     }
     else {
-      enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
+      alias L = typeof(T.tupleof[I]);
+      enum NAME = T.tupleof[I].stringof;
+      // skip the constraints and _esdl__ variables
+      static if(is(L f == Constraint!C, immutable (char)[] C)) {
+	enum _esdl__ConstraintsDecl =
+	  "  Constraint!(_esdl__constraintString!(_esdl__T, " ~ I.stringof ~ ")) " ~
+	  NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
+      }
+      else {
+	enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
+      }
     }
-  }
 }
 
 
 template _esdl__constraintString(T, int I)
 {
-    alias L = typeof(T.tupleof[I]);
-    static if(is(L f == Constraint!C, immutable (char)[] C)) {
-      enum string _esdl__constraintString = C;
-    }
-    else {
-      static assert(false);
-    }
+  alias L = typeof(T.tupleof[I]);
+  static if(is(L f == Constraint!C, immutable (char)[] C)) {
+    enum string _esdl__constraintString = C;
+  }
+  else {
+    static assert(false);
+  }
 }
 
 template _esdl__CstInits(T, int I=0)
@@ -890,25 +1067,28 @@ template _esdl__CstInits(T, int I=0)
   static if(I == T.tupleof.length) {
     enum _esdl__CstInits = "";
   }
-  else {
-    alias L = typeof(T.tupleof[I]);
-    enum string NAME = T.tupleof[I].stringof;
-    static if(is(L f == Constraint!C, immutable (char)[] C)) {
-      enum string _esdl__CstInits =
- 	"    " ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
-	~ I.stringof ~ "))(\"" ~
-	NAME ~ "\");\n    _esdl__cstsList ~= " ~ NAME ~
-	// ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~ 
-	";\n" ~ _esdl__CstInits!(T, I+1);
+  else static if(is(getRandAttr!(T, I) == rand!false)) {
+      enum string _esdl__CstInits = _esdl__CstInits!(T, I+1);
     }
-    else static if(hasRandAttr!(T, I) && is(L == class)) {
-	enum string _esdl__CstInits = "    _esdl__cstsList ~= " ~ NAME ~
-	  "._esdl__cstsList;\n" ~ _esdl__CstInits!(T, I+1);
+    else {
+      alias L = typeof(T.tupleof[I]);
+      enum string NAME = T.tupleof[I].stringof;
+      static if(is(L f == Constraint!C, immutable (char)[] C)) {
+	enum string _esdl__CstInits =
+	  "    " ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
+	  ~ I.stringof ~ "))(\"" ~
+	  NAME ~ "\");\n    _esdl__cstsList ~= " ~ NAME ~
+	  // ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~ 
+	  ";\n" ~ _esdl__CstInits!(T, I+1);
       }
-      else {
-	enum string _esdl__CstInits = _esdl__CstInits!(T, I+1);
-      }
-  }
+      else static if(hasRandAttr!(T, I) && is(L == class)) {
+	  enum string _esdl__CstInits = "    _esdl__cstsList ~= " ~ NAME ~
+	    "._esdl__cstsList;\n" ~ _esdl__CstInits!(T, I+1);
+	}
+	else {
+	  enum string _esdl__CstInits = _esdl__CstInits!(T, I+1);
+	}
+    }
 }
 
 
@@ -921,7 +1101,7 @@ template _esdl__ListRands(T, int I=0) {
   }
   else {
     static if(hasRandAttr!(T, I)) {
-    // static if(hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
+      // static if(hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
       alias _esdl__ListRands = TypeTuple!(T, I, _esdl__ListRands!(T, I+1));
     }
     else {
@@ -952,7 +1132,12 @@ template hasRandInList(A...) {
     }
 }
 
-template getRandAttr(T, int I=0) {
+template getRandAttr(T, string R) {
+  alias getRandAttr = scanRandAttr!(__traits(getAttributes,
+					     __traits(getMember, T, R)));
+}
+
+template getRandAttr(T, int I) {
   alias getRandAttr = scanRandAttr!(__traits(getAttributes, T.tupleof[I]));
 }
 
@@ -1104,69 +1289,69 @@ abstract class RndVecExpr
 
   public RndVec2VecExpr opBinary(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
-  {
-    auto qq = new RndVecConst(q, isVarSigned!Q);
-    static if(op == "&") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.AND);
-    }
-    static if(op == "|") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.OR);
-    }
-    static if(op == "^") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.XOR);
-    }
-    static if(op == "+") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.ADD);
-    }
-    static if(op == "-") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.SUB);
-    }
-    static if(op == "*") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.MUL);
-    }
-    static if(op == "/") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.DIV);
-    }
-    static if(op == "<<") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.LSH);
-    }
-    static if(op == ">>") {
-      return new RndVec2VecExpr(this, qq, CstBinVecOp.RSH);
-    }
-  }
+      {
+	auto qq = new RndVecConst(q, isVarSigned!Q);
+	static if(op == "&") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.AND);
+	}
+	static if(op == "|") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.OR);
+	}
+	static if(op == "^") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.XOR);
+	}
+	static if(op == "+") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.ADD);
+	}
+	static if(op == "-") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.SUB);
+	}
+	static if(op == "*") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.MUL);
+	}
+	static if(op == "/") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.DIV);
+	}
+	static if(op == "<<") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.LSH);
+	}
+	static if(op == ">>") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.RSH);
+	}
+      }
 
   public RndVec2VecExpr opBinaryRight(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
-  {
-    auto qq = new RndVecConst(q, isVarSigned!Q);
-    static if(op == "&") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.AND);
-    }
-    static if(op == "|") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.OR);
-    }
-    static if(op == "^") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.XOR);
-    }
-    static if(op == "+") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.ADD);
-    }
-    static if(op == "-") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.SUB);
-    }
-    static if(op == "*") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.MUL);
-    }
-    static if(op == "/") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.DIV);
-    }
-    static if(op == "<<") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.LSH);
-    }
-    static if(op == ">>") {
-      return new RndVec2VecExpr(qq, this, CstBinVecOp.RSH);
-    }
-  }
+      {
+	auto qq = new RndVecConst(q, isVarSigned!Q);
+	static if(op == "&") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.AND);
+	}
+	static if(op == "|") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.OR);
+	}
+	static if(op == "^") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.XOR);
+	}
+	static if(op == "+") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.ADD);
+	}
+	static if(op == "-") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.SUB);
+	}
+	static if(op == "*") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.MUL);
+	}
+	static if(op == "/") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.DIV);
+	}
+	static if(op == "<<") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.LSH);
+	}
+	static if(op == ">>") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.RSH);
+	}
+      }
 
   public RndVecExpr opIndex(RndVecExpr index)
   {
@@ -1186,10 +1371,10 @@ abstract class RndVecExpr
 
   public RndVecExpr opSlice(P, Q)(P p, Q q) if((isIntegral!P || isBitVector!P) &&
 					       (isIntegral!Q || isBitVector!Q))
-  {
-    return new RndVecSliceExpr(this, new RndVecConst(p, isVarSigned!P),
-			       new RndVecConst(q, isVarSigned!Q));
-  }
+    {
+      return new RndVecSliceExpr(this, new RndVecConst(p, isVarSigned!P),
+				 new RndVecConst(q, isVarSigned!Q));
+    }
 
   public RndVec2BddExpr lth(Q)(Q q) if(isBitVector!Q || isIntegral!Q) {
     auto qq = new RndVecConst(q, isVarSigned!Q);
@@ -1257,30 +1442,30 @@ abstract class RndVecExpr
     return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICIMP);
   }
 
-  public CstBdd2BddExpr implies(RndVecExpr other)
-  {
-    return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICIMP);
-  }
+  // public CstBdd2BddExpr implies(RndVecExpr other)
+  // {
+  //   return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICIMP);
+  // }
 
   public CstBdd2BddExpr logicOr(CstBddExpr other)
   {
     return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICOR);
   }
 
-  public CstBdd2BddExpr logicOr(RndVecExpr other)
-  {
-    return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICOR);
-  }
+  // public CstBdd2BddExpr logicOr(RndVecExpr other)
+  // {
+  //   return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICOR);
+  // }
 
   public CstBdd2BddExpr logicAnd(CstBddExpr other)
   {
     return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICAND);
   }
 
-  public CstBdd2BddExpr logicAnd(RndVecExpr other)
-  {
-    return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICAND);
-  }
+  // public CstBdd2BddExpr logicAnd(RndVecExpr other)
+  // {
+  //   return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICAND);
+  // }
 
   public string name();
 }
@@ -1389,7 +1574,7 @@ abstract class FxdVecVar: RndVecPrim
 
   override public long evaluate() {
     // if(! this.isRand || _stage.solved()) {
-      return value();
+    return value();
     // }
     // else {
     //   import std.conv;
@@ -1601,6 +1786,20 @@ mixin template EnumConstraints(T) {
   }
 }
 
+template _esdl__Rand(T, string S, int I=0)
+{
+  static if(I == T.tupleof.length) {
+    static assert(false, "There is no member named " ~ S ~ " in class " ~ T.stringof);
+  }
+  enum NAME = __traits(identifier, T.tupleof[I]);
+  static if(NAME == S) {
+    alias _esdl__Rand = _esdl__Rand!(T, I);
+  }
+  else {
+    alias _esdl__Rand = _esdl__Rand!(T, S, I+I);
+  }
+}
+
 template _esdl__Rand(T, int I)
 {
   import std.traits;
@@ -1609,8 +1808,8 @@ template _esdl__Rand(T, int I)
     alias _esdl__Rand = RndVecArr!(T, I);
   }
   else static if(isBitVector!L || isIntegral!L) {
-    alias _esdl__Rand = RndVec!(T, I);
-  }
+      alias _esdl__Rand = RndVec!(T, I);
+    }
   else static if(is(L == class)) {
       alias _esdl__Rand = L._esdl__Solver;
     }
@@ -1840,11 +2039,11 @@ class RndVecArr(T, int I, int N=0): RndVecArrVar
 	  auto init = (E).init;
 	  if(i < (_solver._esdl__outer.tupleof[I]).length) {
 	    this[i] = new RndVec!(T, I, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
-					true, this, i);
+	  				     true, this, i);
 	  }
 	  else {
 	    this[i] = new RndVec!(T, I, N+1)(_name ~ "[" ~ i.to!string() ~ "]",
-					true, this, i);
+	  				     true, this, i);
 	  }
 	  assert(this[i] !is null);
 	}
@@ -1852,17 +2051,17 @@ class RndVecArr(T, int I, int N=0): RndVecArrVar
       // }
     }
 
-    static private long getLen_(A, I...)(ref A arr, I idx)
+    static private long getLen_(A, N...)(ref A arr, N idx)
       if(isArray!A) {
-	static if(I.length == 0) return arr.length;
+	static if(N.length == 0) return arr.length;
 	else {
 	  return getLen_(arr[idx[0]], idx[1..$]);
 	}
       }
 
-    static private void setLen_(A, I...)(ref A arr, long v, I idx)
+    static private void setLen_(A, N...)(ref A arr, long v, N idx)
       if(isArray!A) {
-	static if(I.length == 0) {
+	static if(N.length == 0) {
 	  static if(isDynamicArray!A) {
 	    arr.length = v;
 	  }
@@ -1875,17 +2074,17 @@ class RndVecArr(T, int I, int N=0): RndVecArrVar
 	}
       }
 
-    static private long getVal(A, I...)(ref A arr, I idx)
-      if(isArray!A && I.length > 0) {
-	static if(I.length == 1) return arr[idx[0]];
+    static private long getVal(A, N...)(ref A arr, N idx)
+      if(isArray!A && N.length > 0) {
+	static if(N.length == 1) return arr[idx[0]];
 	else {
 	  return getVal(arr[idx[0]], idx[1..$]);
 	}
       }
 
-    static private void setVal(A, I...)(ref A arr, long v, I idx)
-      if(isArray!A && I.length > 0) {
-	static if(I.length == 1) {
+    static private void setVal(A, N...)(ref A arr, long v, N idx)
+      if(isArray!A && N.length > 0) {
+	static if(N.length == 1) {
 	  alias E = ElementType!A;
 	  arr[idx[0]] = cast(E) v;
 	}
@@ -1894,28 +2093,28 @@ class RndVecArr(T, int I, int N=0): RndVecArrVar
 	}
       }
 
-    public long getLen_(I...)(I idx) {
+    public long getLen_(N...)(N idx) {
       return getLen_(_solver._esdl__outer.tupleof[I], idx);
     }
 
-    public void setLen_(I...)(long v, I idx) {
-      setLen_(_solver._esdl__outer.tupleof[I], v, idx);
+    public void setLen_(N...)(long v, N idx) {
+      setLen_(__traits(getMember, _solver._esdl__outer, S), v, idx);
     }
 
     override public long getLen() {
-      return getLen_(_solver._esdl__outer.tupleof[I]);
+      return getLen_(__traits(getMember, _solver._esdl__outer, S));
     }
 
     override public void setLen(long v) {
-      setLen_(_solver._esdl__outer.tupleof[I], v);
+      setLen_(__traits(getMember, _solver._esdl__outer, S), v);
     }
 
     public long getVal(J...)(J idx) {
-      return getVal(_solver._esdl__outer.tupleof[I], idx);
+      return getVal(__traits(getMember, _solver._esdl__outer, S), idx);
     }
 
     public void setVal(J...)(long v, J idx) {
-      setVal(_solver._esdl__outer.tupleof[I], v, idx);
+      setVal(__traits(getMember, _solver._esdl__outer, S), v, idx);
     }
   }
   else {
@@ -1931,19 +2130,19 @@ class RndVecArr(T, int I, int N=0): RndVecArrVar
       _arrLen = new RndVecArrLen(name, maxArrLen, isRand, this);
     }
 
-    public long getLen(I...)(I idx) {
+    public long getLen(N...)(N idx) {
       return _parent.getLen(_index, idx);
     }
 
-    public void setLen(I...)(long v, I idx) {
+    public void setLen(N...)(long v, N idx) {
       _parent.setLen(v, _index, idx);
     }
 
-    public long getVal(I...)(I idx) {
+    public long getVal(N...)(N idx) {
       return _parent.getVal(_index, idx);
     }
 
-    public void setVal(I...)(long v, I idx) {
+    public void setVal(N...)(long v, N idx) {
       _parent.setVal(v, _index, idx);
     }
   }
@@ -2849,6 +3048,34 @@ class RndVec2BddExpr: CstBddExpr
       if(add) _arrVars ~= arrVar;
     }
   }
+}
+
+class CstBddConst: CstBddExpr
+{
+  bool _expr;
+   
+  public this(bool expr) {
+    _expr = expr;
+  }
+
+  override public BDD getBDD(CstStage stage, Buddy buddy) {
+    if(_expr) return buddy.one();
+    else return buddy.zero();
+  }
+
+  override public string name() {
+    if(_expr) return "TRUE";
+    else return "FALSE";
+  }
+   
+  override public RndVecPrim[] getPrims() {
+    return [];
+  }
+
+  override public CstBddConst unroll(RndVecLoopVar l, uint n) {
+    return this;
+  }
+
 }
 
 class CstNotBddExpr: CstBddExpr
