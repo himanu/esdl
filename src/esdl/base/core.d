@@ -270,7 +270,7 @@ package interface NamedComp: EsdlObj, TimeContext
       synchronized(this) {
 	import std.conv: to;
 	static if(S=="") {
-	  string name = t.tupleof[I].stringof[2..$]; // chomp "t."
+	  string name = __traits(identifier, T.tupleof[I]);
 	}
 	else {
 	  string name = S;
