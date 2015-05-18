@@ -26,7 +26,9 @@ template _esdl__SolverUpcast(T) {
 	    && is(B[0] == class)) {
     alias U = B[0];
     // check if the base class has Randomization
-    static if(__traits(compiles, U._esdl__Solver)) {
+    // static if(__traits(compiles, U._esdl__Solver)) {
+    static if(__traits(compiles, U._esdl__thisHasRandomization()) &&
+	      is(U == typeof(U._esdl__thisHasRandomization()))) {
       alias _esdl__SolverUpcast = U._esdl__SolverRand!U;
     }
     else {
@@ -1206,27 +1208,31 @@ string _esdl__randsMixin(T)() {
 }
 
 class Randomizable {
+  mixin Randomization;
   // enum bool _esdl__hasRandomization = true;
-  _esdl__SolverBase _esdl__solverInst;
-  public uint _esdl__randSeed;
-  public _esdl__SolverBase _esdl__getSolver() {
-    return _esdl__solverInst;
-  }
-  public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {}
-  void useThisBuddy() {
-    import esdl.data.obdd;
-    useBuddy(_esdl__solverInst._esdl__buddy);
-  }
-  public void seedRandom(int seed) {
-    _esdl__randSeed = seed;
-    if(_esdl__solverInst !is null) {
-      _esdl__solverInst._esdl__rGen.seed(seed);
-    }
-  }
-  alias srandom = seedRandom;	// SV names the similar method srandom
-  public void _esdl__initSolver() {
-    assert(false, "_esdl__initSolver should never be called for Randomizable object");
-  }
+  // _esdl__SolverBase _esdl__solverInst;
+  // public uint _esdl__randSeed;
+  // public auto _esdl__thisHasRandomization()() {
+  //   return this;
+  // }
+  // public _esdl__SolverBase _esdl__getSolver() {
+  //   return _esdl__solverInst;
+  // }
+  // public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {}
+  // void useThisBuddy() {
+  //   import esdl.data.obdd;
+  //   useBuddy(_esdl__solverInst._esdl__buddy);
+  // }
+  // public void seedRandom(int seed) {
+  //   _esdl__randSeed = seed;
+  //   if(_esdl__solverInst !is null) {
+  //     _esdl__solverInst._esdl__rGen.seed(seed);
+  //   }
+  // }
+  // alias srandom = seedRandom;	// SV names the similar method srandom
+  // public void _esdl__initSolver() {
+  //   assert(false, "_esdl__initSolver should never be called for Randomizable object");
+  // }
 }
 
 mixin template Randomization()
@@ -1234,6 +1240,10 @@ mixin template Randomization()
   enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
 
+  static public _esdl__Type _esdl__thisHasRandomization()() {
+    return null;
+  }
+  
   alias _esdl__Solver = _esdl__SolverRand!_esdl__Type;
 
   static class _esdl__SolverRand(_esdl__T): _esdl__SolverUpcast!_esdl__T
@@ -1319,7 +1329,7 @@ mixin template Randomization()
     return mixin(NAME);
   }
 
-  static if(is(_esdl__T: Randomizable) ||
+  static if(// is(_esdl__T: Randomizable) ||
 	    __traits(compiles, _esdl__solverInst)) {
     override public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
