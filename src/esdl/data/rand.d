@@ -99,15 +99,6 @@ template CheckRandParamsLoop(N...) {
   }
 }
 
-template _esdl__isAttrRand(alias R) {
-  static if(__traits(isSame, R, rand) || is(R unused: rand!M, M...)) {
-    enum _esdl__isAttrRand = true;
-  }
-  else {
-    enum _esdl__isAttrRand = false;
-  }
-}
-
 template _esdl__baseHasRandomization(T) {
   static if(is(T B == super)
 	    && is(B[0] == class)) {
@@ -121,19 +112,6 @@ template _esdl__baseHasRandomization(T) {
   }
     else {
       enum bool _esdl__baseHasRandomization = false;
-    }
-}
-
-template _esdl__upcast(T, int N=1) {
-  static if(N == 0) {
-    alias _esdl__upcast=T;
-  }
-  else static if(is(T B == super)
-		 && is(B[0] == class)) {
-      alias _esdl__upcast = _esdl__upcast!(B[0], N-1);
-    }
-    else {
-      static assert(false, "Can not upcast " ~ T.stringof);
     }
 }
 
@@ -396,24 +374,6 @@ template _esdl__RandSetOuter(T, int I=0)
     }
 }
 
-
-// Returns a tuple consiting of the type of the rand variable and
-// also the @rand!() attribute it has been tagged with
-// template _esdl__RandTypeAttr(T, int I)
-// {
-//   import std.typetuple;
-//   alias _esdl__randAttrList = Filter!(_esdl__isAttrRand,
-//				      __traits(getAttributes, T.tupleof[I]));
-//   static if(_esdl__randAttrList.length != 1) {
-//     static assert(false, "Expected exactly one @rand attribute on variable " ~
-//		  __traits(identifier, T.tupleof[I]) ~ " of class " ~ T.stringof ~
-//		  ". But found " ~ _esdl__randAttrList.length.stringof);
-//   }
-//   else {
-//     alias _esdl__RandTypeAttr = TypeTuple!(typeof(T.tupleof[I]),
-//					   _esdl__randAttrList[0]);
-//   }
-// }
 
 template _esdl__RandDeclVarsSpec(T, R...)
 {
@@ -1413,8 +1373,6 @@ mixin template Randomization()
 
   }
 
-  // static if(__traits(compiles,
-  //		     _esdl__upcast!(typeof(this))._esdl__isRandomizable)) {
   static if(_esdl__baseHasRandomization!_esdl__Type) {
   }
 }

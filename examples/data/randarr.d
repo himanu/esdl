@@ -43,17 +43,17 @@ class Bar : Foo
 
     // this is a comment
     foreach(i, f; foo) {
-      if(i < 6) {
+      if(i < 2) {
 	f < 24;
       }
       else {
-	f < 18;
+	f < 8;
       }
     }
 
     foreach(i, f; foo) {
       f < 64;
-      foo[i] > 16;
+      foo[i] > 0;
     }
   } cstFoo;
 
