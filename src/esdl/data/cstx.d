@@ -920,20 +920,16 @@ struct CstParser {
       srcTag = srcCursor;
       int[MaxHierDepth * 2] idChain = parseIdentifierChain();
       if(idChain[0] != -1) {
-	// idMatch is applicable only if there is one element in the
-	// chain
-	if(idChain[2] == -1) {
-	  int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-	  if(idx == -1) {
-	    fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-	  }
-	  else {
-	    fill(varMap[idx].xLat);
-	  }
+	int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	if(idx == -1) {
+	  fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
 	}
 	else {
-	  // fill("_esdl__rnd!q{");
-	  for (size_t i=0; i != MaxHierDepth-1; ++i) {
+	  fill(varMap[idx].xLat);
+	}
+	if(idChain[2] != -1) {
+	  fill(".");
+	  for (size_t i=1; i != MaxHierDepth-1; ++i) {
 	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
 	    if(idChain[2*i+2] == -1) break;
 	    else fill(".");
