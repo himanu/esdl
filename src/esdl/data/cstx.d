@@ -260,7 +260,45 @@ struct CstParser {
     return result;
   }
 
-
+  void procIdentifier() {
+    // parse an identifier and the following '.' heirarcy if any
+    auto srcTag = srcCursor;
+    int[MaxHierDepth * 2] idChain = parseIdentifierChain();
+    if(idChain[0] != -1) {
+      int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+      if(idx == -1) {
+	fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+      }
+      else {
+	fill(varMap[idx].xLat);
+      }
+      if(idChain[2] != -1) {
+	fill(".");
+	for (size_t i=1; i != MaxHierDepth-1; ++i) {
+	  fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
+	  if(idChain[2*i+2] == -1) break;
+	  else fill(".");
+	}
+	// fill("}(_outer)");
+      }
+    }
+    else {
+      srcTag = parseLiteral();
+      if(srcCursor > srcTag) {
+	fill(CST[srcTag..srcCursor]);
+      }
+      else {
+	srcTag = parseWithArg();
+	if(srcCursor > srcTag) {
+	  fill("_esdl__arg!");
+	  fill(CST[srcTag+1..srcCursor]);
+	}
+	else {
+	  errorToken();
+	}
+      }
+    }
+  }
 
   size_t parseLineComment() {
     size_t start = srcCursor;
@@ -722,6 +760,11 @@ struct CstParser {
       errorToken();
     }
 
+    int idx = idMatch(array);
+    if(idx != -1) {
+      array = varMap[idx].xLat;
+    }
+
     // add index
     if(index.length != 0) {
       VarPair x;
@@ -753,9 +796,6 @@ struct CstParser {
   }
 
   void procIfBlock() {
-    string index;
-    string elem;
-    string array;
     size_t srcTag;
 
     srcTag = parseSpace();
@@ -838,13 +878,55 @@ struct CstParser {
     }
   }
 
+  void procBeforeStmt() {
+    size_t srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    srcTag = parseIdentifier();
+    if(CST[srcTag..srcCursor] != "solve") {
+      import std.conv: to;
+      assert(false, "Not a solve statement at: " ~ srcTag.to!string);
+    }
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    procIdentifier();
+
+    fill(".solveBefore(");
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    srcTag = parseIdentifier();
+    if(CST[srcTag..srcCursor] != "before") {
+      import std.conv: to;
+      assert(false, "Expected keywork \"before\" at: " ~ srcTag.to!string);
+    }
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    procIdentifier();
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if(CST[srcCursor++] !is ';') {
+      assert(false, "Error: -- ';' missing at end of statement; at " ~
+	     srcCursor.to!string);
+    }
+
+    fill(");\n");
+  }
+
   enum StmtToken: byte
     {   STMT    = 0,
-	FOREACH = 1,
-	IFCOND  = 2,
-	ENDCST  = 3,		// end of text
-	BLOCK   = 4,
-	ENDBLOCK= 5,
+	FOREACH,
+	IFCOND,
+	ENDCST,		// end of text
+	BEFORE,
+	BLOCK,
+	ENDBLOCK,
 	// ANYTHING ELSE COMES HERE
 
 	ERROR,
@@ -874,6 +956,7 @@ struct CstParser {
     if(srcCursor > srcTag) {
       if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
       if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
+      if(CST[srcTag..srcCursor] == "solve") return StmtToken.BEFORE;
       // not a keyword
       return StmtToken.STMT;
     }
@@ -916,44 +999,7 @@ struct CstParser {
       case OpUnaryToken.NONE: break;
       }
 
-      // parse an identifier and the following '.' heirarcy if any
-      srcTag = srcCursor;
-      int[MaxHierDepth * 2] idChain = parseIdentifierChain();
-      if(idChain[0] != -1) {
-	int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-	if(idx == -1) {
-	  fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-	}
-	else {
-	  fill(varMap[idx].xLat);
-	}
-	if(idChain[2] != -1) {
-	  fill(".");
-	  for (size_t i=1; i != MaxHierDepth-1; ++i) {
-	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
-	    if(idChain[2*i+2] == -1) break;
-	    else fill(".");
-	  }
-	  // fill("}(_outer)");
-	}
-      }
-      else {
-	srcTag = parseLiteral();
-	if(srcCursor > srcTag) {
-	  fill(CST[srcTag..srcCursor]);
-	}
-	else {
-	  srcTag = parseWithArg();
-	  if(srcCursor > srcTag) {
-	    fill("_esdl__arg!");
-	    fill(CST[srcTag+1..srcCursor]);
-	  }
-	  else {
-	    errorToken();
-	  }
-	}
-      }
-
+      procIdentifier();
       srcTag = moveToRightParens();
       
       // fill(CST[srcTag..srcCursor]);
@@ -1163,6 +1209,9 @@ struct CstParser {
       return;
     case StmtToken.IFCOND:
       procIfBlock();
+      return;
+    case StmtToken.BEFORE:
+      procBeforeStmt();
       return;
     case StmtToken.ERROR:
       assert(false, "Unidentified symbol in constraints at: " ~

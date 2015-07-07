@@ -17,7 +17,6 @@ class Bar
   // @rand ubyte baz = 12;
   //   @rand ubyte[8] bar;
 
-
   void display() {
     writeln("foo: ", foo);
     //     writeln("bar: ", bar);
@@ -25,7 +24,9 @@ class Bar
   }
 
   Constraint! q{
-    foo.length < 2;
+    foo.length <= 8;
+    foo.length > 1;
+    foo[1] == 24;
     // baz < 32;
   } cstFooLength;
 

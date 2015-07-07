@@ -14,7 +14,7 @@ int FFFF = 20;
 class Foo
 {
   mixin Randomization;
-  @rand!8 byte[] foo;
+  @rand!32 byte[] foo;
   @rand ubyte baz = 12;
   void display() {}
 }
@@ -33,9 +33,9 @@ class Bar : Foo
   }
 
   Constraint! q{
-    foo.length > 2;
+    foo.length > 12;
     baz < 32;
-    FFFF + baz == 50;
+    // FFFF + baz == 50;
   } cstFooLength;
 
   Constraint! q{
@@ -69,7 +69,7 @@ class Bar : Foo
 
 void main() {
   Bar foo = new Bar;
-  for (size_t i=0; i!=4; ++i) {
+  for (size_t i=0; i!=40; ++i) {
     foo.randomize();
     foo.display();
   }

@@ -14,18 +14,28 @@ int FFFF = 20;
 class Foo
 {
   mixin Randomization;
-  @rand!(8,8) byte[][] foo;
+  @rand!(2,2,2,2,4) byte[][][][][] foo;
   void display() {
     import std.stdio;
     writeln(foo);
   }
+
   Constraint!q{
-    foo.length > 4;
-    foreach(i, ff; foo) {
-      ff.length > 4;
-      foreach(j, f; ff) {
-	f == j + 2;
-	f < 20;
+    foo.length >= 1;
+    foreach(ff; foo) {
+      ff.length >= 1;
+      foreach(f; ff) {
+	f.length >= 1;
+	foreach(a; f) {
+	  a.length == 2;
+	  foreach(b; a) {
+	    b.length >= 2;
+	    foreach(c; b) {
+	      c > 2;
+	      c < 8;
+	    }
+	  }
+	}
       }
     }
   } aconst;
@@ -33,7 +43,7 @@ class Foo
 
 void main() {
   Foo foo = new Foo;
-  for (size_t i=0; i!=40; ++i) {
+  for (size_t i=0; i!=400; ++i) {
     foo.randomize();
     foo.display();
   }

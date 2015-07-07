@@ -14,18 +14,21 @@ int FFFF = 20;
 class Foo
 {
   mixin Randomization;
-  @rand!(8,8) byte[][] foo;
+  @rand!(4,4,4) byte[][][] foo;
   void display() {
     import std.stdio;
     writeln(foo);
   }
   Constraint!q{
-    foo.length > 4;
-    foreach(i, ff; foo) {
-      ff.length > 4;
+    foo.length > 1;
+    foreach(ff; foo) {
+      ff.length > 1;
       foreach(j, f; ff) {
-	f == j + 2;
-	f < 20;
+	f.length > 2;
+	foreach(i, a; f) {
+	  a == j + i;
+	  // a < 10;
+	}
       }
     }
   } aconst;

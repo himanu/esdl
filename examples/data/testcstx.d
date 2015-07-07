@@ -1,16 +1,6 @@
 import esdl.data.cstx;
-
-enum string CST=q{
-    foreach(i, f; bar) f <= i;
-
-    foreach(i, f; foo) if(i < 6) f == 24;
-    
-    foreach(i, f; foo) {
-      f < 64;
-      f > 16;
-    }
-    
-};
+enum string CST="foo.length == 8;\nforeach(_esdl__elem_foo_0; foo) {\n_esdl__elem_foo_0.length == 4;\n}"
+;
 
   // q{
 //   // ewfjewjofew
@@ -34,7 +24,7 @@ enum string CST=q{
 
 void main()
 {
-  auto parser = ConstraintParser(CST);
+  auto parser = CstParser(CST);
   // auto parser2 = parser.exprParser(60);
   auto test = parser.translate();
   import std.stdio;
