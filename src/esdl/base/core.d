@@ -138,7 +138,7 @@ package interface NamedComp: EsdlObj, TimeContext
   public void _esdl__setName(string name);
   public NamedComp getParent();
   public string getName();
-  public RootEntityIntf getRoot();
+  public RootEntity getRoot();
   public EsdlSimulator getSimulator();
   // useful for removing dynamic process
   protected void removeProcess(Process t);
@@ -196,7 +196,7 @@ package interface NamedComp: EsdlObj, TimeContext
 
     // Look for the root object in the parent and return it
     static if(!__traits(compiles, _esdl__root)) {
-      public final RootEntityIntf getRoot() {
+      public final RootEntity getRoot() {
 	auto parent = this.getParent();
 	if(parent !is null) {
 	  return parent.getRoot;
@@ -699,10 +699,10 @@ public interface HierComp: NamedComp, ParContext
     // not modified) in the simulation phase, as a result these
     // varables can be treated as effectively immutable
     static if(!__traits(compiles, _esdl__root)) {
-      @_esdl__ignore protected RootEntityIntf _esdl__root;
+      @_esdl__ignore protected RootEntity _esdl__root;
     }
 
-    public final void _esdl__setRoot(RootEntityIntf root) {
+    public final void _esdl__setRoot(RootEntity root) {
       synchronized(this) {
 	if(this._esdl__root !is null &&
 	   this._esdl__root !is root) {
@@ -715,7 +715,7 @@ public interface HierComp: NamedComp, ParContext
     }
 
 
-    public final override RootEntityIntf getRoot() {
+    public final override RootEntity getRoot() {
       if(_esdl__root) return _esdl__root;
       assert(false, "Root not set for HierComp " ~ getName());
       // synchronized(this) {
@@ -727,7 +727,7 @@ public interface HierComp: NamedComp, ParContext
       //     return _esdl__root;
       //   }
       //   else {
-      //     RootEntityIntf root =(cast(RootEntityIntf) this);
+      //     RootEntity root =(cast(RootEntity) this);
       //     if(root !is null) return root;
       //     else {
       //       assert(false, "getRoot: ElabContext Inst " ~ getName() ~ ":" ~
@@ -3251,7 +3251,7 @@ abstract private class SimEvent: EventClient
   // Only during the schedule phase
   public void trigger(EsdlSimulator sim) {assert(false, "Can trigger only a timed event");}
 
-  public final RootEntityIntf getRoot() {
+  public final RootEntity getRoot() {
     return this.getObj.getRoot;
   }
   public final EsdlSimulator getSimulator() {
@@ -4391,14 +4391,14 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
       }
 
       override void _esdl__config_timePrecision(Time time) {
-	this._esdl__config!timePrecision(this);
+	this._esdl__config!timePrecision(this, time);
       }
 
       override void _esdl__config_timeUnit(Time time) {
-	this._esdl__config!timeUnit(this);
+	this._esdl__config!timeUnit(this, time);
       }
   
-      override void _esdl__elab_virtual(parent linfo) {
+      override void _esdl__elab_virtual(parallelize linfo) {
 	this._esdl__elab(this, linfo);
       }
     }
@@ -4469,6 +4469,7 @@ template Worker(alias F, int R=0, size_t S=0)
 	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
+	  l._esdl__setParentEntity(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
 	  l._esdl__parLock = t._esdl__getParLock;
@@ -4535,6 +4536,7 @@ template Task(alias F, int R=0, size_t S=0)
 	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
+	  l._esdl__setParentEntity(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
 	  l._esdl__parLock = t._esdl__getParLock;
@@ -4598,6 +4600,7 @@ template Routine(alias F, int R=0)
 	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
+	  l._esdl__setParentEntity(t);
 	  t._esdl__register(l);
 	  // auto linfo = _esdl__get_parallelism!I(t, l)._parallel;
 	  l._esdl__parLock = t._esdl__getParLock;
@@ -4748,10 +4751,10 @@ class EsdlThread: Thread
   }
 
   static if(!__traits(compiles, _esdl__root)) {
-    @_esdl__ignore protected RootEntityIntf _esdl__root;
+    @_esdl__ignore protected RootEntity _esdl__root;
   }
 
-  this(RootEntityIntf root, void function() fn, size_t sz = 0 ) {
+  this(RootEntity root, void function() fn, size_t sz = 0 ) {
     assert(root !is null);
     synchronized(this) {
       _esdl__root = root;
@@ -4759,7 +4762,7 @@ class EsdlThread: Thread
     }
   }
 
-  this(RootEntityIntf root, void delegate() dg, size_t sz = 0 ) {
+  this(RootEntity root, void delegate() dg, size_t sz = 0 ) {
     assert(root !is null);
     synchronized(this) {
       _esdl__root = root;
@@ -4767,7 +4770,7 @@ class EsdlThread: Thread
     }
   }
 
-  protected RootEntityIntf getRoot() {
+  protected RootEntity getRoot() {
     synchronized(this) {
       return _esdl__root;
     }
@@ -4789,10 +4792,10 @@ class SimThread: EsdlThread
   }
 
   static if(!__traits(compiles, _esdl__root)) {
-    @_esdl__ignore protected RootEntityIntf _esdl__root;
+    @_esdl__ignore protected RootEntity _esdl__root;
   }
 
-  this(RootEntityIntf root, void function() fn, size_t sz = 0 ) {
+  this(RootEntity root, void function() fn, size_t sz = 0 ) {
     synchronized(this) {
       _esdl__root = root;
       super(root, () {_self = this; fn();}, sz);
@@ -4800,7 +4803,7 @@ class SimThread: EsdlThread
     }
   }
 
-  this(RootEntityIntf root, void delegate() dg, size_t sz = 0 ) {
+  this(RootEntity root, void delegate() dg, size_t sz = 0 ) {
     synchronized(this) {
       _esdl__root = root;
       super(root, () {_self = this; dg();}, sz);
@@ -4856,7 +4859,7 @@ class BaseWorker: Process
 {
   SimThread _thread;
 
-  this(RootEntityIntf root, void function() fn,
+  this(RootEntity root, void function() fn,
        int stage = 0, size_t sz = 0 ) {
     synchronized(this) {
       super(fn, stage);
@@ -4869,7 +4872,7 @@ class BaseWorker: Process
     }
   }
 
-  this(RootEntityIntf root, void delegate() dg,
+  this(RootEntity root, void delegate() dg,
        int stage = 0, size_t sz = 0 ) {
     synchronized(this) {
       super(dg, stage);
@@ -5057,6 +5060,7 @@ abstract class Process: Procedure, EventClient
   private EventObj _sensitiveTo = null;
   private bool _dynamic = true;
   private Process[] _esdl__childProcs;
+  private Entity _esdl__parentEntity;
 
   // When waiting for an event, this variable will have the event
   // object
@@ -5067,6 +5071,14 @@ abstract class Process: Procedure, EventClient
     synchronized(this) {
       return _dynamic;
     }
+  }
+
+  public final Entity getParentEntity() {
+    return _esdl__parentEntity;
+  }
+
+  public final void _esdl__setParentEntity(Entity entity) {
+    _esdl__parentEntity = entity;
   }
 
   // Add a newly launched process to the list
@@ -5324,8 +5336,11 @@ abstract class Process: Procedure, EventClient
   private final void _esdl__fixParent() {
     synchronized(this) {
       if(Process.self) { // only dynamic procedures
-	Procedure _parent = Procedure.self;
+	Process _parent = Process.self;
+	Entity _entity = _parent.getParentEntity();
+
 	this._esdl__setHierParent(_parent);
+	this._esdl__setParentEntity(_entity);
 	this._esdl__setRoot(_parent.getRoot());
 	// if(_parent._esdl__getParLock is null) {
 	//   // For the time being all the dynamic tasks would run one-at-a-time
@@ -6150,7 +6165,7 @@ class RootThread: Procedure
   }
 
 
-  this(RootEntityIntf root, void function() fn,
+  this(RootEntity root, void function() fn,
        size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
       _esdl__root = root;
@@ -6163,7 +6178,7 @@ class RootThread: Procedure
     }
   }
 
-  this(RootEntityIntf root, void delegate() dg,
+  this(RootEntity root, void delegate() dg,
        size_t fcore=0, size_t sz = 0 ) {
     synchronized(this) {
       _esdl__root = root;
@@ -6269,7 +6284,7 @@ class PoolThread: SimThread
     return _self;
   }
 
-  this(RootEntityIntf root, size_t index, size_t fcore, size_t sz=0 ) {
+  this(RootEntity root, size_t index, size_t fcore, size_t sz=0 ) {
     synchronized(this) {
       super(root, {
 	  _self = this;
@@ -6330,7 +6345,7 @@ class PoolThread: SimThread
     super.start();
   }
 
-  public final override RootEntityIntf getRoot() {
+  public final override RootEntity getRoot() {
     // no lock required since _esdl__root is effectively immutable
     // synchronized(this) {
     return _esdl__root;
@@ -6360,26 +6375,26 @@ enum SimRunPhase: byte
       }
 
 void joinAllRoots() {
-  RootEntityIntf.joinSimAll();
+  RootEntity.joinSimAll();
 }
 
 void forkSimAllRoots(T)(T t)
   if(is(T == Time) || is(T == SimTime)) {
-    RootEntityIntf.forkSimAll(t);
+    RootEntity.forkSimAll(t);
   }
 
 void simulateAllRoots(T)(T t)
   if(is(T == Time) || is(T == SimTime)) {
-    RootEntityIntf.simulateAll(t);
+    RootEntity.simulateAll(t);
   }
 
 void simulateAllRootsUpto(T)(T t)
   if(is(T == Time) || is(T == SimTime)) {
-    RootEntityIntf.simulateAllUpto(t);
+    RootEntity.simulateAllUpto(t);
   }
 
 void terminateAllRoots() {
-  RootEntityIntf.terminateAll();
+  RootEntity.terminateAll();
 }
 
 void forkElab(T)(T t)
@@ -6394,7 +6409,7 @@ void elaborate(T)(T t)
 }
 
 void execElab(T)(T t)
-  if(is(T unused: RootEntityIntf))
+  if(is(T unused: RootEntity))
     {
       synchronized(t) {
 	import std.stdio: writeln;
@@ -7269,17 +7284,17 @@ class EsdlHeapScheduler : EsdlScheduler
   }
 }
 
-interface RootEntityIntf: EntityIntf
+interface RootEntityIntf // : EntityIntf
 {
   import esdl.sync.barrier: Barrier;
-  private __gshared RootEntityIntf[] _roots;
-  static void addRoot(RootEntityIntf root) {
-    synchronized(typeid(RootEntityIntf)) {
+  private __gshared RootEntity[] _roots;
+  static void addRoot(RootEntity root) {
+    synchronized(typeid(RootEntity)) {
       _roots ~= root;
     }
   }
-  static RootEntityIntf[] allRoots() {
-    synchronized(typeid(RootEntityIntf)) {
+  static RootEntity[] allRoots() {
+    synchronized(typeid(RootEntity)) {
       return _roots;
     }
   }
@@ -7340,114 +7355,138 @@ interface RootEntityIntf: EntityIntf
   public bool timePrecisionSet();
   public void timePrecisionSet(bool s);
 
-  // This function shall return 0 if some delta event/or channel update is pending
-  final public SimTime nextSimTime() {
-    return getSimulator.nextSimTime();
-  }
 
-  final void simulate(Time t) {
-    forkSim(t);
-    joinSim();
-  }
-  final void simulate(SimTime st = MAX_SIMULATION_TIME) {
-    forkSim(st);
-    joinSim();
-  }
-  final void simulateUpto(Time t) {
-    forkSimUpto(t);
-    joinSim();
-  }
-  final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
-    forkSimUpto(st);
-    joinSim();
-  }
-  final public void joinSim() {
-    this.getSimulator.joinSim();
-  }
-  final public void join() {
-    this.getSimulator.joinSim();
-  }
-  final public void joinElab() {
-    this.getSimulator.joinElab();
-    addRoot(this);
-  }
-  final void fork(Time t) {
-    forkSim(t);
-  }
-  final void forkSim(Time t) {
-    // So that the simulation root thread too returns a legal value for
-    // getRootEntity
-    setRootEntity(this);
-    getSimulator.forkSim(t);
-  }
-  final void fork(SimTime st = MAX_SIMULATION_TIME) {
-    forkSim(st);
-  }
-  final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
-    // So that the simulation root thread too returns a legal value for
-    // getRootEntity
-    setRootEntity(this);
-    getSimulator.forkSim(st);
-  }
-  final void forkSimUpto(Time t) {
-    // So that the simulation root thread too returns a legal value for
-    // getRootEntity
-    setRootEntity(this);
-    getSimulator.forkSimUpto(t);
-  }
-  final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
-    // So that the simulation root thread too returns a legal value for
-    // getRootEntity
-    setRootEntity(this);
-    getSimulator.forkSimUpto(st);
-  }
-  final public void joinSimEnd() {
-    this.getSimulator.joinSimEnd();
-  }
-  final public void finish() {
-    this.killTree();
-    this.getSimulator.termStage();
-    // To handle the situation where the finish call gets made during a PAUSE
-    if(simPhase() == SimPhase.PAUSE) {
-      this.simulate(0.nsec);
+  public SimTime nextSimTime();
+  void simulate(Time t);
+  void simulate(SimTime st = MAX_SIMULATION_TIME);
+  void simulateUpto(Time t);
+  void simulateUpto(SimTime st = MAX_SIMULATION_TIME);
+  public void joinSim();
+  public void join();
+  public void joinElab();
+  void fork(Time t);
+  void forkSim(Time t);
+  void fork(SimTime st = MAX_SIMULATION_TIME);
+  void forkSim(SimTime st = MAX_SIMULATION_TIME);
+  void forkSimUpto(Time t);
+  void forkSimUpto(SimTime st = MAX_SIMULATION_TIME);
+  public void joinSimEnd();
+  public void finish();
+  public void terminate();
+
+  mixin template RootEntityMixin() {
+    // This function shall return 0 if some delta event/or channel update is pending
+    final public SimTime nextSimTime() {
+      return getSimulator.nextSimTime();
     }
-    version(COSIM_VERILOG) {
-      // pragma(msg, "Compiling COSIM_VERILOG version!");
-      import esdl.intf.vpi;
-      vpi_control(vpiFinish, 1);
+
+    final void simulate(Time t) {
+      forkSim(t);
+      joinSim();
     }
-    // now if this thread is one of the tasks, it must stop
-    Process self = Process.self();
-    if(cast(BaseTask) self !is null) wait(0);
-    if(cast(BaseWorker) self !is null) wait(0);
-  }
-  final public void terminate() {
-    this.killTree();
-    this.getSimulator.termSim();
-    // To handle the situation where the terminate call gets made during a PAUSE
-    if(simPhase() == SimPhase.PAUSE) {
-      this.simulate(0.nsec);
+    final void simulate(SimTime st = MAX_SIMULATION_TIME) {
+      forkSim(st);
+      joinSim();
     }
-    version(COSIM_VERILOG) {
-      // pragma(msg, "Compiling COSIM_VERILOG version!");
-      import esdl.intf.vpi;
-      vpi_control(vpiFinish, 1);
+    final void simulateUpto(Time t) {
+      forkSimUpto(t);
+      joinSim();
     }
-    // now if this thread is one of the tasks, it must stop
-    Process self = Process.self();
-    if(cast(BaseTask) self !is null) wait(0);
-    if(cast(BaseWorker) self !is null) wait(0);
+    final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
+      forkSimUpto(st);
+      joinSim();
+    }
+    final public void joinSim() {
+      getSimulator.joinSim();
+    }
+    final public void join() {
+      getSimulator.joinSim();
+    }
+    final public void joinElab() {
+      getSimulator.joinElab();
+      addRoot(this);
+    }
+    final void fork(Time t) {
+      forkSim(t);
+    }
+    final void forkSim(Time t) {
+      // So that the simulation root thread too returns a legal value for
+      // getRootEntity
+      setRootEntity(this);
+      getSimulator.forkSim(t);
+    }
+    final void fork(SimTime st = MAX_SIMULATION_TIME) {
+      forkSim(st);
+    }
+    final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
+      // So that the simulation root thread too returns a legal value for
+      // getRootEntity
+      setRootEntity(this);
+      getSimulator.forkSim(st);
+    }
+    final void forkSimUpto(Time t) {
+      // So that the simulation root thread too returns a legal value for
+      // getRootEntity
+      setRootEntity(this);
+      getSimulator.forkSimUpto(t);
+    }
+    final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+      // So that the simulation root thread too returns a legal value for
+      // getRootEntity
+      setRootEntity(this);
+      getSimulator.forkSimUpto(st);
+    }
+    final public void joinSimEnd() {
+      this.getSimulator.joinSimEnd();
+    }
+    final public void finish() {
+      this.killTree();
+      this.getSimulator.termStage();
+      // To handle the situation where the finish call gets made during a PAUSE
+      if(simPhase() == SimPhase.PAUSE) {
+	this.simulate(0.nsec);
+      }
+      version(COSIM_VERILOG) {
+	// pragma(msg, "Compiling COSIM_VERILOG version!");
+	import esdl.intf.vpi;
+	vpi_control(vpiFinish, 1);
+      }
+      // now if this thread is one of the tasks, it must stop
+      Process self = Process.self();
+      if(cast(BaseTask) self !is null) wait(0);
+      if(cast(BaseWorker) self !is null) wait(0);
+    }
+    final public void terminate() {
+      this.killTree();
+      this.getSimulator.termSim();
+      // To handle the situation where the terminate call gets made during a PAUSE
+      if(simPhase() == SimPhase.PAUSE) {
+	this.simulate(0.nsec);
+      }
+      version(COSIM_VERILOG) {
+	// pragma(msg, "Compiling COSIM_VERILOG version!");
+	import esdl.intf.vpi;
+	vpi_control(vpiFinish, 1);
+      }
+      // now if this thread is one of the tasks, it must stop
+      Process self = Process.self();
+      if(cast(BaseTask) self !is null) wait(0);
+      if(cast(BaseWorker) self !is null) wait(0);
+    }
   }
 }
 
-abstract class RootEntity: RootEntityIntf
+abstract class RootEntity: Entity, RootEntityIntf
 {
+
+  mixin RootEntityMixin;
+  
   EsdlSimulator _simulator;
+
+  
   public final EsdlSimulator simulator() {
     return _simulator;
   }
-
-  mixin Elaboration;
 
   this(string name) {
     synchronized(this) {
@@ -8011,7 +8050,7 @@ class EsdlSimulator: EntityIntf
     return this._scheduler.simTime();
   }
 
-  this(RootEntityIntf _root) {
+  this(RootEntity _root) {
     synchronized(this) {
       this._esdl__root = _root;
       this._esdl__parent = _root;
@@ -8083,7 +8122,7 @@ class EsdlSimulator: EntityIntf
   }
 }
 
-private static RootEntityIntf _esdl__rootEntity;
+private static RootEntity _esdl__rootEntity;
 
 public SimTime getSimTime() {
   return getRootEntity.getSimTime();
@@ -8095,7 +8134,7 @@ public PoolThread getPoolThread() {
   return cast(PoolThread) _thread;
 }
 
-public RootEntityIntf getRootEntity() {
+public RootEntity getRootEntity() {
   // first handle the case for call within the
   // simulation tasks and routines
   // These need to be handled in the fastest possible manner
@@ -8114,7 +8153,11 @@ public RootEntityIntf getRootEntity() {
   return _esdl__rootEntity;
 }
 
-private void setRootEntity(RootEntityIntf root) {
+public EsdlSimulator getSimulator() {
+  return getRootEntity().getSimulator();
+}
+
+private void setRootEntity(RootEntity root) {
   if(_esdl__rootEntity is null) {
     _esdl__rootEntity = root;
   }
@@ -8239,7 +8282,7 @@ interface TimeConfigContext: TimeContext
       //	   " within doConfig method");
       //   }
       if(! t.isZero()) {
-	._esdl__setTimePrecision(t.normalize());
+	._esdl__setTimePrecisionGlobal(t.normalize());
       }
       // }
     }
@@ -8432,7 +8475,7 @@ immutable SimTime DELTA = SimTime(0L);
 
 immutable SimTime MAX_SIMULATION_TIME = SimTime(ulong.max);
 
-public void _esdl__setTimePrecision(Time t) {
+public void _esdl__setTimePrecisionGlobal(Time t) {
   _isPowerOf10(t._value) ||
     assert(false, "timePrecision takes only powers of 10 as arguments");
   getRootEntity.setTimePrecision(t.normalize);
