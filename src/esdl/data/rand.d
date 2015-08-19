@@ -467,11 +467,10 @@ template _esdl__CstInits(T, int I=0)
       alias L = typeof(T.tupleof[I]);
       enum string NAME = __traits(identifier, T.tupleof[I]);
       static if(is(L f == Constraint!C, immutable (char)[] C)) {
-	enum string _esdl__CstInits =
-	  "    " ~ NAME ~ " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, "
-	  ~ I.stringof ~ "))(\"" ~
-	  NAME ~ "\");\n    _esdl__cstsList ~= " ~ NAME ~
-	  // ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~
+	enum string _esdl__CstInits = "    " ~ NAME ~
+	  " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, " ~
+	  I.stringof ~ "))(\"" ~ NAME ~ "\");\n    _esdl__cstsList ~= " ~
+	  NAME ~ // ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~
 	  ";\n" ~ _esdl__CstInits!(T, I+1);
       }
       else static if(hasRandAttr!(T, I) && is(L == class)) {
@@ -494,15 +493,9 @@ template _esdl__ListRands(T, int I=0) {
   }
   else {
     static if(hasRandAttr!(T, I)) {
-      // static if(hasRandAttr!(__traits(getAttributes, T.tupleof[I]))) {
       alias _esdl__ListRands = TypeTuple!(T, I, _esdl__ListRands!(T, I+1));
     }
     else {
-      // alias aaaa = getRandAttr!(__traits(getAttributes, T.tupleof[I]));
-      // static if(__traits(isSame, aaaa, _esdl__norand)) {
-      //	pragma(msg, getRandAttr!(__traits(getAttributes, T.tupleof[I])));
-      // }
-
       alias _esdl__ListRands = _esdl__ListRands!(T, I+1);
     }
   }
@@ -566,7 +559,8 @@ template isVarSigned(L) {
   else static if(isIntegral!L)
 	 enum bool isVarSigned = isSigned!L;
     else
-    static assert(false, "isVarSigned: Can not determine sign of type " ~ typeid(L));
+    static assert(false, "isVarSigned: Can not determine sign of type " ~
+		  typeid(L));
 }
 
 
@@ -687,15 +681,14 @@ class _esdl__RandGen
 
   @property public T gen(T)() {
     static if(isIntegral!T || isBoolean!T) {
-      T result = uniform!(T)(_gen);
-      return result;
+      T val = uniform!(T)(_gen);
+      return val;
     }
     else static if(isBitVector!T) {
-	T result;
-	result.randomize(_gen);
-	return result;
+	T val;
+	val.randomize(_gen);
+	return val;
       }
-    // else static if(is(T: RandomizableIntf)) {
       else {
 	static assert(false);
       }
@@ -1445,7 +1438,9 @@ abstract class RndVecExpr
   abstract public RndVecPrim[] getPrims();
 
   // get all the primary bdd vectors that would be solved together
-  abstract public RndVecPrim[] getSolvables();
+  public RndVecPrim[] getSolvables() {
+    return getPrims();
+  }
   
   // get the list of stages this expression should be avaluated in
   // abstract public CstStage[] getStages();
@@ -1702,9 +1697,7 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
   }
 
   override public RndVecPrim[] preReqs() {
-    return _preReqs // ~ _parent
-      ~ _parent.preReqs();
-    // else return _preReqs;
+    return _preReqs ~ _parent.preReqs();
   }
 
   override RndVecIterVar[] idxVars() {
@@ -1722,10 +1715,6 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
     return _parent.getPrimLens();
   }
 
-  override public RndVecPrim[] getSolvables() {
-    return _parent.getPrimLens();
-  }
-
   public RndVecPrim[] getPrimLens() {
     assert(false);
   }
@@ -1736,13 +1725,13 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
   //   return stages;
   // }
 
-  override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(_stage !is null, "_stage null for: " ~ name());
-    if(this.isRand && stage is _stage) {
+  override public BddVec getBDD(CstStage s, Buddy buddy) {
+    assert(stage() !is null, "stage null for: " ~ name());
+    if(this.isRand && stage() is s) {
       return _bddvec;
     }
     else if((! this.isRand) ||
-	    this.isRand && _stage.solved()) { // work with the value
+	    this.isRand && stage().solved()) { // work with the value
       return buddy.buildVec(value());
     }
     else {
@@ -1751,13 +1740,13 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
   }
 
   override public long evaluate() {
-    if(! this.isRand || _stage.solved()) {
+    if(! this.isRand || stage().solved()) {
       return value();
     }
     else {
       import std.conv;
       assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
-	     _stage._id.to!string);
+	     stage()._id.to!string);
     }
   }
 
@@ -1993,13 +1982,13 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
     return buddy.one();
   }
 
-  override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(_stage, "Stage not set for " ~ this.name());
-    if(this.isRand && stage is _stage) {
+  override public BddVec getBDD(CstStage s, Buddy buddy) {
+    assert(stage(), "Stage not set for " ~ this.name());
+    if(this.isRand && s is stage()) {
       return _bddvec;
     }
     else if((! this.isRand) ||
-	    this.isRand && _stage.solved()) { // work with the value
+	    this.isRand && stage().solved()) { // work with the value
       return buddy.buildVec(value());
     }
     else {
@@ -2008,13 +1997,13 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
   }
 
   override public long evaluate() {
-    if(! this.isRand || _stage.solved()) {
+    if(! this.isRand || stage().solved()) {
       return value();
     }
     else {
       import std.conv;
       assert(false, "Rand variable " ~ _name ~
-	     " evaluation in wrong stage: " ~ _stage._id.to!string);
+	     " evaluation in wrong stage: " ~ stage()._id.to!string);
     }
   }
 
@@ -2107,10 +2096,6 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       else return [];
     }
 
-    override public RndVecPrim[] getSolvables() {
-      return getPrims();
-    }
-
     public RndVecPrim[] getPrimLens() {
       assert(false);
     }
@@ -2159,11 +2144,11 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
 
     override RndVecPrim[] preReqs() {
       if(_indexExpr) {
-	return _parent.preReqs() ~ _indexExpr.preReqs() ~
-	  _preReqs ~ _parent.arrLen();
+	return _preReqs ~ _parent.arrLen() ~
+	  _parent.preReqs() ~ _indexExpr.preReqs();
       }
       else {
-	return _parent.preReqs() ~ _preReqs ~ _parent.arrLen();
+	return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
       }
     }
 
@@ -2190,27 +2175,22 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
     // cases we need to list all the elements of the array that could
     // finally represent the given element that we are currently
     // dealing with.
-
     override public RndVecPrim[] getPrims() {
-      RndVecPrim[] result;
+      RndVecPrim[] prims;
       if(_indexExpr) {
 	// FIXME -- if the expression has been solved
 	// return _parent.getPrims(_indexExpr.evaluate()) ;
-	result = _indexExpr.getPrims();
+	prims = _indexExpr.getPrims();
 	foreach(pp; _parent.getPrims(-1)) {
-	  result ~= pp;
+	  prims ~= pp;
 	}
       }
       else {
 	foreach(pp; _parent.getPrims(_index)) {
-	  result ~= pp;
+	  prims ~= pp;
 	}
       }
-      return result;
-    }
-
-    override public RndVecPrim[] getSolvables() {
-      return getPrims();
+      return prims;
     }
 
     override public RV unroll(RndVecIterVar l, uint n) {
@@ -2224,11 +2204,11 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       if(! idx) return this;
       else {
 	if(_indexExpr) {
-	  auto result = _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
+	  auto vec = _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
 	  // import std.stdio;
 	  // writeln(_indexExpr.name(), " has been unrolled as: ",
 	  // 	  _indexExpr.unroll(l,n).name());
-	  return result;
+	  return vec;
 	  // return _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
 	}
 	else {
@@ -2568,9 +2548,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
 
     public RndVecPrim[] preReqs() {
-      // if(_arrLen.isRand()) return [this];
-      // else
-      return _preReqs;
+      return _preReqs;		// N = 0 -- no _parent
     }
 
     RndVecIterVar[] idxVars() {
@@ -2583,21 +2561,17 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
 
     public RndVecPrim[] getPrims() {
-      RndVecPrim[] result;
+      RndVecPrim[] prims;
       foreach(elem; _elems) {
-	result ~= elem;
+	prims ~= elem;
       }
-      return result;
-    }
-
-    public RndVecPrim[] getSolvables() {
-      return getPrims();
+      return prims;
     }
 
     public RndVecPrim[] getPrimLens() {
-      RndVecPrim[] result;
-      if(_arrLen.isRand) result ~= _arrLen;
-      return result;
+      RndVecPrim[] prims;
+      if(_arrLen.isRand) prims ~= _arrLen;
+      return prims;
     }
     
     public RV unroll(RndVecIterVar l, uint n) {
@@ -2649,11 +2623,11 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
 
     public RndVecPrim[] preReqs() {
       if(_indexExpr) {
-	return  _indexExpr.preReqs() ~ _parent.preReqs() ~
-	  _preReqs ~ _parent.arrLen();
+	return  _preReqs ~ _parent.arrLen() ~
+	  _indexExpr.preReqs() ~ _parent.preReqs();
       }
       else {
-	return  _parent.preReqs() ~ _preReqs ~ _parent.arrLen();
+	return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
       }
     }
 
@@ -2705,29 +2679,24 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       return prims;
     }
 
-
-    public RndVecPrim[] getSolvables() {
-      return getPrims();
-    }
-
     public RndVecPrim[] getPrimLens() {
       // if(_index.idxVars.length is 0)
       if(_indexExpr is null) {
 	return [_parent[_index].arrLen()];
       }
       if(_indexExpr.isConst()) {
-	RndVecPrim[] result;
-	result ~= _parent[_indexExpr.evaluate()].getPrimLens();
-	return result;
+	RndVecPrim[] prims;
+	prims ~= _parent[_indexExpr.evaluate()].getPrimLens();
+	return prims;
       }
       else {
-	RndVecPrim[] result;
+	RndVecPrim[] prims;
 	foreach(p; getPrims()) {
 	  // import std.stdio;
 	  // writeln(_parent.name(), " ", p.name());
-	  result ~= p.getPrimLens();
+	  prims ~= p.getPrimLens();
 	}
-	return result;
+	return prims;
       }
     }
 
@@ -2835,10 +2804,6 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
   // get all the primary bdd vectors that constitute a given bdd expression
   override public RndVecPrim[] getPrims() {
     return []; // _arrVar.arrLen.getPrims();
-  }
-
-  override public RndVecPrim[] getSolvables() {
-    return []; // _arrVar.arrLen.getSolvables();
   }
 
   public RndVecPrim[] getPrimLens() {
@@ -2949,8 +2914,6 @@ abstract class RndVecIterVar: RndVecExpr
   // get all the primary bdd vectors that constitute a given bdd expression
   override public RndVecPrim[] getPrims();
 
-  override public RndVecPrim[] getSolvables();
-
   // get the list of stages this expression should be avaluated in
   // override public CstStage[] getStages() {
   //   return arrVar.arrLen.getStages();
@@ -2993,10 +2956,6 @@ class RndVecConst(T = int): RndVecExpr, RndVecPrim
   }
 
   override public RndVecPrim[] getPrims() {
-    return [];
-  }
-
-  override public RndVecPrim[] getSolvables() {
     return [];
   }
 
@@ -3124,7 +3083,21 @@ class RndVec2VecExpr: RndVecExpr
   }
 
   override public RndVecPrim[] getSolvables() {
-    return _lhs.getSolvables() ~ _rhs.getSolvables();
+    RndVecPrim[] solvables;
+    foreach(solvable; _lhs.getSolvables() ~ _rhs.getSolvables()) {
+      if(! solvable.solved()) {
+	bool add = true;
+	foreach(req; this.preReqs()) {
+	  if(req is solvable) {
+	    add = false;
+	  }
+	}
+	if(add) {
+	  solvables ~= solvable;
+	}
+      }
+    }
+    return solvables;
   }
 
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -3236,12 +3209,6 @@ class RndVecSliceExpr: RndVecExpr
     return reqs;
   }
   
-  // override RndVecPrim[] preReqs() {
-  //   if(_rhs is null) return _vec.preReqs() ~ _lhs.preReqs();
-  //   else {
-  //     return _vec.preReqs() ~ _lhs.preReqs() ~ _rhs.preReqs();
-  //   }
-  // }
   RndVecIterVar[] _idxVars;
   override RndVecIterVar[] idxVars() {
     return _idxVars;
@@ -3250,6 +3217,7 @@ class RndVecSliceExpr: RndVecExpr
   override public string name() {
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
   }
+
   override public RndVecPrim[] getPrims() {
     if(_rhs is null) {
       return _vec.getPrims() ~ _lhs.getPrims();
@@ -3259,7 +3227,7 @@ class RndVecSliceExpr: RndVecExpr
     }
   }
 
-  override public RndVecPrim[] getSolvables() {
+   override public RndVecPrim[] getSolvables() {
     return _vec.getSolvables();
   }
 
@@ -3432,7 +3400,23 @@ abstract class CstBddExpr
 
   abstract public RndVecPrim[] getPrims();
 
-  abstract public RndVecPrim[] getSolvables();
+  final public RndVecPrim[] getSolvables() {
+    RndVecPrim[] solvables;
+    foreach(prim; getPrims()) {
+      if(! prim.solved()) {
+	bool add = true;
+	foreach(req; this.preReqs()) {
+	  if(req is prim) {
+	    add = false;
+	  }
+	}
+	if(add) {
+	  solvables ~= prim;
+	}
+      }
+    }
+    return solvables;
+  }
 
   // abstract public CstStage[] getStages();
 
@@ -3512,16 +3496,8 @@ class CstBdd2BddExpr: CstBddExpr
     return reqs;
   }
 
-  // override RndVecPrim[] preReqs() {
-  //   return _lhs.preReqs() ~ _rhs.preReqs();
-  // }
-    
   override public RndVecPrim[] getPrims() {
     return _lhs.getPrims() ~ _rhs.getPrims();
-  }
-
-  override public RndVecPrim[] getSolvables() {
-    return _lhs.getSolvables() ~ _rhs.getSolvables();
   }
 
   // override public CstStage[] getStages() {
@@ -3634,9 +3610,6 @@ class RndVec2BddExpr: CstBddExpr
     }
     return reqs;
   }
-  // override RndVecPrim[] preReqs() {
-  //   return _lhs.preReqs() ~ _rhs.preReqs();
-  // }
     
   // override public CstStage[] getStages() {
   //   import std.exception;
@@ -3655,10 +3628,6 @@ class RndVec2BddExpr: CstBddExpr
 
   override public RndVecPrim[] getPrims() {
     return _lhs.getPrims() ~ _rhs.getPrims();
-  }
-
-  override public RndVecPrim[] getSolvables() {
-    return _lhs.getSolvables() ~ _rhs.getSolvables();
   }
 
   override public BDD getBDD(CstStage stage, Buddy buddy) {
@@ -3750,10 +3719,6 @@ class CstBddConst: CstBddExpr
     return [];
   }
 
-  override public RndVecPrim[] getSolvables() {
-    return [];
-  }
-
   override public CstBddConst unroll(RndVecIterVar l, uint n) {
     return this;
   }
@@ -3769,25 +3734,11 @@ class CstNotBddExpr: CstBddExpr
   }
 
   override RndVecPrim[] preReqs() {
-    RndVecPrim[] reqs;
-    foreach(req; _expr.preReqs()) {
-      if(! req.solved()) {
-	reqs ~= req;
-      }
-    }
-    return reqs;
+    return _expr.preReqs();
   }
 
-  // override RndVecPrim[] preReqs() {
-  //   return _expr.preReqs();
-  // }
-    
   override public RndVecPrim[] getPrims() {
     return _expr.getPrims();
-  }
-
-  override public RndVecPrim[] getSolvables() {
-    return _expr.getSolvables();
   }
 
   // override public CstStage[] getStages() {
@@ -3847,23 +3798,7 @@ class CstBlock: CstBddExpr
   }
 
   override public RndVecPrim[] getPrims() {
-    RndVecPrim[] prims;
-
-    foreach(expr; _exprs) {
-      prims ~= expr.getPrims();
-    }
-
-    return prims;
-  }
-
-  override public RndVecPrim[] getSolvables() {
-    RndVecPrim[] prims;
-
-    foreach(expr; _exprs) {
-      prims ~= expr.getSolvables();
-    }
-
-    return prims;
+    assert(false);
   }
 
   override public CstBlock unroll(RndVecIterVar l, uint n) {
