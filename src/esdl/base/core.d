@@ -7055,19 +7055,21 @@ class EsdlHeapScheduler : EsdlScheduler
   private size_t  _deltaCount = 0;
 
   public void reset() {		// reset all the event queues
-    debug(SCHEDULER) {
-      import std.stdio;
-      writeln("Resetting the scheduler");
+    synchronized(this) {
+      debug(SCHEDULER) {
+	import std.stdio;
+	writeln("Resetting the scheduler");
+      }
+      _deltaQueue.length = 0;
+      _deltaQueueAlt.length = 0;
+      _immediateQueueAlt.length = 0;
+      _immediateQueue.length = 0;
+      // detach the heap and reattch with 0 Timed events
+      _noticeHeap.clear();
+      _noticeHeap.assume(_noticeQueue, 0);
     }
-    _deltaQueue.length = 0;
-    _deltaQueueAlt.length = 0;
-    _immediateQueueAlt.length = 0;
-    _immediateQueue.length = 0;
-    // detach the heap and reattch with 0 Timed events
-    _noticeHeap.clear();
-    _noticeHeap.assume(_noticeQueue, 0);
   }
-
+  
   final public SimTime simTime() {
     synchronized(this) {
       return _simTime;
@@ -7205,20 +7207,25 @@ class EsdlHeapScheduler : EsdlScheduler
   }
 
   public final void triggerImmediateEvents() {
-    debug(SCHEDULER) {
-      import std.stdio: writeln;
-      writeln("There are ", this._immediateQueue.length,
-	      " events to trigger");
-    }
-    auto _exec = _immediateQueue;
-    _immediateQueue = _immediateQueueAlt;
-    _immediateQueueAlt = _exec;
+    // FIXME -- ideally this critical region should not be required
+    // But I am getting race condition without it
+    // I am testing with an unreleased DMD version on Aug 18 2015
+    synchronized(this) {
+      debug(SCHEDULER) {
+	import std.stdio: writeln;
+	writeln("There are ", this._immediateQueue.length,
+		" events to trigger");
+      }
+      auto _exec = _immediateQueue;
+      _immediateQueue = _immediateQueueAlt;
+      _immediateQueueAlt = _exec;
 
-    _immediateQueue.length = 0;
+      _immediateQueue.length = 0;
 
-    foreach(ref event; this._immediateQueueAlt) {
-      event.trigger(_simulator);
-    }
+      foreach(ref event; this._immediateQueueAlt) {
+	event.trigger(_simulator);
+      }
+    } 
   }
 
   public final SimRunPhase triggerNextEventNotices(SimTime maxTime) {
