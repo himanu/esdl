@@ -5237,6 +5237,10 @@ abstract class Process: Procedure, EventClient
   }
 
   final protected void abortProcess() {
+    debug(TERMINATE) {
+      import std.stdio: writeln;
+      writeln("Aborting thread in state: ", state);
+    }
     if(_isRunnable()) {
       _state = ProcState.ABORTED;
       if(_state == ProcState.STARTING) {
@@ -5246,15 +5250,15 @@ abstract class Process: Procedure, EventClient
 	call();
       }
     }
-    debug(PROC) {
-      import std.stdio: writeln;
-      writeln("Aborting thread in state:", state);
-    }
   }
 
 
   // called at the end of simulation
   final protected void killProcess() {
+    debug(TERMINATE) {
+      import std.stdio: writeln;
+      writeln("Terminating thread in state: ", state);
+    }
     if(_isRunnable()) {
       _state = ProcState.KILLED;
       if(_state == ProcState.STARTING) {
@@ -5263,10 +5267,6 @@ abstract class Process: Procedure, EventClient
       else {
 	call();
       }
-    }
-    debug(PROC) {
-      import std.stdio: writeln;
-      writeln("Terminating thread in state:", state);
     }
   }
 
@@ -5450,7 +5450,7 @@ abstract class Process: Procedure, EventClient
     }
     catch(TermException e) {
       // Process got terminated at end of simulation
-      debug(THREAD) {
+      debug(TERMINATE) {
 	import std.stdio: writeln;
 	writeln(this.getFullName, " Thread terminated");
       }
@@ -5492,7 +5492,7 @@ abstract class Process: Procedure, EventClient
     }
     catch(TermException e) {
       // Process got terminated at end of simulation
-      debug(THREAD) {
+      debug(TERMINATE) {
 	import std.stdio: writeln;
 	writeln(this.getFullName, " Thread terminated");
       }
@@ -6415,9 +6415,6 @@ void execElab(T)(T t)
 	import std.stdio: writeln;
 	import std.exception: enforce;
 
-	// So that getRootEntity returns a legal value even during elaboration
-	setRootEntity(t);
-
 	// The BUILD Phase
 	// Instantiated modules and events are identified and constructed
 	// (using an explicit call to new operator) if these are not already
@@ -6520,7 +6517,7 @@ class EsdlExecutor: EsdlExecutorIf
       {
 	_simulator = simulator;
 	debug(BARRIER) {
-	  _procBarrier = new DebugBarrier(1);
+	  _procBarrier = new DebugBarrier(1, "_procBarrier");
 	}
 	else {
 	  _procBarrier = new Barrier(1);
@@ -6795,7 +6792,6 @@ class EsdlExecutor: EsdlExecutorIf
 
       // right now only handles terminate requests
       foreach(proc; _termProcs) {
-	import std.stdio;
 	proc.terminateWaiting();
       }
       _procBarrier.wait();
@@ -6807,31 +6803,44 @@ class EsdlExecutor: EsdlExecutorIf
   {
     private int _num;
     private int _size;
-    public this(uint num) {
+    private string _name;
+    public this(uint num, string name) {
       synchronized(this) {
 	_num = num;
 	_size = num;
-	debug(BARRIER_TRACE) {
+	_name = name;
+	debug(BARRIER) {
 	  import std.stdio;
-	  writeln("Creating a Barrier of size: ", _num);
+	  writeln("Creating a Barrier ", _name, " of size: ", _num);
 	}
       }
       super(num);
     }
+    final override void reset(uint num) {
+      synchronized(this) {
+	_num = num;
+	_size = num;
+	debug(BARRIER) {
+	  import std.stdio;
+	  writeln("Resetting Barrier ", _name, " to size: ", _num);
+	}
+      }
+      super.reset(num);
+    }
     final override void wait() {
       synchronized(this) {
-	assert(--_num >= 0);
-	debug(BARRIER_TRACE) {
+	assert(--_num >= 0, "Barrier moved beyond 0 " ~ _name);
+	debug(BARRIER) {
 	  import std.stdio;
-	  writeln("Waiting a Barrier of size: ", _size);
+	  writeln("Waiting on Barrier ", _name, " of size: ", _size, " remaining: ", _num);
 	}
       }
       super.wait();
       synchronized(this) {
 	assert(_num is 0);
-	debug(BARRIER_TRACE) {
+	debug(BARRIER) {
 	  import std.stdio;
-	  writeln("Coming out of Barrier of size: ", _size);
+	  writeln("Coming out of Barrier ", _name, " of size: ", _size);
 	}
       }
     }
@@ -7001,10 +7010,10 @@ class EsdlExecutor: EsdlExecutorIf
       writeln("******* About to terminate ",
 	      count(waitingProcs), " waiting procs");
     }
-    _procBarrier.reset(cast(uint)(count(waitingProcs) + 1));
+    // _procBarrier.reset(cast(uint)(count(waitingProcs) + 1));
     foreach(ref proc; waitingProcs) {
       proc.killProcess();
-      debug {
+      debug(TERMINATE) {
 	import std.stdio: writeln;
 	writeln("Terminating Process");
       }
@@ -7013,7 +7022,7 @@ class EsdlExecutor: EsdlExecutorIf
       import std.stdio: writeln;
       writeln("All processes terminating");
     }
-    _procBarrier.wait();
+    // _procBarrier.wait();
     debug(TERMINATE) {
       import std.stdio: writeln;
       writeln("All processes done with terminating");
@@ -7417,30 +7426,18 @@ interface RootEntityIntf // : EntityIntf
       forkSim(t);
     }
     final void forkSim(Time t) {
-      // So that the simulation root thread too returns a legal value for
-      // getRootEntity
-      setRootEntity(this);
       getSimulator.forkSim(t);
     }
     final void fork(SimTime st = MAX_SIMULATION_TIME) {
       forkSim(st);
     }
     final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
-      // So that the simulation root thread too returns a legal value for
-      // getRootEntity
-      setRootEntity(this);
       getSimulator.forkSim(st);
     }
     final void forkSimUpto(Time t) {
-      // So that the simulation root thread too returns a legal value for
-      // getRootEntity
-      setRootEntity(this);
       getSimulator.forkSimUpto(t);
     }
     final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
-      // So that the simulation root thread too returns a legal value for
-      // getRootEntity
-      setRootEntity(this);
       getSimulator.forkSimUpto(st);
     }
     final public void joinSimEnd() {
@@ -7497,7 +7494,6 @@ abstract class RootEntity: Entity, RootEntityIntf
 
   this(string name) {
     synchronized(this) {
-      _esdl__rootEntity = this;
       if(name == "") assert(false,
 			    "Must provide a valid name to the Root Entiry");
       this._esdl__setName(name);
@@ -8097,7 +8093,6 @@ class EsdlSimulator: EntityIntf
 
     synchronized(this) {
       _rootThread = new RootThread(t, {
-	  setRootEntity(t);
 	  try {
 	    simLoop(t);
 	  }
@@ -8120,7 +8115,6 @@ class EsdlSimulator: EntityIntf
   // with other simulators till the time the simulation is explicitly
   // terminated.
   final void simLoop(T)(T t) {
-    setRootEntity(t);
     t.execElab();
     // inclrementally run simulation
     while(this.phase !is SimPhase.SIMULATION_DONE) {
