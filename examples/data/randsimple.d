@@ -14,6 +14,7 @@ class Simple: Base {
   Constraint! q{
     a[0..4]  == 0;
     a < 128;
+    solve a before b;
   } csta;
 }
 
