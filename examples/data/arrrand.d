@@ -11,30 +11,38 @@ import esdl.data.bvec;
 
 int FFFF = 20;
 
-class Foo
+class Foo: Randomizable
 {
   mixin Randomization;
-  @rand!32 byte[] foo;
-  @rand ubyte baz = 12;
-  void display() {}
+  @rand!(8) byte[] foo;
+  // @rand ubyte baz = 12;
+  void display() {
+    import std.stdio;
+    writeln(foo);
+  }
+  Constraint! q{
+    foo.length > 2;
+    // baz < 32;
+    // FFFF + baz == 50;
+  } cstFooLength;
 }
 
-class Bar : Foo
+class Bar: Foo
 {
-  mixin Randomization;
-
+  // mixin Randomization;
+  mixin(randomization());
   @rand ubyte[8] bar;
 
 
   override void display() {
     writeln("foo: ", foo);
     writeln("bar: ", bar);
-    writeln("baz: ", baz);
+    // writeln("baz: ", baz);
   }
 
   Constraint! q{
-    foo.length > 12;
-    baz < 32;
+    foo.length > 2;
+    // baz < 32;
     // FFFF + baz == 50;
   } cstFooLength;
 
@@ -43,36 +51,30 @@ class Bar : Foo
 
     // this is a comment
     foreach(i, f; foo) {
-      if(i < 2) {
-	f < 24;
+      if(i < 6) {
+  	f < 24;
       }
       else {
-	f < 8;
+  	f < 18;
       }
     }
 
     foreach(i, f; foo) {
       f < 64;
-      foo[i] > 0;
+      foo[i] > 16;
     }
   } cstFoo;
 
-  void preRandomize() {
-    FFFF += 2;
-  }
-
-  void postRandomize() {
+  override void preRandomize() {
     FFFF++;
   }
 
 }
 
 void main() {
-  Bar foo = new Bar;
-  for (size_t i=0; i!=40; ++i) {
+  Foo foo = new Foo;
+  for (size_t i=0; i!=16000; ++i) {
     foo.randomize();
     foo.display();
   }
-  import std.stdio;
-  writeln("End of program");
 }

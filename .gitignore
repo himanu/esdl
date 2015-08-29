@@ -1,0 +1,5 @@
+/examples/data/*.o
+/examples/data/arrrand
+/examples/data/randarr
+/examples/data/randomize
+/examples/data/testcstx

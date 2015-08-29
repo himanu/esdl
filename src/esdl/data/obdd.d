@@ -14,9 +14,10 @@ import std.datetime;
 import std.array;
 import std.math;
 import std.bigint;
+import std.container: Array;
 import std.algorithm;
 import std.conv;
-
+import core.memory: GC;
 
 enum uint bddTrue = 1;
 enum uint bddFalse = 0;
@@ -38,60 +39,489 @@ enum BddOp : ubyte {
     SIMPLIFY = 11
     }
 
-abstract class BddPair
+class BddPair
 {
-  public void set(int oldvar, int newvar);
-  public void set(int oldvar, BDD newvar);
-  public void set(int[] oldvar, int[] newvar);
-  public void set(int[] oldvar, BDD[] newvar);
-  public void set(BddDomain p1, BddDomain p2);
-  public void set(BddDomain[] p1, BddDomain[] p2);
-  public void reset();
-  public override string toString();
   int[] result;
   int last;
   int id;
   BddPair next;
+
+  public void set(int oldvar, int newvar)
+  {
+    getBuddy.bdd_setpair(this, oldvar, newvar);
+  }
+
+  public void set(int oldvar, BDD newvar)
+  {
+    getBuddy.bdd_setbddpair(this, oldvar, newvar._index);
+  }
+
+  public void set(int[] oldvar, int[] newvar)
+  {
+    if(oldvar.length != newvar.length)
+      throw new BddException("Sizes of the BDD Arrays do not match");
+
+    for(size_t n = 0; n != oldvar.length; ++n)
+      this.set(oldvar[n], newvar[n]);
+  }
+
+  // public void set(int[] oldvar, BDD[] newvar)
+  // {
+  //   if(oldvar.length != newvar.length)
+  //     throw new BddException("Sizes of the BDD Arrays do not match");
+
+  //   for(int n = 0; n != newvar.length; ++n)
+  //     this.set(oldvar[n], newvar[n]);
+  // }
+
+  public void set(BddDomain p1, BddDomain p2)
+  {
+    int[] ivar1 = p1.get_ivars();
+    int[] ivar2 = p2.get_ivars();
+    this.set(ivar1, ivar2);
+  }
+
+  // FIXME -- do not use dynamic arrays.
+  
+  // public void set(BddDomain[] p1, BddDomain[] p2)
+  // {
+  //   if(p1.length != p2.length)
+  //     throw new BddException("SIZE MISMATCH");
+
+  //   for(int n = 0; n < p1.length; n++)
+  //     if(p1[n].varNum() != p2[n].varNum())
+  // 	throw new BddException("SIZE MISMATCH");
+
+  //   for(int n = 0; n < p1.length; n++)
+  //     {
+  // 	this.set(p1[n], p2[n]);
+  //     }
+  // }
+
+  public void reset()
+  {
+    getBuddy.bdd_resetpair(this);
+  }
+
+  override public string toString()
+  {
+    string sb = "";
+    sb ~= '{';
+    bool any = false;
+    for(int i = 0; i < result.length; ++i)
+      {
+	if(result[i] != getBuddy.bdd_ithvar(getBuddy._level2Var[i]))
+	  {
+	    if(any) sb ~= ", ";
+	    any = true;
+	    BDD b = BDD(result[i], getBuddy());
+	    sb ~= text(getBuddy._level2Var[i], " = ", b);
+	  }
+      }
+    sb ~= '}';
+    return sb;
+  }
 }
 
-interface BddDomain
+struct BddDomain
 {
-  void name(string n);
-  string name();
-  void index(int i);
-  int index();
-  void realsize(size_t r);
-  size_t realsize();
-  void ivar(int[] iv);
-  int[] ivar();
-  void var(BDD v);
-  BDD var();
-  public void setName(string name);
-  public string getName();
-  public int getIndex();
-  public BDD domain();
-  public size_t size();
-  public BDD buildAdd(BddDomain that, long value);
-  public BDD buildAdd(BddDomain that, int bits, long value);
-  public BDD buildEquals(BddDomain that);
-  public BDD set();
-  public BDD ithVar(long val);
-  public BDD varRange(long lo, long hi);
-  public int varNum();
-  public int[] vars();
-  public int ensureCapacity(size_t range);
-  public string toString();
+
+  /* The name of this _domain. */
+  protected string _name;
+  /* The index of this _domain. */
+  protected int _index;
+
+  /* The specified _domains(0...N-1) */
+  public size_t _realsize;
+  /* Variable indices for the variable set */
+  protected int[] _ivar;
+  /* The BDD variable set.  Actually constructed in extDomain(), etc. */
+  protected BDD _var;		// FIXBDD
+
+  public void name(string n)
+  {
+    _name = n;
+  }
+
+  public string name()
+  {
+    return _name;
+  }
+
+  public void index(int i)
+  {
+    _index = i;
+  }
+
+  public int index()
+  {
+    return _index;
+  }
+
+  public void realsize(size_t r)
+  {
+    _realsize = r;
+  }
+
+  public size_t realsize()
+  {
+    return _realsize;
+  }
+
+  public void ivar(int[] iv)
+  {
+    _ivar = iv;
+  }
+
+  // public int[] ivar()
+  // {
+  //   import std.stdio;
+  //   writeln("getting in ivar: >> ", _ivar);
+  //   return _ivar;
+  // }
+
+  public void var(BDD v)
+  {
+    _var = v;
+  }
+
+  public BDD var()
+  {
+    return var;
+  }
+
+
+  // this(int index, long range)
+  // {
+  //   import std.conv;
+  //   long calcsize = 2;
+  //   if(range <= 0L)
+  // {
+  //	throw new BddException();
+  //   }
+  //   this._name = text(index);
+  //   this._index = index;
+  //   this._realsize = range;
+  //   int binsize = 1;
+  //   while(calcsize < range)
+  // {
+  //	binsize++;
+  //	calcsize <<= 1;
+  //   }
+  //   this._ivar.length = binsize;
+  // }
+
+  this(int index, size_t bits)
+  {
+    import std.conv;
+    if(bits <= 0)
+      {
+	throw new BddException();
+      }
+    this._name = text(index);
+    this._index = index;
+    this._realsize = (cast(size_t) 2) ^^bits;
+    this._ivar.length = bits;
+  }
+
+  public void setName(string name)
+  {
+    this._name = name;
+  }
+
+  public string getName()
+  {
+    return _name;
+  }
+
+  public int getIndex()
+  {
+    return index;
+  }
+
+  public BDD domain()
+  {
+
+    /* Encode V<=X-1. V is the variables in 'var' and X is the domain size */
+    long val = size() - 1;
+    BDD d = getBuddy.one();
+    int[] ivar = get_ivars();
+    for(int n = 0; n < this.varNum(); n++)
+      {
+	if(val & 1)		// test LSB
+	  d = d.or(getBuddy.nithVar(ivar[n]));
+	else
+	  d = d.and(getBuddy.nithVar(ivar[n]));
+	val >>= 1;
+      }
+    return d;
+  }
+
+  public size_t size()
+  {
+    return cast(size_t) this.realsize;
+  }
+
+  public BDD buildAdd(BddDomain that, long value)
+  {
+    if(this.varNum() != that.varNum())
+      throw new BddException();
+    return buildAdd(that, this.varNum(), value);
+  }
+
+  public BDD buildAdd(BddDomain that, int bits, long value)
+  {
+    if(bits > this.varNum() ||
+       bits > that.varNum())
+      throw new BddException(text("Number of bits requested(",
+				  bits, ") is larger than domain sizes ",
+				  this.varNum(), ",",
+				  that.varNum()));
+
+    if(value == 0L)
+      {
+	BDD result = getBuddy.one();
+	int n;
+	for(n = 0; n < bits; n++)
+	  {
+	    BDD b = ithVar(this._ivar[n]);
+	    b = b.biimp(ithVar(that._ivar[n]));
+	    result = result.and(b);
+	  }
+	for( ; n < max(this.varNum(), that.varNum()); n++)
+	  {
+	    BDD b =(n < this.varNum()) ? getBuddy.nithVar(this._ivar[n]) : getBuddy.one();
+	    b = b.and((n < that.varNum()) ? getBuddy.nithVar(that._ivar[n]) : getBuddy.one());
+	    result = result.and(b);
+	  }
+	return result;
+      }
+
+    int[] vars = new int[](bits);
+    vars =(this._ivar[0..bits]).dup;
+    BddVec y = getBuddy.buildVec(vars);
+    BddVec v = getBuddy.buildVec(bits, value);
+    BddVec z = y.add(v);
+
+    int[] thatvars = new int[](bits);
+    thatvars =(this._ivar[0..bits]).dup;
+    BddVec x = getBuddy.buildVec(thatvars);
+    BDD result = getBuddy.one();
+    int n;
+    for(n = 0; n < x.size(); n++)
+      {
+	BDD b = x.bitvec[n].biimp(z.bitvec[n]);
+	result = result.and(b);
+      }
+    for( ; n < max(this.varNum(), that.varNum()); n++)
+      {
+	BDD b =(n < this.varNum()) ? getBuddy.nithVar(this._ivar[n]) : getBuddy.one();
+	b = b.and((n < that.varNum()) ? getBuddy.nithVar(that._ivar[n]) : getBuddy.one());
+	result = result.and(b);
+      }
+    return result;
+  }
+
+  public BDD buildEquals(BddDomain that)
+  {
+    if(this.size() != that.size())
+      {
+	throw new BddException(text("Size of ", this, " != size of that ",
+				    that, "( ", this.size(), " vs ",
+				    that.size(), ")"));
+      }
+
+    BDD e = getBuddy.one();
+
+    int[] this_ivar = this.get_ivars();
+    int[] that_ivar = that.get_ivars();
+
+    for(int n = 0; n < this.varNum(); n++)
+      {
+	BDD a = ithVar(this_ivar[n]);
+	BDD b = ithVar(that_ivar[n]);
+	a = a.biimp(b);
+	e = e.and(a);
+      }
+
+    return e;
+  }
+
+  public BDD set()
+  {
+    return var.dup();
+  }
+
+  public BDD ithVar(long val)
+  {
+    if(val < 0 || val > size())
+      {
+	throw new BddException(text(val, " is out of range"));
+      }
+
+    BDD v = getBuddy.one();
+    int[] ivar = this.get_ivars();
+    for(int n = 0; n < ivar.length; n++)
+      {
+	if(val & 1)
+	  v = v.and(ithVar(ivar[n]));
+	else
+	  v = v.and(getBuddy.nithVar(ivar[n]));
+	val >>= 1;
+      }
+
+    return v;
+  }
+
+  public BDD varRange(long lo, long hi)
+  {
+    if(lo < 0 || hi >= size() || lo > hi)
+      {
+	throw new BddException(text("range <", lo, ", ",
+				    hi, "> is invalid"));
+      }
+
+    BDD result = getBuddy.zero();
+    int[] ivar = this.get_ivars();
+    while(lo <= hi)
+      {
+	BDD v = getBuddy.one();
+	for(int n = cast(int) ivar.length - 1; ; n--)
+	  {
+	    if(lo &(1 << n)) {
+	      v = v.and(ithVar(ivar[n]));
+	    }
+	    else {
+	      v = v.and(getBuddy.nithVar(ivar[n]));
+	    }
+	    long mask =((cast(long) 1) << n) - 1;
+	    if(((lo &(1 << n)) == 0) &&
+	       (lo | mask) <= hi)
+	      {
+		lo =(lo | mask) + 1;
+		break;
+	      }
+	  }
+	result = result.or(v);
+      }
+    return result;
+  }
+
+  public int varNum()
+  {
+    return cast(int) this._ivar.length;
+  }
+  public int[] get_ivars()
+  {
+    return this._ivar;
+  }
+
+  public int ensureCapacity(size_t range)
+  {
+    long calcsize = 2L;
+    if(range < 0)
+      throw new BddException();
+    if(range < realsize)
+      return cast(int) _ivar.length;
+    this._realsize = range + 1;
+    int binsize = 1;
+    while(calcsize <= range)
+      {
+	binsize++;
+	calcsize = calcsize << 1;
+      }
+    if(_ivar.length == binsize) return binsize;
+
+    // int[] new_ivar = new int[binsize];
+    int[] new_ivar = _ivar.dup;
+    new_ivar.length = binsize;
+    for(size_t i = _ivar.length; i < new_ivar.length; ++i)
+      {
+	int newVar = getBuddy.duplicateVar(new_ivar[i-1]);
+	getBuddy.incr_firstbddvar();
+	new_ivar[i] = newVar;
+      }
+    this._ivar = new_ivar;
+    BDD nvar = getBuddy.one();
+    for(int i = 0; i < _ivar.length; ++i)
+      {
+	nvar = nvar.and(ithVar(_ivar[i]));
+      }
+    this._var = nvar;
+    return binsize;
+  }
+
+  public string toString()
+  {
+    return getName();
+  }
+
+  /**
+   * Convert a bdd that to a list of indices of this domain.
+   * This method assumes that the bdd passed is a disjunction
+   * of ithVar(i_1) to ithVar(i_k).  It returns an array
+   * of length 'k' with elements [i_1,...,i_k].
+   * <p>
+   * Be careful when using this method for BDDs with a large number
+   * of entries, as it allocates a long[] array of dimension k.
+   *
+   * @param bdd bdd that is the disjunction of domain indices
+   * @see #getVarIndices(bdd,int)
+   * @see #ithVar(long)
+   */
+  // public long[] getVarIndices(BDD bdd)
+  // {
+  //   return getVarIndices(bdd, -1);
+  // }
+
+  /**
+   * Convert a bdd that to a list of indices of this domain.
+   * Same as getVarIndices(bdd), except only 'max' indices
+   * are extracted.
+   *
+   * @param bdd bdd that is the disjunction of domain indices
+   * @param max maximum number of entries to be returned
+   *
+   * @see #ithVar(long)
+   */
+
+  // Uses Iterator -- not yet implemented in D
+  // public long[] getVarIndices(BDD bdd, int max)
+  // {
+  //   BDD myvarset = set(); // can't use var here, must respect
+  // // subclass a factory may provide
+  //   int n =(int)bdd.satCount(myvarset);
+  //   if(max != -1 && n > max)
+  //     n = max;
+  //   long[] res = new long[](n);
+
+  //   Iterator it = bdd.iterator(myvarset);
+  //   for(int i = 0; i < n; i++)
+  // {
+  //     BDD bi =(bdd) it.next();
+  //     res[i] = bi.scanVar(this);
+  //   }
+  //   return res;
+  // }
+
 }
 
-abstract class BddVec
+
+
+struct BddVec
 {
-  private BDD[] _bitvec;	// FIXBDD
+
+  version(BDDVEC_DYNARR) {
+    private BDD[] _bitvec;	// FIXBDD
+  }
+  else {
+    private Array!BDD _bitvec;
+  }
+  
   private bool _signed = false;
 
-  private bool _destroy = true;
-
-  public void dontDestroy() {
-    _destroy = false;
+  bool isNull() {
+    return (_bitvec.length == 0);
   }
 
   public bool signed()
@@ -99,40 +529,42 @@ abstract class BddVec
     return _signed;
   }
 
-  public BDD[] bitvec()
+  public auto bitvec()
   {
     return _bitvec;
   }
+    
 
-  public @property size_t size()
+  public @property size_t length()
   {
     return _bitvec.length;
   }
 
-  // public @property void size(size_t l)
-  // {
-  //   import std.stdio;
-  //   writeln("Changing bddvec size from ", _bitvec.length, " to: ", l);
-  //   _bitvec.length = l;
-  // }
+  public @property size_t size()
+  {
+    return length;
+  }
 
-  public void initialize(bool isTrue);
-  public void initialize(int val);
-  public void initialize(long val);
-  public void initialize(uint offset, uint step);
-  public void initialize(BddDomain d);
-  public void initialize(int[] var);
-  public BddVec dup();
-  public BddVec copy();
-  public BddVec coerceSign();
-  public BddVec coerce(size_t bitnum);
-  public bool isConst();
-  public long val();
-  public void free();
-  public BddVec apply(BddVec that, BddOp op);
-  public BddVec opCom();
-  public BDD zero();
-  public BDD one();
+  protected this(size_t bitnum, bool signed = false)
+  {
+    _signed = signed;
+    _bitvec.length = bitnum;
+
+    // _bitvec = cast(BDD*) GC.malloc(bitnum * BDD.sizeof);
+    // _length = bitnum;
+    // BDD.disable_delref();
+    // for (size_t i=0; i!=_length; ++i) {
+    // 	_bitvec[i] = BDD.init;
+    // }
+    // BDD.enable_delref();
+  }
+
+  version(BDDVEC_DYNARR) {
+    // ~this() {
+    //   GC.free(cast(void*) _bitvec);
+    // }
+  }
+
   final public BddVec opBinary(string op)(long rhs)
     if(op == "<<" || op == ">>" || op == "*" || op == "/")
       {
@@ -233,137 +665,906 @@ abstract class BddVec
 	    return this.neq(rhs);
 	  }
       }
-  public BddVec add(BddVec that);
-  public BddVec sub(BddVec that);
-  public BddVec mul(long c);
-  public BddVec mul(BddVec rhs);
-  public void div_rec(BddVec divisor, BddVec remainder,
-		      BddVec result, long step);
-  public void replaceWith(BddVec that);
-  public int div(long c, ref BddVec res, ref BddVec rem);
-  public BddVec div(BddVec rhs);
-  public int div(BddVec rhs, ref BddVec result, ref BddVec remainder);
-  public BddVec shl(ptrdiff_t pos, BDD c);
-  public BddVec shl(BddVec r, BDD c);
-  public BddVec shr(ptrdiff_t pos, BDD c);
-  public BddVec shr(BddVec r, BDD c);
-  public BDD lth(BddVec r);
-  public BDD lte(BddVec r);
-  public BDD less(BddVec that, bool equalP);
-  public BDD equ(BddVec r);
-  public BDD gth(BddVec r);
-  public BDD gte(BddVec r);
-  public BDD neq(BddVec r);
-  public BddVec divmod(long c, bool which);
+
   public size_t opDollar() {
-    return _bitvec.length;
+    return length;
   }
   
-  public BDD opIndex(size_t n);
-  public BddVec opSlice(size_t i, size_t j);
+  public void initialize(bool isTrue)
+  {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if(isTrue)
+	  _bitvec[i] = one();
+	else
+	  _bitvec[i] = zero();
+      }
+  }
 
+
+  public void initialize(int val)
+  {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if((val & 0x1) != 0)
+	  _bitvec[i] = one();
+	else
+	  _bitvec[i] = zero();
+	val >>= 1;
+      }
+  }
+
+  public void initialize(long val)
+  {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if((val & 0x1) != 0)
+	  _bitvec[i] = one();
+	else
+	  _bitvec[i] = zero();
+	val >>= 1;
+      }
+  }
+
+
+  public void initialize(uint offset, uint step)
+  {
+    for(int n=0 ; n < size ; n++)
+      this.bitvec[n] = getBuddy.ithVar(offset+n*step);
+  }
+
+  public void initialize(BddDomain d)
+  {
+    initialize(d.get_ivars());
+  }
+
+  public void initialize(int[] var)
+  {
+    for(int n = 0 ; n < size ; n++)
+      this.bitvec[n] = getBuddy.ithVar(var[n]);
+  }
+
+  public BddVec dup()
+  {
+    return this.copy();
+  }
+
+  public BddVec copy()
+  {
+    BddVec dst = BddVec(size, false);
+    dst._signed = this._signed;
+
+    // dst.bitvec[0..$] = this.bitvec[0..$];
+
+    for(int n = 0; n < size; n++)
+      dst.bitvec[n] = this.bitvec[n].dup();
+
+    return dst;
+  }
+
+  public BddVec coerceSign()
+  {
+    if(signed) return copy();
+    else
+      {
+	BddVec dst = BddVec(size+1, true);
+	// dst.bitvec[0..$-1] = this.bitvec[0..$];
+	for(int n = 0; n < size; n++) {
+	  dst.bitvec[n] = this.bitvec[n].dup();
+	}
+	dst.bitvec[dst.size-1] = zero();
+	return dst;
+      }
+  }
+
+  public BddVec coerce(size_t bitnum)
+  {
+    BddVec dst = BddVec(bitnum, this._signed);
+    ulong minnum = min(bitnum, size);
+    uint n;
+    for(n = 0; n < minnum; n++)
+      dst.bitvec[n] = this.bitvec[n].dup();
+    for(uint m = n; m < bitnum; m++)
+      if(this._signed == false)
+	dst.bitvec[m] = zero();
+      else			// extend sign
+	dst.bitvec[m] = this.bitvec[n-1].dup();
+    return dst;
+  }
+
+  public bool isConst()
+  {
+    for (size_t i=0; i!=size; ++i)
+      {
+	if(!_bitvec[i].isOne() && !_bitvec[i].isZero()) return false;
+      }
+    return true;
+  }
+
+  public long val()
+  {
+    long val = 0;
+
+    for(size_t n = size - 1; n >= 0; n--)
+      if(this.bitvec[n].isOne())
+	val =(val << 1) | 1;
+      else if(this.bitvec[n].isZero())
+	val = val << 1;
+      else
+	return 0;
+    return val;
+  }
+
+  public void remove()
+  {
+    // size = 0;
+    _bitvec.length = 0;
+  }
+
+  // public bvec addref(bvec v)
+  // {
+  //   foreach(ref b; _bitvec) b.addref();
+  //   return v;
+  // }
+
+  // public bvec delref(bvec v)
+  // {
+  //   foreach(ref b; _bitvec) b.delref();
+  //   return v;
+  // }
+
+  public BddVec apply(BddVec that, BddOp op)
+  {
+    size_t maxsize = max(size, that.size);
+    size_t minsize = min(size, that.size);
+    // if(size != that.size)
+    // 	// throw new BddException();
+    // 	bdd_error(BddError.BVEC_SIZE);
+
+    BddVec res = BddVec(maxsize, _signed);
+    for(size_t n=0 ; n < minsize ; n++)
+      res.bitvec[n] = this.bitvec[n].apply(that.bitvec[n], op);
+
+    for(size_t n=minsize ; n < size ; n++)
+      res.bitvec[n] = this.bitvec[n].apply(zero(), op);
+
+    for(size_t n=minsize ; n < that.size ; n++)
+      res.bitvec[n] = zero.apply(that.bitvec[n], op);
+
+    return res;
+  }
+
+  public BddVec opCom()
+  {
+    BddVec res = BddVec(size, false);
+    for(int n=0 ; n < size ; n++)
+      res.bitvec[n] = this.bitvec[n].not();
+    return res;
+  }
+
+  public BddVec add(BddVec that)
+  {
+
+    // if(size != b.size)
+    // 	// throw new BddException();
+    // 	bdd_error(BddError.BVEC_SIZE);
+    BddVec a = this.coerceSign();
+    BddVec b = that.coerceSign();
+
+    size_t minsize = min(a.size, b.size);
+    size_t maxsize = max(a.size, b.size);
+
+    BDD c = zero();
+    BddVec res = BddVec(maxsize+1, false);
+    res._signed = true;
+
+    for(size_t n = 0; n < minsize; n++)
+      {
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = a.bitvec[n] ^ b.bitvec[n];
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
+	BDD c1 = a.bitvec[n] | b.bitvec[n];
+	c1 = c1 & c;
+	BDD c2 = a.bitvec[n] & b.bitvec[n];
+	c2 = c2 | c1;
+	c = c2;
+      }
+
+    // a.size > b.size
+    for(size_t n = minsize; n < a.size; n++)
+      {
+	// sign extend
+	BDD ext = b.signed ? b.bitvec[b.size-1] : zero();
+
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = a.bitvec[n] ^ ext;
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
+	BDD c1 = a.bitvec[n] | ext;
+	c1 = c1 & c;
+	BDD c2 = a.bitvec[n] & ext;
+	c2 = c2 | c1;
+	c = c2;
+      }
+
+    // b.size > a.size
+    for(size_t n = minsize; n < b.size; n++)
+      {
+	// sign extend
+	BDD ext = a.signed ? a.bitvec[a.size-1] : zero();
+
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = ext ^ b.bitvec[n];
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
+	BDD c1 = ext | b.bitvec[n];
+	c1 = c1 & c;
+	BDD c2 = ext & b.bitvec[n];
+	c2 = c2 | c1;
+	c = c2;
+      }
+
+    if(a.signed)
+      {
+	c = a.bitvec[a.size-1].ite(c.not(), c);
+      }
+    if(b.signed)
+      {
+	c = b.bitvec[b.size-1].ite(c.not(), c);
+      }
+    res.bitvec[res.size-1] = c;
+
+    // if(a.signed && b.signed)
+    // 	{
+    // 	  // extend sign
+    // 	  res[$-1] = res[$-2].dup();
+    // 	}
+
+    // if(!a.signed && !b.signed)
+    // 	{
+    // 	  // unsigned 0 extend
+    // 	  res[$-1] = zero();
+    // 	}
+
+    // if(a.signed && !b.signed)
+    // 	{
+    // 	  // if the signed number negative and the result is negative
+    // 	  res[$-1] = a[$-1] & res[$-2];
+    // 	}
+
+    // if(!a.signed && b.signed)
+    // 	{
+    // 	  // if the signed number negative and the result is negative
+    // 	  res[$-1] = b[$-1] & res[$-2];
+    // 	}
+
+    return res;
+  }
+
+  public BddVec sub(BddVec that)
+  {
+
+    size_t minsize = min(size, that.size);
+    size_t maxsize = max(size, that.size);
+
+    BDD c = zero();
+    BddVec res = BddVec(maxsize+1, false);
+
+    for(int n = 0; n < minsize; n++)
+      {
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = this.bitvec[n] ^ that.bitvec[n];
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
+	BDD tmp1 = that.bitvec[n] | c;
+	BDD tmp2 = this.bitvec[n].lth(tmp1);
+	tmp1 = this.bitvec[n] & that.bitvec[n];
+	tmp1 = tmp1 & c;
+	tmp1 = tmp1 | tmp2;
+	c = tmp1;
+      }
+
+    // this.size > that.size
+    for(size_t n = minsize; n < size; n++)
+      {
+	// sign extend
+	BDD ext = that.signed ? that.bitvec[that.size-1] : zero();
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = this.bitvec[n] ^ ext;
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
+	BDD tmp1 = ext | c;
+	BDD tmp2 = this.bitvec[n].lth(tmp1);
+	tmp1 = this.bitvec[n] & ext;
+	tmp1 = tmp1 & c;
+	tmp1 = tmp1 | tmp2;
+	c = tmp1;
+      }
+    // that.size > this.size
+    for(size_t n = minsize; n < that.size; n++)
+      {
+	// sign extend
+	BDD ext = signed ? this.bitvec[this.size-1] : zero();
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = ext ^ that.bitvec[n];
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
+	BDD tmp1 = that.bitvec[n] | c;
+	BDD tmp2 = ext.lth(tmp1);
+	tmp1 = ext & that.bitvec[n];
+	tmp1 = tmp1 & c;
+	tmp1 = tmp1 | tmp2;
+	c = tmp1;
+      }
+    res.bitvec[res.size-1] = c;
+    return res;
+  }
+
+  public BddVec mul(long c)
+  {
+    BddVec next = getBuddy.buildVec(size, false);
+    if(c == 0) return next;	// base case
+
+    for(size_t n=1 ; n < size ; n++)
+      next.bitvec[n] = this.bitvec[n-1];
+
+    BddVec rest = next.mul(c >> 1);
+
+    BddVec result;
+    if(c & 0x1)
+      {
+	result = this.add(rest);
+      } else {
+      result = rest;
+    }
+
+    return result;
+
+  }
+
+  public BddVec mul(BddVec rhs)
+  {
+    size_t bitnum = size + rhs.size;
+    BddVec result = getBuddy.buildVec(bitnum, false);
+    BddVec leftshifttmp = this.dup();
+
+    BddVec leftshift = leftshifttmp.coerce(bitnum);
+
+    for (size_t i=0; i!=rhs.size; ++i)
+      {
+	BddVec added = result.add(leftshift);
+	for(size_t m=0; m < bitnum; ++m)
+	  {
+	    BDD tmpres = rhs.bitvec[i].ite(added.bitvec[m], result.bitvec[m]);
+	    result.bitvec[m] = tmpres;
+	  }
+	for(size_t m = bitnum-1; m >= 1; --m)
+	  {
+	    leftshift.bitvec[m] = leftshift.bitvec[m-1];
+	  }
+	leftshift.bitvec[0] = zero();
+      }
+    return result;
+  }
+
+  public void div_rec(BddVec divisor, BddVec remainder,
+			       BddVec result, long step)
+  {
+    BDD isSmaller = divisor.lte(remainder);
+    BddVec newResult = result.shl(1, isSmaller);
+    BddVec zero = getBuddy.buildVec(divisor.size, false);
+    BddVec sub = getBuddy.buildVec(divisor.size, false);
+
+    for(size_t n = 0; n < divisor.size; n++)
+      sub.bitvec[n] = isSmaller.ite(divisor.bitvec[n], zero.bitvec[n]);
+
+    BddVec tmp = remainder.sub(sub);
+    BddVec newRemainder =
+      tmp.shl(1, result.bitvec[divisor.size - 1]);
+
+    if(step > 1)
+      div_rec(divisor, newRemainder, newResult, step - 1);
+
+    result.replaceWith(newResult);
+    remainder.replaceWith(newRemainder);
+  }
+
+  public void replaceWith(BddVec that)
+  {
+    if(size != that.size)
+      // throw new BddException();
+      bdd_error(BddError.BVEC_SIZE);
+    remove();
+    this._bitvec = that.bitvec;
+  }
+
+
+  public int div(long c, ref BddVec res, ref BddVec rem)
+  {
+    if(c > 0)
+      {
+	BddVec divisor = getBuddy.buildVec(size, c);
+	BddVec tmp = getBuddy.buildVec(size, false);
+	BddVec tmpremainder = tmp.shl(1, this.bitvec[size-1]);
+	BddVec result = this.shl(1, zero());
+	BddVec remainder;
+
+	div_rec(divisor, tmpremainder, result, divisor.size);
+	remainder = tmpremainder.shr(1, zero());
+
+	res = result;
+	rem = remainder;
+
+	return 0;
+      }
+    else {
+      throw new BddException("Bit Vector divide by 0");
+    }
+  }
+
+  public BddVec div(BddVec rhs) {
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
+    div(rhs, result, remainder);
+    return result;
+  }
+
+  public int div(BddVec rhs, ref BddVec result, ref BddVec remainder)
+  {
+
+    size_t bitnum = size + rhs.size;
+    if(size != rhs.size)
+      // throw new BddException("Bit Vector sizes do not match");
+      bdd_error(BddError.BVEC_SIZE);
+
+    BddVec rem = this.coerce(bitnum);
+    BddVec divtmp = rhs.coerce(bitnum);
+
+    BddVec div = divtmp.shl(size, zero());
+
+    BddVec res = getBuddy.buildVec(rhs.size, false);
+
+    for(size_t n = 0; n < rhs.size + 1; ++n)
+      {
+	BDD divLteRem = div.lte(rem);
+	BddVec remSubDiv = rem.sub(div);
+
+	for(size_t m = 0; m < bitnum; ++m)
+	  {
+	    BDD remtmp = divLteRem.ite(remSubDiv.bitvec[m], rem.bitvec[m]);
+	    rem.bitvec[m] = remtmp;
+	  }
+
+	if(n > 0)
+	  res.bitvec[rhs.size - n] = divLteRem;
+
+	/* Shift 'div' one bit right */
+	for(size_t m = 0 ; m < bitnum-1 ; ++m)
+	  div.bitvec[m] = div.bitvec[m+1];
+	div.bitvec[bitnum-1] = zero();
+      }
+
+
+    result = res;
+    remainder = rem.coerce(rhs.size);
+    return 0;
+  }
+
+  public BDD zero() {
+    return getBuddy.zero();
+  }
+
+  public BDD one() {
+    return getBuddy.one();
+  }
+
+  public BddVec shl(ptrdiff_t pos, BDD c)
+  {
+    size_t minnum = min(this.size, pos);
+    if(pos < 0)
+      throw new BddException();
+
+    BddVec res = getBuddy.buildVec(size, false);
+
+    size_t n;
+    for(n = 0; n < minnum; n++)
+      res.bitvec[n] = c.dup();
+
+    for(n = minnum; n < size; n++)
+      res.bitvec[n] = this.bitvec[n-pos].dup();
+
+    return res;
+  }
+
+  public BddVec shl(BddVec r, BDD c)
+  {
+    BddVec val;
+    BDD tmp1, tmp2, rEquN;
+
+    BddVec res = getBuddy.buildVec(this.size, false);
+
+    for(size_t n = 0 ; n <= this.size ; ++n)
+      {
+	val = getBuddy.buildVec(r.size, n);
+	rEquN = r.equ(val);
+
+	for(size_t m = 0 ; m < this.size ; m++)
+	  {
+	    /* Set the m'th new location to be the(m+n)'th old location */
+	    if(m  >= n)
+	      tmp1 = rEquN.and(this.bitvec[m-n]);
+	    else
+	      tmp1 = rEquN.and(c);
+	    tmp2 = res.bitvec[m].or(tmp1);
+
+	    res.bitvec[m] = tmp2;
+	  }
+
+      }
+
+    /* At last make sure 'c' is shiftet in for r-values > l-size */
+    val = getBuddy.buildVec(r.size, this.size);
+    rEquN = r.gth(val);
+    tmp1 = rEquN.and(c);
+
+    for(size_t m = 0; m < this.size; ++m)
+      {
+	tmp2 = res.bitvec[m].or(tmp1);
+
+	res.bitvec[m] = tmp2;
+      }
+
+    return res;
+  }
+
+
+  public BddVec shr(ptrdiff_t pos, BDD c)
+  {
+    size_t maxnum = max(0, size - pos);
+    if(pos < 0)
+      throw new BddException();
+
+    BddVec res = getBuddy.buildVec(size, false);
+
+    for(size_t n=maxnum; n < size; ++n)
+      res.bitvec[n] = c.dup();
+
+    for(size_t n = 0; n < maxnum; ++n)
+      res.bitvec[n] = this.bitvec[n+pos].dup();
+
+    return res;
+  }
+
+  public BddVec shr(BddVec r, BDD c)
+  {
+    BddVec val;
+    BDD tmp1, tmp2, rEquN;
+
+    BddVec res = getBuddy.buildVec(this.size, false);
+
+    for(size_t n = 0 ; n <= this.size ; ++n)
+      {
+	val = getBuddy.buildVec(r.size, n);
+	rEquN = r.equ(val);
+
+	for(size_t m = 0 ; m < this.size ; m++)
+	  {
+	    /* Set the m'th new location to be the(m+n)'th old location */
+	    if(m+n <= 2)
+	      tmp1 = rEquN.and(this.bitvec[m+n]);
+	    else
+	      tmp1 = rEquN.and(c);
+	    tmp2 = res.bitvec[m].or(tmp1);
+	    res.bitvec[m] = tmp2;
+	  }
+
+      }
+
+    /* At last make sure 'c' is shiftet in for r-values > l-size */
+    val = getBuddy.buildVec(r.size, this.size);
+    rEquN = r.gth(val);
+    tmp1 = rEquN.and(c);
+
+    for(size_t m = 0; m < this.size; ++m)
+      {
+	tmp2 = res.bitvec[m].or(tmp1);
+	res.bitvec[m] = tmp2;
+      }
+
+    return res;
+  }
+
+  public BDD lth(BddVec r)
+  {
+    return less(r, false);
+  }
+
+  public BDD lte(BddVec r)
+  {
+    return less(r, true);
+  }
+
+  public BDD less(BddVec that, bool equalP)
+  {
+    BDD p = equalP ? one() : zero();
+
+    if(this.size == 0  ||  that.size == 0)
+      return zero;
+
+    // if(this.size != that.size)
+    // 	// throw new BddException("Size Mismatch!");
+    // 	bdd_error(BddError.BVEC_SIZE);
+
+    BddVec a = this.coerceSign();
+    BddVec b = that.coerceSign();
+
+    size_t minsize = min(a.size, b.size);
+    size_t maxsize = max(a.size, b.size);
+
+    for(size_t n=0; n < minsize; ++n)
+      {
+	/* p =(!l[n] & that[n]) |
+	 *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
+
+	BDD tmp1 = a.bitvec[n].lth(b.bitvec[n]);
+	BDD tmp2 = a.bitvec[n].biimp(b.bitvec[n]);
+	BDD tmp3 = tmp2 & p;
+	BDD tmp4 = tmp1 | tmp3;
+	p = tmp4;
+      }
+
+    // a.size > b.size
+    for(size_t n=minsize; n < a.size; ++n)
+      {
+	// sign extend
+	BDD ext = b.signed ? b.bitvec[b.size-1] : zero();
+
+	/* p =(!l[n] & that[n]) |
+	 *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
+
+	BDD tmp1 = a.bitvec[n].lth(ext);
+	BDD tmp2 = a.bitvec[n].biimp(ext);
+	BDD tmp3 = tmp2 & p;
+	BDD tmp4 = tmp1 | tmp3;
+	p = tmp4;
+      }
+
+    // b.size > a.size
+    for(size_t n=minsize; n < b.size; ++n)
+      {
+	// sign extend
+	BDD ext = a.signed ? a.bitvec[a.size-1] : zero();
+	/* p =(!l[n] & that[n]) |
+	 *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
+
+	BDD tmp1 = ext.lth(b.bitvec[n]);
+	BDD tmp2 = ext.biimp(b.bitvec[n]);
+	BDD tmp3 = tmp2 & p;
+	BDD tmp4 = tmp1 | tmp3;
+	p = tmp4;
+      }
+
+    p = (a.bitvec[a.size-1] & (b.bitvec[b.size-1].not())).ite(one(), p);
+    p = ((a.bitvec[a.size-1].not()) & b.bitvec[b.size-1]).ite(zero(), p);
+    // if both this and that are either signed or unsigned, what we
+    // have done till now is sufficient
+
+    // If this is signed and that is not signed
+    // if(a.signed & !(b.signed))
+    // 	{
+    // 	  p = a[$-1].ite(zero(), p);
+    // 	}
+
+    // If that is signed and this is not signed
+    // if(b.signed & !(a.signed))
+    // 	{
+    // 	  p = b[$-1].ite(one(), p);
+    // 	}
+
+    return p;
+  }
+
+  public BDD equ(BddVec r)
+  {
+    BDD p = one;
+
+    if(this.size == 0  ||  r.size == 0)
+      return zero;
+
+    // if(this.size != r.size)
+    // 	// throw new BddException("Size Mismatch!");
+    // 	bdd_error(BddError.BVEC_SIZE);
+
+    size_t minsize = min(size, r.size);
+    size_t maxsize = max(size, r.size);
+
+    for(size_t n=0; n < minsize; ++n)
+      {
+	p = p & this.bitvec[n].biimp(r.bitvec[n]);
+      }
+
+    // this.size > r.size
+    for(size_t n=minsize; n < size; ++n)
+      {
+	// sign extend
+	BDD ext = r.signed ? r.bitvec[r.size-1] : zero();
+	p = p & this.bitvec[n].biimp(ext);
+      }
+
+    // this.size > r.size
+    for(size_t n=minsize; n < r.size; ++n)
+      {
+	// sign extend
+	BDD ext = signed ? this.bitvec[size-1] : zero();
+	p = p & ext.biimp(r.bitvec[n]);
+      }
+    return p;
+  }
+
+  public BDD gth(BddVec r)
+  {
+    BDD tmp = this.lte(r);
+    BDD p = tmp.not();
+    return p;
+  }
+
+  public BDD gte(BddVec r)
+  {
+    BDD tmp = this.lth(r);
+    BDD p = tmp.not();
+    return p;
+  }
+
+  public BDD neq(BddVec r)
+  {
+    BDD tmp = this.equ(r);
+    BDD p = tmp.not();
+    return p;
+  }
+
+  public BddVec divmod(long c, bool which)
+  {
+    if(c <= 0L)
+      throw new BddException();
+    BddVec divisor = getBuddy.buildVec(cast(int) size, c);
+    BddVec tmp = getBuddy.buildVec(cast(int) size, false);
+    BddVec tmpremainder = tmp.shl(1, this.bitvec[size-1]);
+    BddVec result = this.shl(1, zero());
+
+    BddVec remainder;
+
+    div_rec(divisor, tmpremainder, result, cast(int) divisor.size);
+    remainder = tmpremainder.shr(1, zero());
+
+    if(which)
+      {
+	return result;
+      } else {
+      return remainder;
+    }
+  }
+
+  public BddVec opSlice(size_t n, size_t m) {
+    if(n >= m) throw new BddException();
+    if(n >= size) throw new BddException();
+    if(m > size) throw new BddException();
+    BddVec res = getBuddy.buildVec(cast (int) (m - n), false);
+    for(size_t i = 0; i < m - n; ++i) {
+      res.bitvec[i] = this.bitvec[n+i].dup();
+    }
+    return res;
+  }
+
+  public BDD opIndex(size_t i) {
+    if(i >= size) throw new BddException();
+    return bitvec[i].dup;
+  }
 }
 
-// only addref
-struct Bdd
-{
-  private BDD _bdd_;
 
-  public BDD _bdd() {
-    return _bdd_;
-  }
-  
-  alias _bdd this;
-
-  this(BDD b) {
-    _bdd_ = b;
-  }
-
-  void opAssign(BDD b) {
-    _bdd_ = b;
-  }
-}
-
-// addref as well as delref
-struct bdd
-{
-  private BDD _bdd_;
-
-  public BDD _bdd() {
-    return _bdd_;
-  }
-  
-  alias _bdd this;
-
-  this(BDD b) {
-    _bdd_ = b;
-  }
-
-  void opAssign(BDD b) {
-    _bdd_ = b;
-  }
-}
+version(BUDDY_ROOT) {
+   void useBuddy(Buddy buddy) {}
+   void exitBuddy() {}
+ }
+ else {
+   void useBuddy(Buddy buddy) {
+     BDD._buddy = buddy;
+   }
+   void exitBuddy() {
+     BDD._buddy = null;
+   }
+   Buddy getBuddy() {
+     assert(BDD._buddy !is null);
+     return BDD._buddy;
+   }
+ }
 
 struct BDD
 {
   uint _index;
 
-  Buddy _root;
+  static bool _delref_enabled = true;
 
-  const bool opEquals(ref const BDD other) {
-    return (this._index == other._index &&
-	    this._root is other._root);
+  static disable_delref() {
+    _delref_enabled = false;
   }
-  
-  public bool isInitialized() {
-    if(_root is null) return false;
-    else return true;
+
+  static enable_delref() {
+    _delref_enabled = true;
   }
-  
-  @property public Buddy root()
+
+  version(BUDDY_ROOT) {
+    Buddy _buddy;
+    const bool opEquals(ref const BDD other) {
+      return (this._index == other._index &&
+	      this._buddy is other._buddy);
+    }
+  }
+  else {
+    static Buddy _buddy;
+    const bool opEquals(ref const BDD other) {
+      return (this._index == other._index);
+    }
+  }
+
+  size_t toHash() const nothrow @safe {
+    return _index;
+  }
+
+  @property public Buddy buddy()
   {
-    return _root;
+    return _buddy;
   }
-
-  // public void free()
-  // {
-  // }
 
   public ~this()
   {
-    if (root !is null && _index !is 0) root.delRef(_index);
+    if (_buddy !is null && _index !is 0 && _delref_enabled)
+      _buddy.delRef(_index);
   }
 
-  // static uint count = 0;
-  // this(uint _buddyID) {
-  //   buddyID = _buddyID;
-  // }
-
-  this(int index, Buddy root)
-  {
-    // writeln(count++);
-    this._index = index;
-    this._root = root;
-    _root.addRef(_index);
+  version(BUDDY_ROOT) {
+    this(int index, Buddy buddy)
+      {
+	// writeln(count++);
+	this._index = index;
+	this._buddy = buddy;
+	_buddy.addRef(_index);
+      }
   }
-    
+  else {
+    this(int index, Buddy buddy)
+      {
+	// writeln(count++);
+	assert(_buddy is buddy);
+	this._index = index;
+	_buddy.addRef(_index);
+      }
+  }
   this(this)
   {
-    if(_index != 0 && _root !is null) {
-      _root.addRef(_index);
+    if(_index != 0 && _buddy !is null) {
+      _buddy.addRef(_index);
     }
   }
     
   void opAssign(BDD that) {
-    if (_root !is null && _index !is 0) _root.delRef(_index);
-    this._root = that._root;
+    if (_buddy !is null && _index !is 0 && _delref_enabled)
+      _buddy.delRef(_index);
+    this._buddy = that._buddy;
     this._index = that._index;
-    _root.addRef(_index);
+    _buddy.addRef(_index);
   }
 
   BDD makeBdd(int index)
   {
-    return BDD(index, this._root);
+    return BDD(index, this._buddy);
   }
 
   public bool isZero()
@@ -378,22 +1579,22 @@ struct BDD
 
   public int var()
   {
-    return root.bdd_var(_index);
+    return buddy.bdd_var(_index);
   }
 
   public int level()
   {
-    return root.var2Level(this.var);
+    return buddy.var2Level(this.var);
   }
 
   public BDD high()
   {
-    return makeBdd(root.HIGH(_index));
+    return makeBdd(buddy.HIGH(_index));
   }
 
   public BDD low()
   {
-    return makeBdd(root.LOW(_index));
+    return makeBdd(buddy.LOW(_index));
   }
 
   // public BDD id()
@@ -413,7 +1614,7 @@ struct BDD
 
   public BDD not()
   {
-    return makeBdd(root.bdd_not(_index));
+    return makeBdd(buddy.bdd_not(_index));
   }
 
   public bool opEquals(BDD rhs)
@@ -552,7 +1753,7 @@ struct BDD
     uint x = _index;
     uint y = thenBDD._index;
     uint z = elseBDD._index;
-    return makeBdd(root.bdd_ite(x, y, z));
+    return makeBdd(buddy.bdd_ite(x, y, z));
   }
 
   // compare with bvec_ite
@@ -563,7 +1764,7 @@ struct BDD
 	bdd_error(BddError.BVEC_SIZE);
       }
 
-    BddVec res = root.buildVec(b.size, false);
+    BddVec res = buddy.buildVec(b.size, false);
 
     for(size_t n = 0 ; n < b.size ; ++n)
       {
@@ -578,68 +1779,68 @@ struct BDD
     uint x = _index;
     uint y = that._index;
     uint z = var._index;
-    return makeBdd(root.bdd_relprod(x, y, z));
+    return makeBdd(buddy.bdd_relprod(x, y, z));
   }
 
   public BDD compose(BDD g, int var)
   {
     uint x = _index;
     uint y = g._index;
-    return makeBdd(root.bdd_compose(x, y, var));
+    return makeBdd(buddy.bdd_compose(x, y, var));
   }
 
   public BDD veccompose(BddPair pair)
   {
     uint x = _index;
-    return makeBdd(root.bdd_veccompose(x, pair));
+    return makeBdd(buddy.bdd_veccompose(x, pair));
   }
 
   public BDD constrain(BDD that)
   {
     uint x = _index;
     uint y = that._index;
-    return makeBdd(root.bdd_constrain(x, y));
+    return makeBdd(buddy.bdd_constrain(x, y));
   }
 
   public BDD exist(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_exist(x, y));
+    return makeBdd(buddy.bdd_exist(x, y));
   }
 
   public BDD forAll(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_forall(x, y));
+    return makeBdd(buddy.bdd_forall(x, y));
   }
 
   public BDD unique(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_unique(x, y));
+    return makeBdd(buddy.bdd_unique(x, y));
   }
 
   public BDD restrict(BDD var)
   {
     uint x = _index;
     uint y = var._index;
-    return makeBdd(root.bdd_restrict(x, y));
+    return makeBdd(buddy.bdd_restrict(x, y));
   }
 
   public BDD simplify(BDD d)
   {
     uint x = _index;
     uint y = d._index;
-    return makeBdd(root.bdd_simplify(x, y));
+    return makeBdd(buddy.bdd_simplify(x, y));
   }
 
   public BDD support()
   {
     uint x = _index;
-    return makeBdd(root.bdd_support(x));
+    return makeBdd(buddy.bdd_support(x));
   }
 
   public BDD apply(BDD that, BddOp opr)
@@ -647,7 +1848,7 @@ struct BDD
     uint x = _index;
     uint y = that._index;
     // BddOp z = opr.dup;
-    return makeBdd(root.bdd_apply(x, y, opr));
+    return makeBdd(buddy.bdd_apply(x, y, opr));
   }
 
   public BDD applyAll(BDD that, BddOp opr, BDD var)
@@ -656,7 +1857,7 @@ struct BDD
     uint y = that._index;
     // BddOp z = opr.dup;
     uint a = var._index;
-    return makeBdd(root.bdd_appall(x, y, opr, a));
+    return makeBdd(buddy.bdd_appall(x, y, opr, a));
   }
 
   public BDD applyEx(BDD that, BddOp opr, BDD var)
@@ -665,7 +1866,7 @@ struct BDD
     uint y = that._index;
     // BddOp z = opr.dup;
     uint a = var._index;
-    return makeBdd(root.bdd_appex(x, y, opr, a));
+    return makeBdd(buddy.bdd_appex(x, y, opr, a));
   }
 
   public BDD applyUni(BDD that, BddOp opr, BDD var)
@@ -674,24 +1875,24 @@ struct BDD
     uint y = that._index;
     // BddOp z = opr.dup;
     uint a = var._index;
-    return makeBdd(root.bdd_appuni(x, y, opr, a));
+    return makeBdd(buddy.bdd_appuni(x, y, opr, a));
   }
 
   public BDD satOne()
   {
     uint x = _index;
-    return makeBdd(root.bdd_satone(x));
+    return makeBdd(buddy.bdd_satone(x));
   }
 
   public BDD randSatOne(double rand, double[uint] dist)
   {
-    return makeBdd(root.bdd_randsatone(rand, dist, _index));
+    return makeBdd(buddy.bdd_randsatone(rand, dist, _index));
   }
 
   public BDD fullSatOne()
   {
     uint x = _index;
-    return makeBdd(root.bdd_fullsatone(x));
+    return makeBdd(buddy.bdd_fullsatone(x));
   }
 
   public BDD satOne(BDD var, bool pol)
@@ -699,14 +1900,14 @@ struct BDD
     uint x = _index;
     uint y = var._index;
     int z = pol ? 1 : 0;
-    return makeBdd(root.bdd_satoneset(x, y, z));
+    return makeBdd(buddy.bdd_satoneset(x, y, z));
   }
 
   public byte[][] allSat()
   {
     uint x = _index;
     byte[][] result;
-    root.bdd_allsat(x, result);
+    buddy.bdd_allsat(x, result);
     return result;
   }
 
@@ -719,7 +1920,7 @@ struct BDD
 	return varset;
       }
 
-    bdd n = this.dup();
+    BDD n = this.dup();
     // TBD This should be more efficient for D
     version(BDDD_FIX1)
       {
@@ -733,7 +1934,7 @@ struct BDD
       int num = 0;
       do {
 	num++;
-	bdd n2 = n.high();
+	BDD n2 = n.high();
 	n = n2;
       } while(!n.isZero() && !n.isOne());
 
@@ -743,7 +1944,7 @@ struct BDD
       n = this.dup();
       do {
 	varset[num++] = n.var();
-	bdd n2 = n.high();
+	BDD n2 = n.high();
 	n = n2;
       } while(!n.isZero() && !n.isOne());
     }
@@ -766,10 +1967,10 @@ struct BDD
 
     version(BDDD_FIX2)
       {
-	for(n = 0; n < root.numberOfDomains(); n++)
+	for(n = 0; n < buddy.numberOfDomains(); n++)
 	  {
-	    BddDomain dom = root.getDomain(n);
-	    int[] ivar = dom.vars();
+	    BddDomain dom = buddy.getDomain(n);
+	    int[] ivar = dom.get_ivars();
 	    bool found = false;
 	    for(m = 0; m < dom.varNum() && !found; m++)
 	      {
@@ -784,10 +1985,10 @@ struct BDD
 	      }
 	  }
       } else {
-      for(n = 0, num = 0; n < root.numberOfDomains(); n++)
+      for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
-	  BddDomain dom = root.getDomain(n);
-	  int[] ivar = dom.vars();
+	  BddDomain dom = buddy.getDomain(n);
+	  int[] ivar = dom.get_ivars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
 	    {
@@ -805,10 +2006,10 @@ struct BDD
       // varset = new int[num];
       varset.length = num;
 
-      for(n = 0, num = 0; n < root.numberOfDomains(); n++)
+      for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
-	  BddDomain dom = root.getDomain(n);
-	  int[] ivar = dom.vars();
+	  BddDomain dom = buddy.getDomain(n);
+	  int[] ivar = dom.get_ivars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
 	    {
@@ -847,32 +2048,32 @@ struct BDD
     if(this.isZero())
       return null;
 
-    int _varNum = root.varNum();
+    int _varNum = buddy.varNum();
     store = new bool[_varNum];
 
-    bdd p = this.dup();
+    BDD p = this.dup();
     while(!p.isOne() && !p.isZero())
       {
-	bdd lo = p.low();
+	BDD lo = p.low();
 	if(!lo.isZero())
 	  {
 	    store[p.var()] = false;
-	    bdd p2 = p.low();
+	    BDD p2 = p.low();
 	    p = p2;
 	  } else {
 	  store[p.var()] = true;
-	  bdd p2 = p.high();
+	  BDD p2 = p.high();
 	  p = p2;
 	}
       }
 
-    int fdvarnum = root.numberOfDomains();
+    int fdvarnum = buddy.numberOfDomains();
     res.length = fdvarnum;
 
     for(n = 0; n < fdvarnum; n++)
       {
-	BddDomain dom = root.getDomain(n);
-	int[] ivar = dom.vars();
+	BddDomain dom = buddy.getDomain(n);
+	int[] ivar = dom.get_ivars();
 
 	long val = 0;
 	for(int m = dom.varNum() - 1; m >= 0; m--)
@@ -890,11 +2091,11 @@ struct BDD
   private static int[] varset2levels(BDD r)
   {
     int size = 0;
-    bdd p = r.dup();
+    BDD p = r.dup();
     while(!p.isOne() && !p.isZero())
       {
 	++size;
-	bdd p2 = p.high();
+	BDD p2 = p.high();
 	p = p2;
       }
     int[] result = new int[size];
@@ -903,7 +2104,7 @@ struct BDD
     while(!p.isOne() && !p.isZero())
       {
 	result[++size] = p.level();
-	bdd p2 = p.high();
+	BDD p2 = p.high();
 	p = p2;
       }
     return result;
@@ -912,7 +2113,7 @@ struct BDD
   public BDD replace(BddPair pair)
   {
     uint x = _index;
-    return makeBdd(root.bdd_replace(x, pair));
+    return makeBdd(buddy.bdd_replace(x, pair));
   }
 
   public void printSet()
@@ -937,8 +2138,8 @@ struct BDD
     int[BDD] map;
     // HashMap map = new HashMap();
 
-    map[root.zero()] = 0;
-    map[root.one()] = 1;
+    map[buddy.zero()] = 0;
+    map[buddy.one()] = 1;
 
     printdot_rec(stdout, 1, visited, map);
     writeln("}");
@@ -961,8 +2162,8 @@ struct BDD
     // TODO: support labelling of vars.
     f.writeln(ri, " [label=\"", this.var(), "\"];");
 
-    bdd l = this.low();
-    bdd h = this.high();
+    BDD l = this.low();
+    BDD h = this.high();
     int li = map[l];
 
     if((l in map) is null)
@@ -991,34 +2192,34 @@ struct BDD
 
   public int nodeCount()
   {
-    return root.bdd_nodecount(_index);
+    return buddy.bdd_nodecount(_index);
   }
 
   public double pathCount()
   {
-    return root.bdd_pathcount(_index);
+    return buddy.bdd_pathcount(_index);
   }
 
   public void satDist(out double[uint] dist)
   {
-    root.bdd_satdist(_index, dist);
+    buddy.bdd_satdist(_index, dist);
   }
 
   public double satCount()
   {
-    return root.bdd_satcount(_index);
+    return buddy.bdd_satcount(_index);
   }
 
   public double satCount(BDD varset)
   {
-    double unused = root.varNum();
+    double unused = buddy.varNum();
 
     if(varset.isZero() || varset.isOne() || isZero()) /* empty set */
       return 0.;
 
-    bdd n = varset.dup();
+    BDD n = varset.dup();
     do {
-      bdd n2 = n.high();
+      BDD n2 = n.high();
       n = n2;
       unused--;
     } while(!n.isOne() && !n.isZero());
@@ -1042,7 +2243,7 @@ struct BDD
   public int[] varProfile()
   {
     uint x = _index;
-    return root.bdd_varprofile(x);
+    return buddy.bdd_varprofile(x);
   }
 
   public bool equals(BDD that)
@@ -1059,7 +2260,7 @@ struct BDD
   public string toString()
   {
     if(_index < 2) return _index == 0 ? "F" : "T";
-    byte[] set = new byte[](root.varNum());
+    byte[] set = new byte[](buddy.varNum());
     // StringBuffer sb = new StringBuffer();
     string sb;
     bdd_printset_rec(sb, this, set);
@@ -1081,23 +2282,23 @@ struct BDD
 	      {
 		if(!first) sb ~= ", ";
 		first = false;
-		sb ~= text(root.level2Var(n), ':', set[n] == 2 ? '1' : '0');
+		sb ~= text(buddy.level2Var(n), ':', set[n] == 2 ? '1' : '0');
 	      }
 	  }
 	sb ~= '>';
       }
     else
       {
-	// set[root.var2Level(r.var())] = 1;
-	set[root.LEVEL(r._index)] = 1;
+	// set[buddy.var2Level(r.var())] = 1;
+	set[buddy.LEVEL(r._index)] = 1;
 	bdd_printset_rec(sb, r.low(), set);
 
-	// set[root.var2Level(r.var())] = 2;
-	set[root.LEVEL(r._index)] = 2;
+	// set[buddy.var2Level(r.var())] = 2;
+	set[buddy.LEVEL(r._index)] = 2;
 	bdd_printset_rec(sb, r.high(), set);
 
-	// set[root.var2Level(r.var())] = 0;
-	set[root.LEVEL(r._index)] = 0;
+	// set[buddy.var2Level(r.var())] = 0;
+	set[buddy.LEVEL(r._index)] = 0;
       }
   }
 
@@ -1118,8 +2319,8 @@ struct BDD
 	  }
       }
 
-    // set = new byte[](root.varNum());
-    set.length = root.varNum();
+    // set = new byte[](buddy.varNum());
+    set.length = buddy.varNum();
     set[] = -1;
     bdd_tovec_rec(res, this, set);
     return res;
@@ -1133,27 +2334,27 @@ struct BDD
     }
     else
       {
-	set[root.LEVEL(r._index)] = 0;
+	set[buddy.LEVEL(r._index)] = 0;
 	bdd_tovec_rec(res, r.low(), set);
-	set[root.LEVEL(r._index)] = 1;
+	set[buddy.LEVEL(r._index)] = 1;
 	bdd_tovec_rec(res, r.high(), set);
-	set[root.LEVEL(r._index)] = -1;
+	set[buddy.LEVEL(r._index)] = -1;
       }
   }
 
   public int[] getIndices(uint index)
   {
-    BddDomain domain_n = root.getDomain(index);
-    return domain_n.vars();
+    BddDomain domain_n = buddy.getDomain(index);
+    return domain_n.get_ivars();
   }
 
   // public T getVal(T)(short index)
   // {
-  //   int fdvarnum = root.numberOfDomains();
+  //   int fdvarnum = buddy.numberOfDomains();
   //   import std.stdio;
   //   writeln("There are number of domains: ", fdvarnum);
-  //   BddDomain domain_n = root.getDomain(index);
-  //   int[] vars = domain_n.vars();
+  //   BddDomain domain_n = buddy.getDomain(index);
+  //   int[] vars = domain_n.get_ivars();
 
   //   writeln(vars);
   //   return T.min;
@@ -1165,14 +2366,14 @@ struct BDD
     if(this.isOne()) return "T";
 
     string sb;
-    int[] set = new int[](root.varNum());
+    int[] set = new int[](buddy.varNum());
     fdd_printset_rec(sb, this, set);
     return sb;
   }
 
   private void fdd_printset_rec(ref string sb, BDD r, int[] set)
   {
-    int fdvarnum = root.numberOfDomains();
+    int fdvarnum = buddy.numberOfDomains();
 
     bool used = false;
     bool first;
@@ -1190,9 +2391,9 @@ struct BDD
 	    bool firstval = true;
 	    used = false;
 
-	    BddDomain domain_n = root.getDomain(n);
+	    BddDomain domain_n = buddy.getDomain(n);
 
-	    int[] vars = domain_n.vars();
+	    int[] vars = domain_n.get_ivars();
 	    size_t binsize = vars.length;
 	    for(int m=0 ; m<binsize ; m++)
 	      if(set[vars[m]] != 0)
@@ -1230,16 +2431,16 @@ struct BDD
       }
     else
       {
-	// set[root.var2Level(r.var())] = 1;
-	set[root.LEVEL(r._index)] = 1;
+	// set[buddy.var2Level(r.var())] = 1;
+	set[buddy.LEVEL(r._index)] = 1;
 	fdd_printset_rec(sb, r.low(), set);
 
-	// set[root.var2Level(r.var())] = 2;
-	set[root.LEVEL(r._index)] = 2;
+	// set[buddy.var2Level(r.var())] = 2;
+	set[buddy.LEVEL(r._index)] = 2;
 	fdd_printset_rec(sb, r.high(), set);
 
-	// set[root.var2Level(r.var())] = 0;
-	set[root.LEVEL(r._index)] = 0;
+	// set[buddy.var2Level(r.var())] = 0;
+	set[buddy.LEVEL(r._index)] = 0;
       }
   }
 }
@@ -1822,28 +3023,28 @@ class Buddy
     return BDD(bddTrue, this);
   }
 
-  public BDD buildCube(int value, BDD[] variables)
-  {
-    bdd result = one();
-    foreach_reverse(ref var; variables)
-      {
-	bdd v;
-	if((value & 0x1) != 0) v = var.dup();
-	else                   v = var.not();
+  // public BDD buildCube(int value, BDD[] variables)
+  // {
+  //   BDD result = one();
+  //   foreach_reverse(ref var; variables)
+  //     {
+  // 	BDD v;
+  // 	if((value & 0x1) != 0) v = var.dup();
+  // 	else                   v = var.not();
 
-	result = result.and(v);
-	value >>= 1;
-      }
-    return result;
-  }
+  // 	result = result.and(v);
+  // 	value >>= 1;
+  //     }
+  //   return result;
+  // }
 
   // in place of bdd_ibuildcube
   public BDD buildCube(int value, int[] variables)
   {
-    bdd result = one();
+    BDD result = one();
     foreach_reverse(ref var; variables)
       {
-	bdd v;
+	BDD v;
 	if((value & 0x1) != 0) v = ithVar(var);
 	else                   v = nithVar(var);
 	result = result.and(v);
@@ -1854,7 +3055,7 @@ class Buddy
 
   public BDD makeSet(int[] varset)
   {
-    bdd res = one();
+    BDD res = one();
     int varnum = cast(int) varset.length;
     for(int v = varnum-1 ; v >= 0 ; --v) {
       res = res.and(ithVar(varset[v]));
@@ -1910,10 +3111,12 @@ class Buddy
   {
     if(!isRunning())
       bdd_error(BddError.BDD_RUNNING);
-    else if(r < 0 || r >= _nodeSize)
+    else if(r < 0 || r >= _nodeSize) {
       bdd_error(BddError.BDD_ILLBDD);
-    else if(r >= 2 && LOW(r) == INVALID_BDD)
+    }
+    else if(r >= 2 && LOW(r) == INVALID_BDD) {
       bdd_error(BddError.BDD_ILLBDD);
+    }
   }
 
   void CHECKa(int r, int x)
@@ -1924,8 +3127,9 @@ class Buddy
   int bdd_var(int r)
   {
     CHECK(r);
-    if(r < 2)
+    if(r < 2) {
       bdd_error(BddError.BDD_ILLBDD);
+    }
 
     return(_level2Var[LEVEL(r)]);
   }
@@ -1933,8 +3137,9 @@ class Buddy
   int bdd_low(int r)
   {
     CHECK(r);
-    if(r < 2)
+    if(r < 2) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     return(LOW(r));
   }
@@ -1942,8 +3147,9 @@ class Buddy
   int bdd_high(int r)
   {
     CHECK(r);
-    if(r < 2)
+    if(r < 2) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     return(HIGH(r));
   }
@@ -2368,7 +3574,8 @@ class Buddy
 	res = apply_rec(l, r);
 	if(firstReorder == 0)
 	  bdd_enable_reorder();
-      } catch(ReorderException x)
+      }
+      catch(ReorderException x)
 	{
 	  bdd_checkreorder();
 
@@ -4361,28 +5568,21 @@ class Buddy
       }
   }
 
-  version(NO_EMPLACE) {}
-  else {
-    bool _enableDestroy = false;
-    size_t _allRefCount = 0;
-  }
-
   int addRef(int root)
   {
     if(root == INVALID_BDD)
       bdd_error(BddError.BDD_BREAK); /* distinctive */
     if(root < 2 || !isRunning())
       return root;
-    if(root >= _nodeSize)
+    if(root >= _nodeSize) {
       return bdd_error(BddError.BDD_ILLBDD);
-    if(LOW(root) == INVALID_BDD)
+    }
+    if(LOW(root) == INVALID_BDD) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     INCREF(root);
-    version(NO_EMPLACE) {}
-    else {
-      ++_allRefCount;
-    }
+
     debug {writeln("INCREF(", root, ") = ",GETREF(root));}
     return root;
   }
@@ -4393,35 +5593,21 @@ class Buddy
       bdd_error(BddError.BDD_BREAK); /* distinctive */
     if(root < 2 || !isRunning())
       return root;
-    if(root >= _nodeSize)
+    if(root >= _nodeSize) {
       return bdd_error(BddError.BDD_ILLBDD);
-    if(LOW(root) == INVALID_BDD)
+    }
+    if(LOW(root) == INVALID_BDD) {
       return bdd_error(BddError.BDD_ILLBDD);
+    }
 
     /* if the following line is present, fails there much earlier */
     if(!HASREF(root))
       bdd_error(BddError.BDD_BREAK); /* distinctive */
 
     DECREF(root);
-    version(NO_EMPLACE) {}
-    else {
-      if(--_allRefCount is 0 && _enableDestroy) {
-	this._delete;
-      }
-    }
-    
+
     debug {writeln("DECREF(", root, ") = ", GETREF(root));}
     return root;
-  }
-
-  public void destroyBuddy() {
-    version(NO_EMPLACE) {}
-    else {
-      _enableDestroy = true;
-      if(_allRefCount is 0) {
-	this._delete();
-      }
-    }
   }
 
   void bdd_mark(int i)
@@ -4903,87 +6089,10 @@ class Buddy
     p.last = 0;
   }
 
-  class BddPairImpl: BddPair
-  {
-    public override void set(int oldvar, int newvar)
-    {
-      bdd_setpair(this, oldvar, newvar);
-    }
-
-    public override void set(int oldvar, BDD newvar)
-    {
-      bdd_setbddpair(this, oldvar, newvar._index);
-    }
-
-    public override void set(int[] oldvar, int[] newvar)
-    {
-      if(oldvar.length != newvar.length)
-	throw new BddException("Sizes of the BDD Arrays do not match");
-
-      for(size_t n = 0; n != oldvar.length; ++n)
-	this.set(oldvar[n], newvar[n]);
-    }
-
-    public override void set(int[] oldvar, BDD[] newvar)
-    {
-      if(oldvar.length != newvar.length)
-	throw new BddException("Sizes of the BDD Arrays do not match");
-
-      for(int n = 0; n != newvar.length; ++n)
-	this.set(oldvar[n], newvar[n]);
-    }
-
-    public override void set(BddDomain p1, BddDomain p2)
-    {
-      int[] ivar1 = p1.vars();
-      int[] ivar2 = p2.vars();
-      this.set(ivar1, ivar2);
-    }
-
-    public override void set(BddDomain[] p1, BddDomain[] p2)
-    {
-      if(p1.length != p2.length)
-	throw new BddException("SIZE MISMATCH");
-
-      for(int n = 0; n < p1.length; n++)
-	if(p1[n].varNum() != p2[n].varNum())
-	  throw new BddException("SIZE MISMATCH");
-
-      for(int n = 0; n < p1.length; n++)
-	{
-	  this.set(p1[n], p2[n]);
-	}
-    }
-
-    public override void reset()
-    {
-      bdd_resetpair(this);
-    }
-
-    public override string toString()
-    {
-      string sb = "";
-      sb ~= '{';
-      bool any = false;
-      for(int i = 0; i < result.length; ++i)
-	{
-	  if(result[i] != bdd_ithvar(_level2Var[i]))
-	    {
-	      if(any) sb ~= ", ";
-	      any = true;
-	      bdd b = BDD(result[i], this.outer);
-	      sb ~= text(_level2Var[i], " = ", b);
-	    }
-	}
-      sb ~= '}';
-      return sb;
-    }
-  }
-
   BddPair pairs; /* List of all replacement pairs in use */
   int pairsid; /* Pair identifier */
 
-  static final void free(Object o)
+  static final void remove(Object o)
   {
   }
 
@@ -5131,7 +6240,7 @@ class Buddy
 
 	    reorder_block(top, method);
 	    vartree = top.nextlevel;
-	    free(top);
+	    remove(top);
 
 	    usednum_after = _nodeSize - _freeNum;
 
@@ -5919,7 +7028,15 @@ class Buddy
   {
     int _nodes = getNodeTableSize();
     int cache = getCacheSize();
-    _domain.length = 0;
+
+    // FIXMALLOC
+    // _domains.length = 0;
+    if(_domains !is null) {
+      GC.free(cast(void*)_domains);
+      _domains = null;
+    }
+    _domainsLen = 0;
+    
     fdvarnum = 0;
     firstbddvar = 0;
     done();
@@ -6413,7 +7530,7 @@ class Buddy
     bddtree_del(t.nextlevel);
     bddtree_del(t.next);
     t.seq.length = 0;
-    free(t);
+    remove(t);
   }
 
   void bdd_clrvarblocks()
@@ -7226,7 +8343,7 @@ class Buddy
 	mtx.rows[n].length = 0;
       }
     mtx.rows.length = 0;
-    free(mtx);
+    remove(mtx);
   }
 
   public void addVarBlock(BDD var, bool fixed)
@@ -7256,16 +8373,16 @@ class Buddy
     bdd_fprintorder(stdout);
   }
 
-  public int nodeCount(BDD[] arr)
-  {
-    int[] a = new int[](arr.length);
-    int j = 0;
-    foreach(ref r; arr)
-      {
-	a[j++] = r._index;
-      }
-    return bdd_anodecount(a);
-  }
+  // public int nodeCount(BDD[] arr)
+  // {
+  //   int[] a = new int[](arr.length);
+  //   int j = 0;
+  //   foreach(ref r; arr)
+  //     {
+  // 	a[j++] = r._index;
+  //     }
+  //   return bdd_anodecount(a);
+  // }
 
   public int getNodeTableSize()
   {
@@ -7307,7 +8424,7 @@ class Buddy
 
   public BddPair makePair()
   {
-    BddPair p = new BddPairImpl();
+    BddPair p = new BddPair();
     p.result.length = _varNum;
     int n;
     for(n = 0; n < _varNum; n++)
@@ -7865,7 +8982,11 @@ class Buddy
 
   /**** FINITE DOMAINS ****/
 
-  protected BddDomain[] _domain;
+  // FIXMALLOC
+  // protected BddDomain[] _domains;
+  protected BddDomain* _domains;
+  protected size_t _domainsLen;
+  
   protected int fdvarnum;
   protected int firstbddvar;
 
@@ -7878,7 +8999,7 @@ class Buddy
 
   protected BddDomain createDomain(int a, size_t b)
   {
-    return new BddDomainImpl(a, b);
+    return BddDomain(a, b);
   }
 
   public BddDomain extDomain(size_t domainSize)
@@ -7887,7 +9008,7 @@ class Buddy
     return extDomain(domains)[0];
   }
 
-  public BddDomain[] extDomain(int[] dom)
+  public BddDomain* extDomain(int[] dom)
   {
     size_t[] a = new size_t[](dom.length);
     for(int i = 0; i < a.length; ++i) {
@@ -7896,34 +9017,58 @@ class Buddy
     return extDomain(a);
   }
 
-  public BddDomain[] extDomain(size_t[] domainSizes)
+  public BddDomain* extDomain(size_t[] domainSizes)
   {
     int offset = fdvarnum;
     int binoffset;
     int extravars = 0;
     int n, bn;
     bool more;
-    int num = cast(int) domainSizes.length;
+    size_t num = domainSizes.length;
 
-    /* Build _domain table */
-    if(_domain.length == 0) /* First time */ {
-      _domain.length = num;
+    /* Build _domains table */
+    // FIXMALLOC
+    // if(_domains.length == 0) /* First time */ {
+    //   _domains.length = num;
+    if(_domainsLen == 0) /* First time */ {
+      _domains = cast(BddDomain*) GC.malloc(BddDomain.sizeof * num);
+      for (size_t i=0; i!=num; ++i) {
+    	_domains[i] = BddDomain.init;
+      }
+      _domainsLen = num;
     } else /* Allocated before */ {
-      if(fdvarnum + num > _domain.length)
+      // FIXMALLOC
+      // if(fdvarnum + num > _domains.length)
+      if(fdvarnum + num > _domainsLen)
 	{
-	  int fdvaralloc = cast(int)(_domain.length + max(num, _domain.length));
-	  // BddDomain[] d2 = _domain.dup;
+	  // FIXMALLOC
+	  // auto fdvaralloc = _domains.length + max(num, _domains.length);
+	  auto fdvaralloc = _domainsLen + max(num, _domainsLen);
+
+	  // BddDomain[] d2 = _domains.dup;
 	  // d2.length = fdvaralloc;
-	  // _domain = d2;
-	  _domain.length = fdvaralloc;
+	  // _domains = d2;
+
+	  // FIXMALLOC
+	  // _domains.length = fdvaralloc;
+	  BddDomain* d2 = cast(BddDomain*) GC.malloc(BddDomain.sizeof * fdvaralloc);
+	  for (size_t i=0; i!=_domainsLen; ++i) {
+	    d2[i] = _domains[i];
+	  }
+	  for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
+	    d2[i] = BddDomain.init;
+	  }
+	  GC.free(cast(void*)_domains);
+	  _domains = d2;
+	  _domainsLen = fdvaralloc;
 	}
     }
 
     /* Create BDD variable tables */
     for(n = 0; n < num; n++)
       {
-	_domain[n + fdvarnum] = createDomain(n + fdvarnum, domainSizes[n]);
-	extravars += _domain[n + fdvarnum].varNum();
+	_domains[n + fdvarnum] = createDomain(n + fdvarnum, domainSizes[n]);
+	extravars += _domains[n + fdvarnum].varNum();
       }
 
     binoffset = firstbddvar;
@@ -7940,29 +9085,32 @@ class Buddy
 
 	for(n = 0; n < num; n++)
 	  {
-	    if(bn < _domain[n + fdvarnum].varNum())
+	    if(bn < _domains[n + fdvarnum].varNum())
 	      {
 		more = true;
-		_domain[n + fdvarnum].ivar[bn] = binoffset++;
+		_domains[n + fdvarnum].get_ivars[bn] = binoffset++;
 	      }
 	  }
       }
 
     for(n = 0; n < num; n++)
       {
-	_domain[n + fdvarnum].var =
-	  makeSet(_domain[n + fdvarnum].ivar);
+	_domains[n + fdvarnum].var =
+	  makeSet(_domains[n + fdvarnum].get_ivars);
       }
 
     fdvarnum += num;
     firstbddvar += extravars;
 
-    BddDomain[] r = _domain[offset..offset+num];
-    return r;
+    // FIXMALLOC
+    // BddDomain[] r = _domains[offset..offset+num];
+    // return r.ptr;
+
+    return _domains + offset;
   }
 
   /**
-   * <p>This function takes two finite _domain blocks and merges them
+   * <p>This function takes two finite _domains blocks and merges them
    * into a new one, such that the new one is encoded using both sets
    * of BDD variables.</p>
    *
@@ -7973,23 +9121,39 @@ class Buddy
     BddDomain d;
     int n;
 
-    int fdvaralloc = cast(int) _domain.length;
+    // FIXMALLOC
+    // auto fdvaralloc = _domains.length;
+    auto fdvaralloc = _domainsLen;
     if(fdvarnum + 1 > fdvaralloc)
       {
 	fdvaralloc += fdvaralloc;
-	_domain.length = fdvaralloc;
+
+	// FIXMALLOC
+	// _domains.length = fdvaralloc;
+	BddDomain* dom = cast(BddDomain*) GC.malloc(BddDomain.sizeof * fdvaralloc);
+	for (size_t i=0; i!=_domainsLen; ++i) {
+	  dom[i] = _domains[i];
+	}
+	for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
+	  dom[i] = BddDomain.init;
+	}
+	if(_domains !is null) {
+	  GC.free(cast(void*)_domains);
+	}
+	_domains = dom;
+	_domainsLen = fdvaralloc;
       }
 
-    d = _domain[fdvarnum];
+    d = _domains[fdvarnum];
     d.realsize = d1.realsize * d2.realsize;
     d.ivar = new int[d1.varNum() + d2.varNum()];
 
     for(n = 0; n < d1.varNum(); n++)
-      d.ivar[n] = d1.ivar[n];
+      d.get_ivars[n] = d1.get_ivars[n];
     for(n = 0; n < d2.varNum(); n++)
-      d.ivar[d1.varNum() + n] = d2.ivar[n];
+      d.get_ivars[d1.varNum() + n] = d2.get_ivars[n];
 
-    d.var = makeSet(d.ivar);
+    d.var = makeSet(d.get_ivars);
     //addRef(d.var);
 
     fdvarnum++;
@@ -8002,35 +9166,44 @@ class Buddy
    *
    * <p>Compare to fdd_makeset.</p>
    */
-  public BDD makeSet(BddDomain[] v)
-  {
-    bdd res = one();
+  // FIXME -- DO NO USE DYNAMIC ARRAYS
 
-    for(size_t n = 0; n < v.length; ++n) {
-      res = res.and(v[n].set());
-    }
+  // public BDD makeSet(BddDomain[] v)
+  // {
+  //   BDD res = one();
 
-    return res;
-  }
+  //   for(size_t n = 0; n < v.length; ++n) {
+  //     res = res.and(v[n].set());
+  //   }
+
+  //   return res;
+  // }
 
   /**
-   * <p>Clear all allocated finite _domain blocks that were defined by extDomain()
+   * <p>Clear all allocated finite _domains blocks that were defined by extDomain()
    * or overlapDomain().</p>
    *
    * <p>Compare to fdd_clearall.</p>
    */
   public void clearAllDomains()
   {
-    _domain.length = 0;
+    // FIXMALLOC
+    // _domains.length = 0;
+    if(_domains !is null) {
+      GC.free(cast(void*)_domains);
+      _domains = null;
+    }
+    _domainsLen = 0;
+    
     fdvarnum = 0;
     firstbddvar = 0;
   }
 
   /**
-   * <p>Returns the number of finite _domain blocks defined by calls to
+   * <p>Returns the number of finite _domains blocks defined by calls to
    * extDomain().</p>
    *
-   * <p>Compare to fdd_domainnum.</p>
+   * <p>Compare to fdd_domainsnum.</p>
    */
   public int numberOfDomains()
   {
@@ -8038,405 +9211,17 @@ class Buddy
   }
 
   /**
-   * <p>Returns the ith finite _domain block, as defined by calls to
+   * <p>Returns the ith finite _domains block, as defined by calls to
    * extDomain().</p>
    */
   public BddDomain getDomain(int i)
   {
     if(i < 0 || i >= fdvarnum)
       throw new BddException("Index out of bound!");
-    return _domain[i];
+    return _domains[i];
   }
 
   // TODO: fdd_file_hook, fdd_strm_hook
-
-  private class BddDomainImpl: BddDomain
-  {
-
-    /* The name of this _domain. */
-    protected string _name;
-    /* The index of this _domain. */
-    protected int _index;
-
-    /* The specified _domain(0...N-1) */
-    public size_t _realsize;
-    /* Variable indices for the variable set */
-    protected int[] _ivar;
-    /* The BDD variable set.  Actually constructed in extDomain(), etc. */
-    protected BDD _var;		// FIXBDD
-
-    public override void name(string n)
-    {
-      _name = n;
-    }
-
-    public override string name()
-    {
-      return _name;
-    }
-
-    public override void index(int i)
-    {
-      _index = i;
-    }
-
-    public override int index()
-    {
-      return _index;
-    }
-
-    public override void realsize(size_t r)
-    {
-      _realsize = r;
-    }
-
-    public override size_t realsize()
-    {
-      return _realsize;
-    }
-
-    public override void ivar(int[] iv)
-    {
-      _ivar = iv;
-    }
-
-    public override int[] ivar()
-    {
-      return _ivar;
-    }
-
-    public override void var(BDD v)
-    {
-      _var = v;
-    }
-
-    public override BDD var()
-    {
-      return var;
-    }
-
-
-    // this(int index, long range)
-    // {
-    //   import std.conv;
-    //   long calcsize = 2;
-    //   if(range <= 0L)
-    // {
-    //	throw new BddException();
-    //   }
-    //   this._name = text(index);
-    //   this._index = index;
-    //   this._realsize = range;
-    //   int binsize = 1;
-    //   while(calcsize < range)
-    // {
-    //	binsize++;
-    //	calcsize <<= 1;
-    //   }
-    //   this._ivar.length = binsize;
-    // }
-
-    this(int index, size_t bits)
-    {
-      import std.conv;
-      if(bits <= 0)
-	{
-	  throw new BddException();
-	}
-      this._name = text(index);
-      this._index = index;
-      this._realsize = (cast(size_t) 2) ^^bits;
-      this._ivar.length = bits;
-    }
-
-    public override void setName(string name)
-    {
-      this._name = name;
-    }
-
-    public override string getName()
-    {
-      return _name;
-    }
-
-    public override int getIndex()
-    {
-      return index;
-    }
-
-    public override BDD domain()
-    {
-
-      /* Encode V<=X-1. V is the variables in 'var' and X is the domain size */
-      long val = size() - 1;
-      bdd d = one();
-      int[] ivar = vars();
-      for(int n = 0; n < this.varNum(); n++)
-	{
-	  if(val & 1)		// test LSB
-	    d = d.or(nithVar(ivar[n]));
-	  else
-	    d = d.and(nithVar(ivar[n]));
-	  val >>= 1;
-	}
-      return d;
-    }
-
-    public override size_t size()
-    {
-      return cast(size_t) this.realsize;
-    }
-
-    public override BDD buildAdd(BddDomain that, long value)
-    {
-      if(this.varNum() != that.varNum())
-	throw new BddException();
-      return buildAdd(that, this.varNum(), value);
-    }
-
-    public override BDD buildAdd(BddDomain that, int bits, long value)
-    {
-      if(bits > this.varNum() ||
-	 bits > that.varNum())
-	throw new BddException(text("Number of bits requested(",
-				    bits, ") is larger than domain sizes ",
-				    this.varNum(), ",",
-				    that.varNum()));
-
-      if(value == 0L)
-	{
-	  bdd result = one();
-	  int n;
-	  for(n = 0; n < bits; n++)
-	    {
-	      bdd b = ithVar(this.ivar[n]);
-	      b = b.biimp(ithVar(that.ivar[n]));
-	      result = result.and(b);
-	    }
-	  for( ; n < max(this.varNum(), that.varNum()); n++)
-	    {
-	      bdd b =(n < this.varNum()) ? nithVar(this.ivar[n]) : one();
-	      b = b.and((n < that.varNum()) ? nithVar(that.ivar[n]) : one());
-	      result = result.and(b);
-	    }
-	  return result;
-	}
-
-      int[] vars = new int[](bits);
-      // System.arraycopy(this.ivar, 0, vars, 0, vars.length);
-      vars =(this.ivar[0..bits]).dup;
-      BddVec y = buildVec(vars);
-      BddVec v = buildVec(bits, value);
-      BddVec z = y.add(v);
-
-      int[] thatvars = new int[](bits);
-      // System.arraycopy(that.ivar, 0, thatvars, 0, thatvars.length);
-      thatvars =(this.ivar[0..bits]).dup;
-      BddVec x = buildVec(thatvars);
-      bdd result = one();
-      int n;
-      for(n = 0; n < x.size(); n++)
-	{
-	  bdd b = x.bitvec[n].biimp(z.bitvec[n]);
-	  result = result.and(b);
-	}
-      for( ; n < max(this.varNum(), that.varNum()); n++)
-	{
-	  bdd b =(n < this.varNum()) ? nithVar(this.ivar[n]) : one();
-	  b = b.and((n < that.varNum()) ? nithVar(that.ivar[n]) : one());
-	  result = result.and(b);
-	}
-      return result;
-    }
-
-    public override BDD buildEquals(BddDomain that)
-    {
-      if(this.size() != that.size())
-	{
-	  throw new BddException(text("Size of ", this, " != size of that ",
-				      that, "( ", this.size(), " vs ",
-				      that.size(), ")"));
-	}
-
-      bdd e = one();
-
-      int[] this_ivar = this.vars();
-      int[] that_ivar = that.vars();
-
-      for(int n = 0; n < this.varNum(); n++)
-	{
-	  bdd a = ithVar(this_ivar[n]);
-	  bdd b = ithVar(that_ivar[n]);
-	  a = a.biimp(b);
-	  e = e.and(a);
-	}
-
-      return e;
-    }
-
-    public override BDD set()
-    {
-      return var.dup();
-    }
-
-    public override BDD ithVar(long val)
-    {
-      if(val < 0 || val > size())
-	{
-	  throw new BddException(text(val, " is out of range"));
-	}
-
-      bdd v = one();
-      int[] ivar = this.vars();
-      for(int n = 0; n < ivar.length; n++)
-	{
-	  if(val & 1)
-	    v = v.and(ithVar(ivar[n]));
-	  else
-	    v = v.and(nithVar(ivar[n]));
-	  val >>= 1;
-	}
-
-      return v;
-    }
-
-    public override BDD varRange(long lo, long hi)
-    {
-      if(lo < 0 || hi >= size() || lo > hi)
-	{
-	  throw new BddException(text("range <", lo, ", ",
-				      hi, "> is invalid"));
-	}
-
-      bdd result = zero();
-      int[] ivar = this.vars();
-      while(lo <= hi)
-	{
-	  bdd v = one();
-	  for(int n = cast(int) ivar.length - 1; ; n--)
-	    {
-	      if(lo &(1 << n)) {
-		v = v.and(ithVar(ivar[n]));
-	      }
-	      else {
-		v = v.and(nithVar(ivar[n]));
-	      }
-	      long mask =((cast(long) 1) << n) - 1;
-	      if(((lo &(1 << n)) == 0) &&
-		 (lo | mask) <= hi)
-		{
-		  lo =(lo | mask) + 1;
-		  break;
-		}
-	    }
-	  result = result.or(v);
-	}
-      return result;
-    }
-
-    public override int varNum()
-    {
-      return cast(int) this.ivar.length;
-    }
-    public override int[] vars()
-    {
-      return this.ivar;
-    }
-
-    public override int ensureCapacity(size_t range)
-    {
-      long calcsize = 2L;
-      if(range < 0)
-	throw new BddException();
-      if(range < realsize)
-	return cast(int) ivar.length;
-      this._realsize = range + 1;
-      int binsize = 1;
-      while(calcsize <= range)
-	{
-	  binsize++;
-	  calcsize = calcsize << 1;
-	}
-      if(ivar.length == binsize) return binsize;
-
-      // int[] new_ivar = new int[binsize];
-      // System.arraycopy(ivar, 0, new_ivar, 0, ivar.length);
-      int[] new_ivar = ivar.dup;
-      new_ivar.length = binsize;
-      for(size_t i = ivar.length; i < new_ivar.length; ++i)
-	{
-	  //System.out.println("Domain "+this+" Duplicating var#"+new_ivar[i-1]);
-	  int newVar = duplicateVar(new_ivar[i-1]);
-	  incr_firstbddvar();
-	  new_ivar[i] = newVar;
-	  //System.out.println("Domain "+this+" var#"+i+" = "+newVar);
-	}
-      this._ivar = new_ivar;
-      //System.out.println("Domain "+this+" old var = "+var);
-      bdd nvar = one();
-      for(int i = 0; i < ivar.length; ++i)
-	{
-	  nvar = nvar.and(ithVar(ivar[i]));
-	}
-      this._var = nvar;
-      //System.out.println("Domain "+this+" new var = "+var);
-      return binsize;
-    }
-
-    public override string toString()
-    {
-      return getName();
-    }
-
-    /**
-     * Convert a bdd that to a list of indices of this domain.
-     * This method assumes that the bdd passed is a disjunction
-     * of ithVar(i_1) to ithVar(i_k).  It returns an array
-     * of length 'k' with elements [i_1,...,i_k].
-     * <p>
-     * Be careful when using this method for BDDs with a large number
-     * of entries, as it allocates a long[] array of dimension k.
-     *
-     * @param bdd bdd that is the disjunction of domain indices
-     * @see #getVarIndices(bdd,int)
-     * @see #ithVar(long)
-     */
-    // public override long[] getVarIndices(BDD bdd)
-    // {
-    //   return getVarIndices(bdd, -1);
-    // }
-
-    /**
-     * Convert a bdd that to a list of indices of this domain.
-     * Same as getVarIndices(bdd), except only 'max' indices
-     * are extracted.
-     *
-     * @param bdd bdd that is the disjunction of domain indices
-     * @param max maximum number of entries to be returned
-     *
-     * @see #ithVar(long)
-     */
-
-    // Uses Iterator -- not yet implemented in D
-    // public override long[] getVarIndices(BDD bdd, int max)
-    // {
-    //   BDD myvarset = set(); // can't use var here, must respect
-    // // subclass a factory may provide
-    //   int n =(int)bdd.satCount(myvarset);
-    //   if(max != -1 && n > max)
-    //     n = max;
-    //   long[] res = new long[](n);
-
-    //   Iterator it = bdd.iterator(myvarset);
-    //   for(int i = 0; i < n; i++)
-    // {
-    //     BDD bi =(bdd) it.next();
-    //     res[i] = bi.scanVar(this);
-    //   }
-    //   return res;
-    // }
-
-  }
 
   public int[] makeVarOrdering(bool reverseLocal, string ordering)
   {
@@ -8465,7 +9250,9 @@ class Buddy
 	  }
       }
 
-    BddDomain[] doms = new BddDomain[](nDomains);
+    // BddDomain[] doms = new BddDomain[](nDomains);
+    BddDomain[] doms;
+    doms.length = nDomains;
 
     int[] varorder = new int[](varnum);
 
@@ -8548,7 +9335,7 @@ class Buddy
 	      {
 		int di = d.getIndex();
 		int local = localOrders[di][bitNumber];
-		if(local >= d.vars().length)
+		if(local >= d.get_ivars().length)
 		  {
 		    writeln("bug!");
 		  }
@@ -8556,7 +9343,7 @@ class Buddy
 		  {
 		    writeln("bug2!");
 		  }
-		varorder[bitIndex++] = d.vars()[local];
+		varorder[bitIndex++] = d.get_ivars()[local];
 	      }
 	  }
       }
@@ -8567,19 +9354,19 @@ class Buddy
 
   public BddVec createVec(size_t a, bool signed = false)
   {
-    return new BddVecImpl(a, signed);
+    return BddVec(a, signed);
   }
 
   public BddVec buildVec(size_t bitnum, bool b, bool signed = false)
   {
-    BddVec v = createVec(bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(b);
     return v;
   }
 
   public BddVec buildVec(size_t bitnum, long val, bool signed = false)
   {
-    BddVec v = createVec(bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(val);
     return v;
   }
@@ -8602,826 +9389,25 @@ class Buddy
 
   public BddVec buildVec(size_t bitnum, int offset, int step, bool signed = false)
   {
-    BddVec v = createVec(bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(offset, step);
     return v;
   }
 
   public BddVec buildVec(BddDomain d, bool signed = false)
   {
-    BddVec v = createVec(d.varNum(), signed);
+    BddVec v = BddVec(d.varNum(), signed);
     v.initialize(d);
     return v;
   }
 
   public BddVec buildVec(int[] var, bool signed = false)
   {
-    BddVec v = createVec(var.length, signed);
+    BddVec v = BddVec(var.length, signed);
     v.initialize(var);
     return v;
   }
 
-  private class BddVecImpl: BddVec
-  {
-
-    protected this(size_t bitnum, bool signed = false)
-    {
-      _signed = signed;
-      _bitvec.length = bitnum;
-    }
-
-
-    public override void initialize(bool isTrue)
-    {
-      foreach(ref b; _bitvec)
-	if(isTrue)
-	  b = one();
-	else
-	  b = zero();
-    }
-
-
-    public override void initialize(int val)
-    {
-      foreach(ref b; _bitvec)
-	{
-	  if((val & 0x1) != 0)
-	    b = one();
-	  else
-	    b = zero();
-	  val >>= 1;
-	}
-    }
-
-    public override void initialize(long val)
-    {
-      foreach(ref b; _bitvec)
-	{
-	  if((val & 0x1) != 0)
-	    b = one();
-	  else
-	    b = zero();
-	  val >>= 1;
-	}
-    }
-
-
-    public override void initialize(uint offset, uint step)
-    {
-      for(int n=0 ; n < size ; n++)
-	this.bitvec[n] = ithVar(offset+n*step);
-    }
-
-    public override void initialize(BddDomain d)
-    {
-      initialize(d.vars());
-    }
-
-    public override void initialize(int[] var)
-    {
-      for(int n = 0 ; n < size ; n++)
-	this.bitvec[n] = ithVar(var[n]);
-    }
-
-    public override BddVec dup()
-    {
-      return this.copy();
-    }
-
-    public override BddVec copy()
-    {
-      BddVec dst = createVec(size);
-      dst._signed = this._signed;
-      dst.bitvec[0..$] = this.bitvec[0..$];
-
-      // for(int n = 0; n < size; n++)
-      // 	dst[n] = this[n].dup();
-
-      return dst;
-    }
-
-    public override BddVec coerceSign()
-    {
-      if(signed) return copy();
-      else
-	{
-	  BddVec dst = createVec(size+1, true);
-	  dst.bitvec[0..$-1] = this.bitvec[0..$];
-	  dst.bitvec[$-1] = zero();
-	  return dst;
-	}
-    }
-
-    public override BddVec coerce(size_t bitnum)
-    {
-      BddVec dst = createVec(bitnum, this._signed);
-      ulong minnum = min(bitnum, size);
-      uint n;
-      for(n = 0; n < minnum; n++)
-	dst.bitvec[n] = this.bitvec[n].dup();
-      for(uint m = n; m < bitnum; m++)
-	if(this._signed == false)
-	  dst.bitvec[m] = zero();
-	else			// extend sign
-	  dst.bitvec[m] = this.bitvec[n-1].dup();
-      return dst;
-    }
-
-    public override bool isConst()
-    {
-      foreach(ref b; _bitvec)
-	{
-	  if(!b.isOne() && !b.isZero()) return false;
-	}
-      return true;
-    }
-
-    public override long val()
-    {
-      long val = 0;
-
-      for(size_t n = size - 1; n >= 0; n--)
-	if(this.bitvec[n].isOne())
-	  val =(val << 1) | 1;
-	else if(this.bitvec[n].isZero())
-	  val = val << 1;
-	else
-	  return 0;
-      return val;
-    }
-
-    public override void free()
-    {
-      // size = 0;
-      _bitvec = null;
-    }
-
-    // public override bvec addref(bvec v)
-    // {
-    //   foreach(ref b; _bitvec) b.addref();
-    //   return v;
-    // }
-
-    // public override bvec delref(bvec v)
-    // {
-    //   foreach(ref b; _bitvec) b.delref();
-    //   return v;
-    // }
-
-    public override BddVec apply(BddVec that, BddOp op)
-    {
-      size_t maxsize = max(size, that.size);
-      size_t minsize = min(size, that.size);
-      // if(size != that.size)
-      // 	// throw new BddException();
-      // 	bdd_error(BddError.BVEC_SIZE);
-
-      BddVec res = createVec(maxsize, _signed);
-      for(size_t n=0 ; n < minsize ; n++)
-	res.bitvec[n] = this.bitvec[n].apply(that.bitvec[n], op);
-
-      for(size_t n=minsize ; n < size ; n++)
-	res.bitvec[n] = this.bitvec[n].apply(zero(), op);
-
-      for(size_t n=minsize ; n < that.size ; n++)
-	res.bitvec[n] = zero.apply(that.bitvec[n], op);
-
-      return res;
-    }
-
-    public override BddVec opCom()
-    {
-      BddVec res = createVec(size);
-      for(int n=0 ; n < size ; n++)
-	res.bitvec[n] = this.bitvec[n].not();
-      return res;
-    }
-
-    public override BddVec add(BddVec that)
-    {
-
-      // if(size != b.size)
-      // 	// throw new BddException();
-      // 	bdd_error(BddError.BVEC_SIZE);
-      BddVec a = this.coerceSign();
-      BddVec b = that.coerceSign();
-
-      size_t minsize = min(a.size, b.size);
-      size_t maxsize = max(a.size, b.size);
-
-      bdd c = zero();
-      BddVec res = createVec(maxsize+1);
-      res._signed = true;
-
-      for(size_t n = 0; n < minsize; n++)
-	{
-	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res.bitvec[n] = a.bitvec[n] ^ b.bitvec[n];
-	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
-
-	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a.bitvec[n] | b.bitvec[n];
-	  c1 = c1 & c;
-	  bdd c2 = a.bitvec[n] & b.bitvec[n];
-	  c2 = c2 | c1;
-	  c = c2;
-	}
-
-      // a.size > b.size
-      for(size_t n = minsize; n < a.size; n++)
-	{
-	  // sign extend
-	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
-
-	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res.bitvec[n] = a.bitvec[n] ^ ext;
-	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
-
-	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = a.bitvec[n] | ext;
-	  c1 = c1 & c;
-	  bdd c2 = a.bitvec[n] & ext;
-	  c2 = c2 | c1;
-	  c = c2;
-	}
-
-      // b.size > a.size
-      for(size_t n = minsize; n < b.size; n++)
-	{
-	  // sign extend
-	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
-
-	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res.bitvec[n] = ext ^ b.bitvec[n];
-	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
-
-	  /* c =(l[n] & r[n]) |(c &(l[n] | r[n])); */
-	  bdd c1 = ext | b.bitvec[n];
-	  c1 = c1 & c;
-	  bdd c2 = ext & b.bitvec[n];
-	  c2 = c2 | c1;
-	  c = c2;
-	}
-
-      if(a.signed)
-	{
-	  c = a.bitvec[$-1].ite(c.not(), c);
-	}
-      if(b.signed)
-	{
-	  c = b.bitvec[$-1].ite(c.not(), c);
-	}
-      res.bitvec[$-1] = c;
-
-      // if(a.signed && b.signed)
-      // 	{
-      // 	  // extend sign
-      // 	  res[$-1] = res[$-2].dup();
-      // 	}
-
-      // if(!a.signed && !b.signed)
-      // 	{
-      // 	  // unsigned 0 extend
-      // 	  res[$-1] = zero();
-      // 	}
-
-      // if(a.signed && !b.signed)
-      // 	{
-      // 	  // if the signed number negative and the result is negative
-      // 	  res[$-1] = a[$-1] & res[$-2];
-      // 	}
-
-      // if(!a.signed && b.signed)
-      // 	{
-      // 	  // if the signed number negative and the result is negative
-      // 	  res[$-1] = b[$-1] & res[$-2];
-      // 	}
-
-      return res;
-    }
-
-    public override BddVec sub(BddVec that)
-    {
-
-      size_t minsize = min(size, that.size);
-      size_t maxsize = max(size, that.size);
-
-      bdd c = zero();
-      BddVec res = createVec(maxsize+1);
-
-      for(int n = 0; n < minsize; n++)
-	{
-	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res.bitvec[n] = this.bitvec[n] ^ that.bitvec[n];
-	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
-
-	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that.bitvec[n] | c;
-	  bdd tmp2 = this.bitvec[n].lth(tmp1);
-	  tmp1 = this.bitvec[n] & that.bitvec[n];
-	  tmp1 = tmp1 & c;
-	  tmp1 = tmp1 | tmp2;
-	  c = tmp1;
-	}
-
-      // this.size > that.size
-      for(size_t n = minsize; n < size; n++)
-	{
-	  // sign extend
-	  bdd ext = that.signed ? that.bitvec[$-1] : zero();
-	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res.bitvec[n] = this.bitvec[n] ^ ext;
-	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
-
-	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = ext | c;
-	  bdd tmp2 = this.bitvec[n].lth(tmp1);
-	  tmp1 = this.bitvec[n] & ext;
-	  tmp1 = tmp1 & c;
-	  tmp1 = tmp1 | tmp2;
-	  c = tmp1;
-	}
-      // that.size > this.size
-      for(size_t n = minsize; n < that.size; n++)
-	{
-	  // sign extend
-	  bdd ext = signed ? this.bitvec[$-1] : zero();
-	  /* this[n] = l[n] ^ r[n] ^ c; */
-	  res.bitvec[n] = ext ^ that.bitvec[n];
-	  res.bitvec[n] = res.bitvec[n] ^ c.dup();
-
-	  /* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
-	  bdd tmp1 = that.bitvec[n] | c;
-	  bdd tmp2 = ext.lth(tmp1);
-	  tmp1 = ext & that.bitvec[n];
-	  tmp1 = tmp1 & c;
-	  tmp1 = tmp1 | tmp2;
-	  c = tmp1;
-	}
-      res.bitvec[$-1] = c;
-      return res;
-    }
-
-    public override BddVec mul(long c)
-    {
-      BddVec next = buildVec(size, false);
-      if(c == 0) return next;	// base case
-
-      for(size_t n=1 ; n < size ; n++)
-	next.bitvec[n] = this.bitvec[n-1];
-
-      BddVec rest = next.mul(c >> 1);
-
-      BddVec result;
-      if(c & 0x1)
-	{
-	  result = this.add(rest);
-	} else {
-	result = rest;
-      }
-
-      return result;
-
-    }
-
-    public override BddVec mul(BddVec rhs)
-    {
-      size_t bitnum = size + rhs.size;
-      BddVec result = buildVec(bitnum, false);
-      BddVec leftshifttmp = this.dup();
-
-      BddVec leftshift = leftshifttmp.coerce(bitnum);
-
-      foreach(ref r; rhs.bitvec[0..$])
-	{
-	  BddVec added = result.add(leftshift);
-	  for(size_t m=0; m < bitnum; ++m)
-	    {
-	      bdd tmpres = r.ite(added.bitvec[m], result.bitvec[m]);
-	      result.bitvec[m] = tmpres;
-	    }
-	  for(size_t m = bitnum-1; m >= 1; --m)
-	    {
-	      leftshift.bitvec[m] = leftshift.bitvec[m-1];
-	    }
-	  leftshift.bitvec[0] = zero();
-	}
-      return result;
-    }
-
-    public override void div_rec(BddVec divisor, BddVec remainder,
-				 BddVec result, long step)
-    {
-      bdd isSmaller = divisor.lte(remainder);
-      BddVec newResult = result.shl(1, isSmaller);
-      BddVec zero = buildVec(divisor.size, false);
-      BddVec sub = buildVec(divisor.size, false);
-
-      for(size_t n = 0; n < divisor.size; n++)
-	sub.bitvec[n] = isSmaller.ite(divisor.bitvec[n], zero.bitvec[n]);
-
-      BddVec tmp = remainder.sub(sub);
-      BddVec newRemainder =
-	tmp.shl(1, result.bitvec[divisor.size - 1]);
-
-      if(step > 1)
-	div_rec(divisor, newRemainder, newResult, step - 1);
-
-      result.replaceWith(newResult);
-      remainder.replaceWith(newRemainder);
-    }
-
-    public override void replaceWith(BddVec that)
-    {
-      if(size != that.size)
-	// throw new BddException();
-	bdd_error(BddError.BVEC_SIZE);
-      free();
-      this._bitvec = that.bitvec;
-    }
-
-
-    public override int div(long c, ref BddVec res, ref BddVec rem)
-    {
-      if(c > 0)
-	{
-	  BddVec divisor = buildVec(size, c);
-	  BddVec tmp = buildVec(size, false);
-	  BddVec tmpremainder = tmp.shl(1, this.bitvec[$-1]);
-	  BddVec result = this.shl(1, zero());
-	  BddVec remainder;
-
-	  div_rec(divisor, tmpremainder, result, divisor.size);
-	  remainder = tmpremainder.shr(1, zero());
-
-	  res = result;
-	  rem = remainder;
-
-	  return 0;
-	}
-      else {
-	throw new BddException("Bit Vector divide by 0");
-      }
-    }
-
-    public override BddVec div(BddVec rhs) {
-      BddVec result = new BddVecImpl(size, _signed);
-      BddVec remainder = new BddVecImpl(size, _signed);
-      div(rhs, result, remainder);
-      return result;
-    }
-
-    public override int div(BddVec rhs, ref BddVec result, ref BddVec remainder)
-    {
-
-      size_t bitnum = size + rhs.size;
-      if(size != rhs.size)
-	// throw new BddException("Bit Vector sizes do not match");
-	bdd_error(BddError.BVEC_SIZE);
-
-      BddVec rem = this.coerce(bitnum);
-      BddVec divtmp = rhs.coerce(bitnum);
-
-      BddVec div = divtmp.shl(size, zero());
-
-      BddVec res = buildVec(rhs.size, false);
-
-      for(size_t n = 0; n < rhs.size + 1; ++n)
-	{
-	  bdd divLteRem = div.lte(rem);
-	  BddVec remSubDiv = rem.sub(div);
-
-	  for(size_t m = 0; m < bitnum; ++m)
-	    {
-	      bdd remtmp = divLteRem.ite(remSubDiv.bitvec[m], rem.bitvec[m]);
-	      rem.bitvec[m] = remtmp;
-	    }
-
-	  if(n > 0)
-	    res.bitvec[rhs.size - n] = divLteRem;
-
-	  /* Shift 'div' one bit right */
-	  for(size_t m = 0 ; m < bitnum-1 ; ++m)
-	    div.bitvec[m] = div.bitvec[m+1];
-	  div.bitvec[bitnum-1] = zero();
-	}
-
-
-      result = res;
-      remainder = rem.coerce(rhs.size);
-      return 0;
-    }
-
-    public override BDD zero() {
-      return this.outer.zero();
-    }
-
-    public override BDD one() {
-      return this.outer.one();
-    }
-
-    public override BddVec shl(ptrdiff_t pos, BDD c)
-    {
-      size_t minnum = min(this.size, pos);
-      if(pos < 0)
-	throw new BddException();
-
-      BddVec res = buildVec(size, false);
-
-      size_t n;
-      for(n = 0; n < minnum; n++)
-	res.bitvec[n] = c.dup();
-
-      for(n = minnum; n < size; n++)
-	res.bitvec[n] = this.bitvec[n-pos].dup();
-
-      return res;
-    }
-
-    public override BddVec shl(BddVec r, BDD c)
-    {
-      BddVec val;
-      bdd tmp1, tmp2, rEquN;
-
-      BddVec res = buildVec(this.size, false);
-
-      for(size_t n = 0 ; n <= this.size ; ++n)
-	{
-	  val = buildVec(r.size, n);
-	  rEquN = r.equ(val);
-
-	  for(size_t m = 0 ; m < this.size ; m++)
-	    {
-	      /* Set the m'th new location to be the(m+n)'th old location */
-	      if(m  >= n)
-		tmp1 = rEquN.and(this.bitvec[m-n]);
-	      else
-		tmp1 = rEquN.and(c);
-	      tmp2 = res.bitvec[m].or(tmp1);
-
-	      res.bitvec[m] = tmp2;
-	    }
-
-	}
-
-      /* At last make sure 'c' is shiftet in for r-values > l-size */
-      val = buildVec(r.size, this.size);
-      rEquN = r.gth(val);
-      tmp1 = rEquN.and(c);
-
-      for(size_t m = 0; m < this.size; ++m)
-	{
-	  tmp2 = res.bitvec[m].or(tmp1);
-
-	  res.bitvec[m] = tmp2;
-	}
-
-      return res;
-    }
-
-
-    public override BddVec shr(ptrdiff_t pos, BDD c)
-    {
-      size_t maxnum = max(0, size - pos);
-      if(pos < 0)
-	throw new BddException();
-
-      BddVec res = buildVec(size, false);
-
-      for(size_t n=maxnum; n < size; ++n)
-	res.bitvec[n] = c.dup();
-
-      for(size_t n = 0; n < maxnum; ++n)
-	res.bitvec[n] = this.bitvec[n+pos].dup();
-
-      return res;
-    }
-
-    public override BddVec shr(BddVec r, BDD c)
-    {
-      BddVec val;
-      bdd tmp1, tmp2, rEquN;
-
-      BddVec res = buildVec(this.size, false);
-
-      for(size_t n = 0 ; n <= this.size ; ++n)
-	{
-	  val = buildVec(r.size, n);
-	  rEquN = r.equ(val);
-
-	  for(size_t m = 0 ; m < this.size ; m++)
-	    {
-	      /* Set the m'th new location to be the(m+n)'th old location */
-	      if(m+n <= 2)
-		tmp1 = rEquN.and(this.bitvec[m+n]);
-	      else
-		tmp1 = rEquN.and(c);
-	      tmp2 = res.bitvec[m].or(tmp1);
-	      res.bitvec[m] = tmp2;
-	    }
-
-	}
-
-      /* At last make sure 'c' is shiftet in for r-values > l-size */
-      val = buildVec(r.size, this.size);
-      rEquN = r.gth(val);
-      tmp1 = rEquN.and(c);
-
-      for(size_t m = 0; m < this.size; ++m)
-	{
-	  tmp2 = res.bitvec[m].or(tmp1);
-	  res.bitvec[m] = tmp2;
-	}
-
-      return res;
-    }
-
-    public override BDD lth(BddVec r)
-    {
-      return less(r, false);
-    }
-
-    public override BDD lte(BddVec r)
-    {
-      return less(r, true);
-    }
-
-    public override BDD less(BddVec that, bool equalP)
-    {
-      bdd p = equalP ? one() : zero();
-
-      if(this.size == 0  ||  that.size == 0)
-	return zero;
-
-      // if(this.size != that.size)
-      // 	// throw new BddException("Size Mismatch!");
-      // 	bdd_error(BddError.BVEC_SIZE);
-
-      BddVec a = this.coerceSign();
-      BddVec b = that.coerceSign();
-
-      size_t minsize = min(a.size, b.size);
-      size_t maxsize = max(a.size, b.size);
-
-      for(size_t n=0; n < minsize; ++n)
-	{
-	  /* p =(!l[n] & that[n]) |
-	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
-
-	  bdd tmp1 = a.bitvec[n].lth(b.bitvec[n]);
-	  bdd tmp2 = a.bitvec[n].biimp(b.bitvec[n]);
-	  bdd tmp3 = tmp2 & p;
-	  bdd tmp4 = tmp1 | tmp3;
-	  p = tmp4;
-	}
-
-      // a.size > b.size
-      for(size_t n=minsize; n < a.size; ++n)
-	{
-	  // sign extend
-	  bdd ext = b.signed ? b.bitvec[$-1] : zero();
-
-	  /* p =(!l[n] & that[n]) |
-	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
-
-	  bdd tmp1 = a.bitvec[n].lth(ext);
-	  bdd tmp2 = a.bitvec[n].biimp(ext);
-	  bdd tmp3 = tmp2 & p;
-	  bdd tmp4 = tmp1 | tmp3;
-	  p = tmp4;
-	}
-
-      // b.size > a.size
-      for(size_t n=minsize; n < b.size; ++n)
-	{
-	  // sign extend
-	  bdd ext = a.signed ? a.bitvec[$-1] : zero();
-	  /* p =(!l[n] & that[n]) |
-	   *     bdd_apply(l[n], that[n], bddop_biimp) & p; */
-
-	  bdd tmp1 = ext.lth(b.bitvec[n]);
-	  bdd tmp2 = ext.biimp(b.bitvec[n]);
-	  bdd tmp3 = tmp2 & p;
-	  bdd tmp4 = tmp1 | tmp3;
-	  p = tmp4;
-	}
-
-      p = (a.bitvec[$-1] & (b.bitvec[$-1].not())).ite(one(), p);
-      p = ((a.bitvec[$-1].not()) & b.bitvec[$-1]).ite(zero(), p);
-      // if both this and that are either signed or unsigned, what we
-      // have done till now is sufficient
-
-      // If this is signed and that is not signed
-      // if(a.signed & !(b.signed))
-      // 	{
-      // 	  p = a[$-1].ite(zero(), p);
-      // 	}
-
-      // If that is signed and this is not signed
-      // if(b.signed & !(a.signed))
-      // 	{
-      // 	  p = b[$-1].ite(one(), p);
-      // 	}
-
-      return p;
-    }
-
-    public override BDD equ(BddVec r)
-    {
-      bdd p = one;
-
-      if(this.size == 0  ||  r.size == 0)
-	return zero;
-
-      // if(this.size != r.size)
-      // 	// throw new BddException("Size Mismatch!");
-      // 	bdd_error(BddError.BVEC_SIZE);
-
-      size_t minsize = min(size, r.size);
-      size_t maxsize = max(size, r.size);
-
-      for(size_t n=0; n < minsize; ++n)
-	{
-	  p = p & this.bitvec[n].biimp(r.bitvec[n]);
-	}
-
-      // this.size > r.size
-      for(size_t n=minsize; n < size; ++n)
-	{
-	  // sign extend
-	  bdd ext = r.signed ? r.bitvec[$-1] : zero();
-	  p = p & this.bitvec[n].biimp(ext);
-	}
-
-      // this.size > r.size
-      for(size_t n=minsize; n < r.size; ++n)
-	{
-	  // sign extend
-	  bdd ext = signed ? this.bitvec[$-1] : zero();
-	  p = p & ext.biimp(r.bitvec[n]);
-	}
-      return p;
-    }
-
-    public override BDD gth(BddVec r)
-    {
-      bdd tmp = this.lte(r);
-      bdd p = tmp.not();
-      return p;
-    }
-
-    public override BDD gte(BddVec r)
-    {
-      bdd tmp = this.lth(r);
-      bdd p = tmp.not();
-      return p;
-    }
-
-    public override BDD neq(BddVec r)
-    {
-      bdd tmp = this.equ(r);
-      bdd p = tmp.not();
-      return p;
-    }
-
-    public override BddVec divmod(long c, bool which)
-    {
-      if(c <= 0L)
-	throw new BddException();
-      BddVec divisor = buildVec(cast(int) size, c);
-      BddVec tmp = buildVec(cast(int) size, false);
-      BddVec tmpremainder = tmp.shl(1, this.bitvec[size-1]);
-      BddVec result = this.shl(1, zero());
-
-      BddVec remainder;
-
-      div_rec(divisor, tmpremainder, result, cast(int) divisor.size);
-      remainder = tmpremainder.shr(1, zero());
-
-      if(which)
-	{
-	  return result;
-	} else {
-	return remainder;
-      }
-    }
-
-    public override BddVec opSlice(size_t n, size_t m) {
-      if(n >= m) throw new BddException();
-      if(n >= bitvec.length) throw new BddException();
-      if(m > bitvec.length) throw new BddException();
-      BddVec res = buildVec(cast (int) (m - n), false);
-      for(size_t i = 0; i < m - n; ++i) {
-	res.bitvec[i] = this.bitvec[n+i].dup();
-      }
-      return res;
-    }
-
-    public override BDD opIndex(size_t i) {
-      if(i >= bitvec.length) throw new BddException();
-      return bitvec[i].dup;
-    }
-  }
 
   public Buddy cloneBuddy()
   {
@@ -9461,10 +9447,21 @@ class Buddy
     INSTANCE._level2Var = this._level2Var.dup;
     INSTANCE._varSet = this._varSet.dup;
 
-    INSTANCE._domain = new BddDomain[](this._domain.length);
-    for(int i = 0; i < INSTANCE._domain.length; ++i)
+    // FIXMALLOC
+    // INSTANCE._domains = this._domains.dup;
+    BddDomain* d2 = cast(BddDomain*) GC.malloc(BddDomain.sizeof * this._domainsLen);
+    for (size_t i=0; i!=this._domainsLen; ++i) {
+      d2[i] = this._domains[i];
+    }
+    INSTANCE._domainsLen = this._domainsLen;
+    INSTANCE._domains = d2;
+
+    
+    // FIXMALLOC
+    for(int i = 0; i < INSTANCE._domainsLen; ++i)
+      // for(int i = 0; i < INSTANCE._domains.length; ++i)
       {
-	INSTANCE._domain[i] = INSTANCE.createDomain(i, this._domain[i].realsize);
+	INSTANCE._domains[i] = INSTANCE.createDomain(i, this._domains[i].realsize);
       }
     return INSTANCE;
   }
@@ -9784,6 +9781,14 @@ class Buddy
   {
     return _cacheStats;
   }
+
+  // FIXMALLOC
+  // ~this() {
+  //   if(_domains !is null) {
+  //     // GC.free(cast(void*)_domains);
+  //     // _domains = null;
+  //   }
+  // }
 }
 
 private bool bitIsSet(uint n, uint i) {return (n & (1 << i)) != 0;}

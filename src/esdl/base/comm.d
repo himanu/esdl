@@ -411,11 +411,11 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
 
 alias ExePort ExPort;
 
-public interface BasePort: NamedObj {
+public interface BasePort: NamedComp {
   public void _esdl__portIsBound();
 }
 
-public interface BaseExePort: NamedObj {
+public interface BaseExePort: NamedComp {
   public void _esdl__exeportIsBound();
 }
 
@@ -666,7 +666,7 @@ interface MutexIF
   bool unlock();
 }
 
-class MutexObj: MutexIF, NamedObj
+class MutexObj: MutexIF, NamedComp
 {
   static import core.sync.mutex;
 
@@ -676,7 +676,7 @@ class MutexObj: MutexIF, NamedObj
   @_esdl__ignore Process _owner;
 
   // Fixme -- why is a parent required here
-  this(NamedObj parent=null) {
+  this(NamedComp parent=null) {
     synchronized(this) {
       if(parent is null) {
 	parent = Process.self;
@@ -799,11 +799,11 @@ class MutexObj: MutexIF, NamedObj
     return mutexs;
   }
 
-  public final void init(NamedObj parent=null) {
+  public final void init(NamedComp parent=null) {
     init(null, parent);
   }
 
-  public final void init(string name, NamedObj parent=null) {
+  public final void init(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for MutexObj being "
@@ -856,7 +856,7 @@ interface SemaphoreIF
   ptrdiff_t getValue();
 }
 
-class SemaphoreObj: SemaphoreIF, NamedObj
+class SemaphoreObj: SemaphoreIF, NamedComp
 {
   Event _event;
   ptrdiff_t   _value;
@@ -1093,12 +1093,14 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   }
 
  public:
-  this() {
+  this(string name="", NamedComp parent=null) {
     synchronized(this) {
       _readEvent.init(this);
       _writeEvent.init(this);
       static if(N == 0) {_buffer.length = 4;}
       _free = _buffer.length;
+      _esdl__setName(name);
+      _esdl__setParent(parent);
     }
   }
 

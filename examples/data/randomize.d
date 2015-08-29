@@ -7,9 +7,14 @@
 import std.stdio;
 import esdl;
 
-class Foo: Randomizable
+class Foo
 {
+  mixin Randomization;
   @rand int roo;
+  private @rand ubyte pop;
+  Constraint! q{
+    roo > 2;
+  } rooc;
 }
 
 
@@ -20,7 +25,8 @@ class Bar: Foo
   // mixin(_esdl__randomizable());
 
   // private @rand!(16) ushort bob[];
-  private @rand ubyte pop;
+  mixin Randomization;
+
   private @rand ubyte bro;
 
   @rand Bit!1 pun3 = 0;
@@ -36,11 +42,13 @@ class Bar: Foo
 
   void display() {
     import std.stdio;
-    writeln("bro: ", bro, " sis: ", sis, " pop: ", pop, " mom: ", mom, " foo: ", foo, " pun3: ", pun3, " pun1: ", pun1, " pun2: ", pun2);
+    writeln("bro: ", bro, " sis: ", sis, " pop: ", pop, " mom: ", mom,
+	    " foo: ", foo, " pun3: ", pun3, " pun1: ", pun1, " pun2: ", pun2);
   }
 
-  override void pre_randomize() {
-    foo++;
+  void preRandomize() {
+    if(foo == 20) foo = 0;
+    else foo++;
   }
 
   // void post_randomize() {
@@ -49,6 +57,8 @@ class Bar: Foo
 
   Constraint! q{
     foo + pop + mom == 64;
+
+    pun1[0..4] == 0;
 
     // foo + pop + mom == 64 ? pop > 40 : mom > 24;
 
@@ -106,7 +116,7 @@ class Bar: Foo
 void main()
 {
   auto foo = new Bar;
-  for (size_t i=0; i!=32; ++i)
+  for (size_t i=0; i!=320; ++i)
     {
       foo.randomize();
       foo.display();

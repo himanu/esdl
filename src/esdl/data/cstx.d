@@ -49,7 +49,7 @@
 module esdl.data.cstx;
 import std.conv;
 
-struct ConstraintParser {
+struct CstParser {
 
   immutable string CST;
   bool dryRun = true;
@@ -63,6 +63,7 @@ struct ConstraintParser {
   size_t numParen  = 0;
 
   size_t numIndex  = 0;
+  size_t[] indexTag;
 
   VarPair[] varMap = [];
 
@@ -83,8 +84,8 @@ struct ConstraintParser {
     this.CST = CST;
   }
 
-  ConstraintParser exprParser(size_t cursor) {
-    ConstraintParser dup = ConstraintParser(CST[cursor..$]);
+  CstParser exprParser(size_t cursor) {
+    CstParser dup = CstParser(CST[cursor..$]);
     return dup;
   }
 
@@ -259,7 +260,45 @@ struct ConstraintParser {
     return result;
   }
 
-
+  void procIdentifier() {
+    // parse an identifier and the following '.' heirarcy if any
+    auto srcTag = srcCursor;
+    int[MaxHierDepth * 2] idChain = parseIdentifierChain();
+    if(idChain[0] != -1) {
+      int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+      if(idx == -1) {
+	fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+      }
+      else {
+	fill(varMap[idx].xLat);
+      }
+      if(idChain[2] != -1) {
+	fill(".");
+	for (size_t i=1; i != MaxHierDepth-1; ++i) {
+	  fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
+	  if(idChain[2*i+2] == -1) break;
+	  else fill(".");
+	}
+	// fill("}(_outer)");
+      }
+    }
+    else {
+      srcTag = parseLiteral();
+      if(srcCursor > srcTag) {
+	fill(CST[srcTag..srcCursor]);
+      }
+      else {
+	srcTag = parseWithArg();
+	if(srcCursor > srcTag) {
+	  fill("_esdl__arg!");
+	  fill(CST[srcTag+1..srcCursor]);
+	}
+	else {
+	  errorToken();
+	}
+      }
+    }
+  }
 
   size_t parseLineComment() {
     size_t start = srcCursor;
@@ -477,6 +516,7 @@ struct ConstraintParser {
 	}
 	if(srcCursor < CST.length && CST[srcCursor] == ']') {
 	  if(numIndex is 0) break;
+	  indexTag.length -= 1;
 	  --numIndex;
 	  ++srcCursor;
 	  continue;
@@ -486,8 +526,47 @@ struct ConstraintParser {
 	}
       }
     }
+    
     return start;
   }
+
+  size_t moveToRightParens() {
+    auto start = srcCursor;
+    while(srcCursor < CST.length) {
+      auto srcTag = srcCursor;
+
+      parseLineComment();
+      parseBlockComment();
+      parseNestedComment();
+      parseWhiteSpace();
+
+      if(srcCursor > srcTag) {
+	fill(CST[srcTag..srcCursor]);
+	continue;
+      }
+      else {
+	if(srcCursor < CST.length && CST[srcCursor] == ')') {
+	  if(numParen is 0) break;
+	  --numParen;
+	  ++srcCursor;
+	  fill(")");
+	  continue;
+	}
+	if(srcCursor < CST.length && CST[srcCursor] == ']') {
+	  if(numIndex is 0) break;
+	  --numIndex;
+	  ++srcCursor;
+	  fill(")");
+	  continue;
+	}
+	else {
+	  break;
+	}
+      }
+    }
+    
+    return start;
+  }  
 
   size_t parseSpace() {
     auto start = srcCursor;
@@ -681,17 +760,22 @@ struct ConstraintParser {
       errorToken();
     }
 
+    int idx = idMatch(array);
+    if(idx != -1) {
+      array = varMap[idx].xLat;
+    }
+
     // add index
     if(index.length != 0) {
       VarPair x;
       x.varName = index;
-      x.xLat = "_esdl__cstRandArrIndex!q{" ~ array ~ "}(_outer)";
+      x.xLat = array ~ ".iterator()";
       varMap ~= x;
     }
 
     VarPair x;
     x.varName = elem;
-    x.xLat = "_esdl__cstRandArrElem!q{" ~ array ~ "}(_outer)";
+    x.xLat = array ~ ".elements()";
     varMap ~= x;
 
     if(CST[srcCursor] is '{') {
@@ -712,9 +796,6 @@ struct ConstraintParser {
   }
 
   void procIfBlock() {
-    string index;
-    string elem;
-    string array;
     size_t srcTag;
 
     srcTag = parseSpace();
@@ -797,13 +878,55 @@ struct ConstraintParser {
     }
   }
 
+  void procBeforeStmt() {
+    size_t srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    srcTag = parseIdentifier();
+    if(CST[srcTag..srcCursor] != "solve") {
+      import std.conv: to;
+      assert(false, "Not a solve statement at: " ~ srcTag.to!string);
+    }
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    procIdentifier();
+
+    fill(".solveBefore(");
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    srcTag = parseIdentifier();
+    if(CST[srcTag..srcCursor] != "before") {
+      import std.conv: to;
+      assert(false, "Expected keywork \"before\" at: " ~ srcTag.to!string);
+    }
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    procIdentifier();
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if(CST[srcCursor++] !is ';') {
+      assert(false, "Error: -- ';' missing at end of statement; at " ~
+	     srcCursor.to!string);
+    }
+
+    fill(");\n");
+  }
+
   enum StmtToken: byte
     {   STMT    = 0,
-	FOREACH = 1,
-	IFCOND  = 2,
-	ENDCST  = 3,		// end of text
-	BLOCK   = 4,
-	ENDBLOCK= 5,
+	FOREACH,
+	IFCOND,
+	ENDCST,		// end of text
+	BEFORE,
+	BLOCK,
+	ENDBLOCK,
 	// ANYTHING ELSE COMES HERE
 
 	ERROR,
@@ -833,6 +956,7 @@ struct ConstraintParser {
     if(srcCursor > srcTag) {
       if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
       if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
+      if(CST[srcTag..srcCursor] == "solve") return StmtToken.BEFORE;
       // not a keyword
       return StmtToken.STMT;
     }
@@ -875,55 +999,10 @@ struct ConstraintParser {
       case OpUnaryToken.NONE: break;
       }
 
-      // parse an identifier and the following '.' heirarcy if any
-      srcTag = srcCursor;
-      int[MaxHierDepth * 2] idChain = parseIdentifierChain();
-      if(idChain[0] != -1) {
-	// idMatch is applicable only if there is one element in the
-	// chain
-	if(idChain[2] == -1) {
-	  int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-	  if(idx == -1) {
-	    fill("_esdl__cstRand!q{");
-	    fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-	    fill("}(_outer)");
-	  }
-	  else {
-	    fill(varMap[idx].xLat);
-	  }
-	}
-	else {
-	  fill("_esdl__cstRand!q{");
-	  for (size_t i=0; i != MaxHierDepth-1; ++i) {
-	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
-	    if(idChain[2*i+2] == -1) break;
-	    else fill(".");
-	  }
-	  fill("}(_outer)");
-	}
-      }
-      else {
-	srcTag = parseLiteral();
-	if(srcCursor > srcTag) {
-	  fill("_esdl__cstRand(");
-	  fill(CST[srcTag..srcCursor]);
-	  fill(", _outer)");
-	}
-	else {
-	  srcTag = parseWithArg();
-	  if(srcCursor > srcTag) {
-	    fill("_esdl__cstArg!(");
-	    fill(CST[srcTag+1..srcCursor]);
-	    fill(") (_outer)");
-	  }
-	  else {
-	    errorToken();
-	  }
-	}
-      }
-
-      srcTag = parseRightParens();
-      fill(CST[srcTag..srcCursor]);
+      procIdentifier();
+      srcTag = moveToRightParens();
+      
+      // fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
       OpToken opToken = parseOperator();
@@ -984,7 +1063,7 @@ struct ConstraintParser {
 	  place('(', orDstAnchor);
 	  orRHS = true;
 	}
-	fill(").logicOr(");
+	fill(")._esdl__logicOr(");
 	cmpDstAnchor = fill(" ");
 	andDstAnchor = fill(" ");
 	break;
@@ -997,72 +1076,77 @@ struct ConstraintParser {
 	  place('(', andDstAnchor);
 	  andRHS = true;
 	}
-	fill(") .logicAnd(");
+	fill(") ._esdl__logicAnd(");
 	cmpDstAnchor = fill(" ");
 	break;
       case OpToken.EQU:
 	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	fill(").equ (");
+	fill(")._esdl__equ (");
 	break;
       case OpToken.NEQ:
 	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	fill(").neq (");
+	fill(")._esdl__neq (");
 	break;
       case OpToken.LTE:
 	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	fill(").lte (");
+	fill(")._esdl__lte (");
 	break;
       case OpToken.GTE:
 	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	fill(").gte (");
+	fill(")._esdl__gte (");
 	break;
       case OpToken.LTH:
 	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	fill(").lth (");
+	fill(")._esdl__lth (");
 	break;
       case OpToken.GTH:
 	place('(', cmpDstAnchor);
 	cmpRHS = true;
-	fill(").gth (");
+	fill(")._esdl__gth (");
 	break;
       case OpToken.AND:
-	fill("&");
+	fill(" & ");
 	break;
       case OpToken.OR:
-	fill("|");
+	fill(" | ");
 	break;
       case OpToken.XOR:
-	fill("^");
+	fill(" ^ ");
 	break;
       case OpToken.ADD:
-	fill("+");
+	fill(" + ");
 	break;
       case OpToken.SUB:
-	fill("-");
+	fill(" - ");
 	break;
       case OpToken.MUL:
-	fill("*");
+	fill(" * ");
 	break;
       case OpToken.DIV:
-	fill("/");
+	fill(" / ");
 	break;
       case OpToken.LSH:
-	fill("<<");
+	fill(" << ");
 	break;
       case OpToken.RSH:
-	fill(">>");
+	fill(" >> ");
 	break;
       case OpToken.INDEX:
-	fill("[");
+	indexTag ~= outCursor;
+	fill(".opIndex(");
 	++numIndex;
 	break;
       case OpToken.SLICE:
-	fill("..");
+	if(!dryRun) {
+	  size_t tag = indexTag[$-1];
+	  outBuffer[tag..tag+8] = ".opSlice";
+	}
+	fill(",");
 	break;
       }
     }
@@ -1125,6 +1209,9 @@ struct ConstraintParser {
       return;
     case StmtToken.IFCOND:
       procIfBlock();
+      return;
+    case StmtToken.BEFORE:
+      procBeforeStmt();
       return;
     case StmtToken.ERROR:
       assert(false, "Unidentified symbol in constraints at: " ~

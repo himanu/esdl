@@ -56,7 +56,7 @@ class TrafficLight: Entity
       {
 	// lockStage();
 	// unlockStage();
-	writeln(getSimTime, ": Red -> Green ", index, " -- ",
+	writeln(getRoot().getSimTime(), ": Red -> Green ", index, " -- ",
 		Process.self.getFullName());
 	yellow[index].notify(20);
 	// writeln("I am here: ", index);

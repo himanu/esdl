@@ -9,6 +9,8 @@
 // This file is part of esdl.
 
 module esdl.data.queue;
+import std.format: FormatSpec, FormatException;
+import std.conv: to;
 
 
 /** The Queue class provides a random access container where appending and
@@ -19,7 +21,6 @@ module esdl.data.queue;
 */
 public struct Queue(T) {
   import std.traits: isIterable, isArray;
-  import std.conv: to;
   import std.string: format;
 
   private T[] data; /// the actual stored data
@@ -443,12 +444,36 @@ public struct Queue(T) {
       assert(de.toArray() == [1,2,3,4,5]);
       -------------
   */
+
   public T[] toArray() @trusted {
     T[] ret = new T[this.length()];
     foreach(idx, it; this) {
       ret[idx] = it;
     }
     return ret;
+  }
+
+  V to(V)() if(is(V == string) || is(V == char[])) {
+    V v = cast(V) this.toArray.to!string;
+    return v;
+  }
+
+  string toString() {
+    return this.to!(string);
+  }
+
+  void toString(scope void delegate(const(char)[]) sink,
+  		ref FormatSpec!char f) {
+    char[] buff;
+    switch(f.spec) {
+    case 's':
+      buff = cast(char[]) this.toArray.to!string;
+      break;
+    default :
+      throw new FormatException("Format specifier not understood: %" ~ f.spec);
+    }
+    assert(buff.length > 0);
+    sink(buff);
   }
 
   // public const(T)[] toArray() const @trusted {

@@ -32,14 +32,14 @@ struct packer
 
   void pack(T)(T t, bool bigEndian=false)
     if(is(T == SimTime) || is(T == SimTime) || isFloatingPoint!T) {
-      alias vec!(false, false, 8*T.sizeof) V;
+      alias _bvec!(false, false, 8*T.sizeof) V;
       V v = t.toBits();
       this.pack(v, bigEndian);
     }
 
   void unpack(T)(T t, bool bigEndian=false)
     if(is(T == SimTime) || is(T == SimTime) || isFloatingPoint!T) {
-      alias vec!(false, false, 8*T.sizeof) V;
+      alias _bvec!(false, false, 8*T.sizeof) V;
       V v;
       this.unpack(v, bigEndian);
       t.fromBits(v);
@@ -60,8 +60,8 @@ struct packer
   void unpack(T)(ref T t, bool bigEndian=false)
     if (is(T == bool) || isBitVector!T || isIntegral!T) {
       static if(isBitVector!T && T.IS4STATE) {
-	vec!(T.ISSIGNED, false, T.SIZE) aval;
-	vec!(T.ISSIGNED, false, T.SIZE) bval;
+	_bvec!(T.ISSIGNED, false, T.SIZE) aval;
+	_bvec!(T.ISSIGNED, false, T.SIZE) bval;
 	this.unpack(aval, bigEndian);
 	t.setAval(aval);
 	this.unpack(bval, bigEndian);
