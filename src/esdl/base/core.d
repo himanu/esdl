@@ -4421,7 +4421,7 @@ template Worker(alias F, int R=0, size_t S=0)
     class Worker: BaseWorker
     {
       alias F _FUNCTION;
-      enum ulong _STACKSIZE = S;
+      enum size_t _STACKSIZE = S;
 
       this() {
 	// import std.stdio;
@@ -4435,7 +4435,7 @@ template Worker(alias F, int R=0, size_t S=0)
     class Worker: BaseWorker
     {
       alias F _FUNCTION;
-      enum ulong _STACKSIZE = S;
+      enum size_t _STACKSIZE = S;
 
       protected this(void delegate() dg, int stage, size_t stackSize) {
 	super(getRootEntity(), dg, stage, stackSize);
@@ -4488,7 +4488,7 @@ template Task(alias F, int R=0, size_t S=0)
     class Task: BaseTask
     {
       alias F _FUNCTION;
-      enum ulong _STACKSIZE = S;
+      enum size_t _STACKSIZE = S;
 
       this() {
 	// import std.stdio;
@@ -4502,7 +4502,7 @@ template Task(alias F, int R=0, size_t S=0)
     class Task: BaseTask
     {
       alias F _FUNCTION;
-      enum ulong _STACKSIZE = S;
+      enum size_t _STACKSIZE = S;
 
       protected this(void delegate() dg, int stage, size_t stackSize) {
 	super(dg, stage, stackSize);
@@ -4679,7 +4679,7 @@ private auto recreateDelegate(alias F, T)(T _entity)
 // struct Worker(string THUNK, size_t STACKSIZE=0L)
 // {
 //   static immutable string _THUNK = THUNK;
-//   enum ulong _STACKSIZE = STACKSIZE;
+//   enum size_t _STACKSIZE = STACKSIZE;
 
 //   private Process _proc;
 
@@ -7383,8 +7383,8 @@ interface RootEntityIntf // : EntityIntf
 
   public uint getNumPoolThreads();
 
-  public ulong getNumFirstCore();
-  public ulong getNumMultiCore();
+  public size_t getNumFirstCore();
+  public size_t getNumMultiCore();
   
   public void setTimePrecision(Time precision);
   public Time getTimePrecision();
@@ -7624,19 +7624,19 @@ abstract class RootEntity: Entity, RootEntityIntf
   }
 
   // The first core -- rootthread rides on this
-  ulong _esdl__numFirstCore = 0;
+  size_t _esdl__numFirstCore = 0;
   // number of cores to use
-  ulong _esdl__numMultiCore = 1;
+  size_t _esdl__numMultiCore = 1;
 
-  public ulong getNumFirstCore() {
+  public size_t getNumFirstCore() {
     return _esdl__numFirstCore;
   }
 
-  public ulong getNumMultiCore() {
+  public size_t getNumMultiCore() {
     return _esdl__numMultiCore;
   }
 
-  public void multiCore(ulong ncore = CPU_COUNT(), ulong fcore = 0) {
+  public void multiCore(size_t ncore = CPU_COUNT(), size_t fcore = 0) {
     if(CPU_COUNT() < ncore) {
       import std.conv: to;
       assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~

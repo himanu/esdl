@@ -59,7 +59,7 @@ public struct Queue(T) {
       de.removeFront();
 		
       // the copy should still hold all elements
-      foreach(long idx, int it; copy) {
+      foreach(ptrdiff_t idx, int it; copy) {
       assert(copy[idx] == it);
       }
       ---------------
@@ -533,7 +533,7 @@ public struct Queue(T) {
       -------------
       Queue!(int) de = new Queue!(int)([1,2,4,5,6]);
       de.insert(2,3);
-      foreach(long idx, int it; [1,2,3,4,5,6]) {
+      foreach(ptrdiff_t idx, int it; [1,2,3,4,5,6]) {
       assert(de[idx] == it, format("de[%u](%d) == it", idx, de[idx], 
       it));
       }
@@ -548,7 +548,7 @@ public struct Queue(T) {
       Returns:
       The Queue for furthor processing.
   */
-  public Queue!(T) insert(S...)(long idx, S data) @safe {
+  public Queue!(T) insert(S...)(ptrdiff_t idx, S data) @safe {
     foreach(dataElem; data) {
       if(idx < 0) {
 	idx = this.size + idx;
@@ -608,7 +608,7 @@ public struct Queue(T) {
     return this;
   }
 
-  public Queue!(T) insert(R)(long idx, R range) @safe
+  public Queue!(T) insert(R)(ptrdiff_t idx, R range) @safe
     if(isIterable!R) {
       foreach(it; range) {
 	this.insert(idx, it);
@@ -762,7 +762,7 @@ public struct Queue(T) {
       assert(de.length == 0);
       -------------
   */
-  public void remove(const long idx, size_t cnt = 1) @trusted {
+  public void remove(const size_t idx, size_t cnt = 1) @trusted {
     cnt = 1;			// not working yet
     size_t nIdx = idx;
     if(idx < 0) {
@@ -1283,13 +1283,13 @@ public struct Queue(T) {
       assert(de[0] == 1337); 	// holds true 
       --------------
   */
-  public ref T opIndex(const long idx) @trusted {
+  public ref T opIndex(const ptrdiff_t idx) @trusted {
     if(idx >= 0) {	
       assert(idx <= this.size, 
 	     format("idx(%d) size(%d)", idx, this.size));
       return this.data[(this.head+idx)%this.data.length];
     } else {
-      long nIdx = this.size+idx;
+      ptrdiff_t nIdx = this.size+idx;
       assert(nIdx <= (this.size+1) && nIdx >= 0, 
 	     format("out of bound index %d for Queue of length %u", idx,
 		    this.length));
@@ -1347,12 +1347,12 @@ public struct Queue(T) {
       assert(de[5] == 5); // will throw a OutOfBoundException 
       --------------
   */
-  public ref const(T) opIndex(const long idx) const @trusted {
+  public ref const(T) opIndex(const ptrdiff_t idx) const @trusted {
     if(idx >= 0) {	
       assert(idx <= this.size);
       return this.data[(this.head+idx)%this.data.length];
     } else {
-      long nIdx = this.size+idx;
+      ptrdiff_t nIdx = this.size+idx;
       assert(nIdx <= (this.size+1) && nIdx >= 0, 
 	     format("out of bound index %d for Queue of length %u", idx,
 		    this.length));
@@ -1399,7 +1399,7 @@ public struct Queue(T) {
       Examples:
       --------------
       Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      foreach_reverse(ref const long idx, ref const int it; de) {
+      foreach_reverse(ref const ptrdiff_t idx, ref const int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// not allowed, it is const
       }
@@ -1430,7 +1430,7 @@ public struct Queue(T) {
       Examples:
       --------------
       const Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      long idx = 0;
+      ptrdiff_t idx = 0;
       foreach_reverse(ref const int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// not allowed, it is const
@@ -1449,7 +1449,7 @@ public struct Queue(T) {
 
   unittest { // unittest for the previous opApplyReverse
     const Queue!(int) de = [1,2,3,4,5,6];
-    long idx = 0;
+    ptrdiff_t idx = 0;
     foreach_reverse(ref const int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       ++idx;
@@ -1467,7 +1467,7 @@ public struct Queue(T) {
       Examples:
       --------------
       Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      foreach_reverse(long idx, int it; de) {
+      foreach_reverse(ptrdiff_t idx, int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// works
       }
@@ -1503,7 +1503,7 @@ public struct Queue(T) {
       Examples:
       --------------
       Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      long idx = 0;
+      ptrdiff_t idx = 0;
       foreach_reverse(ref int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// works
@@ -1522,7 +1522,7 @@ public struct Queue(T) {
 
   unittest { // unittest for the previous opApplyReverse
     Queue!(int) de = [1,2,3,4,5,6];
-    long idx = 0;
+    ptrdiff_t idx = 0;
     foreach_reverse(ref int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// works
@@ -1543,8 +1543,8 @@ public struct Queue(T) {
       Examples:
       --------------
       const Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      long idx = 0;
-      foreach(ref const long idx, ref const int it; de) {
+      ptrdiff_t idx = 0;
+      foreach(ref const ptrdiff_t idx, ref const int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// works
       ++idx;
@@ -1576,8 +1576,8 @@ public struct Queue(T) {
       Examples:
       --------------
       Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      long idx = 0;
-      foreach(ref long idx, ref int it; de) {
+      ptrdiff_t idx = 0;
+      foreach(ref ptrdiff_t idx, ref int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// works
       ++idx;
@@ -1614,7 +1614,7 @@ public struct Queue(T) {
       Examples:
       --------------
       const Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      long idx = 0;
+      ptrdiff_t idx = 0;
       foreach(ref const int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       ++idx;
@@ -1632,7 +1632,7 @@ public struct Queue(T) {
 
   unittest { // unittest for the previous opApply
     const Queue!(int) de = [1,2,3,4,5,6];
-    long idx = 0;
+    ptrdiff_t idx = 0;
     foreach(ref const int it; de) {
       assert(de[idx] == it, format("de[idx](%d) != it(%d)", 
   				   de[idx], it));	// holds true
@@ -1649,7 +1649,7 @@ public struct Queue(T) {
       Examples:
       --------------
       Queue!(int) de = new Queue!(int)([1,2,3,4,5,6]);
-      long idx = 0;
+      ptrdiff_t idx = 0;
       foreach(ref const int it; de) {
       assert(de[-(idx+1)] == it);	// holds true
       it = 666;					// works 
@@ -1668,7 +1668,7 @@ public struct Queue(T) {
 
   unittest { // unittest for the previous opApply
     Queue!(int) de = [1,2,3,4,5,6];
-    long idx = 0;
+    ptrdiff_t idx = 0;
     foreach(ref int it; de) {
       assert(de[idx] == it, format("de[idx](%d) != it(%d)", 
   				   de[idx], it));	// holds true
@@ -2017,7 +2017,7 @@ public struct Queue(T) {
   // 	}
 
   // 	set[t] = true;
-  // 	long idx = uniform(0, de.length == 0 ? 1 : de.length);
+  // 	ptrdiff_t idx = uniform(0, de.length == 0 ? 1 : de.length);
   // 	/*writefln("NEW %d at %d size(%u) i(%d) round %d", t, idx,
   // 	  de.length, i, k);*/
   // 	de.insert(idx, t);
@@ -2040,7 +2040,7 @@ public struct Queue(T) {
   //     }
 
   //     while(!de.empty) {
-  // 	long idx = uniform(0, de.length == 0 ? 1 : de.length);
+  // 	ptrdiff_t idx = uniform(0, de.length == 0 ? 1 : de.length);
   // 	int re = de.remove(idx);
   // 	/*writefln("REMOVE %d idx %d size %u round %d", re, idx,
   // 	  de.length, k);*/

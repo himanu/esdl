@@ -2484,7 +2484,7 @@ private void toHexZeroPadded(char[] output, uint value) {
 }
 
 public auto toBits(T)(T val) {
-  static if(T.sizeof >= 8) {
+  static if(size_t.sizeof == 8 && T.sizeof >= 8) {
     enum WSIZE = (T.sizeof+7)/8;
     alias ulong U;
   }
