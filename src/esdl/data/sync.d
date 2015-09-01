@@ -310,7 +310,7 @@ class SyncQueue (T=Object)
     }
   }
 
-  public void insert (long index, T item) {
+  public void insert (ptrdiff_t index, T item) {
     synchronized(this) {
       _queue.insert(index, item);
     }
@@ -524,7 +524,7 @@ class SyncArray (T=Object)
     }
   }
 
-  public void insert (long index, T item) {
+  public void insert (ptrdiff_t index, T item) {
     synchronized(this) {
       auto pre = _array[0..index];
       auto post = _array[index..$];

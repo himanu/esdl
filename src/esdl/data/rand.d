@@ -3258,13 +3258,13 @@ class RndVecSliceExpr: RndVecExpr
     }
 
     auto vec  = _vec.getBDD(stage, buddy);
-    auto lvec = _lhs.evaluate();
-    auto rvec = lvec;
+    size_t lvec = cast(size_t) _lhs.evaluate();
+    size_t rvec = lvec;
     if(_rhs is null) {
       rvec = lvec + 1;
     }
     else {
-      rvec = _rhs.evaluate();
+      rvec = cast(size_t) _rhs.evaluate();
     }
     return vec[lvec..rvec];
   }
