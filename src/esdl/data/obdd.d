@@ -132,7 +132,7 @@ struct BddDomain
   protected int _index;
 
   /* The specified _domains(0...N-1) */
-  public size_t _realsize;
+  public ulong _realsize;
   /* Variable indices for the variable set */
   protected int[] _ivar;
   /* The BDD variable set.  Actually constructed in extDomain(), etc. */
@@ -158,12 +158,12 @@ struct BddDomain
     return _index;
   }
 
-  public void realsize(size_t r)
+  public void realsize(ulong r)
   {
     _realsize = r;
   }
 
-  public size_t realsize()
+  public ulong realsize()
   {
     return _realsize;
   }
@@ -220,7 +220,7 @@ struct BddDomain
       }
     this._name = text(index);
     this._index = index;
-    this._realsize = (cast(size_t) 2) ^^bits;
+    this._realsize = (cast(ulong) 2) ^^bits;
     this._ivar.length = bits;
   }
 
@@ -257,9 +257,9 @@ struct BddDomain
     return d;
   }
 
-  public size_t size()
+  public ulong size()
   {
-    return cast(size_t) this.realsize;
+    return cast(ulong) this.realsize;
   }
 
   public BDD buildAdd(BddDomain that, long value)
@@ -416,7 +416,7 @@ struct BddDomain
     return this._ivar;
   }
 
-  public int ensureCapacity(size_t range)
+  public int ensureCapacity(ulong range)
   {
     long calcsize = 2L;
     if(range < 0)
@@ -9461,7 +9461,8 @@ class Buddy
     for(int i = 0; i < INSTANCE._domainsLen; ++i)
       // for(int i = 0; i < INSTANCE._domains.length; ++i)
       {
-	INSTANCE._domains[i] = INSTANCE.createDomain(i, this._domains[i].realsize);
+	INSTANCE._domains[i] =
+	  INSTANCE.createDomain(i, cast(size_t) this._domains[i].realsize);
       }
     return INSTANCE;
   }
