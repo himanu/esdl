@@ -18,6 +18,8 @@ import std.container: Array;
 import std.algorithm;
 import std.conv;
 import core.memory: GC;
+import core.stdc.string: memset;
+
 
 enum uint bddTrue = 1;
 enum uint bddFalse = 0;
@@ -127,16 +129,16 @@ struct BddDomain
 {
 
   /* The name of this _domain. */
-  protected string _name;
+  private string _name;
   /* The index of this _domain. */
-  protected int _index;
+  private int _index;
 
   /* The specified _domains(0...N-1) */
   public ulong _realsize;
   /* Variable indices for the variable set */
-  protected int[] _ivar;
+  private int[] _ivar;
   /* The BDD variable set.  Actually constructed in extDomain(), etc. */
-  protected BDD _var;		// FIXBDD
+  private BDD _var;		// FIXBDD
 
   public void name(string n)
   {
@@ -447,7 +449,7 @@ struct BddDomain
       {
 	nvar = nvar.and(ithVar(_ivar[i]));
       }
-    this._var = nvar;
+    this.var = nvar;
     return binsize;
   }
 
@@ -1525,8 +1527,9 @@ struct BDD
 
   public ~this()
   {
-    if (_buddy !is null && _index !is 0 && _delref_enabled)
+    if (_buddy !is null && _index !is 0 && _delref_enabled) {
       _buddy.delRef(_index);
+    }
   }
 
   version(BUDDY_ROOT) {
@@ -9031,7 +9034,9 @@ class Buddy
     // if(_domains.length == 0) /* First time */ {
     //   _domains.length = num;
     if(_domainsLen == 0) /* First time */ {
-      _domains = cast(BddDomain*) GC.malloc(BddDomain.sizeof * num);
+      void* mem = GC.malloc(BddDomain.sizeof * num);
+      memset(mem, 0, BddDomain.sizeof * num);
+      _domains = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * num);
       for (size_t i=0; i!=num; ++i) {
     	_domains[i] = BddDomain.init;
       }
@@ -9051,7 +9056,9 @@ class Buddy
 
 	  // FIXMALLOC
 	  // _domains.length = fdvaralloc;
-	  BddDomain* d2 = cast(BddDomain*) GC.malloc(BddDomain.sizeof * fdvaralloc);
+	  void* mem2 = GC.malloc(BddDomain.sizeof * fdvaralloc);
+	  memset(mem2, 0, BddDomain.sizeof * fdvaralloc);
+	  BddDomain* d2 = cast(BddDomain*) mem2; // GC.malloc(BddDomain.sizeof * fdvaralloc);
 	  for (size_t i=0; i!=_domainsLen; ++i) {
 	    d2[i] = _domains[i];
 	  }
@@ -9130,7 +9137,9 @@ class Buddy
 
 	// FIXMALLOC
 	// _domains.length = fdvaralloc;
-	BddDomain* dom = cast(BddDomain*) GC.malloc(BddDomain.sizeof * fdvaralloc);
+	void* mem = GC.malloc(BddDomain.sizeof * fdvaralloc);
+	memset(mem, 0, BddDomain.sizeof * fdvaralloc);
+	BddDomain* dom = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * fdvaralloc);
 	for (size_t i=0; i!=_domainsLen; ++i) {
 	  dom[i] = _domains[i];
 	}
@@ -9449,7 +9458,9 @@ class Buddy
 
     // FIXMALLOC
     // INSTANCE._domains = this._domains.dup;
-    BddDomain* d2 = cast(BddDomain*) GC.malloc(BddDomain.sizeof * this._domainsLen);
+    void* mem = GC.malloc(BddDomain.sizeof * this._domainsLen);
+    memset(mem, 0, BddDomain.sizeof * this._domainsLen);
+    BddDomain* d2 = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * this._domainsLen);
     for (size_t i=0; i!=this._domainsLen; ++i) {
       d2[i] = this._domains[i];
     }
