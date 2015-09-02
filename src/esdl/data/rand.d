@@ -1842,7 +1842,7 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
     // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
     // import std.stdio;
     // writeln("Setting length for array: ", _parent.name(), " to ", v);
-    _parent.setLen(v);
+    _parent.setLen(cast(size_t) v);
     // writeln("Getting length for array: ", _parent.name(), " as ", _parent.getLen());
     
   }
@@ -2234,7 +2234,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
 
     long value() {
       if(_indexExpr) {
-	return _parent.getVal(_indexExpr.evaluate());
+	return _parent.getVal(cast(size_t) _indexExpr.evaluate());
       }
       else {
 	return _parent.getVal(_index);
@@ -2247,7 +2247,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       // writeln("Parent length value of ", this.name(),
       // 	      " is: ", _parent.getLen());
       if(_indexExpr) {
-	_parent.setVal(v, _indexExpr.evaluate());
+	_parent.setVal(v, cast(size_t) _indexExpr.evaluate());
       }
       else {
 	return _parent.setVal(v, _index);
@@ -2286,7 +2286,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     return _name;
   }
 
-  ulong maxArrLen() {
+  size_t maxArrLen() {
     static if(isStaticArray!L) {
       return L.length;
     }
@@ -2337,7 +2337,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       // }
       // import std.stdio;
       // writeln(idx.evaluate());
-      return _elems[idx.evaluate()];
+      return _elems[cast(size_t) idx.evaluate()];
     }
     else {
       static if(isStaticArray!E) {
@@ -2426,14 +2426,14 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
   }
 
-  static private long getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
+  static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
     static if(N.length == 0) return arr.length;
     else {
       return getLen(arr[idx[0]], idx[1..$]);
     }
   }
 
-  static private void setLen(A, N...)(ref A arr, long v, N idx) if(isArray!A) {
+  static private void setLen(A, N...)(ref A arr, size_t v, N idx) if(isArray!A) {
     static if(N.length == 0) {
       static if(isDynamicArray!A) {
 	arr.length = v;
@@ -2591,11 +2591,11 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       setVal(_solver._esdl__outer.tupleof[I], v, idx);
     }
 
-    public long getLen(N...)(N idx) {
+    public size_t getLen(N...)(N idx) {
       return getLen(_solver._esdl__outer.tupleof[I], idx);
     }
 
-    public void setLen(N...)(long v, N idx) {
+    public void setLen(N...)(size_t v, N idx) {
       setLen(_solver._esdl__outer.tupleof[I], v, idx);
     }
 
@@ -2686,7 +2686,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       }
       if(_indexExpr.isConst()) {
 	RndVecPrim[] prims;
-	prims ~= _parent[_indexExpr.evaluate()].getPrimLens();
+	prims ~= _parent[cast(size_t) _indexExpr.evaluate()].getPrimLens();
 	return prims;
       }
       else {
@@ -2728,18 +2728,18 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       return _parent.getSolver();
     }
 
-    public long getLen(N...)(N idx) {
+    public size_t getLen(N...)(N idx) {
       return _parent.getLen(_index, idx);
     }
 
-    public void setLen(N...)(long v, N idx) {
+    public void setLen(N...)(size_t v, N idx) {
       _parent.setLen(v, _index, idx);
     }
 
     public long getVal(N...)(N idx) if(isIntegral!(N[0])) {
       if(_indexExpr) {
 	assert(_indexExpr.isConst());
-	return _parent.getVal(_indexExpr.evaluate(), idx);
+	return _parent.getVal(cast(size_t) _indexExpr.evaluate(), idx);
       }
       else {
 	return _parent.getVal(_index, idx);
@@ -2749,7 +2749,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     public void setVal(N...)(long v, N idx) if(isIntegral!(N[0])) {
       if(_indexExpr) {
 	assert(_indexExpr.isConst());
-	_parent.setVal(v, _indexExpr.evaluate(), idx);
+	_parent.setVal(v, cast(size_t) _indexExpr.evaluate(), idx);
       }
       else {
 	_parent.setVal(v, _index, idx);
@@ -2819,7 +2819,7 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
   public void value(long v) {
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _arrVar.name, " to ", v);
-    _arrVar.arrLen.value(v);
+    _arrVar.arrLen.value(cast(size_t) v);
   }
   void doRandomization() {
     assert(false);
