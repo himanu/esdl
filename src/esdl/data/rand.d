@@ -1066,17 +1066,24 @@ abstract class _esdl__SolverEnvRoot {
     }
 
     foreach(vec; stage._rndVecs) {
-      long value;
-      // vec.value = 0;	// init
-      foreach(uint i, ref j; solveBDD.getIndices(vec.domIndex)) {
+      size_t value;
+      enum WORDSIZE = 8 * size_t.sizeof;
+      auto bitvals = solveBDD.getIndices(vec.domIndex);
+      foreach(uint i, ref j; bitvals) {
+	uint pos = i % WORDSIZE;
+	uint word = i / WORDSIZE;
 	if(bits.length == 0 || bits[j] == -1) {
-	  value = value + ((cast(ulong) _esdl__rGen.flip()) << i);
+	  value = value + ((cast(ulong) _esdl__rGen.flip()) << pos);
 	}
 	else if(bits[j] == 1) {
-	  value = value + (1L << i);
+	  value = value + (1L << pos);
+	}
+	if(pos == WORDSIZE - 1 || i == bitvals.length - 1) {
+	  vec.value(value, word);
+	  value = 0;
 	}
       }
-      vec.value = value;
+      // vec.value = value;
       // vec.bddvec = null;
     }
     if(stage !is null) stage.id(stageIdx);
@@ -1374,7 +1381,7 @@ interface RndVecPrim
   abstract void doRandomization();
   abstract public bool isRand();
   abstract public long value();
-  abstract public void value(long v);
+  abstract public void value(size_t v, int word=0);
   abstract public CstStage stage();
   abstract public void stage(CstStage s);
   abstract public void _esdl__reset();
@@ -1837,7 +1844,8 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
     return _parent.getLen();
   }
 
-  public void value(long v) {
+  public void value(size_t v, int word = 0) {
+    assert(word == 0);
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
     // import std.stdio;
@@ -2119,8 +2127,26 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       return cast(long) (_solver._esdl__outer.tupleof[I]);
     }
 
-    public void value(long v) {
-      _solver._esdl__outer.tupleof[I] = cast(L) toBitVec(v);
+    public void value(size_t v, int word = 0) {
+      static if(isIntegral!L) {
+	if(word == 0) {
+	  _solver._esdl__outer.tupleof[I] = cast(L) v; // = cast(L) toBitVec(v      }
+	}
+	else {
+	  static if(size_t.sizeof == 4) {
+	    assert(word == 1);	// 32 bit machine with long integral
+	    L val = v;
+	    val = val << (8 * size_t.sizeof);
+	    _solver._esdl__outer.tupleof[I] += val;
+	  }
+	  else {
+	    assert(false, "word has to be 0 for integrals");
+	  }
+	}
+      }
+      else {
+	_solver._esdl__outer.tupleof[I]._setNthWord(v, word); // = cast(L) toBitVec(v);
+      }
     }
   }
 
@@ -2241,16 +2267,16 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       }
     }
 
-    void value(long v) {
+    void value(size_t v, int word = 0) {
       // import std.stdio;
       // writeln("Setting value of ", this.name(), " to: ", v);
       // writeln("Parent length value of ", this.name(),
       // 	      " is: ", _parent.getLen());
       if(_indexExpr) {
-	_parent.setVal(v, cast(size_t) _indexExpr.evaluate());
+	_parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
       }
       else {
-	return _parent.setVal(v, _index);
+	return _parent.setVal(v, word, _index);
       }
     }
   }
@@ -2460,14 +2486,32 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
   }
 
-  static private void setVal(A, N...)(ref A arr, long v, N idx)
+  static private void setVal(A, N...)(ref A arr, size_t v, int word, N idx)
     if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
       static if(N.length == 1) {
 	alias AE = ElementType!A;
-	arr[idx[0]] = cast(AE) v;
+	static if(isIntegral!AE) {
+	  if(word == 0) {
+	    arr[idx[0]] = cast(AE) v;
+	  }
+	  else {
+	    static if(size_t.sizeof == 4) {
+	      assert(word == 1);	// 32 bit machine with long integral
+	      AE val = v;
+	      val = val << (8 * size_t.sizeof);
+	      arr[idx[0]] += val;
+	    }
+	    else {
+	      assert(false, "word has to be 0 for integrals");
+	    }
+	  }
+	}
+	else {
+	  arr[idx[0]]._setNthWord(v, word);
+	}
       }
       else {
-	setVal(arr[idx[0]], v, idx[1..$]);
+	setVal(arr[idx[0]], v, word, idx[1..$]);
       }
     }
 
@@ -2479,7 +2523,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     assert(false, "value not implemented for RndVecVar");
   }
 
-  public void value(long v) {
+  public void value(size_t v, int word = 0) {
     assert(false, "value not implemented for RndVecVar");
   }
 
@@ -2587,8 +2631,8 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       return getVal(_solver._esdl__outer.tupleof[I], idx);
     }
 
-    public void setVal(J...)(long v, J idx) if(isIntegral!(J[0])) {
-      setVal(_solver._esdl__outer.tupleof[I], v, idx);
+    public void setVal(J...)(size_t v, int word, J idx) if(isIntegral!(J[0])) {
+      setVal(_solver._esdl__outer.tupleof[I], v, word, idx);
     }
 
     public size_t getLen(N...)(N idx) {
@@ -2746,13 +2790,13 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       }
     }
 
-    public void setVal(N...)(long v, N idx) if(isIntegral!(N[0])) {
+    public void setVal(N...)(size_t v, int word, N idx) if(isIntegral!(N[0])) {
       if(_indexExpr) {
 	assert(_indexExpr.isConst());
-	_parent.setVal(v, cast(size_t) _indexExpr.evaluate(), idx);
+	_parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
       }
       else {
-	_parent.setVal(v, _index, idx);
+	_parent.setVal(v, word, _index, idx);
       }
     }
   }
@@ -2816,9 +2860,10 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
   public long value() {
     return _arrVar.arrLen.value();
   }
-  public void value(long v) {
+  public void value(size_t v, int word = 0) {
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _arrVar.name, " to ", v);
+    assert(word == 0);
     _arrVar.arrLen.value(cast(size_t) v);
   }
   void doRandomization() {
@@ -2983,7 +3028,7 @@ class RndVecConst(T = int): RndVecExpr, RndVecPrim
     assert(false);
   }
 
-  public void value(long v) {
+  public void value(size_t v, int word = 0) {
     assert(false);
   }
 
