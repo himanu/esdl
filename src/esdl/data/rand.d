@@ -1073,10 +1073,10 @@ abstract class _esdl__SolverEnvRoot {
 	uint pos = i % WORDSIZE;
 	uint word = i / WORDSIZE;
 	if(bits.length == 0 || bits[j] == -1) {
-	  value = value + ((cast(ulong) _esdl__rGen.flip()) << pos);
+	  value = value + ((cast(size_t) _esdl__rGen.flip()) << pos);
 	}
 	else if(bits[j] == 1) {
-	  value = value + (1L << pos);
+	  value = value + ((cast(size_t) 1) << pos);
 	}
 	if(pos == WORDSIZE - 1 || i == bitvals.length - 1) {
 	  vec.value(value, word);
@@ -2133,7 +2133,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
 	  _solver._esdl__outer.tupleof[I] = cast(L) v; // = cast(L) toBitVec(v      }
 	}
 	else {
-	  static if(size_t.sizeof == 4) {
+	  static if(size_t.sizeof == 4 && (is(L == long) || is(L == ulong))) {
 	    assert(word == 1);	// 32 bit machine with long integral
 	    L val = v;
 	    val = val << (8 * size_t.sizeof);
