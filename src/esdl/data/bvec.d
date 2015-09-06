@@ -765,6 +765,15 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       return retVal;
     }
 
+    // Primarily for the ease of constraint solver to set value
+    package void _setNthWord(size_t v, int word = 0) {
+      import std.conv;
+      assert(word < STORESIZE, "trying to access " ~ word.to!string ~
+	     " when aval is only " ~ STORESIZE.to!string);
+      _aval[word] = cast(store_t) v;
+      _bval[word] = 0;
+    }
+
     public void setAval(V)(V t)
       if(isBoolean!V ||
 	 (isIntegral!V && V.sizeof*8 <= SIZE) ||
