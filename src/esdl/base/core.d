@@ -7236,9 +7236,12 @@ class EsdlHeapScheduler : EsdlScheduler
   }
 
   public final void triggerImmediateEvents() {
-    // FIXME -- ideally this critical region should not be required
-    // But I am getting race condition without it
-    // I am testing with an unreleased DMD version on Aug 18 2015
+    // ideally this critical region should not be required
+    // the only reason we need this critical region is because an
+    // external actor (for example uvm_tlm_fifo_ingress or
+    // uvm_tlm_fifo_egress) might notify an event. We assume that an
+    // external actor could notify only an immediate event. It will
+    // not have any idea of time anyways.
     synchronized(this) {
       debug(SCHEDULER) {
 	import std.stdio: writeln;
@@ -7329,6 +7332,20 @@ interface RootEntityIntf // : EntityIntf
       _roots ~= root;
     }
   }
+
+  static void delRoot(RootEntity root) {
+    synchronized(typeid(RootEntity)) {
+      RootEntity[] roots;
+      foreach(_root; _roots) {
+	if(_root !is root) {
+	  roots ~= _root;
+	}
+      }
+      _roots = roots;
+    }
+  }
+
+  
   static RootEntity[] allRoots() {
     synchronized(typeid(RootEntity)) {
       return _roots;
@@ -7637,10 +7654,15 @@ abstract class RootEntity: Entity, RootEntityIntf
   }
 
   public void multiCore(size_t ncore = CPU_COUNT(), size_t fcore = 0) {
-    if(CPU_COUNT() < ncore) {
-      import std.conv: to;
-      assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
-	     " threads are avaialbe for execution");
+    version(COSIM_VERILOG) {
+      // Mentor Questa tool does not like the next few lines
+    }
+    else {
+      if(CPU_COUNT() < ncore) {
+	import std.conv: to;
+	assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
+	       " threads are avaialbe for execution");
+      }
     }
     _esdl__numMultiCore = ncore;
     _esdl__numFirstCore = fcore;
@@ -7813,6 +7835,7 @@ class EsdlSimulator: EntityIntf
       this._executor.terminateProcs(getRoot()._esdl__getChildProcsHier());
       this._executor.joinPoolThreads();
       writeln(" > Simulation Complete....");
+      RootEntity.delRoot(this.getRoot());
       version(COSIM_VERILOG) {
 	import std.stdio;
 	writeln(" > Sending vpiFinish signal to the Verilog Simulator");
