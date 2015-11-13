@@ -519,7 +519,7 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
     }
   }
 
-  public T opCast(T)()
+  public T opCast(T)() const
     if(isBitVector!T) {
       enum bool _L = T.IS4STATE;
       enum bool _S = T.ISSIGNED;
@@ -1724,7 +1724,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       return ba;
     }
 
-    public V opCast(V)() if(isIntegral!V || isBoolean!V) {
+    public V opCast(V)() const if(isIntegral!V || isBoolean!V) {
       static if(L) {
 	V value = cast(V)(this._aval[0] & ~this._bval[0]);
       }
