@@ -1884,8 +1884,9 @@ public class NotificationObj(T): EventObj
   // as having just one notification
   public void post(T data) {
     if (this.getTimed().notify()) {
-      synchronized(this)
+      synchronized(this) {
 	_data = data;
+      }
     }
   }
 
@@ -2629,7 +2630,15 @@ public class EventObj: EventAgent, NamedComp
   // Cancel the scheduled notification
   public void cancel() {
     synchronized(this) {
-      this.getTimed().cancel();
+      if(this._simEvent is null) {
+	assert(false, "Can not cancel an event that has not been scheduled");
+      }
+      else if(this._simEvent.isTimed()) {
+	this.getTimed().cancel();
+      }
+      else {
+	assert(false, "Can not cancel an Composite Event");
+      }
     }
   }
 
@@ -3288,6 +3297,7 @@ final private class TimedEvent: SimEvent
 
   enum Schedule: ubyte
     {   NONE,
+	ASYNC,
 	NOW,
 	DELTA,
 	TIMED
@@ -3307,6 +3317,10 @@ final private class TimedEvent: SimEvent
       final switch(this._schedule) {
       case Schedule.NONE:
 	// Not scheduled -- do nothing
+	break;
+      case Schedule.ASYNC:
+	this.getObj.getSimulator._scheduler.cancelAsyncEvent(this);
+	this._schedule = Schedule.NONE;
 	break;
       case Schedule.NOW:
 	this.getObj.getSimulator._scheduler.cancelImmediateEvent(this);
@@ -3346,11 +3360,22 @@ final private class TimedEvent: SimEvent
   public final override bool notify() {
     // Cancel the already scheduled notifications
     synchronized(this) {
-      if(this._schedule != Schedule.NOW) {
-	cancel();
-	this._schedule = Schedule.NOW;
-	this._eventQueueIndex =
-	  this.getSimulator._scheduler.insertImmediate(this);
+      if(Process.self is null) { // async notify
+	if(this._schedule != Schedule.ASYNC) {
+	  cancel();
+	  this._schedule = Schedule.ASYNC;
+	  this._eventQueueIndex =
+	    this.getSimulator._scheduler.insertAsyncEvent(this);
+	}
+      }
+      else {			// immediate notify
+	if(this._schedule != Schedule.NOW &&
+	   this._schedule != Schedule.ASYNC) {
+	  cancel();
+	  this._schedule = Schedule.NOW;
+	  this._eventQueueIndex =
+	    this.getSimulator._scheduler.insertImmediateEvent(this);
+	}
       }
       return true;
     }
@@ -7057,9 +7082,11 @@ public:
   // An EventObj can be queued up
   void cancelDeltaEvent(TimedEvent e);
   void cancelImmediateEvent(TimedEvent e);
+  void cancelAsyncEvent(TimedEvent e);
   void insertTimed(EventNotice e);
   size_t insertDelta(TimedEvent e);
-  size_t insertImmediate(TimedEvent e);
+  size_t insertImmediateEvent(TimedEvent e);
+  size_t insertAsyncEvent(TimedEvent e);
   public SimTime nextSimTime();
   public void triggerDeltaEvents();
   public void triggerImmediateEvents();
@@ -7078,6 +7105,8 @@ class EsdlHeapScheduler : EsdlScheduler
   private TimedEvent[] _deltaQueueAlt;
   private TimedEvent[] _immediateQueue;
   private TimedEvent[] _immediateQueueAlt;
+  bool _asyncFlag = false;
+  private TimedEvent[] _asyncQueue;
 
   private SimTime _simTime = SimTime(0);
   // number of delta cycles at the current simulation time
@@ -7093,6 +7122,9 @@ class EsdlHeapScheduler : EsdlScheduler
       _deltaQueueAlt.length = 0;
       _immediateQueueAlt.length = 0;
       _immediateQueue.length = 0;
+
+      _asyncQueue.length = 0;
+      _asyncFlag = false;
       // detach the heap and reattch with 0 Timed events
       _noticeHeap.clear();
       _noticeHeap.assume(_noticeQueue, 0);
@@ -7156,15 +7188,47 @@ class EsdlHeapScheduler : EsdlScheduler
     }
   }
 
-  public final size_t insertImmediate(TimedEvent e) {
+  public final size_t insertAsyncEvent(TimedEvent e) {
+    synchronized(this) { // synchronized(e.getObj)
+      debug {
+	import std.stdio: writeln;
+	writeln("======== Adding Async TimedNotice ",
+		_asyncQueue.length);
+      }
+      auto index = this._asyncQueue.length;
+      this._asyncQueue ~= e;
+      this._asyncFlag = true;
+      return index;
+    }
+  }
+
+  public final size_t insertImmediateEvent(TimedEvent e) {
     synchronized(this) { // synchronized(e.getObj)
       debug {
 	import std.stdio: writeln;
 	writeln("======== Adding Immediate TimedNotice ",
 		_immediateQueue.length);
       }
+      auto index = this._immediateQueue.length;
       this._immediateQueue ~= e;
-      return this._immediateQueue.length - 1;
+      return index;
+    }
+  }
+
+  public final void cancelAsyncEvent(TimedEvent e) {
+    synchronized(e) {
+      synchronized(this) {
+	import std.exception: enforce;
+	enforce((this._asyncQueue[e._eventQueueIndex] is e),
+		"Received event with wrong _eventQueueIndex");
+	// move the last event in the queue to occupy cancelled events place
+	synchronized(this._asyncQueue[$-1]) {
+	  this._asyncQueue[$-1]._eventQueueIndex = e._eventQueueIndex;
+	}
+	this._asyncQueue[e._eventQueueIndex] = this._asyncQueue[$-1];
+	// reduce the event queue
+	this._asyncQueue.length -= 1;
+      }
     }
   }
 
@@ -7205,7 +7269,8 @@ class EsdlHeapScheduler : EsdlScheduler
   // make this method callable only when the simulation is paused
   public final SimTime nextSimTime() {
     if(this._deltaQueue.length > 0 ||
-       this._immediateQueue.length > 0) {
+       this._immediateQueue.length > 0 ||
+       this._asyncFlag) {
       return SimTime(0);
     }
     else if(this._noticeHeap.empty()) {
@@ -7242,23 +7307,30 @@ class EsdlHeapScheduler : EsdlScheduler
     // uvm_tlm_fifo_egress) might notify an event. We assume that an
     // external actor could notify only an immediate event. It will
     // not have any idea of time anyways.
-    synchronized(this) {
-      debug(SCHEDULER) {
-	import std.stdio: writeln;
-	writeln("There are ", this._immediateQueue.length,
-		" events to trigger");
-      }
-      auto _exec = _immediateQueue;
-      _immediateQueue = _immediateQueueAlt;
-      _immediateQueueAlt = _exec;
+    debug(SCHEDULER) {
+      import std.stdio: writeln;
+      writeln("There are ", this._immediateQueue.length,
+	      " events to trigger");
+    }
+    auto immediate = _immediateQueue;
+    _immediateQueue = _immediateQueueAlt;
+    _immediateQueueAlt = immediate;
 
-      _immediateQueue.length = 0;
+    _immediateQueue.length = 0;
 
-      foreach(ref event; this._immediateQueueAlt) {
-	event.trigger(_simulator);
+    foreach(ref event; this._immediateQueueAlt) {
+      event.trigger(_simulator);
+    }
+    if(_asyncFlag) {
+      synchronized(this) {
+	foreach(ref event; this._asyncQueue) {
+	  event.trigger(_simulator);
+	}
+	_asyncQueue.length = 0;
+	_asyncFlag = false;
       }
-    } 
-  }
+    }
+  } 
 
   public final SimRunPhase triggerNextEventNotices(SimTime maxTime) {
     _deltaCount = 0;
