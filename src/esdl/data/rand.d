@@ -375,17 +375,24 @@ template _esdl__RandInits(T, int I=0)
       }
       else static if(is(L == struct)) {
 	enum _esdl__RandInits =
-	  "    _esdl__" ~ NAME ~
-	  " = new typeof(_esdl__" ~ NAME ~
-	  ")(this._esdl__outer._esdl__randSeed, \"" ~
+	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
+	  NAME ~ ")(this._esdl__outer._esdl__randSeed, \"" ~
 	  NAME ~ "\", this._esdl__outer." ~ NAME ~
 	  ", this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
       }
+      else static if(is(L == U*, U) && is(U == struct)) {
+	enum _esdl__RandInits =
+	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
+	  NAME ~ ")(this._esdl__outer._esdl__randSeed, \"" ~
+	  NAME ~ "\", *(this._esdl__outer." ~ NAME ~
+	  "), this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
+	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
+      }
       else {
 	enum _esdl__RandInits =
-	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
-	  ")(\"" ~ NAME ~ "\", this);\n" ~
+	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
+	  NAME ~ ")(\"" ~ NAME ~ "\", this);\n" ~
 	  "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
 	  _esdl__RandInits!(T, I+1);
       }
@@ -1910,11 +1917,14 @@ template _esdl__Rand(T, int I)
     alias _esdl__Rand = RndVecArr!(T, I);
   }
   else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = RndVec!(T, I);
-    }
+    alias _esdl__Rand = RndVec!(T, I);
+  }
   else static if(is(L == class) || is(L == struct)) {
-      alias _esdl__Rand = _esdl__SolverEnv!L;
-    }
+    alias _esdl__Rand = _esdl__SolverEnv!L;
+  }
+  else static if(is(L == U*, U) && is(U == struct)) {
+    alias _esdl__Rand = _esdl__SolverEnv!U;
+  }
 }
 
 template ElementTypeN(T, int N=0)
