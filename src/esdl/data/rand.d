@@ -429,6 +429,12 @@ template _esdl__RandSetOuter(T, int I=0)
 	  "._esdl__setOuter(this._esdl__outer." ~ NAME ~
 	  ");\n" ~ _esdl__RandSetOuter!(T, I+1);
       }
+      else static if(is(L == U*, U) && is(U == struct)) {
+	enum _esdl__RandSetOuter =
+	  "    _esdl__" ~ NAME ~
+	  "._esdl__setOuter(*(this._esdl__outer." ~ NAME ~
+	  "));\n" ~ _esdl__RandSetOuter!(T, I+1);
+      }
       else {
 	enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
       }
