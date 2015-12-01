@@ -782,7 +782,7 @@ version(COSIM_VHDL) {
      */
     alias void* mhpiUcliClientData;
     alias mhpiUcliCmdDeleteProc = void function (mhpiUcliClientData data);
-    alias mhpiUcliCmdProc = int function (mhpiUcliClientData data, int argc, char* argv[]);
+    alias mhpiUcliCmdProc = int function (mhpiUcliClientData data, int argc, char** argv);
 
     /*
      * This function creates a ucli tcl command.

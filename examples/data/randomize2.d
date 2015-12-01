@@ -11,7 +11,7 @@ import esdl.data.bvec;
 
 class Foo: Randomizable
 {
-  mixin(randomization);
+  mixin Randomization;
   @rand int roo;
 }
 
@@ -20,7 +20,7 @@ enum AhbMode: ubyte {BURST, BURST_WRAP, SINGLE, IDLE, NONE}
 
 class Bar: Foo
 {
-   mixin(randomization);
+   mixin Randomization;
 
   // private @rand!(16) ushort bob[];
   private @rand ubyte pop;
@@ -35,7 +35,7 @@ class Bar: Foo
     writeln("bro: ", bro, " pop: ", pop, " foo: ", foo, " mode: ", mode);
   }
 
-  override void pre_randomize() {
+  void preRandomize() {
     // foo++;
   }
 
