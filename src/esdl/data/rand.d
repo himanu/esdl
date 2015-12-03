@@ -30,10 +30,10 @@ template _esdl__SolverEnvBase(T) {
 	    is(B[0] == class)) {
     alias U = B[0];
     // check if the base class has Randomization
-    // static if(__traits(compiles, _esdl__SolverEnv!U)) {
+    // static if(__traits(compiles, _esdl__Solver!U)) {
     static if(__traits(compiles, U._esdl__thisHasRandomization()) &&
 	      is(U == typeof(U._esdl__thisHasRandomization()))) {
-      alias _esdl__SolverEnvBase = _esdl__SolverEnv!U;
+      alias _esdl__SolverEnvBase = _esdl__Solver!U;
     }
     else {
       alias _esdl__SolverEnvBase = _esdl__SolverEnvBase!U;
@@ -44,101 +44,115 @@ template _esdl__SolverEnvBase(T) {
   }
 }
 
-class _esdl__SolverEnv(_esdl__T): _esdl__SolverEnvBase!_esdl__T
-{
-  static if(is(_esdl__T == struct)) {
-    _esdl__T* _esdl__outer;
-    public void _esdl__setOuter()(ref _esdl__T outer) {
-      _esdl__outer = &outer;
-    }
-    public this(uint seed, string name, ref _esdl__T outer,
-		_esdl__SolverEnvRoot parent=null) {
-      _esdl__outer = &outer;
-      static if(_esdl__baseHasRandomization!_esdl__T) {
-	super(seed, name, outer, parent);
-      }
-      else {
-	super(seed, name, parent);
-      }
-      _esdl__initRands();
-      _esdl__initCsts();
-    }
-  }
-
-  static if(is(_esdl__T == class)) {
-    _esdl__T _esdl__outer;
-    public void _esdl__setOuter()(_esdl__T outer) {
-      _esdl__outer = outer;
-    }
-    public this(uint seed, string name, _esdl__T outer,
-		_esdl__SolverEnvRoot parent=null) {
-      _esdl__outer = outer;
-      static if(_esdl__baseHasRandomization!_esdl__T) {
-	super(seed, name, outer, parent);
-      }
-      else {
-	super(seed, name, parent);
-      }
-      _esdl__initRands();
-      _esdl__initCsts();
-    }
-  }
-
-  class _esdl__Constraint(string _esdl__CstString):
-    Constraint!_esdl__CstString
+mixin template _esdl__SolverMixin() {
+  class _esdl__SolverEnv(_esdl__T): _esdl__SolverEnvBase!_esdl__T
   {
-    this(string name) {
-      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-    }
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    mixin(constraintXlate(_esdl__CstString));
-    debug(CONSTRAINTS) {
-      pragma(msg, constraintXlate(_esdl__CstString));
-    }
-  }
-
-  class _esdl__Constraint(string _esdl__CstString, size_t N): Constraint!_esdl__CstString
-  {
-    long[N] _withArgs;
-
-    void withArgs(V...)(V values) if(allIntengral!V) {
-      static assert(V.length == N);
-      foreach(i, v; values) {
-	_withArgs[i] = v;
+    static if(is(_esdl__T == struct)) {
+      _esdl__T* _esdl__outer;
+      public void _esdl__setOuter()(ref _esdl__T outer) {
+	_esdl__outer = &outer;
+      }
+      public this(uint seed, string name, ref _esdl__T outer,
+		  _esdl__SolverEnvRoot parent=null) {
+	_esdl__outer = &outer;
+	static if(_esdl__baseHasRandomization!_esdl__T) {
+	  super(seed, name, outer, parent);
+	}
+	else {
+	  super(seed, name, parent);
+	}
+	_esdl__initRands();
+	_esdl__initCsts();
       }
     }
 
-    this(string name) {
-      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+    static if(is(_esdl__T == class)) {
+      _esdl__T _esdl__outer;
+      public void _esdl__setOuter()(_esdl__T outer) {
+	_esdl__outer = outer;
+      }
+      public this(uint seed, string name, _esdl__T outer,
+		  _esdl__SolverEnvRoot parent=null) {
+	_esdl__outer = outer;
+	static if(_esdl__baseHasRandomization!_esdl__T) {
+	  super(seed, name, outer, parent);
+	}
+	else {
+	  super(seed, name, parent);
+	}
+	_esdl__initRands();
+	_esdl__initCsts();
+      }
     }
 
-    public long _esdl__arg(size_t VAR)() {
-      static assert(VAR < N, "Can not map specified constraint with argument: @" ~
-		    VAR.stringof);
-      return _withArgs[VAR];
+    class _esdl__Constraint(string _esdl__CstString):
+      Constraint!_esdl__CstString
+    {
+      this(string name) {
+	super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+      }
+      // This mixin writes out the bdd functions after parsing the
+      // constraint string at compile time
+      mixin(constraintXlate(_esdl__CstString));
+      debug(CONSTRAINTS) {
+	pragma(msg, constraintXlate(_esdl__CstString));
+      }
     }
 
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    mixin(constraintXlate(_esdl__CstString));
+    class _esdl__Constraint(string _esdl__CstString, size_t N): Constraint!_esdl__CstString
+    {
+      long[N] _withArgs;
+
+      void withArgs(V...)(V values) if(allIntengral!V) {
+	static assert(V.length == N);
+	foreach(i, v; values) {
+	  _withArgs[i] = v;
+	}
+      }
+
+      this(string name) {
+	super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+      }
+
+      public long _esdl__arg(size_t VAR)() {
+	static assert(VAR < N, "Can not map specified constraint with argument: @" ~
+		      VAR.stringof);
+	return _withArgs[VAR];
+      }
+
+      // This mixin writes out the bdd functions after parsing the
+      // constraint string at compile time
+      mixin(constraintXlate(_esdl__CstString));
+      debug(CONSTRAINTS) {
+	pragma(msg, "// randomizeWith!\n");
+	pragma(msg, constraintXlate(_esdl__CstString));
+      }
+    }
+
+    void _esdl__with(string _esdl__CstString, V...)(V values) {
+      auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
+      cstWith.withArgs(values);
+      _esdl__cstWith = cstWith;
+    }
+
+    mixin(_esdl__randsMixin!_esdl__T);
+
     debug(CONSTRAINTS) {
-      pragma(msg, "// randomizeWith!\n");
-      pragma(msg, constraintXlate(_esdl__CstString));
+      pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
+      pragma(msg, _esdl__randsMixin!_esdl__T);
     }
   }
+}
 
-  void _esdl__with(string _esdl__CstString, V...)(V values) {
-    auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
-    cstWith.withArgs(values);
-    _esdl__cstWith = cstWith;
+mixin _esdl__SolverMixin;
+
+template _esdl__Solver(T) {
+  // static if(__traits(compiles, T._esdl__hasRandomization)) {
+  static if(is(T == class)) {
+    alias _esdl__Solver = T._esdl__SolverEnv!T;
   }
-
-  mixin(_esdl__randsMixin!_esdl__T);
-
-  debug(CONSTRAINTS) {
-    pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
-    pragma(msg, _esdl__randsMixin!_esdl__T);
+  else {
+    alias _esdl__Solver = _esdl__SolverEnv!T;
   }
 }
 
@@ -363,7 +377,14 @@ template _esdl__RandInits(T, int I=0)
 		 is(getRandAttr!(T, I) == rand!false))) {
       enum NAME = __traits(identifier, T.tupleof[I]);
       alias L = typeof(T.tupleof[I]);
-      static if(is(L == class)) {
+      static if(isBitVector!L || isIntegral!L) {
+	enum _esdl__RandInits =
+	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
+	  NAME ~ ")(\"" ~ NAME ~ "\", this);\n" ~
+	  "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
+	  _esdl__RandInits!(T, I+1);
+      }
+      else static if(is(L == class)) {
 	enum _esdl__RandInits =
 	  "    assert(this._esdl__outer." ~ NAME ~
 	  " !is null);\n    _esdl__" ~ NAME ~
@@ -392,11 +413,7 @@ template _esdl__RandInits(T, int I=0)
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
       }
       else {
-	enum _esdl__RandInits =
-	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
-	  NAME ~ ")(\"" ~ NAME ~ "\", this);\n" ~
-	  "    _esdl__randsList ~= _esdl__" ~ NAME ~ ";\n" ~
-	  _esdl__RandInits!(T, I+1);
+	pragma(msg, "Unhandled type: " ~ L.stringof);
       }
     }
     else {
@@ -416,7 +433,10 @@ template _esdl__RandSetOuter(T, int I=0)
   else static if(! __traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
       enum NAME = __traits(identifier, T.tupleof[I]);
       alias L = typeof(T.tupleof[I]);
-      static if(is(L == class)) {
+      static if(isBitVector!L || isIntegral!L) {
+	enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+      }
+      else static if(is(L == class)) {
 	enum _esdl__RandSetOuter =
 	  "    assert(this._esdl__outer." ~ NAME ~
 	  " !is null);\n    _esdl__" ~ NAME ~
@@ -436,7 +456,7 @@ template _esdl__RandSetOuter(T, int I=0)
 	  "));\n" ~ _esdl__RandSetOuter!(T, I+1);
       }
       else {
-	enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+	pragma(msg, "Unhandled type: " ~ L.stringof);
       }
     }
     else {
@@ -485,7 +505,7 @@ template _esdl__RandDeclFuncs(T, int I=0)
 	}
       else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
 	// When NAME is used explicitly, D looks for public access
-	// permissions, this works wine if the _esdl__SolverEnvRoot
+	// permissions, this works fine if the _esdl__SolverEnvRoot
 	// template is instantiated as a mixin inside the class that
 	// has mixin Randomization
 	// We want to eliminate the need to mixin Randomization for
@@ -1274,6 +1294,10 @@ class Randomizable {
 
 mixin template Randomization()
 {
+  static {
+    mixin _esdl__SolverMixin;
+  }
+  
   enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
 
@@ -1281,7 +1305,7 @@ mixin template Randomization()
     return null;
   }
 
-  alias _esdl__Solver = _esdl__SolverEnv!_esdl__Type;
+  alias _esdl__SolverThis = _esdl__Solver!_esdl__Type;
 
   // final auto _esdl__randEval(string NAME)() {
   //   return mixin(NAME);
@@ -1292,13 +1316,13 @@ mixin template Randomization()
     override public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
     }
-    override public _esdl__Solver _esdl__getSolver() {
-      return _esdl__staticCast!_esdl__Solver(_esdl__solverInst);
+    override public _esdl__SolverThis _esdl__getSolver() {
+      return _esdl__staticCast!_esdl__SolverThis(_esdl__solverInst);
     }
     override public void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__Solver(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
+	  new _esdl__SolverThis(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
       }
       else {
 	_esdl__getSolver()._esdl__setObjOuter();
@@ -1308,8 +1332,8 @@ mixin template Randomization()
   else {
     _esdl__SolverEnvRoot _esdl__solverInst;
     public uint _esdl__randSeed;
-    public _esdl__Solver _esdl__getSolver() {
-      return _esdl__staticCast!_esdl__Solver(_esdl__solverInst);
+    public _esdl__SolverThis _esdl__getSolver() {
+      return _esdl__staticCast!_esdl__SolverThis(_esdl__solverInst);
     }
     public void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
@@ -1328,16 +1352,15 @@ mixin template Randomization()
     public void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__Solver(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
+	  new _esdl__SolverThis(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
       }
       else {
 	_esdl__getSolver()._esdl__setObjOuter();
       }
     }
   }
-
-  static if(_esdl__baseHasRandomization!_esdl__Type) {
-  }
+  // static if(_esdl__baseHasRandomization!_esdl__Type) {
+  // }
 }
 
 public void randomizeWith(string C, T, V...)(ref T t, V values)
@@ -1359,7 +1382,7 @@ public void randomizeWith(string C, T, V...)(ref T t, V values)
       // t._esdl__solverInst._esdl__cstWith = withCst;
     }
     else {
-      alias CST = _esdl__SolverEnv!(T)._esdl__Constraint!(C, V.length);
+      alias CST = _esdl__Solver!(T)._esdl__Constraint!(C, V.length);
       auto cstWith = _esdl__staticCast!CST(t._esdl__solverInst._esdl__cstWith);
       cstWith.withArgs(values);
       t._esdl__solverInst._esdl__cstWithChanged = false;
@@ -1938,10 +1961,10 @@ template _esdl__Rand(T, int I)
     alias _esdl__Rand = RndVec!(T, I);
   }
   else static if(is(L == class) || is(L == struct)) {
-    alias _esdl__Rand = _esdl__SolverEnv!L;
+    alias _esdl__Rand = _esdl__Solver!L;
   }
   else static if(is(L == U*, U) && is(U == struct)) {
-    alias _esdl__Rand = _esdl__SolverEnv!U;
+    alias _esdl__Rand = _esdl__Solver!U;
   }
 }
 
@@ -2107,9 +2130,10 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
   void build() {}
     
   static if(N == 0) {
-    _esdl__SolverEnv!T _solver;
+    alias _esdl__SolverThis = _esdl__Solver!T._esdl__Solver;
+    _esdl__SolverThis _solver;
 
-    public this(string name, _esdl__SolverEnv!T solver) {
+    public this(string name, _esdl__SolverThis solver) {
       _name = name;
       _solver = solver;
     }
@@ -2142,7 +2166,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       }
     }
 
-    public _esdl__SolverEnv!T getSolver() {
+    public _esdl__SolverThis getSolver() {
       return _solver;
     }
 
@@ -2274,7 +2298,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       }
     }
 
-    public _esdl__SolverEnv!T getSolver() {
+    public _esdl__Solver!T getSolver() {
       if(_parent is null) {
 	assert(false, "No parent associated with RndVec");
       }
@@ -2592,12 +2616,12 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
   }
 
   static if(N == 0) {
-    _esdl__SolverEnv!T _solver;
+    _esdl__Solver!T _solver;
 
     static if(isStaticArray!L) {
       static assert(__traits(isSame, R, rand));
       enum int maxLen = L.length;
-      public this(string name, _esdl__SolverEnv!T solver) {
+      public this(string name, _esdl__Solver!T solver) {
 	_name = name;
 	_solver = solver;
 	_arrLen = new RndVecLen!RV(name ~ ".len", this);
@@ -2606,7 +2630,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
 
     static if(isDynamicArray!L) {
       enum int maxLen = getRandAttr!(T, I, N);
-      public this(string name, _esdl__SolverEnv!T solver) {
+      public this(string name, _esdl__Solver!T solver) {
 	_name = name;
 	_solver = solver;
 	_arrLen = new RndVecLen!RV(name ~ ".len", this);
@@ -2645,7 +2669,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       return this;
     }
 
-    public _esdl__SolverEnv!T getSolver() {
+    public _esdl__Solver!T getSolver() {
       return _solver;
     }
 
@@ -2788,7 +2812,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       }
     }
 
-    public _esdl__SolverEnv!T getSolver() {
+    public _esdl__Solver!T getSolver() {
       if(_parent is null) {
 	assert(false, "No parent associated with RndVec");
       }
