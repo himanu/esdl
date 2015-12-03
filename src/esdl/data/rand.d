@@ -484,8 +484,18 @@ template _esdl__RandDeclFuncs(T, int I=0)
 	    _esdl__RandDeclFuncs!(T, I+1);
 	}
       else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
+	// When NAME is used explicitly, D looks for public access
+	// permissions, this works wine if the _esdl__SolverEnvRoot
+	// template is instantiated as a mixin inside the class that
+	// has mixin Randomization
+	// We want to eliminate the need to mixin Randomization for
+	// the classes/structs that are hierarchical, so we need to
+	// use explicit tupleof[N], since that does not use access
+	// permissions
+	// enum _esdl__RandDeclFuncs =
+	  //   "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
 	  enum _esdl__RandDeclFuncs =
-	    "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
+	    "  const auto " ~ NAME ~ "() { return this._esdl__outer.tupleof[" ~ I.stringof ~ "]; }\n" ~
 	    _esdl__RandDeclFuncs!(T, I+1);
 	}
 	else {
