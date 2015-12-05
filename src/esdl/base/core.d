@@ -190,7 +190,10 @@ package interface NamedComp: EsdlObj, TimeContext
     // process or of a routine. Otherwise return the Routine or the
     // Process
     private static NamedComp _esdl__getParentProc() {
-      auto p = Process.self;
+      NamedComp p = Process.self;
+      if(p is null) {
+	p = EntityIntf.getThreadContext();
+      }
       return p;
     }
 
@@ -687,7 +690,7 @@ public interface HierComp: NamedComp, ParContext
 	// }
 	return _esdl__hier_parent;
       }
-      assert(false, "Tried to seek parent for a NamedComp "
+      assert(false, "Tried to seek parent for a HierComp "
 	     "which does not have it set");
       // synchronized(this) {
       //   _esdl__parent = _esdl__getParentProc();
@@ -1765,6 +1768,7 @@ public interface ElabContext: HierComp
     void _esdl__elab_virtual(parallelize linfo) {
       this._esdl__elab(this, linfo);
     }
+
   }
 }
 
@@ -2419,8 +2423,9 @@ public class EventObj: EventAgent, NamedComp
 
   protected this(SimEvent simEvent, NamedComp parent=null) {
     synchronized(this) {
-      if(parent is null) parent = _esdl__getParentProc();
-      if(parent !is null) this._esdl__parent = parent;
+      if(parent is null) {parent = _esdl__getParentProc();}
+      this._esdl__parent = parent;
+
       if(simEvent !is null) {
 	this._simEvent = simEvent;
       }
@@ -4356,6 +4361,17 @@ class Routine(T, alias F, int R=0): Routine!(F, R)
 
 interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 {
+  static EntityIntf _esdl__threadContext;
+  final void setThreadContext() {
+    auto proc = Process.self();
+    assert(proc is null,
+	   "setThreadContext can be called only from" ~
+	   " a non-simulation thread");
+    EntityIntf._esdl__threadContext = this;
+  }
+  static EntityIntf getThreadContext() {
+    return _esdl__threadContext;
+  }
 
   mixin template ConfigTimeMixin()
   {
@@ -6136,10 +6152,11 @@ class Channel: ChannelIF, NamedComp // Primitive Channel
 {
   UpdateReason _updateReason = UpdateReason.NONE;
 
-  this(string name="", EntityIntf parent=null) {
+  this(string name="", NamedComp parent=null) {
     synchronized(this) {
       // _esdl__getParentProc returns null during elaboration
-      this._esdl__parent = _esdl__getParentProc();
+      if(parent is null) {parent = _esdl__getParentProc();}
+      this._esdl__parent = parent;
     }
   }
 
