@@ -4362,6 +4362,9 @@ class Routine(T, alias F, int R=0): Routine!(F, R)
 interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 {
   static EntityIntf _esdl__threadContext;
+  final void resetThreadContext() {
+    _esdl__threadContext = null;    
+  }
   final void setThreadContext() {
     auto proc = Process.self();
     assert(proc is null,
