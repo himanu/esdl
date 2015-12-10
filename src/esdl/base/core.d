@@ -4376,12 +4376,13 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
     return _esdl__threadContext;
   }
   static EntityIntf getContextEntity() {
-    EntityIntf parent = getThreadContext();
-    if(parent is null) {
-      auto process = Process.self();
-      if(process !is null) {
-	parent = process.getParentEntity();
-      }
+    EntityIntf parent;
+    auto process = Process.self();
+    if(process !is null) {
+      parent = process.getParentEntity();
+    }
+    else {
+      parent = getThreadContext();
     }
     return parent;
   }
