@@ -4362,7 +4362,7 @@ class Routine(T, alias F, int R=0): Routine!(F, R)
 interface EntityIntf: ElabContext, SimContext, TimeConfigContext
 {
   static EntityIntf _esdl__threadContext;
-  final void resetThreadContext() {
+  static void resetThreadContext() {
     _esdl__threadContext = null;    
   }
   final void setThreadContext() {
@@ -4374,6 +4374,16 @@ interface EntityIntf: ElabContext, SimContext, TimeConfigContext
   }
   static EntityIntf getThreadContext() {
     return _esdl__threadContext;
+  }
+  static EntityIntf getContextEntity() {
+    EntityIntf parent = getThreadContext();
+    if(parent is null) {
+      auto process = Process.self();
+      if(process !is null) {
+	parent = process.getParentEntity();
+      }
+    }
+    return parent;
   }
 
   mixin template ConfigTimeMixin()
