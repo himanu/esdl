@@ -1580,7 +1580,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 	}
 
 	v.value.vector = vector.ptr;
-	vpiPutValue(netHandle, &v, null, vpiNoDelay);
+	vpi_put_value(netHandle, &v, null, vpiNoDelay);
 
       }
     }
@@ -1671,7 +1671,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 	// for now, get the value and display it
 	s_vpi_value v;
 	v.format = vpiVectorVal;
-	vpiGetValue(netHandle, &v);
+	vpi_get_value(netHandle, &v);
 	// at the time of binding we already checked that the size of
 	// the signal at the two sides match.
 
@@ -1708,12 +1708,12 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 	  assert(false, "Can not find \"" ~ net ~ "\" in the verilog design");
 	}
     
-	auto handleType = vpiGet(vpiType, netHandle);
+	auto handleType = vpi_get(vpiType, netHandle);
 	if(handleType !is vpiNet && handleType !is vpiReg) {
 	  assert(false, "\"" ~ net ~ "\"" ~ " is not of reg or wire type");
 	}
 
-	auto size = vpiGet(vpiSize, netHandle);
+	auto size = vpi_get(vpiSize, netHandle);
 	static if(isBitVector!T) {
 	  if(size !is T.SIZE) {
 	    assert(false, "hdlBind: Signal size does not match with the size"
@@ -1748,8 +1748,8 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 	Object obj = this;
 	p_cb.user_data = cast(void*) obj;
 
-	vpiRegisterCb(p_cb); // Do not know why this will not work
-	// vpiRegisterCb(&cb);
+	vpi_register_cb(p_cb); // Do not know why this will not work
+	// vpi_register_cb(&cb);
 	// }
       }
     }

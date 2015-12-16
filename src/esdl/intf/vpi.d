@@ -849,20 +849,15 @@ version(COSIM_VERILOG) {
 
   /* callback related */
   extern(C) vpiHandle vpi_register_cb (p_cb_data cb_data_p);
-  alias vpi_register_cb vpiRegisterCb;
 
   extern(C) int vpi_remove_cb (vpiHandle cb_obj);
-  alias vpi_remove_cb vpiRemoveCb;
 
   extern(C) void vpi_get_cb_info (vpiHandle object, p_cb_data cb_data_p);
-  alias vpi_get_cb_info vpiGetCbInfo;
 
   extern(C) vpiHandle vpi_register_systf (p_vpi_systf_data systf_data_p);
-  alias vpi_register_systf vpiRegisterSystf;
 
   extern(C) void vpi_get_systf_info (vpiHandle object,
 				     p_vpi_systf_data systf_data_p);
-  alias vpi_get_systf_info vpiGetSystfInfo;
 
   /* for obtaining handles */
   extern(C) vpiHandle vpi_handle_by_name (char *name, vpiHandle scope_handle);
@@ -873,67 +868,50 @@ version(COSIM_VERILOG) {
   }
 
   extern(C) vpiHandle vpi_handle_by_index (vpiHandle object, int indx);
-  alias vpi_handle_by_index vpiGetHandleByIndex;
 
   /* for traversing relationships */
   extern(C) vpiHandle vpi_handle (int type, vpiHandle refHandle);
-  alias vpi_handle vpiGetHandle;
 
   extern(C) vpiHandle vpi_handle_multi (int type, vpiHandle refHandle1,
 					vpiHandle refHandle2, ... );
-  alias vpi_handle_multi vpiGetHandleMulti;
 
   extern(C) vpiHandle vpi_iterate (int type, vpiHandle refHandle);
-  alias vpi_iterate vpiIterate;
 
   extern(C) vpiHandle vpi_scan (vpiHandle iterator);
-  alias vpi_scan vpiScan;
 
   /* for processing properties */
   extern(C) int vpi_get (int property, vpiHandle object);
-  alias vpi_get vpiGet;
 
   extern(C) long vpi_get64 (int property, vpiHandle object);
-  alias vpi_get64 vpiGet64;
 
   extern(C) char *vpi_get_str (int property, vpiHandle object);
-  alias vpi_get_str vpiGetStr;
 
   /* delay processing */
   extern(C) void vpi_get_delays (vpiHandle object, p_vpi_delay delay_p);
-  alias vpi_get_delays vpiGetDelays;
 
   extern(C) void vpi_put_delays (vpiHandle object, p_vpi_delay delay_p);
-  alias vpi_put_delays vpiPutDelays;
 
   /* value processing */
   extern(C) void vpi_get_value (vpiHandle expr, p_vpi_value value_p);
-  alias vpi_get_value vpiGetValue;
 
   extern(C) vpiHandle vpi_put_value (vpiHandle object, p_vpi_value value_p,
 				     p_vpi_time time_p, vpiDelayModeT flags);
-  alias vpi_put_value vpiPutValue;
 
   extern(C) void vpi_get_value_array (vpiHandle object,
 				      p_vpi_arrayvalue arrayvalue_p,
 				      int *index_p, uint num);
-  alias vpi_get_value_array vpiGetValueArray;
 
   extern(C) void vpi_put_value_array (vpiHandle object,
 				      p_vpi_arrayvalue arrayvalue_p,
 				      int *index_p, uint num);
-  alias vpi_put_value_array vpiPutValueArray;
 
   /* time processing */
   extern(C) void vpi_get_time (vpiHandle object, p_vpi_time time_p);
-  alias vpi_get_time vpiGetTime;
 
   /* I/O routines */
   extern(C) uint vpi_mcd_open (char *fileName);
-  alias vpi_mcd_open vpiMcdOpen;
 
   extern(C) uint vpi_mcd_close (uint mcd);
-  alias vpi_mcd_close vpiMcdClose;
 
   extern(C) char *vpi_mcd_name (uint cd);
   // TBD
@@ -946,61 +924,111 @@ version(COSIM_VERILOG) {
 
   /* utility routines */
   extern(C) int vpi_compare_objects (vpiHandle object1, vpiHandle object2);
-  alias vpi_compare_objects vpiCompareObjects;
 
   extern(C) int vpi_chk_error (p_vpi_error_info error_info_p);
-  alias vpi_chk_error vpiChkError;
 
   extern(C) int vpi_configure (int item, char *value);
-  alias vpi_configure vpiConfigure;
 
   /* vpi_free_object() is deprecated in 1800-2009 */
   extern(C) int vpi_free_object (vpiHandle object);
-  alias vpi_free_object vpiFreeObject;
 
   extern(C) int vpi_release_handle (vpiHandle object);
-  alias vpi_release_handle vpiReleaseHandle;
 
   extern(C) int vpi_get_vlog_info (p_vpi_vlog_info vlog_info_p);
-  alias vpi_get_vlog_info vpiGetVlogInfo;
 
   /* routines added with 1364-2001 */
   extern(C) int vpi_get_data (int id, char *dataLoc, int numOfBytes);
-  alias vpi_get_data vpiGetData;
 
   extern(C) int vpi_put_data (int id, char *dataLoc, int numOfBytes);
-  alias vpi_put_data vpiPutData;
 
   extern(C) void *vpi_get_userdata (vpiHandle obj);
-  alias vpi_get_userdata vpiGetUserdata;
 
   extern(C) int vpi_put_userdata (vpiHandle obj, void *userdata);
-  alias vpi_put_userdata vpiPutUserdata;
 
   // extern(C) int vpi_vprintf (char *format, va_list ap);
   // extern(C) int vpi_mcd_vprintf (uint mcd, char *format, va_list ap);
   extern(C) int vpi_flush ();
-  alias vpi_flush vpiFlush;
 
   extern(C) int vpi_mcd_flush (uint mcd);
-  alias vpi_mcd_flush vpiMcdFlush;
 
   extern(C) int vpi_control (int operation, ...);
-  alias vpi_control vpiControl;
 
   extern(C) vpiHandle vpi_handle_by_multi_index (vpiHandle obj, int num_index,
 						 int *index_array);
-  alias vpi_handle_by_multi_index vpiHandleByMultiIndex;
 
 
   /**************************** GLOBAL VARIABLES ****************************/
   // extern void (**vlog_startup_routines)();
   // extern void function() *vlog_startup_routines;
   alias void function() vpi_thunk;
-  alias vpi_thunk vpiThunk;
 
   extern vpi_thunk* vlog_startup_routines;
-  alias vlog_startup_routines vlogStartRoutines;
 
   /* array of function pointers, last pointer should be null */
+
+  // Meta Functions
+  void vpiGetValue(T)(vpiHandle handle, ref T t) {
+    s_vpi_value val;
+    import std.traits; // isIntegral
+    static if(isIntegral!T) {
+      val.format = vpiIntVal;
+      vpi_get_value(handle, &val);
+      t = cast(T) val.value.integer;
+    }
+    else {
+      static assert(false, "vpiGetValue not yet implemented for type: " ~
+		    T.stringof);
+    }
+  }
+  void vpiPutValue(T)(vpiHandle handle, T t) {
+    s_vpi_value val;
+    import std.traits; // isIntegral
+    static if(isIntegral!T) {
+      val.format = vpiIntVal;
+      val.value.integer = t;
+      vpi_put_value(handle, &val, null, vpiNoDelay);
+    }
+    else {
+      static assert(false, "vpiPutValue not yet implemented for type: " ~
+		    T.stringof);
+    }
+  }
+  
+  private void vpiGetNextValue(T)(vpiHandle iter, ref T t) {
+    vpiHandle handle = vpi_scan(iter);
+    assert(handle);
+    vpiGetValue(handle, t);
+  }
+  
+  private void vpiPutNextValue(T)(vpiHandle iter, T t) {
+    vpiHandle handle = vpi_scan(iter);
+    assert(handle);
+    vpiPutValue(handle, t);
+  }
+
+  private void vpiGetValuesByOne(U, T...)(vpiHandle iter, ref U u, ref T t) {
+    vpiGetNextValue(iter, u);
+    static if(T.length > 0) {
+      vpiGetValuesByOne(iter, t[0], t[1..$]);
+    }
+  }
+
+  void vpiGetValues(T...)(vpiHandle iter, ref T t) {
+    static if(T.length > 0) {
+      vpiGetValuesByOne(iter, t[0], t[1..$]);
+    }
+  }
+
+  private void vpiPutValuesByOne(U, T...)(vpiHandle iter, U u, T t) {
+    vpiPutNextValue(iter, u);
+    static if(T.length > 0) {
+      vpiPutValuesByOne(iter, t[0], t[1..$]);
+    }
+  }
+
+  void vpiPutValues(T...)(vpiHandle iter, T t) {
+    static if(T.length > 0) {
+      vpiPutValuesByOne(iter, t[0], t[1..$]);
+    }
+  }
 }
