@@ -6412,7 +6412,6 @@ class PoolThread: SimThread
 enum SimPhase : byte
   {   NONE = 0,
       BUILD,
-      ELABORATE,
       CONFIGURE,
       BINDEXEPORTS,
       BINDPORTS,
@@ -6471,18 +6470,15 @@ void execElab(T)(T t)
 	import std.stdio: writeln;
 	import std.exception: enforce;
 
-	// The BUILD Phase
-	// Instantiated modules and events are identified and constructed
-	// (using an explicit call to new operator) if these are not already
-	// instantiated
-
-	// The ELABORATE Phase
-	// All the instantiated modules/events get automatically named.
-	// Information regarding the parent/childObjs
-	// modules/events is also added as part of t phase
-	// At some stage we would like to include Tasks too.
-	writeln(">>>>>>>>>> Starting Phase: ELABORATE");
-	t.getSimulator.setPhase = SimPhase.ELABORATE;
+	// The BUILD Phase Instantiated modules and events are
+	// identified and constructed (using an explicit call to new
+	// operator) if these are not already instantiated All the
+	// instantiated modules/events get automatically named.
+	// Information regarding the parent/childObjs modules/events
+	// is also added as part of t phase At some stage we would
+	// like to include Tasks too.
+	writeln(">>>>>>>>>> Starting Phase: BUILD");
+	t.getSimulator.setPhase = SimPhase.BUILD;
 
  	t._esdl__elab(t, parallelize(ParallelPolicy._UNDEFINED_, ubyte.max));
 
@@ -7798,7 +7794,7 @@ class EsdlSimulator: EntityIntf
   }
 
   // Phase is defined in the SimContext interface class
-  // enum SimPhase : byte {BUILD, ELABORATE, CONFIGURE, BINDEXEPORTS, BINDPORTS, SIMULATE}
+  // enum SimPhase : byte {NONE, BUILD, CONFIGURE, BINDEXEPORTS, BINDPORTS, SIMULATE}
   @_esdl__ignore private long _updateCount = 0;	// increments each time update happens
 
   private RootThread _rootThread;
@@ -7846,7 +7842,7 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  protected SimPhase _phase = SimPhase.BUILD;
+  protected SimPhase _phase = SimPhase.NONE;
   public final SimPhase phase() {
     synchronized(this) {
       return this._phase;
