@@ -1550,7 +1550,6 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
     final private void hdlPut() {
       synchronized(this) {
-	// for now, get the value and display it
 	s_vpi_value v;
 	v.format = vpiVectorVal;
 	static if(isBitVector!T) {
@@ -1592,8 +1591,10 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     _curVal = _newVal;
     _changeEvent.post(0, _curVal);
     version(COSIM_VERILOG) {
-      if(this._updateReason !is UpdateReason.VERILOG) {
-	this.hdlPut();
+      if(netHandle) {	// only if the signal is bound to a Verilog net
+	if(this._updateReason !is UpdateReason.VERILOG) {
+	  this.hdlPut();
+	}
       }
     }
     static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
