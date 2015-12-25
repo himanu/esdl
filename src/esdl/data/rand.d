@@ -1417,6 +1417,7 @@ enum CstBinVecOp: byte
       SUB,
       MUL,
       DIV,
+      REM,
       LSH,
       RSH,
       BITINDEX,
@@ -1537,6 +1538,9 @@ abstract class RndVecExpr
     static if(op == "/") {
       return new RndVec2VecExpr(this, other, CstBinVecOp.DIV);
     }
+    static if(op == "%") {
+      return new RndVec2VecExpr(this, other, CstBinVecOp.REM);
+    }
     static if(op == "<<") {
       return new RndVec2VecExpr(this, other, CstBinVecOp.LSH);
     }
@@ -1570,6 +1574,9 @@ abstract class RndVecExpr
 	static if(op == "/") {
 	  return new RndVec2VecExpr(this, qq, CstBinVecOp.DIV);
 	}
+	static if(op == "%") {
+	  return new RndVec2VecExpr(this, qq, CstBinVecOp.REM);
+	}
 	static if(op == "<<") {
 	  return new RndVec2VecExpr(this, qq, CstBinVecOp.LSH);
 	}
@@ -1602,6 +1609,9 @@ abstract class RndVecExpr
 	}
 	static if(op == "/") {
 	  return new RndVec2VecExpr(qq, this, CstBinVecOp.DIV);
+	}
+	static if(op == "%") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.REM);
 	}
 	static if(op == "<<") {
 	  return new RndVec2VecExpr(qq, this, CstBinVecOp.LSH);
@@ -3213,14 +3223,28 @@ class RndVec2VecExpr: RndVecExpr
 	_rhs.getBDD(stage, buddy);
     case CstBinVecOp.SUB: return _lhs.getBDD(stage, buddy) -
 	_rhs.getBDD(stage, buddy);
-    case CstBinVecOp.MUL: return _lhs.getBDD(stage, buddy) *
-	_rhs.getBDD(stage, buddy);
-    case CstBinVecOp.DIV: return _lhs.getBDD(stage, buddy) /
-	_rhs.getBDD(stage, buddy);
-    case CstBinVecOp.LSH: return _lhs.getBDD(stage, buddy) <<
-	_rhs.getBDD(stage, buddy);
-    case CstBinVecOp.RSH: return _lhs.getBDD(stage, buddy) >>
-	_rhs.getBDD(stage, buddy);
+    case CstBinVecOp.MUL:
+      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) *
+			   _rhs.evaluate();
+      if(_lhs.isConst()) return _lhs.evaluate() *
+			   _rhs.getBDD(stage, buddy);
+      return _lhs.getBDD(stage, buddy) * _rhs.getBDD(stage, buddy);
+    case CstBinVecOp.DIV:
+      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) /
+			   _rhs.evaluate();
+      return _lhs.getBDD(stage, buddy) / _rhs.getBDD(stage, buddy);
+    case CstBinVecOp.REM:
+      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) %
+			   _rhs.evaluate();
+      return _lhs.getBDD(stage, buddy) % _rhs.getBDD(stage, buddy);
+    case CstBinVecOp.LSH:
+      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) <<
+			   _rhs.evaluate();
+      return _lhs.getBDD(stage, buddy) << _rhs.getBDD(stage, buddy);
+    case CstBinVecOp.RSH:
+      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) >>
+			   _rhs.evaluate();
+      return _lhs.getBDD(stage, buddy) >> _rhs.getBDD(stage, buddy);
     case CstBinVecOp.BITINDEX:
       assert(false, "BITINDEX is not implemented yet!");
     }
@@ -3238,6 +3262,7 @@ class RndVec2VecExpr: RndVecExpr
     case CstBinVecOp.SUB: return lvec -  rvec;
     case CstBinVecOp.MUL: return lvec *  rvec;
     case CstBinVecOp.DIV: return lvec /  rvec;
+    case CstBinVecOp.REM: return lvec %  rvec;
     case CstBinVecOp.LSH: return lvec << rvec;
     case CstBinVecOp.RSH: return lvec >> rvec;
     case CstBinVecOp.BITINDEX:

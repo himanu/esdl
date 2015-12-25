@@ -1994,7 +1994,6 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     public bool opEquals(string file = __FILE__,
 			 size_t line = __LINE__, V)(V other)
       if(isIntegral!V || isBoolean!V) {
-	reportX!(file, line)(other);
 	alias _bvec!(typeof(this), _bvec!V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;

@@ -57,6 +57,7 @@ class Bar: Foo
 
   Constraint! q{
     foo + pop + mom == 64;
+    pop % 3 == 0;
 
     pun1[0..4] == 0;
 

@@ -98,6 +98,7 @@ struct CstParser {
 	SUB,
 	MUL,
 	DIV,
+	REM,			// remainder
 	LSH,
 	RSH,
 	EQU,
@@ -106,7 +107,7 @@ struct CstParser {
 	NEQ,
 	GTH,
 	LTH,
-	LOGICIMP,			// Implication operator
+	LOGICIMP,		// Implication operator
 	LOGICAND,
 	LOGICOR,
 	INDEX,
@@ -160,6 +161,7 @@ struct CstParser {
       if(CST[srcCursor] == '-') tok = OpToken.SUB;
       if(CST[srcCursor] == '*') tok = OpToken.MUL;
       if(CST[srcCursor] == '/') tok = OpToken.DIV;
+      if(CST[srcCursor] == '%') tok = OpToken.REM;
       if(CST[srcCursor] == '<') tok = OpToken.LTH;
       if(CST[srcCursor] == '>') tok = OpToken.GTH;
       if(CST[srcCursor] == '[') tok = OpToken.INDEX;
@@ -1129,6 +1131,9 @@ struct CstParser {
 	break;
       case OpToken.DIV:
 	fill(" / ");
+	break;
+      case OpToken.REM:
+	fill(" % ");
 	break;
       case OpToken.LSH:
 	fill(" << ");

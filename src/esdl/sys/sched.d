@@ -57,8 +57,8 @@ size_t[] CPU_LIST() {
 }
 
 size_t CPU_COUNT() {
-  //  return sysconf(_SC_NPROCESSORS_ONLN);
-  return CPU_LIST().length;
+  return sysconf(_SC_NPROCESSORS_ONLN);
+  // return CPU_LIST().length;
 }
 
 size_t CPU_COUNT__() {
