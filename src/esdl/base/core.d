@@ -375,7 +375,7 @@ public auto _esdl__get_parallelism(size_t I, T)(T t) {
     // first check if the attribute is just @parallelize
     static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
 		       parallelize)) {
-      enum par = parallelize(byte.min, uint.max);
+      enum par = parallelize(ParallelPolicy.MULTI, uint.max);
     }
     else {
       enum par = __traits(getAttributes, t.tupleof[I])[P];
@@ -7422,19 +7422,19 @@ class EsdlHeapScheduler : EsdlScheduler
   }
 }
 
-interface RootEntityIntf // : EntityIntf
+interface RootEntityIntf: EntityIntf
 {
   import esdl.sync.barrier: Barrier;
-  private __gshared RootEntity[] _roots;
-  static void addRoot(RootEntity root) {
-    synchronized(typeid(RootEntity)) {
+  private __gshared RootEntityIntf[] _roots;
+  static void addRoot(RootEntityIntf root) {
+    synchronized(typeid(RootEntityIntf)) {
       _roots ~= root;
     }
   }
 
-  static void delRoot(RootEntity root) {
-    synchronized(typeid(RootEntity)) {
-      RootEntity[] roots;
+  static void delRoot(RootEntityIntf root) {
+    synchronized(typeid(RootEntityIntf)) {
+      RootEntityIntf[] roots;
       foreach(_root; _roots) {
 	if(_root !is root) {
 	  roots ~= _root;
@@ -7445,8 +7445,8 @@ interface RootEntityIntf // : EntityIntf
   }
 
   
-  static RootEntity[] allRoots() {
-    synchronized(typeid(RootEntity)) {
+  static RootEntityIntf[] allRoots() {
+    synchronized(typeid(RootEntityIntf)) {
       return _roots;
     }
   }
@@ -7508,109 +7508,106 @@ interface RootEntityIntf // : EntityIntf
   public void timePrecisionSet(bool s);
 
 
-  public SimTime nextSimTime();
-  void simulate(Time t);
-  void simulate(SimTime st = MAX_SIMULATION_TIME);
-  void simulateUpto(Time t);
-  void simulateUpto(SimTime st = MAX_SIMULATION_TIME);
-  public void joinSim();
-  public void join();
-  public void joinElab();
-  void fork(Time t);
-  void forkSim(Time t);
-  void fork(SimTime st = MAX_SIMULATION_TIME);
-  void forkSim(SimTime st = MAX_SIMULATION_TIME);
-  void forkSimUpto(Time t);
-  void forkSimUpto(SimTime st = MAX_SIMULATION_TIME);
-  public void joinSimEnd();
-  public void finish();
-  public void terminate();
   public void fileCaveat(NamedComp caveat);
   public void withdrawCaveat(NamedComp caveat);
 
+  final public SimTime nextSimTime() {
+    return getSimulator.nextSimTime();
+  }
+
+  final void simulate(Time t) {
+    forkSim(t);
+    joinSim();
+  }
+  final void simulate(SimTime st = MAX_SIMULATION_TIME) {
+    forkSim(st);
+    joinSim();
+  }
+  final void simulateUpto(Time t) {
+    forkSimUpto(t);
+    joinSim();
+  }
+  final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
+    forkSimUpto(st);
+    joinSim();
+  }
+  final public void joinSim() {
+    getSimulator.joinSim();
+  }
+  final public void join() {
+    getSimulator.joinSim();
+  }
+  final public void joinElab() {
+    getSimulator.joinElab();
+    addRoot(this);
+  }
+  final void fork(Time t) {
+    forkSim(t);
+  }
+  final void forkSim(Time t) {
+    getSimulator.forkSim(t);
+  }
+  final void fork(SimTime st = MAX_SIMULATION_TIME) {
+    forkSim(st);
+  }
+  final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
+    getSimulator.forkSim(st);
+  }
+  final void forkSimUpto(Time t) {
+    getSimulator.forkSimUpto(t);
+  }
+  final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
+    getSimulator.forkSimUpto(st);
+  }
+  final public void joinSimEnd() {
+    getSimulator.joinSimEnd();
+  }
+  final public void finish() {
+    this.killTree();
+    this.getSimulator.termStage();
+    // To handle the situation where the finish call gets made during a PAUSE
+    if(simPhase() == SimPhase.PAUSE) {
+      this.simulate(0.nsec);
+    }
+    // now if this thread is one of the tasks, it must stop
+    Process self = Process.self();
+    if(cast(BaseTask) self !is null) wait(0);
+    if(cast(BaseWorker) self !is null) wait(0);
+  }
+  final public void terminate() {
+    this.killTree();
+    this.getSimulator.termSim();
+    // To handle the situation where the terminate call gets made during a PAUSE
+    if(simPhase() == SimPhase.PAUSE) {
+      this.simulate(0.nsec);
+    }
+    version(COSIM_VERILOG) {
+      // pragma(msg, "Compiling COSIM_VERILOG version!");
+      import esdl.intf.vpi;
+      vpi_control(vpiFinish, 1);
+    }
+    // now if this thread is one of the tasks, it must stop
+    Process self = Process.self();
+    if(cast(BaseTask) self !is null) wait(0);
+    if(cast(BaseWorker) self !is null) wait(0);
+  }
+
+  final public SimPhase getSimPhase() {
+    auto simulator = getSimulator();
+    synchronized(simulator) {
+      return getSimulator()._phase;
+    }
+  }
+
+  final public bool isTerminated() {
+    return getSimPhase() == SimPhase.SIMULATION_DONE;
+  }
+
   mixin template RootEntityMixin() {
+    // This is for EntityIntf that we inherited
+    mixin Elaboration;
+
     // This function shall return 0 if some delta event/or channel update is pending
-    final public SimTime nextSimTime() {
-      return getSimulator.nextSimTime();
-    }
-
-    final void simulate(Time t) {
-      forkSim(t);
-      joinSim();
-    }
-    final void simulate(SimTime st = MAX_SIMULATION_TIME) {
-      forkSim(st);
-      joinSim();
-    }
-    final void simulateUpto(Time t) {
-      forkSimUpto(t);
-      joinSim();
-    }
-    final void simulateUpto(SimTime st = MAX_SIMULATION_TIME) {
-      forkSimUpto(st);
-      joinSim();
-    }
-    final public void joinSim() {
-      getSimulator.joinSim();
-    }
-    final public void join() {
-      getSimulator.joinSim();
-    }
-    final public void joinElab() {
-      getSimulator.joinElab();
-      addRoot(this);
-    }
-    final void fork(Time t) {
-      forkSim(t);
-    }
-    final void forkSim(Time t) {
-      getSimulator.forkSim(t);
-    }
-    final void fork(SimTime st = MAX_SIMULATION_TIME) {
-      forkSim(st);
-    }
-    final void forkSim(SimTime st = MAX_SIMULATION_TIME) {
-      getSimulator.forkSim(st);
-    }
-    final void forkSimUpto(Time t) {
-      getSimulator.forkSimUpto(t);
-    }
-    final void forkSimUpto(SimTime st = MAX_SIMULATION_TIME) {
-      getSimulator.forkSimUpto(st);
-    }
-    final public void joinSimEnd() {
-      this.getSimulator.joinSimEnd();
-    }
-    final public void finish() {
-      this.killTree();
-      this.getSimulator.termStage();
-      // To handle the situation where the finish call gets made during a PAUSE
-      if(simPhase() == SimPhase.PAUSE) {
-	this.simulate(0.nsec);
-      }
-      // now if this thread is one of the tasks, it must stop
-      Process self = Process.self();
-      if(cast(BaseTask) self !is null) wait(0);
-      if(cast(BaseWorker) self !is null) wait(0);
-    }
-    final public void terminate() {
-      this.killTree();
-      this.getSimulator.termSim();
-      // To handle the situation where the terminate call gets made during a PAUSE
-      if(simPhase() == SimPhase.PAUSE) {
-	this.simulate(0.nsec);
-      }
-      version(COSIM_VERILOG) {
-	// pragma(msg, "Compiling COSIM_VERILOG version!");
-	import esdl.intf.vpi;
-	vpi_control(vpiFinish, 1);
-      }
-      // now if this thread is one of the tasks, it must stop
-      Process self = Process.self();
-      if(cast(BaseTask) self !is null) wait(0);
-      if(cast(BaseWorker) self !is null) wait(0);
-    }
-
     // Caveats -- determining the end of simulation
     NamedComp[] _caveats;
 
@@ -7657,7 +7654,7 @@ interface RootEntityIntf // : EntityIntf
   }
 }
 
-abstract class RootEntity: Entity, RootEntityIntf
+abstract class RootEntity: RootEntityIntf
 {
 
   mixin RootEntityMixin;
