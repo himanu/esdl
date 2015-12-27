@@ -26,7 +26,7 @@ import esdl.data.bvec: isBitVector;
 import std.traits: isArray, isIntegral;
 import std.random: Random, uniform;
 
-import esdl.sys.sched: stickToCpuCore, CPU_COUNT;
+import esdl.sys.sched: stickToCpuCore, CPU_COUNT, CPU_COUNT_AFFINITY, CPU_LIST;
 import unstd.memory.weakref;
 
 alias void delegate() DelegateThunk;
@@ -620,6 +620,7 @@ public interface HierComp: NamedComp, ParContext
     }
 
     public final void _esdl__setParConfig(parallelize linfo) {
+      _esdl__setEntityMutex(linfo);
       // default for root
       ParConfig parentCfg = null;
       parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
@@ -1192,18 +1193,15 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
       }
   }
 
-void _esdl__configArray(FOO, L)(ref L l, Time tinfo// , uint[] indices=null
-				)
+void _esdl__configArray(FOO, L, ATTR)(ref L l, ATTR attr)
 {
   for(size_t j = 0; j < l.length; ++j) {
     // pragma(msg, "Adding: ", typeof(l[j]));
     static if(isArray!(typeof(l[j]))) {
-      _esdl__configArray!(FOO)(l[j], tinfo//, indices ~ cast(uint) j
-			       );
+      _esdl__configArray!(FOO)(l[j], attr);
     }
     else {
-      l[j]._esdl__config!(FOO)(l[j], tinfo// , indices ~ cast(uint) j
-			       );
+      l[j]._esdl__config!(FOO)(l[j], attr);
     }
   }
 }
@@ -1586,7 +1584,7 @@ public interface ElabContext: HierComp
     }
   }
 
-  static void _esdl__config(FOO, L)(L l, Time time) {
+  static void _esdl__config(FOO, L, ATTR)(L l, ATTR attr) {
     // debug(ATTRCONFIG) {
     //   import std.stdio;
     //   writeln("** ElabContext: Fooorating " ~ l.tupleof[I].stringof ~ ":" ~
@@ -1598,21 +1596,21 @@ public interface ElabContext: HierComp
 		    "other ElabContext components");
       static if(is(FOO == timePrecision)) {
 	Time tpinfo;
-	if(time.isZero) {
+	if(attr.isZero) {
 	  tpinfo = _esdl__get_timePrecision(l);
 	}
 	else {
-	  tpinfo = time;
+	  tpinfo = attr;
 	}
 	l._esdl__setTimePrecision(tpinfo);
       }
       static if(is(FOO == timeUnit)) {
 	Time tuinfo;
-	if(time.isZero) {
+	if(attr.isZero) {
 	  tuinfo = _esdl__get_timeUnit(l);
 	}
 	else {
-	  tuinfo = time;
+	  tuinfo = attr;
 	}
 	l._esdl__setTimeUnit(tuinfo);
       }
@@ -1631,7 +1629,6 @@ public interface ElabContext: HierComp
       }
       l.doBuild();
       l._esdl__postBuild();
-      l._esdl__setEntityMutex(linfo);
       l._esdl__setParConfig(linfo);
       _esdl__elabMems(l);
       l._esdl__postElab();
@@ -6353,7 +6350,7 @@ class PoolThread: SimThread
   private final void execTaskProcesses(size_t fcore=0) {
     // First set affinity
     _esdl__root.simulator()._executor._poolThreadInitBarrier.wait();
-    stickToCpuCore(_poolIndex + fcore % CPU_COUNT());
+    stickToCpuCore(_poolIndex + fcore % getRoot().getNumMultiCore());
     while(true) {
       // wait for next cycle
       _esdl__root.simulator()._executor._poolThreadExecBarrier.wait();
@@ -7749,17 +7746,26 @@ abstract class RootEntity: RootEntityIntf
     return _esdl__numMultiCore;
   }
 
-  public void multiCore(size_t ncore = CPU_COUNT(), size_t fcore = 0) {
+  static size_t cpuCount() {
     version(COSIM_VERILOG) {
-      // Mentor Questa tool does not like the next few lines
+      return CPU_COUNT();
     }
     else {
-      if(CPU_COUNT() < ncore) {
-	import std.conv: to;
-	assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
-	       " threads are avaialbe for execution");
-      }
+      return CPU_COUNT_AFFINITY();
     }
+  }
+  
+  public void multiCore(size_t ncore = cpuCount(), size_t fcore = 0) {
+    // version(COSIM_VERILOG) {
+    //   // Mentor Questa tool does not like the next few lines
+    // }
+    // else {
+    if(cpuCount() < ncore) {
+      import std.conv: to;
+      assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
+	     " threads are avaialbe for execution");
+    }
+    // }
     _esdl__numMultiCore = ncore;
     _esdl__numFirstCore = fcore;
   }
