@@ -141,6 +141,7 @@ void main()
   // top level module
   TrafficRoot theRoot = new TrafficRoot("theRoot");
   theRoot.elaborate();
+  theRoot.multiCore(4, 0);
   // theRoot.waitElab();
   // theRoot.simulate(100.nsec);
   // theRoot.waitSim();

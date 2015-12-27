@@ -12,14 +12,15 @@ class Foo: Entity {
   void hello() {
     writeln("Greetings from: ",
 	    Process.self.getFullName());
+    writeln("Thread: ", getParConfig().getThreadIndex());
     Bit!233 foo = urandom!(Bit!233);
     writeln(foo);
   }
   Task!hello greet[2];
   Worker!hello greetWorld[2];
   static this() {
-    import std.stdio;
-    writeln("hehe");
+    // import std.stdio;
+    // writeln("hehe");
   }
 }
 @timeUnit(1.nsec)
