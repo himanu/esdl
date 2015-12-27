@@ -665,6 +665,89 @@ public interface HierComp: NamedComp, ConfigContext
       mixin(THUNK);
     }
 
+    // Create a new Semaphore for a given HierComp when required,
+    // based on the UDP option @parallelize. This function is called
+    // during the elaboration phase.
+    public final void _esdl__setEntityMutex(parallelize linfo) {
+      // defaults for root
+      CoreSemaphore parentLock = null;
+      parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
+      // but if not root then get from parent
+      if(getParent !is this && getParent !is null) {
+	parentLock = getParent._esdl__getParLock;
+	plinfo = getParent._esdl__getParInfo;
+      }
+      if(linfo._parallel == ParallelPolicy._UNDEFINED_) {
+	// take hier information
+	_esdl__parInfo = plinfo;
+	if(plinfo._parallel == ParallelPolicy.MULTI) {
+	  // UDP @parallelize without argument
+	  _esdl__parLock = null;
+	}
+	else if(plinfo._parallel == ParallelPolicy.INHERIT) {
+	  _esdl__parLock = parentLock;
+	}
+	else {
+	  _esdl__parLock = new CoreSemaphore(plinfo._parallel);
+	}
+      }
+      else {
+	if(plinfo._parallel == ParallelPolicy.INHERIT) {
+	  // FIXME -- give out warning
+	}
+	_esdl__parInfo = linfo;
+	if(linfo._parallel == ParallelPolicy.MULTI) {	// parallelize
+	  _esdl__parLock = null;
+	}
+	else if(linfo._parallel == ParallelPolicy.INHERIT) {
+	  _esdl__parLock = new CoreSemaphore(1);
+	}
+	else {
+	  _esdl__parLock = new CoreSemaphore(linfo._parallel);
+	}
+      }
+    }
+
+    public ParContext _esdl__parInheritFrom() {
+      auto parent = cast(HierComp) this.getParent();
+      assert(parent !is null);
+      return parent;
+    }
+
+    public uint _esdl__parComponentId() {
+      return _esdl__compId;
+    }
+
+    public final void _esdl__setParConfig(parallelize linfo) {
+      _esdl__setEntityMutex(linfo);
+      // default for root
+      ParConfig parentCfg = null;
+      parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
+      if(getParent !is this && getParent !is null) {
+	parentCfg = getParent.getParConfig;
+	plinfo = getParent._esdl__getParInfo;
+      }
+      if(linfo._parallel == ParallelPolicy._UNDEFINED_) { // take hier information
+	_esdl__parInfo = plinfo;
+      }
+      else {
+	_esdl__parInfo = linfo;
+      }
+
+      if(_esdl__parInfo._parallel == ParallelPolicy.INHERIT) {
+	_esdl__parConfig = parentCfg;
+      }
+      else {
+	auto nthreads = getSimulator._executor._poolThreads.length;
+	if(_esdl__parInfo._poolIndex != uint.max) {
+	  assert(_esdl__parInfo._poolIndex < nthreads);
+	  _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
+	}
+	else {
+	  _esdl__parConfig = new ParConfig(_esdl__parComponentId() % nthreads);
+	}
+      }
+    }
 
     mixin NamedMixin;
   }
@@ -1218,93 +1301,6 @@ public interface ParContext
     // set durin gthe elaboration
     public final CoreSemaphore _esdl__getParLock() {
       return _esdl__parLock;
-    }
-
-    static if(is(typeof(this): HierComp)) {
-      // Create a new Semaphore for a given HierComp when required,
-      // based on the UDP option @parallelize. This function is called
-      // during the elaboration phase.
-      public final void _esdl__setEntityMutex(parallelize linfo) {
-	// defaults for root
-	CoreSemaphore parentLock = null;
-	parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
-	// but if not root then get from parent
-	if(getParent !is this && getParent !is null) {
-	  parentLock = getParent._esdl__getParLock;
-	  plinfo = getParent._esdl__getParInfo;
-	}
-	if(linfo._parallel == ParallelPolicy._UNDEFINED_) {
-	  // take hier information
-	  _esdl__parInfo = plinfo;
-	  if(plinfo._parallel == ParallelPolicy.MULTI) {
-	    // UDP @parallelize without argument
-	    _esdl__parLock = null;
-	  }
-	  else if(plinfo._parallel == ParallelPolicy.INHERIT) {
-	    _esdl__parLock = parentLock;
-	  }
-	  else {
-	    _esdl__parLock = new CoreSemaphore(plinfo._parallel);
-	  }
-	}
-	else {
-	  if(plinfo._parallel == ParallelPolicy.INHERIT) {
-	    // FIXME -- give out warning
-	  }
-	  _esdl__parInfo = linfo;
-	  if(linfo._parallel == ParallelPolicy.MULTI) {	// parallelize
-	    _esdl__parLock = null;
-	  }
-	  else if(linfo._parallel == ParallelPolicy.INHERIT) {
-	    _esdl__parLock = new CoreSemaphore(1);
-	  }
-	  else {
-	    _esdl__parLock = new CoreSemaphore(linfo._parallel);
-	  }
-	}
-      }
-
-      public ParContext _esdl__parInheritFrom() {
-	auto parent = cast(HierComp) this.getParent();
-	assert(parent !is null);
-	return parent;
-      }
-
-      public uint _esdl__parComponentId() {
-	return _esdl__compId;
-      }
-
-      public final void _esdl__setParConfig(parallelize linfo) {
-	_esdl__setEntityMutex(linfo);
-	// default for root
-	ParConfig parentCfg = null;
-	parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
-	if(getParent !is this && getParent !is null) {
-	  parentCfg = getParent.getParConfig;
-	  plinfo = getParent._esdl__getParInfo;
-	}
-	if(linfo._parallel == ParallelPolicy._UNDEFINED_) { // take hier information
-	  _esdl__parInfo = plinfo;
-	}
-	else {
-	  _esdl__parInfo = linfo;
-	}
-
-	if(_esdl__parInfo._parallel == ParallelPolicy.INHERIT) {
-	  _esdl__parConfig = parentCfg;
-	}
-	else {
-	  auto nthreads = getSimulator._executor._poolThreads.length;
-	  if(_esdl__parInfo._poolIndex != uint.max) {
-	    assert(_esdl__parInfo._poolIndex < nthreads);
-	    _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
-	  }
-	  else {
-	    _esdl__parConfig = new ParConfig(_esdl__parComponentId() % nthreads);
-	  }
-	}
-      }
-    
     }
   }
 }
