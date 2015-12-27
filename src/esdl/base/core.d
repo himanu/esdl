@@ -548,7 +548,7 @@ public interface HierComp: NamedComp, ConfigContext
 
   mixin template HierMixin()
   {
-    mixin ParContextMixin;
+    mixin ConfigMixin;
 
     static if(!__traits(compiles, _esdl__compId)) {
       private uint _esdl__compId = uint.max;
@@ -1461,8 +1461,10 @@ public interface ElabContext: HierComp
     }
   }
 
-  mixin template HierContextMixin()
+  mixin template ElabContextMixin()
   {
+    mixin HierMixin;
+    
     // Arrays for ports and exports. These variables are effectively
     // immutable since (ex)ports are added to them only during
     // elaboration.
@@ -1565,282 +1567,277 @@ public interface ElabContext: HierComp
       this._esdl__elab(this);
     }
 
-    static if(! is(typeof(this): Procedure)) {
-      // The Process and Routine classes would have only child
-      // processes and not other hierarchy to track. There may be
-      // Events and Channels etc declared inside a process' body but
-      // a process will not keep track of these objects as it child
-      // objects -- no useful purpose is served .
-      static if(! is(typeof(this): Procedure)) {
-	static if(!__traits(compiles, _esdl__childObjs)) {
-	  @_esdl__ignore protected NamedComp[] _esdl__childObjs;
-	}
+    // The Process and Routine classes would have only child
+    // processes and not other hierarchy to track. There may be
+    // Events and Channels etc declared inside a process' body but
+    // a process will not keep track of these objects as it child
+    // objects -- no useful purpose is served .
+    static if(!__traits(compiles, _esdl__childObjs)) {
+      @_esdl__ignore protected NamedComp[] _esdl__childObjs;
+    }
 
-	static if(!__traits(compiles, _esdl__childTasks)) {
-	  @_esdl__ignore protected Process[] _esdl__childTasks;
-	}
+    static if(!__traits(compiles, _esdl__childTasks)) {
+      @_esdl__ignore protected Process[] _esdl__childTasks;
+    }
 
-	static if(!__traits(compiles, _esdl__childComps)) {
-	  @_esdl__ignore protected EntityIntf[] _esdl__childComps;
-	}
+    static if(!__traits(compiles, _esdl__childComps)) {
+      @_esdl__ignore protected EntityIntf[] _esdl__childComps;
+    }
 
-	static if(__traits(isAbstractFunction, getChildObjs)) {
-	  public final override NamedComp[] getChildObjs() {
-	    // _esdl__childObjs is effectively immutable
-	    return this._esdl__childObjs;
-	  }
-	}
+    static if(__traits(isAbstractFunction, getChildObjs)) {
+      public final override NamedComp[] getChildObjs() {
+	// _esdl__childObjs is effectively immutable
+	return this._esdl__childObjs;
       }
+    }
 
-      // Returns only the static(frozen during elaboration)
-      // hierarchical objects
-      static if(__traits(isAbstractFunction, getChildObjsHier)) {
-	public final override NamedComp[] getChildObjsHier() {
-	  NamedComp[] children = getChildObjs();
-	  foreach(child; getChildComps()) {
-	    children ~= child.getChildObjsHier();
-	  }
-	  return children;
+    // Returns only the static(frozen during elaboration)
+    // hierarchical objects
+    static if(__traits(isAbstractFunction, getChildObjsHier)) {
+      public final override NamedComp[] getChildObjsHier() {
+	NamedComp[] children = getChildObjs();
+	foreach(child; getChildComps()) {
+	  children ~= child.getChildObjsHier();
 	}
+	return children;
       }
+    }
 
-      static if(__traits(isAbstractFunction, getChildTasks)) {
-	public final override Process[] getChildTasks() {
-	  // Though the scheduler does modify _esdl__childTasks as and
-	  // when processes get spawned or die out, the variable can
-	  // be treated as effectively immutable since the scheduler
-	  // works with single thread
-	  return this._esdl__childTasks;
+    static if(__traits(isAbstractFunction, getChildTasks)) {
+      public final override Process[] getChildTasks() {
+	// Though the scheduler does modify _esdl__childTasks as and
+	// when processes get spawned or die out, the variable can
+	// be treated as effectively immutable since the scheduler
+	// works with single thread
+	return this._esdl__childTasks;
+      }
+    }
+
+    // Returns only the static tasks. Only Entities are traversed as
+    // hierarchy
+    static if(__traits(isAbstractFunction, getChildTasksHier)) {
+      public final override Process[] getChildTasksHier() {
+	Process[] children = getChildTasks();
+	foreach(child; getChildComps()) {
+	  children ~= child.getChildTasksHier();
 	}
+	return children;
       }
+    }
 
-      // Returns only the static tasks. Only Entities are traversed as
-      // hierarchy
-      static if(__traits(isAbstractFunction, getChildTasksHier)) {
-	public final override Process[] getChildTasksHier() {
-	  Process[] children = getChildTasks();
-	  foreach(child; getChildComps()) {
-	    children ~= child.getChildTasksHier();
-	  }
-	  return children;
+    static if(__traits(isAbstractFunction, _esdl__getChildProcs)) {
+      // When called on an entity, returns the  static tasks. Same
+      // behaviour as getChildTasks
+      protected final override Process[] _esdl__getChildProcs() {
+	// Though the scheduler does modify _esdl__childProcs as and
+	// when processes get spawned or die out, the variable can
+	// be treated as effectively immutable since the scheduler
+	// works with single thread
+	return _esdl__childTasks; // this._esdl__childProcs;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, _esdl__getChildProcsHier)) {
+      // When called for an entity, returns the static tasks and the
+      // dynamic child hierarchy thereof. This function may be
+      // called only in the scheduling phase
+      protected final override Process[] _esdl__getChildProcsHier() {
+	Process[] children = _esdl__getChildProcs();
+	foreach(child; getChildComps()) {
+	  children ~= child._esdl__getChildProcsHier();
 	}
+	return children;
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__getChildProcs)) {
-	// When called on an entity, returns the  static tasks. Same
-	// behaviour as getChildTasks
-	protected final override Process[] _esdl__getChildProcs() {
-	  // Though the scheduler does modify _esdl__childProcs as and
-	  // when processes get spawned or die out, the variable can
-	  // be treated as effectively immutable since the scheduler
-	  // works with single thread
-	  return _esdl__childTasks; // this._esdl__childProcs;
+    static if(__traits(isAbstractFunction, getChildComps)) {
+      // Return the child components.
+      public final EntityIntf[] getChildComps() {
+	// _esdl__childComps is effectively immutable
+	return this._esdl__childComps;
+      }
+    }
+
+    static if(__traits(isAbstractFunction, getChildCompsHier)) {
+      // Return all the components in the static hierarchy.
+      public final EntityIntf[] getChildCompsHier() {
+	EntityIntf[] children = getChildComps();
+	foreach(child; getChildComps()) {
+	  children ~= child.getChildCompsHier();
 	}
+	return children;
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__getChildProcsHier)) {
-	// When called for an entity, returns the static tasks and the
-	// dynamic child hierarchy thereof. This function may be
-	// called only in the scheduling phase
-	protected final override Process[] _esdl__getChildProcsHier() {
-	  Process[] children = _esdl__getChildProcs();
-	  foreach(child; getChildComps()) {
-	    children ~= child._esdl__getChildProcsHier();
-	  }
-	  return children;
-	}
-      }
-
-      static if(__traits(isAbstractFunction, getChildComps)) {
-	// Return the child components.
-	public final EntityIntf[] getChildComps() {
-	  // _esdl__childComps is effectively immutable
-	  return this._esdl__childComps;
-	}
-      }
-
-      static if(__traits(isAbstractFunction, getChildCompsHier)) {
-	// Return all the components in the static hierarchy.
-	public final EntityIntf[] getChildCompsHier() {
-	  EntityIntf[] children = getChildComps();
-	  foreach(child; getChildComps()) {
-	    children ~= child.getChildCompsHier();
-	  }
-	  return children;
-	}
-      }
-
-      static if(__traits(isAbstractFunction, _esdl__addChildObj)) {
-	// Add object as child of this parent. This function is called
-	// only during the elaboration phase for the purpose of
-	// creation of object hierarchy.
-	public final override void _esdl__addChildObj(NamedComp child) {
-	  synchronized(this) {
-	    bool add = true;
-	    debug(DUPLICATE_CHILD) {
-	      foreach(ref _child; this._esdl__childObjs) {
-		if(child is _child) {
-		  add = false;
-		  break;
-		}
+    static if(__traits(isAbstractFunction, _esdl__addChildObj)) {
+      // Add object as child of this parent. This function is called
+      // only during the elaboration phase for the purpose of
+      // creation of object hierarchy.
+      public final override void _esdl__addChildObj(NamedComp child) {
+	synchronized(this) {
+	  bool add = true;
+	  debug(DUPLICATE_CHILD) {
+	    foreach(ref _child; this._esdl__childObjs) {
+	      if(child is _child) {
+		add = false;
+		break;
 	      }
 	    }
-	    if(add) this._esdl__childObjs ~= child;
 	  }
+	  if(add) this._esdl__childObjs ~= child;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__addChildTask)) {
-	// We maintain a list of static tasks in the entities in order
-	// to avoid incurring efficiency loss because of any dynamic
-	// casting.
-	public final override void _esdl__addChildTask(Process child) {
-	  synchronized(this) {
-	    bool add = true;
-	    debug(DUPLICATE_CHILD) {
-	      foreach(ref _child; this._esdl__childTasks) {
-		if(child is _child) {
-		  add = false;
-		  break;
-		}
+    static if(__traits(isAbstractFunction, _esdl__addChildTask)) {
+      // We maintain a list of static tasks in the entities in order
+      // to avoid incurring efficiency loss because of any dynamic
+      // casting.
+      public final override void _esdl__addChildTask(Process child) {
+	synchronized(this) {
+	  bool add = true;
+	  debug(DUPLICATE_CHILD) {
+	    foreach(ref _child; this._esdl__childTasks) {
+	      if(child is _child) {
+		add = false;
+		break;
 	      }
 	    }
-	    if(add) this._esdl__childTasks ~= child;
 	  }
+	  if(add) this._esdl__childTasks ~= child;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, _esdl__addChildComp)) {
-	// To help build a list of hierarchical components.
-	public final void _esdl__addChildComp(EntityIntf child) {
-	  synchronized(this) {
-	    bool add = true;
-	    debug(DUPLICATE_CHILD) {
-	      foreach(ref _child; this._esdl__childComps) {
-		if(child is _child) {
-		  add = false;
-		  break;
-		}
+    static if(__traits(isAbstractFunction, _esdl__addChildComp)) {
+      // To help build a list of hierarchical components.
+      public final void _esdl__addChildComp(EntityIntf child) {
+	synchronized(this) {
+	  bool add = true;
+	  debug(DUPLICATE_CHILD) {
+	    foreach(ref _child; this._esdl__childComps) {
+	      if(child is _child) {
+		add = false;
+		break;
 	      }
 	    }
-	    if(add) this._esdl__childComps ~= child;
 	  }
+	  if(add) this._esdl__childComps ~= child;
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, suspend)) {
-	// suspend all the tasks of an entity
-	public final void suspend() {
-	  foreach(task; getChildTasks()) {
-	    task.suspend();
-	  }
+    static if(__traits(isAbstractFunction, suspend)) {
+      // suspend all the tasks of an entity
+      public final void suspend() {
+	foreach(task; getChildTasks()) {
+	  task.suspend();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, suspendTree)) {
-	// suspend all the tasks and processes hierarchically for an
-	// entity.
-	public final void suspendTree() {
-	  foreach(task; getChildTasks()) {
-	    task.suspendTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.suspendTree();
-	  }
+    static if(__traits(isAbstractFunction, suspendTree)) {
+      // suspend all the tasks and processes hierarchically for an
+      // entity.
+      public final void suspendTree() {
+	foreach(task; getChildTasks()) {
+	  task.suspendTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.suspendTree();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, disable)) {
-	// disable all the tasks of an entity.
-	public final void disable() {
-	  foreach(task; getChildTasks()) {
-	    task.disable();
-	  }
+    static if(__traits(isAbstractFunction, disable)) {
+      // disable all the tasks of an entity.
+      public final void disable() {
+	foreach(task; getChildTasks()) {
+	  task.disable();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, disableTree)) {
-	// disable all tasks and processes hierarchically for an
-	// entity.
-	public final void disableTree() {
-	  foreach(task; getChildTasks()) {
-	    task.disableTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.disableTree();
-	  }
+    static if(__traits(isAbstractFunction, disableTree)) {
+      // disable all tasks and processes hierarchically for an
+      // entity.
+      public final void disableTree() {
+	foreach(task; getChildTasks()) {
+	  task.disableTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.disableTree();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, abort)) {
-	// abort all tasks
-	public final void abort() {
-	  foreach(task; getChildTasks()) {
-	    task.abort();
-	  }
+    static if(__traits(isAbstractFunction, abort)) {
+      // abort all tasks
+      public final void abort() {
+	foreach(task; getChildTasks()) {
+	  task.abort();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, abortTree)) {
-	// abort all tasks and ptocesses thereof hierarchically
-	public final void abortTree() {
-	  foreach(task; getChildTasks()) {
-	    task.abortTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.abortTree();
-	  }
+    static if(__traits(isAbstractFunction, abortTree)) {
+      // abort all tasks and ptocesses thereof hierarchically
+      public final void abortTree() {
+	foreach(task; getChildTasks()) {
+	  task.abortTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.abortTree();
 	}
       }
+    }
 
-      static if(! __traits(compiles, kill())) {
-	// kill all tasks
-	public final void kill() {
-	  foreach(task; getChildTasks()) {
-	    task.kill();
-	  }
+    static if(! __traits(compiles, kill())) {
+      // kill all tasks
+      public final void kill() {
+	foreach(task; getChildTasks()) {
+	  task.kill();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, killTree)) {
-	// kill all tasks and ptocesses thereof hierarchically
-	public final void killTree() {
-	  foreach(task; getChildTasks()) {
-	    task.killTree();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.killTree();
-	  }
+    static if(__traits(isAbstractFunction, killTree)) {
+      // kill all tasks and ptocesses thereof hierarchically
+      public final void killTree() {
+	foreach(task; getChildTasks()) {
+	  task.killTree();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.killTree();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, resume)) {
-	// resume a suspended entity
-	public final void resume() {
-	  foreach(task; getChildTasks()) {
-	    task.resume();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.resume();
-	  }
+    static if(__traits(isAbstractFunction, resume)) {
+      // resume a suspended entity
+      public final void resume() {
+	foreach(task; getChildTasks()) {
+	  task.resume();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.resume();
 	}
       }
+    }
 
-      static if(__traits(isAbstractFunction, enable)) {
-	// enable a disabled an entity
-	public final void enable() {
-	  foreach(task; getChildTasks()) {
-	    task.enable();
-	  }
-	  foreach(comp; getChildComps()) {
-	    comp.enable();
-	  }
+    static if(__traits(isAbstractFunction, enable)) {
+      // enable a disabled an entity
+      public final void enable() {
+	foreach(task; getChildTasks()) {
+	  task.enable();
+	}
+	foreach(comp; getChildComps()) {
+	  comp.enable();
 	}
       }
     }
   }
 }
-
 
 // Any object that can poke/trigger an event
 interface EventAgent
@@ -4461,9 +4458,7 @@ interface EntityIntf: ElabContext, SimContext
   {
     static if (! __traits(compiles, _esdl__Elaboration)) {
       enum _esdl__Elaboration;
-      mixin ConfigMixin;
-      mixin HierMixin;
-      mixin HierContextMixin;
+      mixin ElabContextMixin;
     }
     else {
       alias typeof(this) _esdl__elab_type;
@@ -5117,7 +5112,6 @@ class BaseRoutine: Process
 abstract class Process: Procedure, HierComp, EventClient
 {
   
-  mixin ConfigMixin;
   mixin HierMixin;
 
   __gshared size_t _procCount;
@@ -6316,11 +6310,6 @@ class RootThread: Procedure
       _esdl__elabMems(l);
     }
   }
-
-  // FIXME
-  // void kill() {}
-
-  // mixin HierMixin;
 }
 
 
@@ -8477,6 +8466,7 @@ interface ConfigContext: TimeContext, ParContext
 
   mixin template ConfigMixin()
   {
+    mixin ParContextMixin;
     protected ulong _timeScale = 0;
 
     override protected void _esdl__setTimeUnit(Time t) {
@@ -8581,7 +8571,7 @@ interface ConfigContext: TimeContext, ParContext
 	  this._timeScale = scale;
 	}
 
-	static if(! is(typeof(this): Procedure)) {
+	static if(is(typeof(this): EntityIntf)) {
 	  foreach(ref c; this._esdl__childObjs) {
 	    if(ConfigContext m = cast(ConfigContext) c) {
 	      synchronized(m) {
@@ -8594,8 +8584,6 @@ interface ConfigContext: TimeContext, ParContext
       }
     }
   }
-
-
 }
 
 struct SimTime
