@@ -3780,9 +3780,7 @@ final class EventNotice
   }
 }
 
-
-
-abstract class Procedure: NamedComp
+interface Procedure: NamedComp
 {
   // returns true if the process was spawned at run time
   // on the other hand if the process was created at time of
