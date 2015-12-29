@@ -6465,14 +6465,15 @@ void terminateAllRoots() {
   RootEntity.terminateAll();
 }
 
-void forkElab(T)(T t)
+void forkElab(T)(T t, string name)
 {
+  t._esdl__setName(name);
   t.getSimulator.elabRootThread(t);
 }
 
-void elaborate(T)(T t)
+void elaborate(T)(T t, string name)
 {
-  t.forkElab();
+  t.forkElab(name);
   t.joinElab();
 }
 
@@ -7680,11 +7681,8 @@ abstract class RootEntity: RootEntityIntf
     return _simulator;
   }
 
-  this(string name) {
+  this() {
     synchronized(this) {
-      if(name == "") assert(false,
-			    "Must provide a valid name to the Root Entiry");
-      this._esdl__setName(name);
       _simulator = new EsdlSimulator(this);
       _esdl__root = this;
       _esdl__parent = this;
@@ -8761,9 +8759,6 @@ private ubyte _log10(ulong n) {
 
 class Root(T): RootEntity if(is(T: EntityIntf))
   {
-    this(string name) {
-      super(name);
-    }
     mixin("Inst!T " ~ T.stringof ~ "Instance;\n");
 }
 
@@ -8785,9 +8780,9 @@ public void withdrawCaveat() {
 
 public void simulate(T)(string name,
 			uint multi=1, uint first=0) {
-  auto root = new Root!T(name);
+  auto root = new Root!T();
   root.multiCore(multi, first);
-  root.elaborate();
+  root.elaborate(name);
   root.simulate();
 }
 

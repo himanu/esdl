@@ -40,21 +40,14 @@ class Foo: Entity {
 @timeUnit(100.psec)
 @parallelize
 class Sim: RootEntity {
-  
-  this(string name)
-    {
-      super(name);
-    }
-
   @parallelize
     Foo[2] top;
-
 }
 
 int main()
 {
-  Sim theRootEntity = new Sim("theRootEntity");
-  theRootEntity.elaborate();
+  Sim theRootEntity = new Sim;
+  theRootEntity.elaborate("theRootEntity");
   theRootEntity.simulate(1.nsec);
   theRootEntity.terminate();
   return 0;

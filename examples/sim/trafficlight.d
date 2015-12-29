@@ -125,22 +125,14 @@ class Dummy: Entity
 class TrafficRoot: RootEntity
 {
   Inst!Dummy[4] dummy;
-
-  this(string name) {
-    super(name);
-  }
-
 }
 
 void main()
 {
   import std.stdio;
-
-
-
   // top level module
-  TrafficRoot theRoot = new TrafficRoot("theRoot");
-  theRoot.elaborate();
+  TrafficRoot theRoot = new TrafficRoot;
+  theRoot.elaborate("theRoot");
   theRoot.multiCore(4, 0);
   // theRoot.waitElab();
   // theRoot.simulate(100.nsec);

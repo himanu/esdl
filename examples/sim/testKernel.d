@@ -51,12 +51,7 @@ class Foo: Entity {
 }
 
 class Sim: RootEntity {
-  this(string name) {
-    super(name);
-  }
-
   Inst!(Foo) top;
-
   Event e1;
   Event e2;
   Event e3;
@@ -64,14 +59,13 @@ class Sim: RootEntity {
   void proc1() {
     Event e5 = e1 | e2;
   }
-
 }
 
 void main()
 {
 
-  Sim theSimulator = new Sim("theSimulator");
-  theSimulator.elaborate();
+  Sim theSimulator = new Sim;
+  theSimulator.elaborate("theSimulator");
   theSimulator.simulate(10000.nsec);
   //   theSimulator.terminate();
 
