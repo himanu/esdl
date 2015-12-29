@@ -1124,6 +1124,33 @@ void _esdl__connect(T)(T t) {
 }
 
 
+// call doStart for each wntity once the simulation is over
+void _esdl__start(T)(T t) {
+  synchronized(t) {
+    // static if(__traits(compiles, t.doStart()))
+    // {
+    t.doStart();
+    // }
+    foreach(child; t.getChildComps()) {
+      _esdl__start(child);
+    }
+  }
+}
+
+// call doFinish for each wntity once the simulation is over
+void _esdl__finish(T)(T t) {
+  synchronized(t) {
+    // static if(__traits(compiles, t.doFinish()))
+    // {
+    t.doFinish();
+    // }
+    foreach(child; t.getChildComps()) {
+      _esdl__finish(child);
+    }
+  }
+}
+
+
 // Register all the routines are tasks with the simulator during the
 // elaboration phase. The Dynamic processes and routines are handled
 // separately(in the process/routine constructor)
@@ -1321,6 +1348,8 @@ public interface ElabContext: HierComp
   public void doConfig();
   public void doConnect();
   public void endElab();
+  public void doStart();
+  public void doFinish();
 
   // these methods are hooks that are not exposed to the end user
   protected void _esdl__postBuild();
@@ -1502,6 +1531,12 @@ public interface ElabContext: HierComp
     }
     static if(__traits(isAbstractFunction, _esdl__postConfig)) {
       public override void _esdl__postConfig() {}
+    }
+    static if(__traits(isAbstractFunction, doStart)) {
+      public override void doStart() {}
+    }
+    static if(__traits(isAbstractFunction, doFinish)) {
+      public override void doFinish() {}
     }
 
 
@@ -6431,6 +6466,7 @@ enum SimPhase : byte
       SIMULATE,
       PAUSE,
       SIMULATION_DONE,
+      COUNT,
       }
 
 enum SimRunPhase: byte
@@ -6548,6 +6584,7 @@ void execElab(T)(T t)
 	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
 	writeln(">>>>>>>>>> Start of Simulation");
+ 	t._esdl__start();
 	t.getSimulator.elabDoneLock.notify();
       }
     }
@@ -7467,6 +7504,8 @@ interface RootEntityIntf: EntityIntf
     }
   }
 
+  public void addSimHook(SimPhase phase, DelegateThunk thunk);
+
   public void _esdl__unboundPorts();
   public void _esdl__unboundExePorts();
 
@@ -7739,6 +7778,11 @@ abstract class RootEntity: RootEntityIntf
     _esdl__noUnboundExePorts = false;
   }
 
+  public void addSimHook(SimPhase phase, DelegateThunk thunk) {
+    assert(_simulator !is null);
+    _simulator.addSimHook(phase, thunk);
+  }
+
   public override void initProcess() {}
 
   public final override SimTime getSimTime() {
@@ -7801,6 +7845,11 @@ class EsdlSimulator: EntityIntf
 
   SchedPhase _sched = SchedPhase.IMMEDIATE;
 
+  public void addSimHook(SimPhase phase, DelegateThunk thunk) {
+    synchronized(this) {
+      _simHooks[phase] ~= thunk;
+    }
+  }
 
   public final SchedPhase schedPhase() {
     synchronized(this)
@@ -7837,6 +7886,7 @@ class EsdlSimulator: EntityIntf
   }
 
   @_esdl__ignore private Channel[] _channelUpdateReqs;
+  @_esdl__ignore private DelegateThunk[][SimPhase.COUNT] _simHooks;
 
   private final Channel[] channelUpdateReqs() {
     synchronized(this) {
@@ -7868,9 +7918,15 @@ class EsdlSimulator: EntityIntf
     }
   }
 
-  public final void setPhase(SimPhase _phase) {
+  public final void setPhase(SimPhase phase) {
     synchronized(this) {
-      this._phase = _phase;
+      this._phase = phase;
+      // call the registered hooks if any
+      if(_simHooks[phase].length > 0) {
+	foreach(hook; _simHooks[phase]) {
+	  hook();
+	}
+      }
     }
   }
 
@@ -7954,6 +8010,7 @@ class EsdlSimulator: EntityIntf
       this._executor.joinPoolThreads();
       writeln(" > Simulation Complete....");
       RootEntity.delRoot(this.getRoot());
+      getRoot._esdl__finish();
       version(COSIM_VERILOG) {
 	import std.stdio;
 	writeln(" > Sending vpiFinish signal to the Verilog Simulator");
