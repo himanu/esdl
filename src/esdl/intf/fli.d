@@ -227,10 +227,10 @@ void setStdLogicSignalValue(T)(SignalIdT sig, T t)
       }
       else {			// bool
 	if(t is true) {
-	  fliSetSignalValue(sig, StdLogicEnum.STD_LOGIC_1);
+	  fliSetSignalValue(sig, StdLogicEnum._1);
 	}
 	else {
-	  fliSetSignalValue(sig, StdLogicEnum.STD_LOGIC_0);
+	  fliSetSignalValue(sig, StdLogicEnum._0);
 	}
       }
     }
