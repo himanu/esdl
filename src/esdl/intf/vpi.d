@@ -5,6 +5,7 @@
 // Authors:   Puneet Goel <puneet@coverify.com>
 
 module esdl.intf.vpi;
+import core.vararg;
 
 version(COSIM_VERILOG) {
   /******************************** TYPEDEFS ********************************/
@@ -848,117 +849,232 @@ version(COSIM_VERILOG) {
   /* ---------------------------------------------------------------- */
 
   /* callback related */
-  extern(C) vpiHandle vpi_register_cb (p_cb_data cb_data_p);
+  extern(C) vpiHandle vpi_register_cb (p_cb_data cb_data_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_remove_cb (vpiHandle cb_obj);
+  extern(C) int vpi_remove_cb (vpiHandle cb_obj) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) void vpi_get_cb_info (vpiHandle object, p_cb_data cb_data_p);
+  extern(C) void vpi_get_cb_info (vpiHandle object, p_cb_data cb_data_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) vpiHandle vpi_register_systf (p_vpi_systf_data systf_data_p);
+  extern(C) vpiHandle vpi_register_systf (p_vpi_systf_data systf_data_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   extern(C) void vpi_get_systf_info (vpiHandle object,
-				     p_vpi_systf_data systf_data_p);
+				     p_vpi_systf_data systf_data_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* for obtaining handles */
-  extern(C) vpiHandle vpi_handle_by_name (char *name, vpiHandle scope_handle);
+  extern(C) vpiHandle vpi_handle_by_name (char *name, vpiHandle scope_handle) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
+  
   vpiHandle vpiGetHandleByName (string name, vpiHandle scope_handle) {
     import std.string;
     char* cstr = cast(char*) name.toStringz();
     return vpi_handle_by_name(cstr, scope_handle);
   }
 
-  extern(C) vpiHandle vpi_handle_by_index (vpiHandle object, int indx);
+  extern(C) vpiHandle vpi_handle_by_index (vpiHandle object, int indx) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* for traversing relationships */
-  extern(C) vpiHandle vpi_handle (int type, vpiHandle refHandle);
+  extern(C) vpiHandle vpi_handle (int type, vpiHandle refHandle) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   extern(C) vpiHandle vpi_handle_multi (int type, vpiHandle refHandle1,
-					vpiHandle refHandle2, ... );
+					vpiHandle refHandle2, ... ) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) vpiHandle vpi_iterate (int type, vpiHandle refHandle);
+  extern(C) vpiHandle vpi_iterate (int type, vpiHandle refHandle) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) vpiHandle vpi_scan (vpiHandle iterator);
+  extern(C) vpiHandle vpi_scan (vpiHandle iterator) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* for processing properties */
-  extern(C) int vpi_get (int property, vpiHandle object);
+  extern(C) int vpi_get (int property, vpiHandle object) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) long vpi_get64 (int property, vpiHandle object);
+  extern(C) long vpi_get64 (int property, vpiHandle object) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) char *vpi_get_str (int property, vpiHandle object);
+  extern(C) char *vpi_get_str (int property, vpiHandle object) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* delay processing */
-  extern(C) void vpi_get_delays (vpiHandle object, p_vpi_delay delay_p);
+  extern(C) void vpi_get_delays (vpiHandle object, p_vpi_delay delay_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) void vpi_put_delays (vpiHandle object, p_vpi_delay delay_p);
+  extern(C) void vpi_put_delays (vpiHandle object, p_vpi_delay delay_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* value processing */
-  extern(C) void vpi_get_value (vpiHandle expr, p_vpi_value value_p);
+  extern(C) void vpi_get_value (vpiHandle expr, p_vpi_value value_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   extern(C) vpiHandle vpi_put_value (vpiHandle object, p_vpi_value value_p,
-				     p_vpi_time time_p, vpiDelayModeT flags);
+				     p_vpi_time time_p, vpiDelayModeT flags) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   extern(C) void vpi_get_value_array (vpiHandle object,
 				      p_vpi_arrayvalue arrayvalue_p,
-				      int *index_p, uint num);
+				      int *index_p, uint num) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   extern(C) void vpi_put_value_array (vpiHandle object,
 				      p_vpi_arrayvalue arrayvalue_p,
-				      int *index_p, uint num);
+				      int *index_p, uint num) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* time processing */
-  extern(C) void vpi_get_time (vpiHandle object, p_vpi_time time_p);
+  extern(C) void vpi_get_time (vpiHandle object, p_vpi_time time_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* I/O routines */
-  extern(C) uint vpi_mcd_open (char *fileName);
+  extern(C) uint vpi_mcd_open (char *fileName) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) uint vpi_mcd_close (uint mcd);
+  extern(C) uint vpi_mcd_close (uint mcd) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) char *vpi_mcd_name (uint cd);
+  extern(C) char *vpi_mcd_name (uint cd) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
   // TBD
 
-  extern(C) int vpi_mcd_printf (uint mcd, char *format, ...);
+  extern(C) int vpi_mcd_printf (uint mcd, char *format, ...) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
   // TBD
 
-  extern(C) int vpi_printf (char *format, ...);
+  extern(C) int vpi_printf (char *format, ...) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
   // TBD
 
   /* utility routines */
-  extern(C) int vpi_compare_objects (vpiHandle object1, vpiHandle object2);
+  extern(C) int vpi_compare_objects (vpiHandle object1, vpiHandle object2) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_chk_error (p_vpi_error_info error_info_p);
+  extern(C) int vpi_chk_error (p_vpi_error_info error_info_p) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_configure (int item, char *value);
+  extern(C) int vpi_configure (int item, char *value) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   /* vpi_free_object() is deprecated in 1800-2009 */
-  extern(C) int vpi_free_object (vpiHandle object);
+  extern(C) int vpi_free_object (vpiHandle object) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_release_handle (vpiHandle object);
+  extern(C) int vpi_release_handle (vpiHandle object) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_get_vlog_info (p_vpi_vlog_info vlog_info_p);
+  extern(C) int vpi_get_vlog_info (p_vpi_vlog_info vlog_info_p) {
+    import std.string;
+    vlog_info_p.argc = 0;
+    vlog_info_p.argv = null;
+    vlog_info_p.product = cast(char*) "Vlang".toStringz();
+    vlog_info_p.product_version = cast(char*) "void".toStringz();
+    return false;	     // dummy function and hence returns false
+  }
 
+  string vpiGetProduct() {
+    import std.string;
+    s_vpi_vlog_info info;
+    vpi_get_vlog_info(&info);
+    return cast(string) fromStringz(info.product);
+  }
+
+  string vpiGetProductVersion() {
+    import std.string;
+    s_vpi_vlog_info info;
+    vpi_get_vlog_info(&info);
+    return cast(string) fromStringz(info.product_version);
+  }
+  
+  bool vpiIsCompatible() {
+    s_vpi_vlog_info info;
+    auto status = vpi_get_vlog_info(&info);
+    if(status) return true;
+    else {
+      import std.stdio;
+      stderr.writeln("vpi_get_vlog_info is returning false");
+      return false;
+    }
+  }
+  
   /* routines added with 1364-2001 */
-  extern(C) int vpi_get_data (int id, char *dataLoc, int numOfBytes);
+  extern(C) int vpi_get_data (int id, char *dataLoc, int numOfBytes) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_put_data (int id, char *dataLoc, int numOfBytes);
+  extern(C) int vpi_put_data (int id, char *dataLoc, int numOfBytes) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) void *vpi_get_userdata (vpiHandle obj);
+  extern(C) void *vpi_get_userdata (vpiHandle obj) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_put_userdata (vpiHandle obj, void *userdata);
+  extern(C) int vpi_put_userdata (vpiHandle obj, void *userdata) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  // extern(C) int vpi_vprintf (char *format, va_list ap);
-  // extern(C) int vpi_mcd_vprintf (uint mcd, char *format, va_list ap);
-  extern(C) int vpi_flush ();
+  // extern(C) int vpi_vprintf (char *format, va_list ap) {
+  //   assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  // }
+  // extern(C) int vpi_mcd_vprintf (uint mcd, char *format, va_list ap) {
+  //   assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  // }
+  extern(C) int vpi_flush () {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_mcd_flush (uint mcd);
+  extern(C) int vpi_mcd_flush (uint mcd) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
-  extern(C) int vpi_control (int operation, ...);
+  extern(C) int vpi_control (int operation, ...) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
   extern(C) vpiHandle vpi_handle_by_multi_index (vpiHandle obj, int num_index,
-						 int *index_array);
+						 int *index_array) {
+    assert(false, "Kindly link to a Verilog compiler that supports VPI");
+  }
 
 
   /**************************** GLOBAL VARIABLES ****************************/
-  // extern void (**vlog_startup_routines)();
+  // extern void (**vlog_startup_routines)()
   // extern void function() *vlog_startup_routines;
   alias void function() vpi_thunk;
 
