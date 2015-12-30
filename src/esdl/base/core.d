@@ -6489,8 +6489,9 @@ void forkElab(T)(T t, string name)
   t.getSimulator.elabRootThread(t);
 }
 
-void elaborate(T)(T t, string name)
+void elaborate(T)(T t, string name, string[] argv = [])
 {
+  t.addArgv(argv);
   t.forkElab(name);
   t.joinElab();
 }
@@ -7478,6 +7479,8 @@ interface RootEntityIntf: EntityIntf
     }
   }
 
+  public void addArgv(string[] argv);
+  
   public void addSimHook(SimPhase phase, DelegateThunk thunk);
 
   public void _esdl__unboundPorts();
@@ -7710,6 +7713,7 @@ abstract class RootEntity: RootEntityIntf
 
   private Time _timingPrecision;
   private bool _timingPrecisionSet = false;
+  private string[] _argv;
 
   public void setTimePrecision(Time precision) {
     synchronized(this) {
@@ -7752,6 +7756,18 @@ abstract class RootEntity: RootEntityIntf
     _esdl__noUnboundExePorts = false;
   }
 
+  public void addArgv(string[] argv) {
+    synchronized(this) {
+      _argv ~= argv;
+    }
+  }
+
+  public string[] getArgv() {
+    synchronized(this) {
+      return _argv;
+    }
+  }
+
   public void addSimHook(SimPhase phase, DelegateThunk thunk) {
     assert(_simulator !is null);
     _simulator.addSimHook(phase, thunk);
@@ -7780,7 +7796,7 @@ abstract class RootEntity: RootEntityIntf
     return _esdl__numMultiCore;
   }
 
-  static size_t cpuCount() {
+  static int cpuCount() {
     version(COSIM_VERILOG) {
       return CPU_COUNT();
     }
@@ -7789,11 +7805,15 @@ abstract class RootEntity: RootEntityIntf
     }
   }
   
-  public void multiCore(size_t ncore = cpuCount(), size_t fcore = 0) {
+  public void multiCore(int ncore = 0, size_t fcore = 0) {
     // version(COSIM_VERILOG) {
     //   // Mentor Questa tool does not like the next few lines
     // }
     // else {
+    if(ncore < 1) {
+      ncore = cpuCount() - ncore;
+    }
+    
     if(cpuCount() < ncore) {
       import std.conv: to;
       assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
@@ -8806,27 +8826,24 @@ public void withdrawCaveat() {
   root.withdrawCaveat(proc.getParentEntity());
 }
 
-public void simulate(T)(string name,
-			uint multi=1, uint first=0) {
+public void simulate(T)(string name, string[] argv = []) {
   auto root = new Root!T();
-  root.multiCore(multi, first);
-  root.elaborate(name);
+  root.multiCore();
+  root.elaborate(name, argv);
   root.simulate();
 }
 
-public auto elaborate(T)(string name,
-			 uint multi=1, uint first=0) {
-  auto root = new Root!T(name);
-  root.multiCore(multi, first);
-  root.elaborate();
+public auto elaborate(T)(string name, string[] argv = []) {
+  auto root = new Root!T();
+  root.multiCore();
+  root.elaborate(name, argv);
   return root;
 }
 
-public auto forkSim(T)(string name,
-		       uint multi=1, uint first=0) {
-  auto root = new Root!T(name);
-  root.multiCore(multi, first);
-  root.elaborate();
+public auto forkSim(T)(string name, string[] argv = []) {
+  auto root = new Root!T();
+  root.multiCore();
+  root.elaborate(name, argv);
   root.forkSim();
   return root;
 }

@@ -1021,7 +1021,7 @@ version(COSIM_VERILOG) {
     return cast(string) fromStringz(info.product_version);
   }
   
-  bool vpiIsCompatible() {
+  bool vpiIsUsable() {
     s_vpi_vlog_info info;
     auto status = vpi_get_vlog_info(&info);
     if(status) return true;
