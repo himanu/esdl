@@ -1075,20 +1075,6 @@ void _esdl__elabArray(size_t I, T, L)(T t, ref L l, uint[] indices=null)
 //     }
 //   }
 
-// Hook provided for the user to call any code he wishes to just
-// before starting the simulation
-void _esdl__endElab(T)(T t)
-  if(is(T : ElabContext)) {
-    synchronized(t) {
-      t.endElab();
-      foreach(child; t.getChildComps()) {
-	ElabContext hChild = cast(ElabContext) child;
-	if(hChild !is null) {
-	  _esdl__endElab(hChild);
-	}
-      }
-    }
-  }
 
 // To facillitate connections between ports etc. Also check if all the
 // ports are bound sanely by the user.
@@ -1347,7 +1333,6 @@ public interface ElabContext: HierComp
   public void doBuild();
   public void doConfig();
   public void doConnect();
-  public void endElab();
   public void doStart();
   public void doFinish();
 
@@ -1516,9 +1501,6 @@ public interface ElabContext: HierComp
     }
     static if(__traits(isAbstractFunction, doConnect)) {
       public override void doConnect() {}
-    }
-    static if(__traits(isAbstractFunction, endElab)) {
-      public override void endElab() {}
     }
     static if(__traits(isAbstractFunction, doBuild)) {
       public override void doBuild() {}
@@ -6570,14 +6552,6 @@ void execElab(T)(T t)
 	_esdl__connect(t);
 	enforce(t._esdl__noUnboundPorts, "Error: There are unbound ports");
 
-	// In t Phase the EsdlSimulator invokes the endElab() method(if defined
-	// by the user) for all the modules.
-	// This phase may be used for creating Tasks and Scheduling Timed
-	// Events
-	writeln(">>>>>>>>>> Calling \"endElab\" for all module instances");
-	// _esdl__done!0(t);
-	_esdl__endElab(t);
-
 	t.getSimulator._executor.initPoolThreads();
 	t.getSimulator._executor._poolThreadInitBarrier.wait();
 
@@ -8389,10 +8363,7 @@ class EsdlSimulator: EntityIntf
 void joinAllThreads() {
   version(COSIM_VERILOG) {
     import core.thread;
-    import std.stdio;
-    writeln("Waiting for all threads to join");
     thread_joinAll();
-    writeln("All threads to join");
   }
 }
 
