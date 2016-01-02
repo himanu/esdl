@@ -960,8 +960,8 @@ public struct Queue(T) {
   */
 	
   public void removeFront(const size_t numToPop = 1) @safe {
-    debug assert(numToPop <= this.size, to!(string)(numToPop) ~ " " 
-		 ~ to!(string)(this.size));
+    // debug assert(numToPop <= this.size, to!(string) ~ numToPop.to!string ~ " " 
+    // 		 ~ to!(string) ~ " " ~ this.size.to!string);
     this.head = (this.head+numToPop) % this.data.length;
     this.size -= numToPop;
   }

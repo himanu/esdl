@@ -296,7 +296,7 @@ struct VcdVecVal(V)
 
 class VcdStringWave: VcdVar
 {
-  VcdVecVal!string _wave[];
+  VcdVecVal!string[] _wave;
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, name, size);
   }
@@ -307,7 +307,7 @@ class VcdStringWave: VcdVar
 
 class VcdRealWave: VcdVar
 {
-  VcdVecVal!real _wave[];
+  VcdVecVal!real[] _wave;
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, name, size);
   }
@@ -326,7 +326,7 @@ class VcdRealWave: VcdVar
 
 class VcdCommandWave: VcdVar
 {
-  VcdVecVal!SIM_COMMAND _wave[];
+  VcdVecVal!SIM_COMMAND[] _wave;
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, name, size);
   }
@@ -343,7 +343,7 @@ class VcdCommandWave: VcdVar
 
 class VcdEventWave: VcdVar
 {
-  VcdVecVal!bool _wave[];
+  VcdVecVal!bool[] _wave;
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, name, size);
   }
@@ -359,7 +359,7 @@ class VcdEventWave: VcdVar
   
 class VcdLogicStringWave: VcdVar
 {
-  VcdVecVal!lstr _wave[];
+  VcdVecVal!lstr[] _wave;
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, name, size);
   }
@@ -425,7 +425,7 @@ class VcdLogicStringWave: VcdVar
 
 class VcdVecWave(size_t N): VcdVar
 {
-  VcdVecVal!(VcdVec!N) _wave[];
+  VcdVecVal!(VcdVec!N)[] _wave;
   this(VcdScope parent, VCD vcd, string name, uint size) {
     super(parent, vcd, name, size);
   }

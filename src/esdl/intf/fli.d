@@ -90,14 +90,19 @@ enum DriverModeEnum {
 alias VoidFuncPtrT = void function(void *);
 
 extern(C)
-void mti_Sensitize (ProcessIdT proc, SignalIdT sig, ProcessTriggerT when);
+void mti_Sensitize (ProcessIdT proc, SignalIdT sig, ProcessTriggerT when) {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
 
 void fliSensitize(ProcessIdT proc, SignalIdT sig, ProcessTriggerT when) {
   mti_Sensitize(proc, sig, when);
 }
 
 extern(C)
-ProcessIdT  mti_CreateProcess (char * name, VoidFuncPtrT func, void * param);
+ProcessIdT  mti_CreateProcess (char * name, VoidFuncPtrT func, void * param)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 ProcessIdT  fliCreateProcess (string name,
 			      VoidFuncPtrT func,
 			      void * param) {
@@ -105,12 +110,18 @@ ProcessIdT  fliCreateProcess (string name,
   return mti_CreateProcess(cast(char*) name.toStringz(), func, param);
 }
 
-extern(C) void* mti_Malloc (ulong size);
+extern(C) void* mti_Malloc (ulong size)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 void* fliMalloc (ulong size) {
   return mti_Malloc(size);
 }
 
-extern(C) SignalIdT mti_FindPort(InterfaceListT * list, char * name);
+extern(C) SignalIdT mti_FindPort(InterfaceListT * list, char * name)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 
 SignalIdT fliFindPort(InterfaceListT * list, string name) {
   import std.string;
@@ -118,58 +129,88 @@ SignalIdT fliFindPort(InterfaceListT * list, string name) {
 }
 
 extern(C)
-void mti_ScheduleDriver (DriverIdT drv, long value, int delay, DriverModeEnum mod);
+void mti_ScheduleDriver (DriverIdT drv, long value, int delay, DriverModeEnum mod)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 
 void fliScheduleDriver (DriverIdT drv, long value, int delay, DriverModeEnum mod) {
   mti_ScheduleDriver(drv, value, delay, mod);
 }
 
 extern(C)
-void mti_ScheduleDriver64 (DriverIdT drv, long value, long delay, DriverModeEnum mode);
+void mti_ScheduleDriver64 (DriverIdT drv, long value, long delay, DriverModeEnum mode)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 void fliScheduleDriver64 (DriverIdT drv, long value, long delay, DriverModeEnum mode) {
   mti_ScheduleDriver64(drv, value, delay, mode);
 }
 
-extern(C) int mti_GetSignalValue (SignalIdT sig);
+extern(C) int mti_GetSignalValue (SignalIdT sig)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 
 int fliGetSignalValue (SignalIdT sig) {
   return mti_GetSignalValue(sig);
 }
 
-extern(C) void mti_SetSignalValue (SignalIdT sig, size_t val);
+extern(C) void mti_SetSignalValue (SignalIdT sig, size_t val)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 void fliSetSignalValue (SignalIdT sig, size_t val) {
   mti_SetSignalValue(sig, val);
 }
 
-extern(C) DriverIdT   mti_CreateDriver(SignalIdT sig);
+extern(C) DriverIdT   mti_CreateDriver(SignalIdT sig)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 DriverIdT fliCreateDriver(SignalIdT sig) {
   return mti_CreateDriver(sig);
 }
 
-extern(C) TypeKindT mti_GetTypeKind (TypeIdT type);
+extern(C) TypeKindT mti_GetTypeKind (TypeIdT type)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 TypeKindT fliGetTypeKind (TypeIdT type) {
   return mti_GetTypeKind(type);
 }
 
 
-extern(C) TypeIdT mti_GetSignalType(SignalIdT sig);
+extern(C) TypeIdT mti_GetSignalType(SignalIdT sig)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 TypeIdT fliGetSignalType(SignalIdT sig) {
   return mti_GetSignalType(sig);
 }
 
-extern(C) int mti_TickLength(TypeIdT tp);
+extern(C) int mti_TickLength(TypeIdT tp)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 int fliTickLength(TypeIdT tp) {
   return mti_TickLength(tp);
 }
 
 extern(C) void* mti_GetSignalValueIndirect(SignalIdT sig,
-					   void * buf);
+					   void * buf)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 void* fliGetSignalValueIndirect(SignalIdT sig, void* buf) {
   return mti_GetSignalValueIndirect(sig, buf);
 }
 				
 extern(C) SignalIdT* mti_GetSignalSubelements (SignalIdT sig,
-						SignalIdT * buf);
+						SignalIdT * buf)  {
+  assert(false, "Please load this library with a simulator that support FLI interface");
+}
+
 SignalIdT* fliGetSignalSubelements (SignalIdT sig,
 				    SignalIdT * buf) {
   return mti_GetSignalSubelements(sig, buf);

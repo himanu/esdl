@@ -25,6 +25,9 @@ import std.range;
 import core.bitop;
 import core.exception;
 
+import esdl.intf.vpi: s_vpi_vecval, p_vpi_vecval;
+    
+
 // required for appender
 // import std.array;
 
@@ -668,6 +671,7 @@ template ULogicVec(N...) if(CheckVecParams!N) {
 struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
   {
     import esdl.data.time;
+
     enum size_t SIZE = VecSize!(1,N);
     private alias VecParams!(SIZE,S).StoreT store_t;
 
@@ -1168,77 +1172,72 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
       }
 
-    version(COSIM_VERILOG) {
-      import esdl.intf.vpi;
+    public void opAssign()(p_vpi_vecval other) {
+      this._from(other);
+    }
 
-      public void opAssign()(p_vpi_vecval other) {
-	this._from(other);
-      }
-
-      private void _from() (p_vpi_vecval other) {
-	static if(WORDSIZE is 64) {
-	  for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	    ulong word = other[i].aval;
-	    if(i%2 == 0) this._aval[i/2] = word;
-	    else this._aval[i/2] |= word << 32;
-	    static if(IS4STATE) {
-	      ulong cword = other[i].bval;
-	      if(i%2 == 0) this._bval[i/2] = cword;
-	      else this._bval[i/2] |= cword << 32;
-	    }
+    private void _from() (p_vpi_vecval other) {
+      static if(WORDSIZE is 64) {
+	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
+	  ulong word = other[i].aval;
+	  if(i%2 == 0) this._aval[i/2] = word;
+	  else this._aval[i/2] |= word << 32;
+	  static if(IS4STATE) {
+	    ulong cword = other[i].bval;
+	    if(i%2 == 0) this._bval[i/2] = cword;
+	    else this._bval[i/2] |= cword << 32;
 	  }
 	}
-	else static if(WORDSIZE is 32) {
-	    for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	      this._aval[i] = other[i].aval;
-	      static if(IS4STATE) {
-		this._bval[i] = other[i].bval;
-	      }
-	    }
-	  }
-	  else {
-	    this._aval[0] = cast(store_t) other[0].aval;
-	    static if(IS4STATE) {
-	      this._bval[0] = cast(store_t) other[0].bval;
-	    }
-	  }
       }
-
-      // It is the responsibility of the caller to make sure that
-      // there is enough space available at other to write down the
-      // required bits
-      public void toVpiVecValue(s_vpi_vecval[] other) {
-	this._to(other);
-      }
-      
-      private void _to() (s_vpi_vecval[] other) {
-	static if(WORDSIZE is 64) {
-	  for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	    if(i%2 == 0) other[i].aval = cast(uint) this._aval[i/2];
-	    else other[i].aval = cast(uint) (this._aval[i/2] >>> 32);
-	    static if(IS4STATE) {
-	      if(i%2 == 0) other[i].bval = cast(uint) this._bval[i/2];
-	      else other[i].bval = cast(uint) (this._bval[i/2] >>> 32);
-	    }
+      else static if(WORDSIZE is 32) {
+	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
+	  this._aval[i] = other[i].aval;
+	  static if(IS4STATE) {
+	    this._bval[i] = other[i].bval;
 	  }
 	}
-	else static if(WORDSIZE is 32) {
-	    for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	      other[i].aval = this._aval[i];
-	      static if(IS4STATE) {
-		other[i].bval = this._bval[i];
-	      }
-	    }
-	  }
-	  else {
-	    other[0].aval = this._aval[0];
-	    static if(IS4STATE) {
-	      other[0].bval = this._bval[0];
-	    }
-	  }
+      }
+      else {
+	this._aval[0] = cast(store_t) other[0].aval;
+	static if(IS4STATE) {
+	  this._bval[0] = cast(store_t) other[0].bval;
+	}
       }
     }
-    
+
+    // It is the responsibility of the caller to make sure that
+    // there is enough space available at other to write down the
+    // required bits
+    public void toVpiVecValue(s_vpi_vecval[] other) {
+      this._to(other);
+    }
+      
+    private void _to() (s_vpi_vecval[] other) {
+      static if(WORDSIZE is 64) {
+	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
+	  if(i%2 == 0) other[i].aval = cast(uint) this._aval[i/2];
+	  else other[i].aval = cast(uint) (this._aval[i/2] >>> 32);
+	  static if(IS4STATE) {
+	    if(i%2 == 0) other[i].bval = cast(uint) this._bval[i/2];
+	    else other[i].bval = cast(uint) (this._bval[i/2] >>> 32);
+	  }
+	}
+      }
+      else static if(WORDSIZE is 32) {
+	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
+	  other[i].aval = this._aval[i];
+	  static if(IS4STATE) {
+	    other[i].bval = this._bval[i];
+	  }
+	}
+      }
+      else {
+	other[0].aval = this._aval[0];
+	static if(IS4STATE) {
+	  other[0].bval = this._bval[0];
+	}
+      }
+    }
 
     public void opAssign(V)(V ba) if(is(V == barray)) {
       auto numBits = ba.length;

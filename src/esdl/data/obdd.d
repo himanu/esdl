@@ -5646,7 +5646,7 @@ class Buddy
 
     INCREF(root);
 
-    debug {writeln("INCREF(", root, ") = ",GETREF(root));}
+    debug(BUDDY) {writeln("INCREF(", root, ") = ",GETREF(root));}
     return root;
   }
 
@@ -5669,7 +5669,7 @@ class Buddy
 
     DECREF(root);
 
-    debug {writeln("DECREF(", root, ") = ", GETREF(root));}
+    debug(BUDDY) {writeln("DECREF(", root, ") = ", GETREF(root));}
     return root;
   }
 

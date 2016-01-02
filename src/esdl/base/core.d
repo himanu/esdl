@@ -2563,7 +2563,7 @@ public class EventObj: EventAgent, NamedComp
   // here?
   protected void trigger(EsdlSimulator sim) {
     _triggeredAt = sim.updateCount;
-    debug(EVENT) {
+    debug(EVENTS) {
       import std.stdio: writeln;
       writeln("Event Triggered: ", this.getFullName);
     }
@@ -2581,12 +2581,12 @@ public class EventObj: EventAgent, NamedComp
     foreach(c; clientEvents) {
       if(c.client !is null) {
 	_clientEvents ~= c;
-	debug(EVENT) {
+	debug(EVENTS) {
 	  import std.stdio: writeln;
 	  writeln("Event Triggered: ", this.getFullName, " client ", index);
 	}
 	c.client.poke(sim, this, c.index);
-	debug(EVENT) {
+	debug(EVENTS) {
 	  import std.stdio: writeln;
 	  writeln("Event Triggered: ", this.getFullName, " poked client ", index);
 	}
@@ -3508,7 +3508,7 @@ final private class TimedEvent: SimEvent
 	}
 	if(steps == DELTA)	{ // delta event
 	  if(this._schedule == Schedule.TIMED) {
-	    debug {
+	    debug(EVENTS) {
 	      import std.stdio: writeln;
 	      writeln("Cancelling scheduled event");
 	    }
@@ -3717,7 +3717,7 @@ final class EventNotice
 
   static EventNotice alloc(SimTime t, TimedEvent event) {
     // assert(t > SimTime(0));
-    debug {
+    debug(ALLOC) {
       import std.stdio: writeln;
       writeln("Creating Timed Event at time ", t.getVal);
     }
@@ -3738,7 +3738,7 @@ final class EventNotice
   // the synchronization
   public final void trigger(EsdlSimulator sim) {
     if(this._event is null) {
-      debug {
+      debug(EVENTS) {
 	import std.stdio: writeln;
 	writeln("An annulled event notice got triggered");
       }
@@ -6655,7 +6655,7 @@ class EsdlExecutor: EsdlExecutorIf
     _poolThreads.length = numThreads;
     _runnableTasksGroups.length = numThreads;
     for(uint i=0; i!=numThreads; ++i) {
-      debug {
+      debug(THREAD) {
 	import std.stdio;
 	writeln("Creating Pool Threads: ", i);
       }
@@ -6974,7 +6974,7 @@ class EsdlExecutor: EsdlExecutorIf
 
   private final void threadCount(size_t numThreads=1) {
     synchronized(this) {
-      debug {
+      debug(THREAD) {
 	import std.stdio: writeln;
 	writeln("Creating an Executor with ", numThreads, " active threads.");
       }
@@ -7233,7 +7233,7 @@ class EsdlHeapScheduler : EsdlScheduler
   public final size_t insertDelta(TimedEvent e) {
     synchronized(this) {
       // synchronized(e.getObj)
-      debug {
+      debug(DELTA) {
 	import std.stdio: writeln;
 	writeln("======== Adding delta event at ",
 		_deltaQueue.length);
@@ -7245,7 +7245,7 @@ class EsdlHeapScheduler : EsdlScheduler
 
   public final size_t insertAsyncEvent(TimedEvent e) {
     synchronized(this) { // synchronized(e.getObj)
-      debug {
+      debug(ASYNCEVENT) {
 	import std.stdio: writeln;
 	writeln("======== Adding Async TimedNotice ",
 		_asyncQueue.length);
@@ -7259,7 +7259,7 @@ class EsdlHeapScheduler : EsdlScheduler
 
   public final size_t insertImmediateEvent(TimedEvent e) {
     synchronized(this) { // synchronized(e.getObj)
-      debug {
+      debug(IMMEDIATE_EVENT) {
 	import std.stdio: writeln;
 	writeln("======== Adding Immediate TimedNotice ",
 		_immediateQueue.length);
@@ -7414,7 +7414,7 @@ class EsdlHeapScheduler : EsdlScheduler
       return SimRunPhase.PAUSE;
     }
 
-    debug {
+    debug(TIME) {
       import std.stdio: writeln;
       writeln(" > Advancing simulation time to #",
 	      firstEvent.atTime.getVal);
@@ -7427,7 +7427,7 @@ class EsdlHeapScheduler : EsdlScheduler
     this._simTime = firstEvent.atTime;
     debug(EVENTS) {size_t numTriggered = 0;}
     while(firstEvent.atTime == this._simTime) {
-      debug {
+      debug(EVENTS) {
 	import std.stdio: writeln;
 	writeln("Notifying Timed Event");
       }
@@ -7613,11 +7613,6 @@ interface RootEntityIntf: EntityIntf
     if(simPhase() == SimPhase.PAUSE) {
       this.simulate(0.nsec);
     }
-    version(COSIM_VERILOG) {
-      // pragma(msg, "Compiling COSIM_VERILOG version!");
-      import esdl.intf.vpi;
-      vpi_control(vpiFinish, 1);
-    }
     // now if this thread is one of the tasks, it must stop
     Process self = Process.self();
     if(cast(BaseTask) self !is null) wait(0);
@@ -7796,20 +7791,16 @@ abstract class RootEntity: RootEntityIntf
     return _esdl__numMultiCore;
   }
 
-  static int cpuCount() {
-    version(COSIM_VERILOG) {
-      return CPU_COUNT();
-    }
-    else {
-      return CPU_COUNT_AFFINITY();
-    }
+  public int cpuCount() {
+    // version(COSIM_VERILOG) {
+    return CPU_COUNT();
+    // }
+    // else {
+    //   return CPU_COUNT_AFFINITY();
+    // }
   }
   
   public void multiCore(int ncore = 0, size_t fcore = 0) {
-    // version(COSIM_VERILOG) {
-    //   // Mentor Questa tool does not like the next few lines
-    // }
-    // else {
     if(ncore < 1) {
       ncore = cpuCount() - ncore;
     }
@@ -8005,16 +7996,7 @@ class EsdlSimulator: EntityIntf
       writeln(" > Simulation Complete....");
       RootEntity.delRoot(this.getRoot());
       getRoot._esdl__finish();
-      version(COSIM_VERILOG) {
-	import std.stdio;
-	writeln(" > Sending vpiFinish signal to the Verilog Simulator");
-	// pragma(msg, "Compiling COSIM_VERILOG version!");
-	import esdl.intf.vpi;
-	vpi_control(vpiFinish, 1);
-      }
-      else {
-	simTermLock.notify();
-      }
+      simTermLock.notify();
     }
   }
 
@@ -8379,14 +8361,6 @@ class EsdlSimulator: EntityIntf
     }
   }
 }
-
-void joinAllThreads() {
-  version(COSIM_VERILOG) {
-    import core.thread;
-    thread_joinAll();
-  }
-}
-
 
 private static RootEntity _esdl__rootEntity;
 
