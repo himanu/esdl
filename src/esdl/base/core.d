@@ -411,7 +411,13 @@ public interface HierComp: NamedComp, ConfigContext
   // waitForks) even during the run-phase, but only on the current
   // thread -- and hence does not require any guards.
   protected Process[] _esdl__getChildProcs();
+  public final Process[] getChildProcs() {
+    return _esdl__getChildProcs();
+  }
   protected Process[] _esdl__getChildProcsHier();
+  public final Process[] getChildProcsHier() {
+    return _esdl__getChildProcsHier();
+  }
 
   public void _esdl__setIndices(uint[] indices);;
 
@@ -4183,23 +4189,27 @@ public Process routine(FunctionThunk fn, int stage = 0) {
   return f;
 }
 
-private void forkHelper(F...)(ref Process[] procs, F thunks) {
+private void forkHelper(string NAME="fork", int C=0, F...)
+  (ref Process[] procs, F thunks) {
   static if(F.length == 0) {
     return;
   }
   else static if(is(F[0]: DelegateThunk) ||
 		 is(F[0]: FunctionThunk)) {
-      procs ~= process(thunks[0], getStage);
-      forkHelper(procs, thunks[1..$]);
-    }
+    Process proc = process(thunks[0], getStage);
+    proc._esdl__setName(NAME ~ "_" ~ C.stringof);
+    procs ~= proc;
+    forkHelper!(NAME, C+1)(procs, thunks[1..$]);
+  }
   else static if(is(F[0]: Process)) {
-      procs ~= thunks[0];
-      forkHelper(procs, thunks[1..$]);
-    }
-    else {
-      static assert(false, "join can take only functions, delegates "
-		    "or processes as arguments");
-    }
+    thunks[0]._esdl__setName(NAME ~ "_" ~ C.stringof);
+    procs ~= thunks[0];
+    forkHelper!(NAME, C+1)(procs, thunks[1..$]);
+  }
+  else {
+    static assert(false, "join can take only functions, delegates "
+		  "or processes as arguments");
+  }
 }
 
 // public Fork joinAll(F...)(F thunks) {
@@ -4225,18 +4235,19 @@ private void forkHelper(F...)(ref Process[] procs, F thunks) {
 //   return retval;
 // }
 
-public Fork fork(F...)(F thunks) if(F.length > 1) {
+public Fork fork(string NAME="fork", F...)(F thunks) if(F.length > 1) {
   Process[] procs;
-  forkHelper(procs, thunks);
+  forkHelper!NAME(procs, thunks);
   Fork retval = new Fork(procs);
   return retval;
  }
 
-public ForkMono fork(F)(F thunk) {
+public ForkMono fork(string NAME="fork", F)(F thunk) {
   Process proc;
   static if(is(F: DelegateThunk) ||
 	    is(F: FunctionThunk)) {
     proc = process(thunk, getStage);
+    proc._esdl__setName(NAME);
   }
   else static if(is(F: Process)) {
       proc = thunk;
