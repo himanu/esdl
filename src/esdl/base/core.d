@@ -652,7 +652,7 @@ public interface HierComp: NamedComp, ConfigContext
       // }
     }
 
-    
+
     // The indeces is useful to find out the position of a given
     // component inside an array of components. For example, the
     // end-user might be interested in tweeking the functionality of
@@ -897,7 +897,7 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
 		writeln("Configure timeUnit " ~ typeof(t.tupleof[I]).stringof ~ " : ",
 			I, "/", t.tupleof.length);
 	      }
-	    }	    
+	    }
 	  }
 	}
 	else {
@@ -1441,7 +1441,7 @@ public interface ElabContext: HierComp
     debug(ATTRCONFIG) {
       import std.stdio;
       writeln("** ElabContext: Configuring " ~ l.tupleof[I].stringof ~ ":" ~
-    	      typeof(l).stringof);
+	      typeof(l).stringof);
     }
     synchronized(l) {
       static assert(is(L unused: ElabContext),
@@ -1484,7 +1484,7 @@ public interface ElabContext: HierComp
   mixin template ElabContextMixin()
   {
     mixin HierMixin;
-    
+
     // Arrays for ports and exports. These variables are effectively
     // immutable since (ex)ports are added to them only during
     // elaboration.
@@ -1585,7 +1585,7 @@ public interface ElabContext: HierComp
     void _esdl__config_timeUnit(Time time) {
       this._esdl__config!timeUnit(this, time);
     }
-  
+
     void _esdl__elab_virtual() {
       this._esdl__elab(this);
     }
@@ -4401,7 +4401,7 @@ public void srandom(uint _seed) {
       static void _esdl__config(FOO, L, ATTR)(ref L l, ATTR attr) {
 	l._esdl__objRef._esdl__config!(FOO)(l._esdl__objRef, attr);
       }
-      
+
       static void _esdl__config(FOO, size_t I, T, L)
 	(ref T t, ref L l, uint[] indices=null) {
 	l._esdl__objRef._esdl__config!(FOO)(t, l._esdl__objRef, indices);
@@ -4455,7 +4455,7 @@ interface EntityIntf: ElabContext, SimContext
 {
   static EntityIntf _esdl__threadContext;
   static void resetThreadContext() {
-    _esdl__threadContext = null;    
+    _esdl__threadContext = null;
   }
   final void setThreadContext() {
     auto proc = Process.self();
@@ -4503,7 +4503,7 @@ interface EntityIntf: ElabContext, SimContext
       override void _esdl__config_timeUnit(Time time) {
 	this._esdl__config!timeUnit(this, time);
       }
-  
+
       override void _esdl__elab_virtual() {
 	this._esdl__elab(this);
       }
@@ -5002,6 +5002,12 @@ class BaseWorker: Process
   public override final bool isRunnableWorker() {
     return (_state < _DEFUNCT);
   }
+  public override final bool isTerminalTask() {
+    return false;
+  }
+  public override final bool isTerminalWorker() {
+    return (_state >= _KILLED);
+  }
 }
 
 class BaseTask: Process
@@ -5058,8 +5064,16 @@ class BaseTask: Process
   public override final bool isRunnableTask() {
     return (_state < _DEFUNCT);
   }
-  
+
   public override final bool isRunnableWorker() {
+    return false;
+  }
+
+  public override final bool isTerminalTask() {
+    return (_state >= _KILLED);
+  }
+
+  public override final bool isTerminalWorker() {
     return false;
   }
 
@@ -5127,6 +5141,14 @@ class BaseRoutine: Process
     return false;
   }
 
+  public override final bool isTerminalTask() {
+    return (_state >= _KILLED);
+  }
+
+  public override final bool isTerminalWorker() {
+    return false;
+  }
+
   private final void preExecute() {
     super.preExecute();
     _nextTrigger = null;
@@ -5137,7 +5159,7 @@ class BaseRoutine: Process
 
 abstract class Process: Procedure, HierComp, EventClient
 {
-  
+
   mixin HierMixin;
 
   __gshared size_t _procCount;
@@ -5310,12 +5332,8 @@ abstract class Process: Procedure, HierComp, EventClient
     }
   }
 
-  private final void execute() {
-    if(_state == ProcState.RUNNING) {
-      this.call();
-      return;
-    }
-    assert(false, "Unexpected Process State: " ~ _state);
+  private final void _execute() {
+    this.call();
   }
 
   // make sure that a user can not directly "start" the underlying
@@ -5927,7 +5945,7 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     else {
       _state = ProcState.ABORTED;
-      x._termProcs ~= this;
+      x.addTerminalProcess(this);
     }
   }
 
@@ -5939,7 +5957,7 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     else {
       _state = ProcState.KILLED;
-      x._termProcs ~= this;
+      x.addTerminalProcess(this);
     }
   }
 
@@ -5959,6 +5977,9 @@ abstract class Process: Procedure, HierComp, EventClient
 
   public bool isRunnableTask();
   public bool isRunnableWorker();
+
+  public bool isTerminalTask();
+  public bool isTerminalWorker();
 
   public final bool isRunnable() {
     synchronized(this) {
@@ -5995,13 +6016,13 @@ abstract class Process: Procedure, HierComp, EventClient
     debug(ATTRCONFIG) {
       import std.stdio;
       writeln("** ElabContext: Configuring " ~ l.tupleof[I].stringof ~ ":" ~
-    	      typeof(l).stringof);
+	      typeof(l).stringof);
     }
 
     synchronized(l) {
       //   static assert(is(L unused: ElabContext),
-      // 		    "Only ElabContext components are allowed to instantiate "
-      // 		    "other ElabContext components");
+      //		    "Only ElabContext components are allowed to instantiate "
+      //		    "other ElabContext components");
       static if(is(FOO == parallelize)) {
 	l._esdl__setParConfig(attr);
       }
@@ -6253,7 +6274,7 @@ class Channel: ChannelIF, NamedComp // Primitive Channel
 class RootThread: Procedure
 {
   mixin NamedMixin;
-  
+
   EsdlThread _thread;
 
   private static RootThread _self;
@@ -6405,9 +6426,14 @@ class PoolThread: SimThread
 	break;
       }
 
+      foreach(proc; this._esdl__root.simulator._executor._terminalTasksGroups[_poolIndex]) {
+	if(proc._state >= _KILLED) {
+	  proc._execute();
+	}
+      }
       foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
 	if(proc._state == ProcState.RUNNING) {
-	  proc.execute();
+	  proc._execute();
 	}
       }
       _esdl__root.simulator()._executor._poolThreadPostBarrier.wait();
@@ -6415,6 +6441,7 @@ class PoolThread: SimThread
 	proc.postExecute();
       }
       this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex].length = 0;
+      this._esdl__root.simulator._executor._terminalTasksGroups[_poolIndex].length = 0;
       _esdl__root.simulator()._executor._poolThreadDoneBarrier.wait();
     }
   }
@@ -6511,7 +6538,6 @@ void execElab(T)(T t)
   if(is(T unused: RootEntity))
     {
       synchronized(t) {
-	import std.stdio: writeln;
 	import std.exception: enforce;
 
 	// The BUILD Phase Instantiated modules and events are
@@ -6521,10 +6547,10 @@ void execElab(T)(T t)
 	// Information regarding the parent/childObjs modules/events
 	// is also added as part of t phase At some stage we would
 	// like to include Tasks too.
-	writeln(">>>>>>>>>> Starting Phase: BUILD");
+	t.message("Starting Phase: BUILD");
 	t.getSimulator.setPhase = SimPhase.BUILD;
 
- 	t._esdl__elab(t);
+	t._esdl__elab(t);
 
 	// Each module is allowed to override the config() method
 	// which is declared in the Entity class. The config methods
@@ -6532,7 +6558,7 @@ void execElab(T)(T t)
 	// constructors of the modules. In the CONFIGURE phase, all t
 	// information read in during the configurarion is consolidated and
 	// reflected at the EsdlSimulator level.
-	writeln(">>>>>>>>>> Starting Phase: CONFIGURE");
+	t.message("Starting Phase: CONFIGURE");
 	t.getSimulator.setPhase = SimPhase.CONFIGURE;
 	t._esdl__config!parallelize(t, parallelize(ParallelPolicy._UNDEFINED_,
 						   ubyte.max));
@@ -6554,7 +6580,7 @@ void execElab(T)(T t)
 	// constructors of the modules. In the CONFIGURE phase, all t
 	// information read in during the configurarion is consolidated and
 	// reflected at the EsdlSimulator level.
-	writeln(">>>>>>>>>> Starting Phase: BIND");
+	t.message("Starting Phase: BIND");
 	t.getSimulator.setPhase = SimPhase.BINDEXEPORTS;
 	// _esdl__connect!0(t);
 	_esdl__connect(t);
@@ -6569,8 +6595,8 @@ void execElab(T)(T t)
 
 	t.getSimulator.setPhase = SimPhase.PAUSE;
 	t.getSimulator._executor.resetStage();
-	writeln(">>>>>>>>>> Start of Simulation");
- 	t._esdl__start();
+	t.message("Start of Simulation");
+	t._esdl__start();
 	t.getSimulator.elabDoneLock.notify();
       }
     }
@@ -6582,9 +6608,9 @@ interface EsdlExecutorIf
   public void reqUpdateProcess(Process task);
   public void reqPurgeProcess(Process task);
   // public ref Process[] getRunnableProcs();
-  public size_t runnableWorkersCount();
-  public size_t runnableTasksCount();
-  public size_t runnableThreadsCount();
+  public size_t executableWorkersCount();
+  public size_t executableTasksCount();
+  public size_t executableThreadsCount();
   public void processRegistered();
 }
 
@@ -6620,8 +6646,12 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   private Process[] _runnableWorkers;
-  private Process[] _runnableTasks;
+  private Process[] _terminalWorkers;
+
+  private Process[] _executableTasks;
   private Process[][] _runnableTasksGroups;
+  private Process[][] _terminalTasksGroups;
+
   // Before adding them to _runnableWorkers, make a check whether
   // these tasks are dontInit
   private Process[][] _registeredProcesses;
@@ -6665,6 +6695,7 @@ class EsdlExecutor: EsdlExecutorIf
 				       size_t stackSize) {
     _poolThreads.length = numThreads;
     _runnableTasksGroups.length = numThreads;
+    _terminalTasksGroups.length = numThreads;
     for(uint i=0; i!=numThreads; ++i) {
       debug(THREAD) {
 	import std.stdio;
@@ -6682,17 +6713,19 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
 
-  public final size_t runnableThreadsCount() {
+  public final size_t executableThreadsCount() {
     return(_runnableWorkers.length +
-	   _runnableTasks.length);
+	   _terminalWorkers.length +
+	   _executableTasks.length);
   }
 
-  public final size_t runnableWorkersCount() {
-    return _runnableWorkers.length;
+  public final size_t executableWorkersCount() {
+    return(_runnableWorkers.length +
+	   _terminalWorkers.length);
   }
 
-  public final size_t runnableTasksCount() {
-    return _runnableTasks.length;
+  public final size_t executableTasksCount() {
+    return _executableTasks.length;
   }
 
   // private size_t _processedProcs = 0;
@@ -6710,7 +6743,7 @@ class EsdlExecutor: EsdlExecutorIf
 	    this._runnableWorkers ~= proc;
 	  }
 	  if(proc.isRunnableTask) {
-	    this._runnableTasks ~= proc;
+	    this._executableTasks ~= proc;
 	    this._runnableTasksGroups[proc._esdl__parConfig._threadPoolIndex] ~= proc;
 	  }
 	}
@@ -6725,9 +6758,18 @@ class EsdlExecutor: EsdlExecutorIf
       this._runnableWorkers ~= p;
     }
     if(p.isRunnableTask) {
-      import std.stdio;
-      this._runnableTasks ~= p;
+      this._executableTasks ~= p;
       this._runnableTasksGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
+    }
+  }
+
+  public final void addTerminalProcess(Process p) {
+    if(p.isTerminalWorker) {
+      this._terminalWorkers ~= p;
+    }
+    if(p.isTerminalTask) {
+      this._executableTasks ~= p;
+      this._terminalTasksGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
     }
   }
 
@@ -6785,8 +6827,6 @@ class EsdlExecutor: EsdlExecutorIf
       this._purgeProcs ~= task;
     }
   }
-
-  Process[] _termProcs;
 
   public final void updateProcs() {
     // expand the list by recursion
@@ -6871,26 +6911,6 @@ class EsdlExecutor: EsdlExecutorIf
       proc.requestState(ProcState.NONE, false);
     }
     _updateProcs.length = 0;
-    if(_termProcs.length > 0) {
-      termProcesses();
-    }
-  }
-
-  void termProcesses() {
-    if(_termProcs.length > 0) {
-      import std.algorithm: filter, count;	// filter
-      auto termWorkers = filter!(function bool(Process t)
-				 {return t.isRunnableWorker();})(_termProcs);
-
-      _workerBarrier.reset(cast(uint) count(termWorkers) + 1);
-
-      // right now only handles terminate requests
-      foreach(proc; _termProcs) {
-	proc.terminateWaiting();
-      }
-      _workerBarrier.wait();
-    }
-    _termProcs.length = 0;
   }
 
   static class DebugBarrier: Barrier
@@ -7031,8 +7051,7 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   public final void joinPoolThreads() {
-    import std.stdio: writeln;
-    writeln(" > Shutting down all the Routine Threads ....");
+    _simulator.getRoot.message("Shutting down all the Routine threads");
     foreach(ref _poolThread; this._poolThreads) {
       _poolThread._halt();
       _poolThread._waitLock.notify();
@@ -7071,8 +7090,20 @@ class EsdlExecutor: EsdlExecutorIf
     }
 
     auto procs = runProcs;
-
     this._runnableWorkers.length = 0;
+
+    foreach(worker; this._terminalWorkers) {
+      debug(TERMINATE) {
+	import std.stdio: writeln;
+	writeln("******* About to Terminate ",
+		worker.procID, " (ID) ", worker.state, "(status)");
+      }
+      if(worker._stage >= _KILLED) {
+	runProcs ~= worker;
+      }
+    }
+
+    this._terminalWorkers.length = 0;
 
     _workerBarrier.reset(cast(uint)runProcs.length + 1);
 
@@ -7083,7 +7114,7 @@ class EsdlExecutor: EsdlExecutorIf
 	this._procSemaphore.wait();
 	if(worker._esdl__parLock is null ||
 	   worker._esdl__parLock.tryWait) {
-	  worker.execute();
+	  worker._execute();
 	}
 	else {			// postpone
 	  runProcs ~= worker;
@@ -7196,7 +7227,7 @@ class EsdlHeapScheduler : EsdlScheduler
       _noticeHeap.assume(_noticeQueue, 0);
     }
   }
-  
+
   final public SimTime simTime() {
     synchronized(this) {
       return _simTime;
@@ -7396,7 +7427,7 @@ class EsdlHeapScheduler : EsdlScheduler
 	_asyncFlag = false;
       }
     }
-  } 
+  }
 
   public final SimRunPhase triggerNextEventNotices(SimTime maxTime) {
     _deltaCount = 0;
@@ -7465,6 +7496,13 @@ interface RootEntityIntf: EntityIntf
 {
   import esdl.sync.barrier: Barrier;
   private __gshared RootEntityIntf[] _roots;
+
+  final private void message(string str, bool important = false) {
+    import std.stdio: stderr;
+    if(important) stderr.writeln("[ESDL->", this.getName(), "]*", str);
+    else stderr.writeln("[ESDL->", this.getName(), "] ", str);
+  }
+
   static void addRoot(RootEntityIntf root) {
     synchronized(typeid(RootEntityIntf)) {
       _roots ~= root;
@@ -7483,7 +7521,7 @@ interface RootEntityIntf: EntityIntf
     }
   }
 
-  
+
   static RootEntityIntf[] allRoots() {
     synchronized(typeid(RootEntityIntf)) {
       return _roots;
@@ -7491,7 +7529,7 @@ interface RootEntityIntf: EntityIntf
   }
 
   public void addArgv(string[] argv);
-  
+
   public void addSimHook(SimPhase phase, DelegateThunk thunk);
 
   public void _esdl__unboundPorts();
@@ -7544,7 +7582,7 @@ interface RootEntityIntf: EntityIntf
 
   public size_t getNumFirstCore();
   public size_t getNumMultiCore();
-  
+
   public void setTimePrecision(Time precision);
   public Time getTimePrecision();
   public bool timePrecisionSet();
@@ -7663,7 +7701,7 @@ interface RootEntityIntf: EntityIntf
 	}
       }
     }
-    
+
     public void withdrawCaveat(NamedComp caveat) {
       bool allWithdrawn = false;
       synchronized(this) {
@@ -7696,7 +7734,7 @@ abstract class RootEntity: RootEntityIntf
 {
 
   mixin RootEntityMixin;
-  
+
   EsdlSimulator _simulator;
 
   public final EsdlSimulator simulator() {
@@ -7748,9 +7786,9 @@ abstract class RootEntity: RootEntityIntf
       if(_timingPrecision == Time.init) {
 	_timingPrecision = 1.psec;
       }
-      import std.stdio;
-      writeln(">>>>>>>>>> Timing Precision is: ",
-	      _timingPrecision.normalize());
+      import std.string: format;
+      this.message(format("Timing Precision is: %s",
+			  _timingPrecision.normalize()));
     }
   }
 
@@ -7810,12 +7848,12 @@ abstract class RootEntity: RootEntityIntf
     //   return CPU_COUNT_AFFINITY();
     // }
   }
-  
+
   public void multiCore(int ncore = 0, size_t fcore = 0) {
     if(ncore < 1) {
       ncore = cpuCount() - ncore;
     }
-    
+
     if(cpuCount() < ncore) {
       import std.conv: to;
       assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
@@ -8000,11 +8038,10 @@ class EsdlSimulator: EntityIntf
       setPhase(SimPhase.SIMULATION_DONE);
       // Unlock stepSim
       simStepLock.notify();
-      import std.stdio: writeln;
-      writeln(" > Shutting down all the active tasks ....");
+      getRoot.message("Shutting down all the active Tasks");
       this._executor.terminateProcs(getRoot()._esdl__getChildProcsHier());
       this._executor.joinPoolThreads();
-      writeln(" > Simulation Complete....");
+      getRoot.message("Simulation Complete");
       RootEntity.delRoot(this.getRoot());
       getRoot._esdl__finish();
       simTermLock.notify();
@@ -8066,14 +8103,14 @@ class EsdlSimulator: EntityIntf
       // tasks = _executor.getRunnableProcs();
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	writeln(" > Got Immediate workers: ", _executor.runnableWorkersCount);
+	writeln(" > Got Immediate workers: ", _executor.executableWorkersCount);
       }
       debug(SCHEDULER) {
 	import std.stdio: writeln;
-	writeln(" > Got Immediate tasks: ", _executor.runnableTasksCount);
+	writeln(" > Got Immediate tasks: ", _executor.executableTasksCount);
       }
 
-      if(_executor.runnableThreadsCount is 0) {
+      if(_executor.executableThreadsCount is 0) {
 	if(runDelta is true || timeLeft is true) {
 	  runDelta = false;	// runDelta will trigger only one delta cycle
 
@@ -8104,14 +8141,14 @@ class EsdlSimulator: EntityIntf
 	  _scheduler.triggerDeltaEvents();
 	  debug(SCHEDULER) {
 	    import std.stdio: writeln;
-	    writeln(" > Got Delta workers: ", _executor.runnableWorkersCount);
+	    writeln(" > Got Delta workers: ", _executor.executableWorkersCount);
 	  }
 	  debug(SCHEDULER) {
 	    import std.stdio: writeln;
-	    writeln(" > Got Delta tasks: ", _executor.runnableTasksCount);
+	    writeln(" > Got Delta tasks: ", _executor.executableTasksCount);
 	  }
 	  while(this.phase is SimPhase.SIMULATE &&
-		_executor.runnableThreadsCount is 0) {
+		_executor.executableThreadsCount is 0) {
 	    schedPhase = SchedPhase.TIMED;
 	    debug(SCHEDULER) {
 	      import std.stdio: writeln;
@@ -8124,11 +8161,11 @@ class EsdlSimulator: EntityIntf
 	    case SimRunPhase.SIMULATE:
 	      debug(SCHEDULER) {
 		import std.stdio: writeln;
-		writeln(" > Got Timed tasks: ",	_executor.runnableWorkersCount);
+		writeln(" > Got Timed tasks: ",	_executor.executableWorkersCount);
 	      }
 	      debug(SCHEDULER) {
 		import std.stdio: writeln;
-		writeln(" > Got Timed tasks: ",	_executor.runnableTasksCount);
+		writeln(" > Got Timed tasks: ",	_executor.executableTasksCount);
 	      }
 	      break;
 	    case SimRunPhase.SIMULATION_DONE:
@@ -8172,22 +8209,20 @@ class EsdlSimulator: EntityIntf
 	}
       }
       Process[] runProcs;
-      if(_executor.runnableWorkersCount) {
+      if(_executor.executableWorkersCount > 0) {
 	runProcs = _executor.execWorkers();
 	debug(SCHEDULER) {
 	  import std.stdio: writeln;
 	  writeln(" > Done executing workers");
 	}
       }
-      if(_executor.runnableTasksCount) {
+      if(_executor.executableTasksCount > 0) {
 	_executor.execTasks();
 	debug(SCHEDULER) {
 	  import std.stdio: writeln;
 	  writeln(" > Done executing tasks");
 	}
-	if(_executor.runnableTasksCount) {
-	  _executor._runnableTasks.length = 0;
-	}
+	_executor._executableTasks.length = 0;
       }
       // change the state of the Workers only after we are also
       // done with the tasks
@@ -8499,6 +8534,7 @@ interface ConfigContext: TimeContext, ParContext
     protected ulong _timeScale = 0;
 
     override protected void _esdl__setTimeUnit(Time t) {
+      import std.string: format;
       synchronized(this) {
 	if(! t.isZero()) {
 	  Time prec = getRoot.getTimePrecision.normalize();
@@ -8506,13 +8542,12 @@ interface ConfigContext: TimeContext, ParContext
 	  if(tuni._value !is 0 && prec._value is 0) {
 	    import std.stdio;
 	    prec = tuni;
-	    writeln("********** timePrecision undefined, setting it to top level timeUnit: ", prec);
+	    getRootEntity.message(format("timePrecision undefined, setting it to top level timeUnit: %s", prec), true);
 	    getRootEntity._esdl__setTimePrecision(prec);
 	  }
 	  if(prec._unit > tuni._unit ||
 	     ((tuni._value * 10L^^(tuni._unit - prec._unit)) %
 	      prec._value) !is 0) {
-	    import std.string: format;
 	    assert(false,
 		   format("setTimeUnit %s incompatible with setTimePrecision %s",
 			  tuni, prec));
@@ -8578,19 +8613,19 @@ interface ConfigContext: TimeContext, ParContext
       synchronized(this) {
 	// this._phase = SimPhase.CONFIGURE;
 	if(this._timeScale is 0 && scale is 0) {
-	  import std.stdio;
+	  import std.string: format;
 	  Time prec = getRootEntity.getTimePrecision.normalize();
 	  if(prec._value is 0) {
-	    writeln("********** No default timePrecision specified; "
-		    "setting timePrecision to 1.psec");
+	    getRootEntity.message("No default timePrecision specified; " ~
+				  "setting timePrecision to 1.psec", true);
 	    this._esdl__setTimePrecision = 1.psec;
-	    writeln("********** No default timeUnit specified; "
-		    "setting timeUnit to 1.nsec");
+	    getRootEntity.message("No default timeUnit specified; " ~
+				  "setting timeUnit to 1.nsec", true);
 	    this._esdl__setTimeUnit = 1.nsec;
 	  }
 	  else {
-	    writeln("********** No default timeUnit specified; "
-		    "setting timeUnit to timePrecision: ", prec);
+	    getRootEntity.message("No default timeUnit specified; " ~
+				  format("setting timeUnit to timePrecision: %s", prec), true);
 	    this._esdl__setTimeUnit = prec;
 	  }
 	}
