@@ -806,6 +806,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
     }
 
+    // some bits are X or Z
+    alias isUnkown = isX;
     @property public bool isX() {
       static if(L) {
 	for (size_t i=0; i!=_bval.length-1; ++i) {
@@ -817,7 +819,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       else return false;
     }
 
-   @property public bool isZ() {
+    // returns true if all the logic bits are carrying Z
+    @property public bool isZ() {
      static if(L) {
        for (size_t i=0; i!= _bval.length-1; ++i) {
 	 if(cast(store_t) (_bval[i]+1) != 0) return false;
