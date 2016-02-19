@@ -89,7 +89,8 @@ public struct Queue(T) {
     return this;
   }
     
-
+  // Unlike underlying dlang array assignment, data is duplicated
+  // data can not be shared between the two queues anyways
   public Queue!T opAssign()(Queue!T q) @safe {
     this.data = q.data.dup;
     this.head = q.head;
@@ -104,6 +105,24 @@ public struct Queue(T) {
     return this;
   }
 
+  public Queue!T clone() const {
+    Queue!T q;
+    q.data = (cast(T[]) this.data).dup;
+    q.head = head;
+    q.size = size;
+    return q;
+  }
+
+  public Queue!T clone() {
+    Queue!T q;
+    q.data ~= this.data.dup;
+    q.head = head;
+    q.size = size;
+    return q;
+  }
+
+  alias dup = clone;
+  
   unittest {
     int[] arr = [1,2,3,4,5];
     Queue!(int) de = arr;
@@ -485,7 +504,7 @@ public struct Queue(T) {
   // }
 
   // http://d.puremagic.com/issues/show_bug.cgi?id=10727
-  alias toArray this;
+  // alias toArray this;
 
   unittest {
     Queue!(int) de = [1,2,3,4,5];
@@ -1170,13 +1189,13 @@ public struct Queue(T) {
       }
     }
 
-  public void pushBack()(const T[] values) @trusted {
+  public void pushBack()(T[] values) @trusted {
     foreach(it; values) {
       this.pushBack(it);
     }
   }
 
-  public void opOpAssign(string op, R)(R values) @safe
+  public void opOpAssign(string op, R)(R values) @trusted
     if(op == "~" && isIterable!R) {
       foreach(it; values) {
 	this.pushBack(it);
