@@ -24,6 +24,7 @@ import std.bitmanip;
 import std.range;
 import core.bitop;
 import core.exception;
+static import std.algorithm; 	// required for min, max
 
 import esdl.intf.vpi: s_vpi_vecval, p_vpi_vecval;
     
@@ -723,13 +724,12 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     public static auto ones(size_t msb, size_t lsb=0) {
-      import std.algorithm;
       import std.conv: to;
 
       assert(msb <= SIZE && lsb <= SIZE, "MSB is: " ~ msb.to!string);
       alias _bvec!(false, false, N) _type;
-      _type a =(cast(_type) 1) << max(msb, lsb);
-      _type b =(cast(_type) 1) << min(lsb, msb);
+      _type a =(cast(_type) 1) << std.algorithm.max(msb, lsb);
+      _type b =(cast(_type) 1) << std.algorithm.min(lsb, msb);
       a -= b;
       return a;
     }
@@ -1395,7 +1395,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       static if(STORESIZE == 1) {
 	import std.conv;
 	auto val = this._aval[0];
-	string str = to!string(val);
+	string str = val.to!string();
 	char[] buff;
 	foreach(c; str) buff ~= c;
 	return buff;
