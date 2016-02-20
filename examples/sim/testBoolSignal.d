@@ -63,11 +63,6 @@ class Foo: Entity {
 }
 
 class Sim: RootEntity {
-
-  this(string name)
-    {
-      super(name);
-    }
   // Inst!(Foo) [320] top;
   // Inst!(Foo) [2] top;
   Inst!Foo[1] foo;
@@ -80,8 +75,8 @@ int main()
   // writeln("Size of EventNotice is: ", EventNotice.sizeof);
   // writeln("Size of Time is: ", Time.sizeof);
   
-  Sim theRootEntity = new Sim("theRootEntity");
-  theRootEntity.elaborate();
+  Sim theRootEntity = new Sim;
+  theRootEntity.elaborate("theRootEntity");
   theRootEntity.simulate(1000.nsec);
   // theRootEntity.terminate();
   return 0;

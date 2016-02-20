@@ -1,5 +1,12 @@
 import esdl.data.cstx;
-enum string CST="foo.length == 8;\nforeach(_esdl__elem_foo_0; foo) {\n_esdl__elem_foo_0.length == 4;\n}"
+enum string CST="
+    foreach(ff; foo) {
+      foreach(f; ff) {
+	f < 20;
+	f > 0;
+      }
+    }
+"
 ;
 
   // q{

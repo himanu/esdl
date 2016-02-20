@@ -56,14 +56,12 @@ size_t[] CPU_LIST() {
   return list;
 }
 
-size_t CPU_COUNT() {
-  //  return sysconf(_SC_NPROCESSORS_ONLN);
-  return CPU_LIST().length;
+int CPU_COUNT() {
+  return cast(int) sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-size_t CPU_COUNT__() {
-  return sysconf(_SC_NPROCESSORS_ONLN);
-  // return CPU_LIST().length;
+int CPU_COUNT_AFFINITY() {
+  return cast(int) CPU_LIST().length;
 }
 
 void CPU_ZERO(cpu_set_t* cpusetp) {
@@ -74,7 +72,7 @@ public int stickToCpuCore(size_t coreId) {
   import std.stdio;
   import core.cpuid: threadsPerCPU;
 
-  assert(coreId >= 0 && coreId < CPU_COUNT__());
+  assert(coreId >= 0 && coreId < CPU_COUNT());
 
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);

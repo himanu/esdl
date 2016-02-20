@@ -11,6 +11,7 @@ module esdl.base.comm;
 private import esdl.base.core;
 import std.traits;
 import std.stdio;
+import core.memory: GC;
 
 // Given a type (class or interface), this template function finds out
 // whether the type has a member function by name event that
@@ -33,7 +34,7 @@ private template isEventMethod(ML...) {
     enum bool isEventMethod = false;
   } else {
     static if((is(ReturnType!(ML[0]) == Event) ||
-		is(ReturnType!(ML[0]) : EventObj))) {
+	       is(ReturnType!(ML[0]) : EventObj))) {
       enum bool isEventMethod = true;
     } else {
       enum bool isEventMethod = isEventMethod!(ML[1..$]);
@@ -102,7 +103,7 @@ string declareWait(IF, string E, string CHANNEL)() {
 	    (__traits(compiles, mixin("channel." ~ E ~ "()")))) {
     foreach(M;(MemberFunctionsTuple!(IF, E)))
       if(is(ReturnType!M == Event) ||
-	  is(ReturnType!M : EventObj)) {
+	 is(ReturnType!M : EventObj)) {
 	result = "
 	  void wait() {
 	    // wait for default Event
@@ -266,7 +267,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
   public void _esdl__exeportIsBound() {
     if(M != 0 && _channel is null) {
       writeln("Error: ExePort '" ~ this.getFullName ~
-	       "' is not bound to any channel");
+	      "' is not bound to any channel");
       this.getRoot._esdl__unboundExePorts();
     }
   }
@@ -326,29 +327,29 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
 	}
     }
   else
-    {
-      final void bind(IF channel) {
-	if(simPhase == SimPhase.BINDEXEPORTS) {
-	  import std.exception;
-	  enforce(_channel is null, "Re-binding a exeport if not allowed: " ~
-		  this.getFullName);
-	  this._channel = channel;
-	  // Bind all Proxy Events
-	  //    mixin(bindProxyEvents!(IF, "_channel")());
-	  // static if(hasRegisterMethod!(IF, "registerExePort")) {
-	  static if(__traits(compiles, _channel.registerExePort(this))) {
-	    _channel.registerExePort(this);
-	  }
-	  // static if(hasRegisterMethod!(IF, "registerExePort", ExePort!(IF, N))) {
-	  //   channel.registerExePort();
-	  // }
+  {
+    final void bind(IF channel) {
+      if(simPhase == SimPhase.BINDEXEPORTS) {
+	import std.exception;
+	enforce(_channel is null, "Re-binding a exeport if not allowed: " ~
+		this.getFullName);
+	this._channel = channel;
+	// Bind all Proxy Events
+	//    mixin(bindProxyEvents!(IF, "_channel")());
+	// static if(hasRegisterMethod!(IF, "registerExePort")) {
+	static if(__traits(compiles, _channel.registerExePort(this))) {
+	  _channel.registerExePort(this);
 	}
-      }
-
-      final void opCall(IF channel) {
-	this.bind(channel);
+	// static if(hasRegisterMethod!(IF, "registerExePort", ExePort!(IF, N))) {
+	//   channel.registerExePort();
+	// }
       }
     }
+
+    final void opCall(IF channel) {
+      this.bind(channel);
+    }
+  }
 
   // Hierarchy
   mixin NamedMixin;
@@ -444,7 +445,7 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
     synchronized(this) {
       if(M != 0 && _channel is null) {
 	writeln("Error: port '" ~ this.getFullName ~
-		 "' is not bound to any channel");
+		"' is not bound to any channel");
 	this.getRoot._esdl__unboundPorts();
       }
     }
@@ -482,57 +483,57 @@ public class PortObj(IF, size_t N=1, size_t M=N) if(N == 1) : BasePort
       // bind method for signals
       void bind(U)(U channel)
 	if(is(U unused == Signal!(S, M), S, bool M)) {
-	if(simPhase == SimPhase.BINDPORTS) {
-	  import std.exception;
-	  enforce(this._channel is null, "Re-binding a port if not allowed: " ~
-		  this.getFullName);
-	  synchronized(this) {
-	    this._channel = channel._esdl__objRef;
+	  if(simPhase == SimPhase.BINDPORTS) {
+	    import std.exception;
+	    enforce(this._channel is null, "Re-binding a port if not allowed: " ~
+		    this.getFullName);
+	    synchronized(this) {
+	      this._channel = channel._esdl__objRef;
+	    }
+	    // Bind all Proxy Events
+	    //    mixin(bindProxyEvents!(IF, "_channel")());
+	    // static if(hasRegisterMethod!(IF, "registerPort")) {
+	    static if(__traits(compiles, _channel.registerPort(this))) {
+	      _channel.registerPort(this);
+	    }
+	    // static if(hasRegisterMethod!(IF, "registerPort", Port!(IF, N))) {
+	    //   _channel.registerPort();
+	    // }
 	  }
-	  // Bind all Proxy Events
-	  //    mixin(bindProxyEvents!(IF, "_channel")());
-	  // static if(hasRegisterMethod!(IF, "registerPort")) {
-	  static if(__traits(compiles, _channel.registerPort(this))) {
-	    _channel.registerPort(this);
-	  }
-	  // static if(hasRegisterMethod!(IF, "registerPort", Port!(IF, N))) {
-	  //   _channel.registerPort();
-	  // }
 	}
-      }
       void opCall(U)(U channel)
 	if(is(U unused == Signal!(S, M), S, bool M)) {
 	  this.bind(channel);
 	}
     }
   else
-    {
-      // bind method
-      final void bind(IF channel) {
-	if(simPhase == SimPhase.BINDPORTS) {
-	  import std.exception;
-	  enforce(this._channel is null, "Re-binding a port if not allowed: " ~
-		  this.getFullName);
-	  synchronized(this) {
-	    this._channel = channel;
-	  }
-	  // Bind all Proxy Events
-	  //    mixin(bindProxyEvents!(IF, "_channel")());
-	  // static if(hasRegisterMethod!(IF, "registerPort")) {
-	  static if(__traits(compiles, _channel.registerPort(this))) {
-	    _channel.registerPort(this);
-	  }
-	  // static if(hasRegisterMethod!(IF, "registerPort", Port!(IF, N))) {
-	  //   _channel.registerPort();
-	  // }
+  {
+    // bind method
+    final void bind(IF channel) {
+      if(simPhase == SimPhase.BINDPORTS) {
+	import std.exception;
+	enforce(this._channel is null, "Re-binding a port if not allowed: " ~
+		this.getFullName);
+	synchronized(this) {
+	  this._channel = channel;
 	}
-      }
-
-
-      final void opCall(IF channel) {
-	this.bind(channel);
+	// Bind all Proxy Events
+	//    mixin(bindProxyEvents!(IF, "_channel")());
+	// static if(hasRegisterMethod!(IF, "registerPort")) {
+	static if(__traits(compiles, _channel.registerPort(this))) {
+	  _channel.registerPort(this);
+	}
+	// static if(hasRegisterMethod!(IF, "registerPort", Port!(IF, N))) {
+	//   _channel.registerPort();
+	// }
       }
     }
+
+
+    final void opCall(IF channel) {
+      this.bind(channel);
+    }
+  }
 
   // Hierarchy
   mixin NamedMixin;
@@ -1379,7 +1380,7 @@ interface SignalInIF(T)
 
   alias read this;
 
-  static if(is(T == Bit!1) || is(T == Logic!1) || is(T == bool)) {
+  static if((isBitVector!T && T.SIZE == 1) || is(T == bool)) {
     public Event posedge();
     public Event negedge();
     public bool valueChangedPos();
@@ -1401,8 +1402,6 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 {
   import esdl.data.bvec;
 
-  alias SignalObj!(T, MULTI_DRIVER) ThisType;
-  
   protected Notification!T _changeEvent;
   protected T _curVal;
   protected T _newVal;
@@ -1418,7 +1417,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
   public this() {
     synchronized(this) {
-      static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
+      static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
 	_posedgeEvent.init("_posedgeEvent", this);
 	_negedgeEvent.init("_negedgeEvent", this);
       }
@@ -1545,66 +1544,30 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     }
   }
 
-  version(COSIM_VERILOG) {
+  public void updateBindings() {}
 
-    final private void hdlPut() {
-      synchronized(this) {
-	// for now, get the value and display it
-	s_vpi_value v;
-	v.format = vpiVectorVal;
-	static if(isBitVector!T) {
-	  enum size_t NWORDS = (T.SIZE+31)/32;
-	}
-	else {
-	  enum size_t NWORDS = (8*T.sizeof + 31)/32;
-	}
-	s_vpi_vecval[NWORDS+1] vector;
-
-	static if(isBitVector!T) {
-	  _curVal.toVpiVecValue(vector);
-	}
-	else {
-	  enum size_t size = 8 * T.sizeof;
-	  // special handling for long/ulong for others simply copy
-	  static if(size > 32) {
-	    vector[0].aval = cast(uint) _curVal;
-	    vector[1].aval = cast(uint) (_curVal >>> 32);
-	    vector[0].bval = 0;
-	    vector[1].bval = 0;
-	  }
-	  else {
-	    vector[0].aval = _curVal;
-	    vector[0].bval = 0;
-	  }
-	}
-
-	v.value.vector = vector.ptr;
-	vpiPutValue(netHandle, &v, null, vpiNoDelay);
-
-      }
-    }
-  }
-  
   // no need for synchronized
   public final override void update() {
     // if(_newVal != _curVal) {
     _curVal = _newVal;
     _changeEvent.post(0, _curVal);
-    version(COSIM_VERILOG) {
-      if(this._updateReason !is UpdateReason.VERILOG) {
-	this.hdlPut();
+    updateBindings();
+    static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
+      // if(_posedgeEvent._eventObj !is null) {
+      if(_newVal == 1) {
+	_posedgeEvent.notify(0);
       }
-    }
-    static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
-      if(_posedgeEvent._eventObj !is null) {
-	if(_newVal == true) _posedgeEvent.notify(0);
-	if(_newVal == false) _negedgeEvent.notify(0);
+      // }
+      // if(_negedgeEvent._eventObj !is null) {
+      if(_newVal == 0) {
+	_negedgeEvent.notify(0);
       }
+      // }
     }
     // }
   }
 
-  static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
+  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
     protected Event _posedgeEvent;
     protected Event _negedgeEvent;
 
@@ -1648,101 +1611,11 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     }
   }
 
-  version(COSIM_VERILOG) {
-    import esdl.intf.vpi;
+}
 
-    vpiHandle netHandle = null;
-
-    private static int _hdlConnect(p_cb_data cb) {
-      auto t = cast(ThisType) (*cb).user_data;
-      t.hdlGet();
-      return 0;
-    }
-
-    private final void hdlGet() {
-      synchronized(this) {
-	import std.stdio;
-	// for now, get the value and display it
-	s_vpi_value v;
-	v.format = vpiVectorVal;
-	vpiGetValue(netHandle, &v);
-	// at the time of binding we already checked that the size of
-	// the signal at the two sides match.
-
-	static if(isBitVector!T) {
-	  _newVal = v.value.vector;
-	  requestUpdate(UpdateReason.VERILOG);
-	}
-	else {
-	  enum size_t size = 8 * T.sizeof;
-	  // special handling for long/ulong for others simply copy
-	  static if(size > 32) {
-	    ulong lsw = v.value.vector[0].aval;
-	    ulong msw = v.value.vector[1].aval;
-	    lsw |= (msw << 32);
-	    _newVal = cast(T) lsw;
-	  }
-	  else {
-	    _newVal = cast(T) v.value.vector[0].aval;
-	  }
-	}
-	requestUpdate(UpdateReason.VERILOG);
-	// writeln(*(v.value.vector));
-      }
-    }
-
-    public final void hdlBind(string net) {
-      synchronized(this) {
-	if(netHandle is null) {
-	  netHandle = vpiGetHandleByName(net, null);
-
-	  if(netHandle is null) {
-	    assert(false, "Can not find \"" ~ net ~ "\" in the verilog design");
-	  }
-    
-	  auto handleType = vpiGet(vpiType, netHandle);
-	  if(handleType !is vpiNet && handleType !is vpiReg) {
-	    assert(false, "\"" ~ net ~ "\"" ~ " is not of reg or wire type");
-	  }
-
-	  auto size = vpiGet(vpiSize, netHandle);
-	  static if(isBitVector!T) {
-	    if(size !is T.SIZE) {
-	      assert(false, "hdlBind: Signal size does not match with the size"
-		     "of the net" ~ net);
-	    }
-	  }
-	  else static if(isBoolean!T) {
-	      if(size !is 1) {
-		assert(false, "hdlBind: Signal size does not match with the size"
-		       "of the net" ~ net);
-	      }
-	    }
-	    else {
-	      if(size !is 8 * T.sizeof) {
-		assert(false, "hdlBind: Signal size does not match with the size"
-		       "of the net" ~ net);
-	      }
-	    }
-
-	  import core.stdc.stdlib;
-	  auto p_cb = cast(p_cb_data)
-	    core.stdc.stdlib.malloc(s_cb_data.sizeof);
-	  s_cb_data cb = *p_cb;
-	  cb.reason = vpiCbValueChange;
-	  cb.cb_rtn = &_hdlConnect;//next callback address
-	  cb.obj = netHandle;
-	  // cb.time = null;
-	  // cb.value = null;
-
-	  Object obj = this;
-	  cb.user_data = cast(void*) obj;
-	  // vpiRegisterCb(p_cb); // Do not know why this will not work
-	  vpiRegisterCb(&cb);
-	}
-      }
-    }
-  }
+template Signal(uint WIDTH) {
+  import esdl.data.bvec;
+  alias Signal=Signal!(Bit!WIDTH);
 }
 
 @_esdl__component struct Signal(T, bool MULTI_DRIVER = false)
@@ -1768,7 +1641,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
 	  import esdl.data.bvec;
 
-	  static if(is(T == bool) || is(T == Bit!1) || is(T == Logic!1)) {
+	  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
 	    _signalObj._posedgeEvent.init();
 	    _signalObj._negedgeEvent.init();
 	  }
@@ -1782,17 +1655,72 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
   private auto opAssign(S)(S e)
     if(is(S unused: SignalObj!(T, M), bool M))
-  {
-    auto ret = e.read();
-    this.write(ret);
-    return ret;
-  }
+      {
+	auto ret = e.read();
+	this.write(ret);
+	return ret;
+      }
 
   // Disallow Signal assignment
   // @disable private this(this);
 
   public void opAssign()(T val) {
     _esdl__obj.write(val);
+  }
+
+  public final void opAssign(V) (V val)
+    if(isAssignable!(V, T) &&
+       !is(T == V) &&
+       !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
+      _esdl__obj.write(cast(T) val);
+    }
+
+  static if(isBitVector!T) {
+    static if(T.SIZE >= 1) {
+      public void opAssign(bool val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 8 && T.ISSIGNED) {
+      public void opAssign(byte val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 8 && !T.ISSIGNED) {
+      public void opAssign(ubyte val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 16 && T.ISSIGNED) {
+      public void opAssign(short val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 16 && !T.ISSIGNED) {
+      public void opAssign(ushort val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 32 && T.ISSIGNED) {
+      public void opAssign(int val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 32 && !T.ISSIGNED) {
+      public void opAssign(uint val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 64 && T.ISSIGNED) {
+      public void opAssign(long val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 64 && !T.ISSIGNED) {
+      public void opAssign(ulong val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
   }
 
   public void opOpAssign(string op, T)(T other) {
@@ -1803,6 +1731,318 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
     synchronized(typeid(Signal!(T, MULTI_DRIVER))) {
       if(_signalObj is null) {
 	_signalObj = new SignalObj!(T, MULTI_DRIVER);
+      }
+    }
+  }
+
+  static void _esdl__inst(size_t I=0, U, L)(U u, ref L l) {
+    l._esdl__objRef._esdl__inst!I(u, l._esdl__objRef);
+  }
+
+  static void _esdl__elab(size_t I, U, L)(U u, ref L l, uint[] indices=null) {
+    l._esdl__inst!I(u, l);
+    synchronized(l._esdl__objRef) {
+      static if(is(U unused: ElabContext)) {
+	u._esdl__addChildObj(l._esdl__objRef);
+      }
+      l._esdl__objRef._esdl__nomenclate!I(u, indices);
+      l._esdl__objRef._esdl__setParent(u);
+      _esdl__elabMems(l._esdl__objRef);
+    }
+  }
+}
+
+class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
+{
+  import esdl.intf.vpi;
+
+  alias read this;
+
+  vpiHandle vpiNetHandle = null;
+
+  override final void updateBindings() {
+    if(vpiNetHandle) {	// only if the signal is bound to a Verilog net
+      if(this._updateReason !is UpdateReason.VERILOG) {
+	this.hdlPut();
+      }
+    }
+  }
+  
+  final private void hdlPut() {
+    assert(vpiIsUsable);
+    synchronized(this) {
+      s_vpi_value v;
+      v.format = vpiVectorVal;
+      static if(isBitVector!T) {
+	enum size_t NWORDS = (T.SIZE+31)/32;
+      }
+      else {
+	enum size_t NWORDS = (8*T.sizeof + 31)/32;
+      }
+      s_vpi_vecval[NWORDS+1] vector;
+
+      static if(isBitVector!T) {
+	_curVal.toVpiVecValue(vector);
+      }
+      else {
+	enum size_t size = 8 * T.sizeof;
+	// special handling for long/ulong for others simply copy
+	static if(size > 32) {
+	  vector[0].aval = cast(uint) _curVal;
+	  vector[1].aval = cast(uint) (_curVal >>> 32);
+	  vector[0].bval = 0;
+	  vector[1].bval = 0;
+	}
+	else {
+	  vector[0].aval = _curVal;
+	  vector[0].bval = 0;
+	}
+      }
+
+      v.value.vector = vector.ptr;
+      vpi_put_value(vpiNetHandle, &v, null, vpiNoDelay);
+
+    }
+  }
+  
+  private static int _hdlConnect(p_cb_data cb) {
+    auto t = cast(HdlSignalObj!(T, MULTI_DRIVER)) (*cb).user_data;
+    t.hdlGet();
+    return 0;
+  }
+
+  private final void hdlGet() {
+    synchronized(this) {
+      // for now, get the value and display it
+      s_vpi_value v;
+      v.format = vpiVectorVal;
+      vpi_get_value(vpiNetHandle, &v);
+      // at the time of binding we already checked that the size of
+      // the signal at the two sides match.
+
+      static if(isBitVector!T) {
+	_newVal = v.value.vector;
+      }
+      else {
+	enum size_t size = 8 * T.sizeof;
+	// special handling for long/ulong for others simply copy
+	static if(size > 32) {
+	  ulong lsw = v.value.vector[0].aval;
+	  ulong msw = v.value.vector[1].aval;
+	  lsw |= (msw << 32);
+	  _newVal = cast(T) lsw;
+	}
+	else {
+	  _newVal = cast(T) v.value.vector[0].aval;
+	}
+      }
+      requestUpdate(UpdateReason.VERILOG);
+      // writeln(*(v.value.vector));
+    }
+  }
+
+  public final void hdlBind(string net) {
+    synchronized(this) {
+      if(vpiNetHandle !is null) {
+	assert(false, "Signal is already bound: " ~ this.getFullName());
+      }
+	
+      vpiNetHandle = vpiGetHandleByName(net, null);
+
+      if(vpiNetHandle is null) {
+	assert(false, "Can not find \"" ~ net ~ "\" in the verilog design");
+      }
+    
+      auto handleType = vpi_get(vpiType, vpiNetHandle);
+      if(handleType !is vpiNet && handleType !is vpiReg) {
+	assert(false, "\"" ~ net ~ "\"" ~ " is not of reg or wire type");
+      }
+
+      auto size = vpi_get(vpiSize, vpiNetHandle);
+      static if(isBitVector!T) {
+	if(size !is T.SIZE) {
+	  assert(false, "hdlBind: Signal size does not match with the size"
+		 "of the net " ~ net);
+	}
+      }
+      else static if(isBoolean!T) {
+	if(size !is 1) {
+	  assert(false, "hdlBind: Signal size does not match with the size"
+		 "of the net" ~ net);
+	}
+      }
+      else {
+	if(size !is 8 * T.sizeof) {
+	  assert(false, "hdlBind: Signal size does not match with the size"
+		 "of the net" ~ net);
+	}
+      }
+
+      import core.stdc.stdlib;
+      auto p_cb = cast(p_cb_data)
+	// core.stdc.stdlib.malloc(s_cb_data.sizeof);
+	GC.malloc(s_cb_data.sizeof);
+	  
+      // s_cb_data cb; //  = *p_cb;
+      p_cb.reason = vpiCbValueChange;
+      p_cb.cb_rtn = &_hdlConnect;
+      p_cb.obj = vpiNetHandle;
+      // cb.time = null;
+      // cb.value = null;
+
+      Object obj = this;
+      p_cb.user_data = cast(void*) obj;
+
+      vpi_register_cb(p_cb); // Do not know why this will not work
+      // vpi_register_cb(&cb);
+      // }
+    }
+  }
+
+  public final void opAssign(V) (V val)
+    if(isAssignable!(V, T) &&
+       !is(T == V) &&
+       !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
+      this.write(cast(T) val);
+    }
+
+  
+  public final void opOpAssign(string op, T)(T other) {
+    synchronized(this) {
+      static if(op == "+")  _newVal = _curVal +  other;
+      static if(op == "-")  _newVal = _curVal -  other;
+      static if(op == "*")  _newVal = _curVal *  other;
+      static if(op == "/")  _newVal = _curVal /  other;
+      static if(op == "^^") _newVal = _curVal ^^ other;
+      static if(op == "%")  _newVal = _curVal %  other;
+      static if(op == "~")  _newVal = _curVal ~  other;
+      static if(op == "|")  _newVal = _curVal ^  other;
+      static if(op == "&")  _newVal = _curVal %  other;
+      static if(op == "^")  _newVal = _curVal ~  other;
+      this.requestUpdate();
+    }
+  }
+
+}
+
+template HdlSignal(uint WIDTH) {
+  import esdl.data.bvec;
+  alias HdlSignal=HdlSignal!(Bit!WIDTH);
+}
+
+@_esdl__component struct HdlSignal(T, bool MULTI_DRIVER = false)
+{
+  // enum bool _thisIsSignal = true;
+  public HdlSignalObj!(T, MULTI_DRIVER) _signalObj = void;
+
+  public ref HdlSignalObj!(T, MULTI_DRIVER) _esdl__objRef() {
+    return _signalObj;
+  }
+
+  public HdlSignalObj!(T, MULTI_DRIVER) _esdl__obj() {
+    if(this._signalObj is null) {
+      synchronized(typeid(HdlSignal!(T, MULTI_DRIVER))) { //(this)
+	if(_signalObj is null) {
+	  _signalObj = new HdlSignalObj!(T, MULTI_DRIVER);
+
+	  // Construct these event objects here
+	  // otherwise these get autoconstructed in the update phase
+	  // where the parent object is not visible
+	
+	  _signalObj._changeEvent.init();
+
+	  import esdl.data.bvec;
+
+	  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
+	    _signalObj._posedgeEvent.init();
+	    _signalObj._negedgeEvent.init();
+	  }
+	}
+      }
+    }
+    return this._signalObj;
+  }
+
+  alias _esdl__obj this;
+
+  private auto opAssign(S)(S e)
+    if(is(S unused: HdlSignalObj!(T, M), bool M))
+      {
+	auto ret = e.read();
+	this.write(ret);
+	return ret;
+      }
+
+  // Disallow Signal assignment
+  // @disable private this(this);
+
+  public void opAssign()(T val) {
+    _esdl__obj.write(val);
+  }
+
+  public final void opAssign(V) (V val)
+    if(isAssignable!(V, T) &&
+       !is(T == V) &&
+       !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
+      _esdl__obj.write(cast(T) val);
+    }
+
+  static if(isBitVector!T) {
+    static if(T.SIZE >= 1) {
+      public void opAssign(bool val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 8 && T.ISSIGNED) {
+      public void opAssign(byte val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 8 && !T.ISSIGNED) {
+      public void opAssign(ubyte val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 16 && T.ISSIGNED) {
+      public void opAssign(short val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 16 && !T.ISSIGNED) {
+      public void opAssign(ushort val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 32 && T.ISSIGNED) {
+      public void opAssign(int val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 32 && !T.ISSIGNED) {
+      public void opAssign(uint val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 64 && T.ISSIGNED) {
+      public void opAssign(long val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+    static if(T.SIZE >= 64 && !T.ISSIGNED) {
+      public void opAssign(ulong val) {
+	_esdl__obj.write(cast(T) val);
+      }
+    }
+  }
+
+  public void opOpAssign(string op, T)(T other) {
+    _esdl__obj.opOpAssign!op(other);
+  }
+
+  public final void init() {
+    synchronized(typeid(HdlSignal!(T, MULTI_DRIVER))) {
+      if(_signalObj is null) {
+	_signalObj = new HdlSignalObj!(T, MULTI_DRIVER);
       }
     }
   }
@@ -1841,19 +2081,19 @@ template InOut(T)
 
 
 template Wire(size_t W)
-if(W > 0) {
+  if(W > 0) {
   import esdl.data.bvec;
   alias Signal!(Logic!W) Wire;
- }
+}
 
 template WireIn(size_t W)
-if(W > 0) {
+  if(W > 0) {
   import esdl.data.bvec;
   alias Input!(Logic!W) Wire;
- }
+}
 
 template WireOut(size_t W)
-if(W > 0) {
+  if(W > 0) {
   import esdl.data.bvec;
   alias Output!(Logic!W) Wire;
- }
+}

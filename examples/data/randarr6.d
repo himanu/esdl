@@ -20,9 +20,10 @@ class Foo
     writeln(foo);
   }
 
-  Constraint!q{
+  Constraint! q{
     foo.length >= 1;
     foreach(ff; foo) {
+      // the 1st dimension
       ff.length >= 1;
       foreach(f; ff) {
 	f.length >= 1;

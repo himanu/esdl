@@ -8,10 +8,6 @@ import std.stdio;
 import esdl.base.core;
 
 class RootWrap: RootEntity {
-  this(string name) {
-    super(name);
-  }
-
   void proc1() {
     import std.stdio;
     writeln("********** Task from RootEntity **********");
@@ -23,8 +19,8 @@ class RootWrap: RootEntity {
 void main()
 {
   // top level module
-  auto theRootEntity = new RootWrap("theRootEntity");
-  theRootEntity.elaborate();
+  auto theRootEntity = new RootWrap;
+  theRootEntity.elaborate("theRootEntity");
   theRootEntity.simulate();
   // theRootEntity.terminate();
   // import std.stdio;

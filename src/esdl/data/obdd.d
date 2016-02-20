@@ -568,7 +568,7 @@ struct BddVec
   }
 
   final public BddVec opBinary(string op)(long rhs)
-    if(op == "<<" || op == ">>" || op == "*" || op == "/")
+    if(op == "<<" || op == ">>" || op == "*" || op == "/" || op == "%")
       {
 	static if(op == "<<")
 	  {
@@ -586,6 +586,10 @@ struct BddVec
 	  {
 	    return this.div(rhs);
 	  }
+	static if(op == "%")
+	  {
+	    return this.rem(rhs);
+	  }
       }
 
   final public BddVec opBinaryRight(string op)(long rhs)
@@ -596,10 +600,12 @@ struct BddVec
 	    return this.mul(rhs);
 	  }
       }
+
   final public BddVec opBinary(string op)(BddVec rhs)
     if(op == "&" || op == "|" || op == "^" ||
        op == "<<" || op == ">>" || op == "+" ||
-       op == "-" || op == "*"  || op == "/")
+       op == "-" || op == "*"  || op == "/" ||
+       op == "%")
       {
 	static if(op == "&")
 	  {
@@ -636,6 +642,10 @@ struct BddVec
 	static if(op == "/")
 	  {
 	    return this.div(rhs);
+	  }
+	static if(op == "%")
+	  {
+	    return this.rem(rhs);
 	  }
       }
   final public BDD opBinary(string op)(BddVec rhs)
@@ -947,6 +957,35 @@ struct BddVec
     return res;
   }
 
+  // required for division and remainder operation with rhs of type long
+  public BddVec sub_samesize(BddVec that)
+  {
+
+    BDD c = zero();
+    BddVec res = BddVec(size, false);
+
+   if (size != that.size)
+   {
+     bdd_error(BddError.BVEC_SIZE);
+   }
+   
+    for(int n = 0; n < size; n++)
+      {
+	/* this[n] = l[n] ^ r[n] ^ c; */
+	res.bitvec[n] = this.bitvec[n] ^ that.bitvec[n];
+	res.bitvec[n] = res.bitvec[n] ^ c.dup();
+
+	/* c =(l[n] & r[n] & c) |(!l[n] &(r[n] | c)); */
+	BDD tmp1 = that.bitvec[n] | c;
+	BDD tmp2 = this.bitvec[n].lth(tmp1);
+	tmp1 = this.bitvec[n] & that.bitvec[n];
+	tmp1 = tmp1 & c;
+	tmp1 = tmp1 | tmp2;
+	c = tmp1;
+      }
+    return res;
+  }
+
   public BddVec sub(BddVec that)
   {
 
@@ -1056,8 +1095,8 @@ struct BddVec
     return result;
   }
 
-  public void div_rec(BddVec divisor, BddVec remainder,
-			       BddVec result, long step)
+  public void div_rec(BddVec divisor, ref BddVec remainder,
+		      ref BddVec result, long step)
   {
     BDD isSmaller = divisor.lte(remainder);
     BddVec newResult = result.shl(1, isSmaller);
@@ -1067,10 +1106,9 @@ struct BddVec
     for(size_t n = 0; n < divisor.size; n++)
       sub.bitvec[n] = isSmaller.ite(divisor.bitvec[n], zero.bitvec[n]);
 
-    BddVec tmp = remainder.sub(sub);
+    BddVec tmp = remainder.sub_samesize(sub);
     BddVec newRemainder =
       tmp.shl(1, result.bitvec[divisor.size - 1]);
-
     if(step > 1)
       div_rec(divisor, newRemainder, newResult, step - 1);
 
@@ -1080,15 +1118,16 @@ struct BddVec
 
   public void replaceWith(BddVec that)
   {
-    if(size != that.size)
+    if(size != that.size) {
       // throw new BddException();
       bdd_error(BddError.BVEC_SIZE);
+    }
     remove();
     this._bitvec = that.bitvec;
   }
 
 
-  public int div(long c, ref BddVec res, ref BddVec rem)
+  public int div(ulong c, ref BddVec res, ref BddVec rem)
   {
     if(c > 0)
       {
@@ -1111,7 +1150,28 @@ struct BddVec
     }
   }
 
+  public BddVec rem(BddVec rhs) {
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
+    div(rhs, result, remainder);
+    return remainder;
+  }
+
+  public BddVec rem(ulong rhs) {
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
+    div(rhs, result, remainder);
+    return remainder;
+  }
+
   public BddVec div(BddVec rhs) {
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
+    div(rhs, result, remainder);
+    return result;
+  }
+
+  public BddVec div(ulong rhs) {
     BddVec result = BddVec(size, _signed);
     BddVec remainder = BddVec(size, _signed);
     div(rhs, result, remainder);
@@ -5586,7 +5646,7 @@ class Buddy
 
     INCREF(root);
 
-    debug {writeln("INCREF(", root, ") = ",GETREF(root));}
+    debug(BUDDY) {writeln("INCREF(", root, ") = ",GETREF(root));}
     return root;
   }
 
@@ -5609,7 +5669,7 @@ class Buddy
 
     DECREF(root);
 
-    debug {writeln("DECREF(", root, ") = ", GETREF(root));}
+    debug(BUDDY) {writeln("DECREF(", root, ") = ", GETREF(root));}
     return root;
   }
 

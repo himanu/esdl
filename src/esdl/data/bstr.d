@@ -30,6 +30,13 @@ private ubyte _log2(size_t n) {
   else return cast(ubyte)(1 + _log2(n/2));
 }
 
+template isBitString(T) {
+  static if(is(T unused == BitString!(L), bool L))
+    enum bool isBitString = true;
+  else
+  enum bool isBitString = false;
+}
+
 struct BitString(bool L)
 {
 
@@ -941,7 +948,7 @@ struct BitString(bool L)
    * Support for operator ~= for $(D BitArray).
    */
 
-  auto opCatAssign(bool BIGENDIAN=false, T)(T t)
+  auto opCatAssign(bool BIGENDIAN=false, T)(T t, size_t count = 0)
   if(is(T == bool) || isIntegral!T ||
      (isBitVector!T && (L || (! T.IS4STATE)))) {
     static if(is(T == bool)) {
@@ -956,46 +963,62 @@ struct BitString(bool L)
         alias T V;
         alias t v;
       }
-    length = len + V.SIZE;
+    size_t bits;
+    if(count == 0) {
+      bits = V.SIZE;
+    }
+    else {
+      assert(count <= V.SIZE);
+      bits = count;
+    }
+    length = len + bits;
     static if(BIGENDIAN) {
-      for (size_t i=0; i != V.SIZE; ++i) {
-        this[$-1-i] = v[i];
+      for (size_t i=0; i != bits; ++i) {
+        this[$-bits+i] = v[$-i-1];
       }
     }
     else {
-      for (size_t i=0; i != V.SIZE; ++i) {
-        this[$-1-i] = v[$-1-i];
+      for (size_t i=0; i != bits; ++i) {
+        this[$-bits+i] = v[i];
       }
     }
     return this;
   }
 
-  void pushBack(T)(T t, bool bigEndian=false)
+  void pushBack(T)(T t, bool bigEndian=false, size_t count = 0)
     if(is(T == bool) || isIntegral!T ||
        (isBitVector!T && (L || (! T.IS4STATE)))) {
       if(bigEndian) {
-        this.opCatAssign!true(t);
+        this.opCatAssign!true(t, count);
       }
       else {
-        this.opCatAssign(t);
+        this.opCatAssign(t, count);
       }
     }
 
-  void getFront(T)(out T t, size_t index, bool bigEndian=false)
+  void getFront(T)(out T t, size_t index, bool bigEndian=false, size_t count = 0)
     if(((! L) && (is(T == bool) || isIntegral!T)) ||
        (isBitVector!T && (T.IS4STATE || (! L)))) {
       static if(is(T == bool))     alias UBit!(1) V;
       else static if(isIntegral!T) alias UBit!(T.sizeof*8) V;
         else                       alias T V;
-      assert(len-index >= V.SIZE);
+      size_t bits;
+      if(count == 0) {
+	bits = V.SIZE;
+      }
+      else {
+	assert(count <= V.SIZE);
+	bits = count;
+      }
+      assert(len-index >= bits);
       V v;
       if(bigEndian) {
-        for (size_t i=0; i != V.SIZE; ++i) {
+        for (size_t i=0; i != bits; ++i) {
           v[$-i-1] = this[index+i];
         }
       }
       else {
-        for (size_t i=0; i != V.SIZE; ++i) {
+        for (size_t i=0; i != bits; ++i) {
           v[i] = this[index+i];
         }
       }

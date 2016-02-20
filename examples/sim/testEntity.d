@@ -50,21 +50,14 @@ class TrafficLight: Entity
 
 
 class TrafficRoot: RootEntity {
-
-  this(string name)
-    {
-      super(name);
-    }
-
   Inst!TrafficLight traffic[2][32];
-
 }
 
 void main()
 {
   // top level module
-  TrafficRoot theRoot = new TrafficRoot("theRoot");
-  theRoot.elaborate();
+  TrafficRoot theRoot = new TrafficRoot;
+  theRoot.elaborate("theRoot");
   theRoot.simulate(100.nsec);
   theRoot.terminate();
 }

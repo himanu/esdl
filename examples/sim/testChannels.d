@@ -135,20 +135,14 @@ class Foo: Entity {
 @timeUnit(100.psec)
 @timePrecision(10.psec)
 class Sim: RootEntity {
-
   Inst!(Foo) [2] top;
-
-  this(string name)
-    {
-      super(name);
-    }
 }
 
 int main()
 {
   // top level module
-  Sim theRootEntity = new Sim("theRootEntity");
-  theRootEntity.elaborate();
+  Sim theRootEntity = new Sim;
+  theRootEntity.elaborate("theRootEntity");
   theRootEntity.simulate(100.nsec);
   theRootEntity.terminate();
   return 0;

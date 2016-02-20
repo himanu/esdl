@@ -45,31 +45,43 @@ struct packer
       t.fromBits(v);
     }
 
-  void pack(T)(T t, bool bigEndian=false)
+  void pack(T)(T t, bool bigEndian=false, size_t count = 0)
     if (is(T == bool) || isBitVector!T || isIntegral!T) {
       static if(isBitVector!T && T.IS4STATE) {
-	this.pack(t.aVal, bigEndian);
-	this.pack(t.bVal, bigEndian);
+	this.pack(t.aVal, bigEndian, count);
+	this.pack(t.bVal, bigEndian, count);
       }
       else {
-	data.pushBack(t, bigEndian);
-	_packIndex += BitLength!T;
+	data.pushBack(t, bigEndian, count);
+	if(count == 0) {
+	  _packIndex += BitLength!T;
+	}
+	else {
+	  assert(count <= BitLength!T);
+	  _packIndex += count;
+	}
       }
     }
 
-  void unpack(T)(ref T t, bool bigEndian=false)
+  void unpack(T)(ref T t, bool bigEndian=false, size_t count = 0)
     if (is(T == bool) || isBitVector!T || isIntegral!T) {
       static if(isBitVector!T && T.IS4STATE) {
 	_bvec!(T.ISSIGNED, false, T.SIZE) aval;
 	_bvec!(T.ISSIGNED, false, T.SIZE) bval;
-	this.unpack(aval, bigEndian);
+	this.unpack(aval, bigEndian, count);
 	t.setAval(aval);
-	this.unpack(bval, bigEndian);
+	this.unpack(bval, bigEndian, count);
 	t.setBval(bval);
       }
       else {
-	data.getFront(t, _unpackIndex, bigEndian);
-	_unpackIndex += BitLength!T;
+	data.getFront(t, _unpackIndex, bigEndian, count);
+	if(count == 0) {
+	  _unpackIndex += BitLength!T;
+	}
+	else {
+	  assert(count <= BitLength!T);
+	  _unpackIndex += count;
+	}
       }
     }
 

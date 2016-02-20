@@ -1,0 +1,28 @@
+﻿{
+    "name": "vlang",
+    "description": "Hardware Verification DSL",
+    "license": "Boost",
+    "copyright": "Copyright © 2012-2015 Coverify Systems Technology",
+    "authors": [
+	"Puneet Goel"
+    ],
+    "targetPath": "lib",
+    "configurations": [
+	{
+	    "name": "vlangsourcelib",
+	    "targetType": "sourceLibrary",
+	    "excludedSourceFiles": ["source/app.d"]
+	},
+	{
+	    "name": "vlangdynamiclib",
+	    "targetType": "dynamicLibrary",
+	    "dflags": ["-fPIC"],
+	    "excludedSourceFiles": ["source/app.d"]
+	},
+	{
+	    "name": "vlangstaticlib",
+	    "targetType": "staticLibrary",
+	    "excludedSourceFiles": ["source/app.d"]
+	}
+    ]
+}

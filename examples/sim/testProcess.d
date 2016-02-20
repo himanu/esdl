@@ -68,16 +68,12 @@ class TestProc: Entity
 class Root: RootEntity
 {
   Inst!TestProc test;
-  this(string name) {
-    super(name);
-  }
-
 }
 
 void main()
 {
-  Root root = new Root("root");
-  root.elaborate();
+  Root root = new Root;
+  root.elaborate("root");
   root.simulate(100000.nsec);
   root.terminate();
 }

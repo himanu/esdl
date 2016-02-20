@@ -49,20 +49,14 @@ class Foo: Entity
 @timeUnit(100.psec)
 @timePrecision(10.psec)
 class Bar: RootEntity {
-
-  this(string name) {
-    super(name);
-  }
-
   Inst!Foo foo;
-
 }
 
 void main()
 {
   // top level module
-  Bar theRoot = new Bar("theRoot");
-  theRoot.elaborate();
+  Bar theRoot = new Bar;
+  theRoot.elaborate("theRoot");
   theRoot.simulate(1.nsec);
   theRoot.terminate();
 }

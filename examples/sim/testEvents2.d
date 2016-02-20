@@ -51,21 +51,14 @@ class Foo: Entity {
 }
 
 class Sim: RootEntity {
-  this(string name)
-    {
-      super(name);
-    }
-
   Inst!(Foo) [16] top;
-  
-
 }
 
 void main()
 {
   // top level module
-  Sim theRootEntity = new Sim("theRootEntity");
-  theRootEntity.elaborate();
+  Sim theRootEntity = new Sim;
+  theRootEntity.elaborate("theRootEntity");
   theRootEntity.simulate(10000.nsec);
   // theRootEntity.terminate();
 }
