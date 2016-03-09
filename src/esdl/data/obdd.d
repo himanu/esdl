@@ -3283,7 +3283,7 @@ class Buddy
     return PAIR(l, r);
   }
 
-  static immutable double M_LN2 = 0.69314718055994530942;
+  enum double M_LN2 = 0.69314718055994530942;
 
   static double log1p(double a)
   {
@@ -5947,7 +5947,7 @@ class Buddy
   enum int OPERATOR_NUM = 11;
 
   /* Operator results - entry = left<<1 | right(left,right in {0,1}) */
-  static int[4][OPERATOR_NUM] oprres =
+  enum oprres =
     [ [ 0, 0, 0, 1 ], // and( & )
       [ 0, 1, 1, 0 ], // xor( ^ )
       [ 0, 1, 1, 1 ], // or( | )
@@ -10023,7 +10023,7 @@ enum BddError : byte
       BVEC_DIVZERO = -22
       }
 
-static immutable string[] errorstrings =
+enum errorstrings =
   ["",			// empty for 0
    "Out of memory",
    "Unknown variable",
