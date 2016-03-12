@@ -12,7 +12,7 @@ module esdl.data.time;
 
 import std.math;		// needed for ^^ operation
 
-protected enum TimeUnit: byte
+enum TimeUnit: byte
   {   SEC  = 0,
       MSEC = -3,
       USEC = -6,

@@ -928,7 +928,7 @@ class CstStage {
 
 abstract class _esdl__SolverEnvRoot {
   // Keep a list of constraints in the class
-  protected _esdl__ConstraintBase[] _esdl__cstsList;
+  public _esdl__ConstraintBase[] _esdl__cstsList;
   public _esdl__ConstraintBase _esdl__cstWith;
   bool _esdl__cstWithChanged;
 

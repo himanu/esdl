@@ -167,6 +167,18 @@ package interface NamedComp: EsdlObj, TimeContext
   {
     static if(!__traits(compiles, _esdl__objId)) {
       private uint _esdl__objId = uint.max;
+      void _esdl__setObjId() {
+	synchronized(typeid(NamedComp)) {
+	  if(_esdl__objId is uint.max) {
+	    // do not use getRoot since in some odd cases root is
+	    // not set for the components when this function is called
+	    _esdl__objId = getRootEntity()._esdl__genObjId();
+	  }
+	  static if(__traits(compiles, _esdl__compId)) {
+	    _esdl__setCompId();
+	  }
+	}
+      }
     }
 
     static if(!__traits(compiles, _esdl__name)) {
@@ -201,9 +213,8 @@ package interface NamedComp: EsdlObj, TimeContext
     static if(!__traits(compiles, _esdl__root)) {
       public final RootEntity getRoot() {
 	auto parent = this.getParent();
-	if(parent !is null) {
-	  return parent.getRoot;
-	}
+	assert(parent !is null);
+	return parent.getRoot;
 	// This is retuired for the cases where the object does not
 	// have a parent. But since we decided that the parent must
 	// be set either during the elaboration or during inside the
@@ -213,8 +224,6 @@ package interface NamedComp: EsdlObj, TimeContext
 	//   if(rootProc !is null)
 	//     return rootProc.getRoot;
 	// }
-	assert(false,
-	       "Can not determine root of a NamedComp with null Parent");
       }
     }
 
@@ -323,29 +332,6 @@ package interface NamedComp: EsdlObj, TimeContext
 
 }
 
-
-static shared uint _esdl__compCount;
-private void _esdl__setCompId(T)(T t) if(is(T: HierComp)) {
-  synchronized(typeid(HierComp)) {
-    if(t._esdl__compId is uint.max) {
-      t._esdl__compId = _esdl__compCount;
-      _esdl__compCount = _esdl__compCount + 1;
-    }
-  }
- }
-
-static shared uint _esdl__objCount;
-private void _esdl__setObjId(T)(T t) if(is(T: NamedComp)) {
-  synchronized(typeid(NamedComp)) {
-    if(t._esdl__objId is uint.max) {
-      t._esdl__objId = _esdl__objCount;
-      _esdl__objCount = _esdl__objCount + 1;
-    }
-    static if(is(T: HierComp)) {
-      t._esdl__setCompId();
-    }
-  }
- }
 
 public auto _esdl__get_parallelism(L)(L l) {
   enum int Q = _esdl__attr!(parallelize, L);
@@ -558,6 +544,20 @@ public interface HierComp: NamedComp, ConfigContext
 
     static if(!__traits(compiles, _esdl__compId)) {
       private uint _esdl__compId = uint.max;
+      void _esdl__setCompId() {
+	synchronized(typeid(HierComp)) {
+	  if(_esdl__compId is uint.max) {
+	    // do not use getRoot since in some odd cases root is
+	    // not set for the components when this function is called
+	    _esdl__compId = getRootEntity()._esdl__genCompId();
+	    debug(ELABORATE) {
+	      import std.stdio;
+	      writeln("Setting component ID as: ",
+		      _esdl__compId);
+	    }
+	  }
+	}
+      }
     }
     //////////////////////////////////////////////////////
     // Implementation of the hierarchy/elaboration methods
@@ -1424,9 +1424,9 @@ public interface ElabContext: HierComp
 	t._esdl__addChildComp(l);
       }
       l._esdl__nomenclate!(I, S)(t, indices);
-      l._esdl__setObjId();
       l._esdl__setHierParent(t);
       l._esdl__setRoot(t.getRoot);
+      l._esdl__setObjId();
       l._esdl__setIndices(indices);
       static if(is(typeof(l._esdl__elab_typeID): L)) {
 	l._esdl__elab_virtual();
@@ -2197,8 +2197,8 @@ public class NotificationObj(T): EventObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -2480,8 +2480,8 @@ public class NotificationQueueObj(T): NotificationObj!T
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -2513,7 +2513,7 @@ public class EventObj: EventAgent, NamedComp
   protected this(SimEvent simEvent, NamedComp parent=null) {
     synchronized(this) {
       if(parent is null) {parent = _esdl__getParentProc();}
-      this._esdl__parent = parent;
+      this._esdl__setParent(parent);
 
       if(simEvent !is null) {
 	this._simEvent = simEvent;
@@ -2921,8 +2921,8 @@ public class EventObj: EventAgent, NamedComp
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -3193,8 +3193,8 @@ public class EventQueueObj: EventObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -4571,10 +4571,10 @@ template Worker(alias F, int R=0, size_t S=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
 	  l._esdl__setParentEntity(t);
+	  l._esdl__setObjId();
 	  t._esdl__register(l);
 	}
       }
@@ -4634,10 +4634,10 @@ template Task(alias F, int R=0, size_t S=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
 	  l._esdl__setParentEntity(t);
+	  l._esdl__setObjId();
 	  t._esdl__register(l);
 	}
       }
@@ -4694,10 +4694,10 @@ template Routine(alias F, int R=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
 	  l._esdl__setParentEntity(t);
+	  l._esdl__setObjId();
 	  t._esdl__register(l);
 	}
       }
@@ -6251,7 +6251,7 @@ class Channel: ChannelIF, NamedComp // Primitive Channel
     synchronized(this) {
       // _esdl__getParentProc returns null during elaboration
       if(parent is null) {parent = _esdl__getParentProc();}
-      this._esdl__parent = parent;
+      this._esdl__setParent(parent);
     }
   }
 
@@ -7506,7 +7506,7 @@ interface RootEntityIntf: EntityIntf
   import esdl.sync.barrier: Barrier;
   private __gshared RootEntityIntf[] _roots;
 
-  final private void message(string str, bool important = false) {
+  final void message(string str, bool important = false) {
     import std.stdio: stderr;
     if(important) stderr.writeln("[ESDL!", this.getName(), "]*", str);
     else stderr.writeln("[ESDL!", this.getName(), "] ", str);
@@ -7745,6 +7745,7 @@ abstract class RootEntity: RootEntityIntf
   mixin RootEntityMixin;
 
   EsdlSimulator _simulator;
+  private static RootEntity _esdl__rootEntity;
 
   public final EsdlSimulator simulator() {
     return _simulator;
@@ -7755,12 +7756,38 @@ abstract class RootEntity: RootEntityIntf
       _simulator = new EsdlSimulator(this);
       _esdl__root = this;
       _esdl__parent = this;
+      _esdl__rootId = _esdl__genRootId();
       _simulator._esdl__setRoot(this);
       _simulator._esdl__setHierParent(this);
       _simulator._esdl__setName("_simulator");
     }
   }
 
+  private uint _esdl__rootId;
+  private shared static uint _esdl__rootCount;
+  uint _esdl__genRootId() {
+    synchronized(typeid(RootEntity)) {
+      auto count = _esdl__rootCount;
+      _esdl__rootCount = _esdl__rootCount + 1;
+      return count;
+    }
+  }
+
+  private uint _esdl__compCount;
+  uint _esdl__genCompId() {
+    synchronized(this) {
+      return _esdl__compCount++;
+    }
+  }
+  
+  private uint _esdl__objCount;
+  uint _esdl__genObjId() {
+    synchronized(this) {
+      return _esdl__objCount++;
+    }
+  }
+  
+  
   protected bool _esdl__noUnboundPorts = true;
   protected bool _esdl__noUnboundExePorts = true;
 
@@ -8417,9 +8444,6 @@ class EsdlSimulator: EntityIntf
   }
 }
 
-private static RootEntity _esdl__rootEntity;
-
-
 // return the current PoolThread, otherwise null
 public PoolThread getPoolThread() {
   auto _thread = Thread.getThis();
@@ -8430,19 +8454,19 @@ public RootEntity getRootEntity() {
   // first handle the case for call within the
   // simulation tasks and routines
   // These need to be handled in the fastest possible manner
-  if(_esdl__rootEntity is null) {
+  if(RootEntity._esdl__rootEntity is null) {
     auto proc = Procedure.self();
     if(proc !is null) {
-      _esdl__rootEntity = Procedure.self.getRoot();
+      RootEntity._esdl__rootEntity = Procedure.self.getRoot();
     }
   }
   // if still null, get the root entity from the EsdlThread
-  if(_esdl__rootEntity is null) {
+  if(RootEntity._esdl__rootEntity is null) {
     EsdlThread _thread = cast(EsdlThread) Thread.getThis();
-    _esdl__rootEntity = _thread.getRoot();
+    RootEntity._esdl__rootEntity = _thread.getRoot();
   }
   // A null could still be returned for non-Esdl Threads
-  return _esdl__rootEntity;
+  return RootEntity._esdl__rootEntity;
 }
 
 public EsdlSimulator getSimulator() {
@@ -8450,11 +8474,11 @@ public EsdlSimulator getSimulator() {
 }
 
 private void setRootEntity(RootEntity root) {
-  if(_esdl__rootEntity is null) {
-    _esdl__rootEntity = root;
+  if(RootEntity._esdl__rootEntity is null) {
+    RootEntity._esdl__rootEntity = root;
   }
   else {
-    assert(_esdl__rootEntity == root);
+    assert(RootEntity._esdl__rootEntity == root);
   }
 }
 
