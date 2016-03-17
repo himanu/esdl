@@ -572,11 +572,11 @@ struct BddVec
       {
 	static if(op == "<<")
 	  {
-	    return this.shl(rhs, zero());
+	    return this.shl(cast(int) rhs, zero());
 	  }
 	static if(op == ">>")
 	  {
-	    return this.shr(rhs, zero());
+	    return this.shr(cast(int) rhs, zero());
 	  }
 	static if(op == "*")
 	  {

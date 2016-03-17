@@ -940,7 +940,7 @@ struct CstParser {
     srcTag = parseIdentifier();
     if(CST[srcTag..srcCursor] != "before") {
       import std.conv: to;
-      assert(false, "Expected keywork \"before\" at: " ~ srcTag.to!string);
+      assert(false, "Expected keyword \"before\" at: " ~ srcTag.to!string);
     }
 
     srcTag = parseSpace();
