@@ -168,10 +168,12 @@ package interface NamedComp: EsdlObj, TimeContext
     static if(!__traits(compiles, _esdl__objId)) {
       private uint _esdl__objId = uint.max;
       void _esdl__setObjId() {
-	synchronized(typeid(NamedComp)) {
+	synchronized(typeid(typeof(this))) {
 	  if(_esdl__objId is uint.max) {
 	    // do not use getRoot since in some odd cases root is
 	    // not set for the components when this function is called
+	    auto root = getRootEntity();
+	    assert(root !is null, "Root is not set");
 	    _esdl__objId = getRootEntity()._esdl__genObjId();
 	  }
 	  static if(__traits(compiles, _esdl__compId)) {
@@ -545,7 +547,7 @@ public interface HierComp: NamedComp, ConfigContext
     static if(!__traits(compiles, _esdl__compId)) {
       private uint _esdl__compId = uint.max;
       void _esdl__setCompId() {
-	synchronized(typeid(HierComp)) {
+	synchronized(typeid(typeof(this))) {
 	  if(_esdl__compId is uint.max) {
 	    // do not use getRoot since in some odd cases root is
 	    // not set for the components when this function is called
@@ -4467,11 +4469,38 @@ interface EntityIntf: ElabContext, SimContext
   static EntityIntf getThreadContext() {
     return _esdl__threadContext;
   }
+  static RootEntity getContextRoot() {
+    EntityIntf parent;
+    auto process = Process.self();
+    if(process !is null) {
+      parent = process.getParentEntity();
+    }
+    else {
+      parent = getThreadContext();
+    }
+    if (parent !is null) {
+      return parent.getRoot();
+    }
+    else {
+      return null;
+    }
+  }
   static EntityIntf getContextEntity() {
     EntityIntf parent;
     auto process = Process.self();
     if(process !is null) {
       parent = process.getParentEntity();
+    }
+    else {
+      parent = getThreadContext();
+    }
+    return parent;
+  }
+  static NamedComp getContextParent() {
+    NamedComp parent;
+    auto process = Process.self();
+    if(process !is null) {
+      parent = process;
     }
     else {
       parent = getThreadContext();
@@ -4708,7 +4737,7 @@ template Routine(alias F, int R=0)
 private auto recreateDelegate(alias F, T)(T _entity)
 {
   import std.functional: toDelegate;
-  alias typeof(toDelegate(&F)) DG;
+  alias DG = typeof(toDelegate(&F));
   DG dg;
   dg.funcptr = &F;
   dg.ptr = *(cast(void **) (&_entity));
@@ -5333,7 +5362,7 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   private final void _execute() {
-    debug(PROC) {
+    debug(LOGPROCS) {
       import std.stdio;
       stderr.writeln("Activating Process: ", getFullName());
     }
@@ -5658,7 +5687,7 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   public final void waitSensitive(EventObj event) {
-    debug(PROC) {
+    debug(LOGPROCS) {
       import std.stdio;
       stderr.writeln("De-activating Process: ", getFullName());
     }
@@ -6628,7 +6657,7 @@ class EsdlExecutor: EsdlExecutorIf
   private EsdlSimulator _simulator;
   // class ProcessMonitor {}
   import core.sync.semaphore: Semaphore;
-  import esdl.sync.barrier: Barrier;
+  import core.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
   private Barrier _workerBarrier;
   private Barrier _poolThreadExecBarrier;
@@ -6942,19 +6971,19 @@ class EsdlExecutor: EsdlExecutorIf
       }
       super(num);
     }
-    final override void reset(uint num) {
-      synchronized(this) {
-	assert(_num == 0 || _num == _size);
-	_num = num;
-	_size = num;
-	_count = 0;
-	debug(BARRIER) {
-	  import std.stdio;
-	  stderr.writeln("Resetting Barrier ", _name, " to size: ", _num);
-	}
-      }
-      super.reset(num);
-    }
+    /* final override void reset(uint num) { */
+    /*   synchronized(this) { */
+    /* 	assert(_num == 0 || _num == _size); */
+    /* 	_num = num; */
+    /* 	_size = num; */
+    /* 	_count = 0; */
+    /* 	debug(BARRIER) { */
+    /* 	  import std.stdio; */
+    /* 	  stderr.writeln("Resetting Barrier ", _name, " to size: ", _num); */
+    /* 	} */
+    /*   } */
+    /*   super.reset(num); */
+    /* } */
     final override void wait() {
       synchronized(this) {
 	// assert(_num >= 0, "Barrier moved beyond 0 " ~ _name);
@@ -7114,7 +7143,8 @@ class EsdlExecutor: EsdlExecutorIf
 
     this._terminalWorkers.length = 0;
 
-    _workerBarrier.reset(cast(uint)runProcs.length + 1);
+    _workerBarrier = new Barrier(cast(uint) runProcs.length + 1);
+    // _workerBarrier.reset(cast(uint)runProcs.length + 1);
 
     while(runProcs.length != 0) {
       Process[] workers = runProcs;
@@ -7430,7 +7460,9 @@ class EsdlHeapScheduler : EsdlScheduler
     if(_asyncFlag) {
       synchronized(this) {
 	foreach(ref event; this._asyncQueue) {
-	  event.trigger(_simulator);
+	  synchronized(event) {
+	    event.trigger(_simulator);
+	  }
 	}
 	_asyncQueue.length = 0;
 	_asyncFlag = false;
@@ -7503,7 +7535,7 @@ class EsdlHeapScheduler : EsdlScheduler
 
 interface RootEntityIntf: EntityIntf
 {
-  import esdl.sync.barrier: Barrier;
+  import core.sync.barrier: Barrier;
   private __gshared RootEntityIntf[] _roots;
 
   final void message(string str, bool important = false) {
@@ -7680,7 +7712,7 @@ interface RootEntityIntf: EntityIntf
   final public SimPhase getSimPhase() {
     auto simulator = getSimulator();
     synchronized(simulator) {
-      return getSimulator()._phase;
+      return simulator._phase;
     }
   }
 
@@ -8460,10 +8492,15 @@ public RootEntity getRootEntity() {
       RootEntity._esdl__rootEntity = Procedure.self.getRoot();
     }
   }
+  if(RootEntity._esdl__rootEntity is null) {
+    RootEntity._esdl__rootEntity = RootEntityIntf.getContextRoot();
+  }
   // if still null, get the root entity from the EsdlThread
   if(RootEntity._esdl__rootEntity is null) {
     EsdlThread _thread = cast(EsdlThread) Thread.getThis();
-    RootEntity._esdl__rootEntity = _thread.getRoot();
+    if (_thread !is null) {
+      RootEntity._esdl__rootEntity = _thread.getRoot();
+    }
   }
   // A null could still be returned for non-Esdl Threads
   return RootEntity._esdl__rootEntity;

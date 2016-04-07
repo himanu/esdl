@@ -59,14 +59,19 @@ class Barrier
      * Throws:
      *  SyncException on error.
      */
-  this( uint limit ) {
-    assert( limit > 0 );
-    m_lock  = new Mutex;
-    m_cond  = new Condition( m_lock );
-    m_group = 0;
-    m_limit = limit;
-    m_count = limit;
-  }
+  this( uint limit )
+    in
+    {
+        assert( limit > 0 );
+    }
+    body
+    {
+        m_lock  = new Mutex;
+        m_cond  = new Condition( m_lock );
+        m_group = 0;
+        m_limit = limit;
+        m_count = limit;
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // General Actions

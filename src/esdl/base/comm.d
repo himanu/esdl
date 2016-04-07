@@ -13,6 +13,8 @@ import std.traits;
 import std.stdio;
 import core.memory: GC;
 
+import esdl.data.bvec: isBitVector;
+
 // Given a type (class or interface), this template function finds out
 // whether the type has a member function by name event that
 // returns an Event when called with no arguments
