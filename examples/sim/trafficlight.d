@@ -61,29 +61,11 @@ class TrafficLight: Entity
 	yellow[index].notify(20);
 	// writeln("I am here: ", index);
 	red[index].notify(25);
-	for (size_t i=0; i!=10000; ++i)
-	  {
-	    foreach (idx, ref bar; foo) {
-	      bar = idx + index;
-	    }
-	  }
 	wait(yellow[index]);
 	writeln("Green -> Yellow ", index);
-	for (size_t i=0; i!=10000; ++i)
-	  {
-	    foreach (idx, ref bar; foo) {
-	      bar = idx + index;
-	    }
-	  }
 	wait(red[index]);
 	writeln("Yellow -> Red ", index);
 	green[(index + 1)%POLES].notify();
-	for (size_t i=0; i!=10000; ++i)
-	  {
-	    foreach (idx, ref bar; foo) {
-	      bar = bar * bar;
-	    }
-	  }
 	wait(green[index]);
 	synchronized(this) {
 	  count = count + 1;
@@ -133,7 +115,7 @@ void main()
   // top level module
   TrafficRoot theRoot = new TrafficRoot;
   theRoot.elaborate("theRoot");
-  theRoot.multiCore(4, 0);
+  theRoot.multiCore(0, 0);
   // theRoot.waitElab();
   // theRoot.simulate(100.nsec);
   // theRoot.waitSim();
