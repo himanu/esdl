@@ -1093,22 +1093,83 @@ extern vpi_thunk* vlog_startup_routines;
 void vpiGetValue(T)(vpiHandle handle, ref T t) {
   s_vpi_value val;
   import std.traits; // isIntegral
+  import core.stdc.string;
+  import std.conv;
   static if(isIntegral!T) {
     val.format = vpiIntVal;
     vpi_get_value(handle, &val);
     t = cast(T) val.value.integer;
+  }
+  else static if(is(T: bool)) {
+    uint size = vpi_get(vpiPropertyT.vpiSize, handle);
+    auto hname = vpi_get_str(vpiFullName, handle);
+    assert(size == 1,
+	   hname[0..hname.strlen] ~ " is " ~ size.to!string() ~
+	   " long; vpiPutValue received a BitVector of size: 1"
+	    ~ "\n");
+    val.format = vpiScalarVal;
+    vpi_get_value(handle, &val);
+    if(val.value.scalar == 0) {
+      t = false;
+    }
+    else {
+      t = true;
+    }
+  }
+  else static if(isBitVector!T) {
+    uint size = vpi_get(vpiPrimTypeT.vpiSize, handle);
+    auto hname = vpi_get_str(vpiFullName, handle);
+    assert(size == T.SIZE,
+	   hname[0..hname.strlen] ~ " is " ~ size.to!string() ~
+	   " long; vpiPutValue received a BitVector of size: " ~
+	   T.SIZE.stringof ~ "\n");
+    enum VECLEN = (T.SIZE+31)/32;
+    s_vpi_vecval[VECLEN] vecval;
+    val.format = vpiVectorVal;
+    val.value.vector = vecval.ptr;
+    vpi_get_value(handle, &val);
+    t = vecval;
   }
   else {
     static assert(false, "vpiGetValue not yet implemented for type: " ~
 		  T.stringof);
   }
 }
+
 void vpiPutValue(T)(vpiHandle handle, T t) {
+  import esdl.data.bvec;
+  import core.stdc.string;
   s_vpi_value val;
   import std.traits; // isIntegral
+  import std.conv;
   static if(isIntegral!T) {
     val.format = vpiIntVal;
     val.value.integer = t;
+    vpi_put_value(handle, &val, null, vpiNoDelay);
+  }
+  else static if(is(T: bool)) {
+    uint size = vpi_get(vpiPropertyT.vpiSize, handle);
+    // auto hname = vpi_get_str(vpiFullName, handle);
+    assert(size == 1,
+	   "Mismatch:  " ~ size.to!string() ~
+	   " long; vpiPutValue received a BitVector of size: 1"
+	    ~ "\n");
+    val.format = vpiScalarVal;
+    val.value.scalar = t;
+    vpi_put_value(handle, &val, null, vpiNoDelay);
+  }
+  else static if(isBitVector!T) {
+    uint size = vpi_get(vpiPrimTypeT.vpiSize, handle);
+    string hname = vpi_get_str(vpiFullName, handle);
+    assert(size == T.SIZE,
+	   hname ~ " is " ~ size.to!string() ~
+	   " long; vpiPutValue received a BitVector of size: " ~
+	   T.SIZE.stringof ~ "\n");
+    enum VECLEN = (T.SIZE+31)/32;
+    s_vpi_vecval[VECLEN] vecval;
+    t.toVpiVecValue(vecval);
+    val.format = vpiVectorVal;
+    val.value.vector = vecval.ptr;
     vpi_put_value(handle, &val, null, vpiNoDelay);
   }
   else {
