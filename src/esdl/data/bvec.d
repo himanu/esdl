@@ -24,8 +24,9 @@ import std.bitmanip;
 import std.range;
 import core.bitop;
 import core.exception;
+static import std.algorithm; 	// required for min, max
 
-import esdl.intf.vpi: s_vpi_vecval, p_vpi_vecval;
+import esdl.intf.vpi: s_vpi_vecval;
     
 
 // required for appender
@@ -723,13 +724,12 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     public static auto ones(size_t msb, size_t lsb=0) {
-      import std.algorithm;
       import std.conv: to;
 
       assert(msb <= SIZE && lsb <= SIZE, "MSB is: " ~ msb.to!string);
       alias _bvec!(false, false, N) _type;
-      _type a =(cast(_type) 1) << max(msb, lsb);
-      _type b =(cast(_type) 1) << min(lsb, msb);
+      _type a =(cast(_type) 1) << std.algorithm.max(msb, lsb);
+      _type b =(cast(_type) 1) << std.algorithm.min(lsb, msb);
       a -= b;
       return a;
     }
@@ -1175,20 +1175,30 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
       }
 
-    public void opAssign()(p_vpi_vecval other) {
+    public void opAssign()(s_vpi_vecval[] other) {
       this._from(other);
     }
 
-    private void _from() (p_vpi_vecval other) {
+    private void _from() (s_vpi_vecval[] other) {
       static if(WORDSIZE is 64) {
 	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	  ulong word = other[i].aval;
-	  if(i%2 == 0) this._aval[i/2] = word;
-	  else this._aval[i/2] |= word << 32;
+	  if(i < other.length) {
+	    ulong word = other[i].aval;
+	    if(i%2 == 0) this._aval[i/2] = word;
+	    else this._aval[i/2] |= word << 32;
+	  }
+	  else {
+	    if(i%2 == 0) this._aval[i/2] = 0;
+	  }
 	  static if(IS4STATE) {
-	    ulong cword = other[i].bval;
-	    if(i%2 == 0) this._bval[i/2] = cword;
-	    else this._bval[i/2] |= cword << 32;
+	    if(i < other.length) {
+	      ulong cword = other[i].bval;
+	      if(i%2 == 0) this._bval[i/2] = cword;
+	      else this._bval[i/2] |= cword << 32;
+	    }
+	    else {
+	      if(i%2 == 0) this._bval[i/2] = 0;
+	    }
 	  }
 	}
       }
@@ -1216,6 +1226,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
       
     private void _to() (s_vpi_vecval[] other) {
+      assert(other.length >= (SIZE+31)/32);
       static if(WORDSIZE is 64) {
 	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
 	  if(i%2 == 0) other[i].aval = cast(uint) this._aval[i/2];
@@ -1395,7 +1406,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       static if(STORESIZE == 1) {
 	import std.conv;
 	auto val = this._aval[0];
-	string str = to!string(val);
+	string str = val.to!string();
 	char[] buff;
 	foreach(c; str) buff ~= c;
 	return buff;

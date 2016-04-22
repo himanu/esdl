@@ -1342,7 +1342,7 @@ struct BitString(bool L)
     if(dim is 1) {
       import std.conv;
       auto val = this.aptr[0];
-      string str = to!string(val);
+      string str = val.to!string();
       char[] buff;
       foreach(c; str) buff ~= c;
       return buff;

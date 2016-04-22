@@ -400,24 +400,62 @@ struct CstParser {
 
   size_t parseLiteral() {
     size_t start = srcCursor;
-    while(srcCursor < CST.length) {
-      char c = CST[srcCursor];
-      if((c >= '0' && c <= '9') ||
-	 (c == '_')) {
-	++srcCursor;
-      }
-      else {
-	break;
+    // look for 0b or 0x
+    if(srcCursor + 2 <= CST.length &&
+       CST[srcCursor] == '0' &&
+       (CST[srcCursor+1] == 'x' ||
+	CST[srcCursor+1] == 'X')) { // hex numbers
+      srcCursor += 2;
+      while(srcCursor < CST.length) {
+	char c = CST[srcCursor];
+	if((c >= '0' && c <= '9') ||
+	   (c >= 'a' && c <= 'f') ||
+	   (c >= 'A' && c <= 'F') ||
+	   (c == '_')) {
+	  ++srcCursor;
+	}
+	else {
+	  break;
+	}
       }
     }
-    // Look for long/short specifier
-    while(srcCursor < CST.length) {
-      char c = CST[srcCursor];
-      if(c == 'L' || c == 'S' ||  c == 'U') {
-	++srcCursor;
+    else if(srcCursor + 2 <= CST.length &&
+	    CST[srcCursor] == '0' &&
+	    (CST[srcCursor+1] == 'b' ||
+	     CST[srcCursor+1] == 'B')) { // binary numbers
+      srcCursor += 2;
+      while(srcCursor < CST.length) {
+	char c = CST[srcCursor];
+	if((c == '0' || c == '1' || c == '_')) {
+	  ++srcCursor;
+	}
+	else {
+	  break;
+	}
       }
-      else {
-	break;
+    }
+    else {			// decimals
+      while(srcCursor < CST.length) {
+	char c = CST[srcCursor];
+	if((c >= '0' && c <= '9') ||
+	   (c == '_')) {
+	  ++srcCursor;
+	}
+	else {
+	  break;
+	}
+      }
+    }
+    if(srcCursor > start) {
+      // Look for long/short specifier
+      while(srcCursor < CST.length) {
+	char c = CST[srcCursor];
+	if(c == 'L' || c == 'S' ||  c == 'U') {
+	  ++srcCursor;
+	}
+	else {
+	  break;
+	}
       }
     }
     return start;
@@ -902,7 +940,7 @@ struct CstParser {
     srcTag = parseIdentifier();
     if(CST[srcTag..srcCursor] != "before") {
       import std.conv: to;
-      assert(false, "Expected keywork \"before\" at: " ~ srcTag.to!string);
+      assert(false, "Expected keyword \"before\" at: " ~ srcTag.to!string);
     }
 
     srcTag = parseSpace();

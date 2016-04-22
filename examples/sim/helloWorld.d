@@ -29,5 +29,5 @@ class Top: Entity {
   Foo foo[4];
 }
 void main() {
-  simulate!Top("root", 4, 0);
+  simulate!Top("root");
 }

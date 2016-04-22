@@ -167,6 +167,20 @@ package interface NamedComp: EsdlObj, TimeContext
   {
     static if(!__traits(compiles, _esdl__objId)) {
       private uint _esdl__objId = uint.max;
+      void _esdl__setObjId() {
+	synchronized(typeid(typeof(this))) {
+	  if(_esdl__objId is uint.max) {
+	    // do not use getRoot since in some odd cases root is
+	    // not set for the components when this function is called
+	    auto root = getRootEntity();
+	    assert(root !is null, "Root is not set");
+	    _esdl__objId = getRootEntity()._esdl__genObjId();
+	  }
+	  static if(__traits(compiles, _esdl__compId)) {
+	    _esdl__setCompId();
+	  }
+	}
+      }
     }
 
     static if(!__traits(compiles, _esdl__name)) {
@@ -201,9 +215,8 @@ package interface NamedComp: EsdlObj, TimeContext
     static if(!__traits(compiles, _esdl__root)) {
       public final RootEntity getRoot() {
 	auto parent = this.getParent();
-	if(parent !is null) {
-	  return parent.getRoot;
-	}
+	assert(parent !is null);
+	return parent.getRoot;
 	// This is retuired for the cases where the object does not
 	// have a parent. But since we decided that the parent must
 	// be set either during the elaboration or during inside the
@@ -213,8 +226,6 @@ package interface NamedComp: EsdlObj, TimeContext
 	//   if(rootProc !is null)
 	//     return rootProc.getRoot;
 	// }
-	assert(false,
-	       "Can not determine root of a NamedComp with null Parent");
       }
     }
 
@@ -323,29 +334,6 @@ package interface NamedComp: EsdlObj, TimeContext
 
 }
 
-
-static shared uint _esdl__compCount;
-private void _esdl__setCompId(T)(T t) if(is(T: HierComp)) {
-  synchronized(typeid(HierComp)) {
-    if(t._esdl__compId is uint.max) {
-      t._esdl__compId = _esdl__compCount;
-      _esdl__compCount = _esdl__compCount + 1;
-    }
-  }
- }
-
-static shared uint _esdl__objCount;
-private void _esdl__setObjId(T)(T t) if(is(T: NamedComp)) {
-  synchronized(typeid(NamedComp)) {
-    if(t._esdl__objId is uint.max) {
-      t._esdl__objId = _esdl__objCount;
-      _esdl__objCount = _esdl__objCount + 1;
-    }
-    static if(is(T: HierComp)) {
-      t._esdl__setCompId();
-    }
-  }
- }
 
 public auto _esdl__get_parallelism(L)(L l) {
   enum int Q = _esdl__attr!(parallelize, L);
@@ -558,6 +546,20 @@ public interface HierComp: NamedComp, ConfigContext
 
     static if(!__traits(compiles, _esdl__compId)) {
       private uint _esdl__compId = uint.max;
+      void _esdl__setCompId() {
+	synchronized(typeid(typeof(this))) {
+	  if(_esdl__compId is uint.max) {
+	    // do not use getRoot since in some odd cases root is
+	    // not set for the components when this function is called
+	    _esdl__compId = getRootEntity()._esdl__genCompId();
+	    debug(ELABORATE) {
+	      import std.stdio;
+	      writeln("Setting component ID as: ",
+		      _esdl__compId);
+	    }
+	  }
+	}
+      }
     }
     //////////////////////////////////////////////////////
     // Implementation of the hierarchy/elaboration methods
@@ -1424,9 +1426,9 @@ public interface ElabContext: HierComp
 	t._esdl__addChildComp(l);
       }
       l._esdl__nomenclate!(I, S)(t, indices);
-      l._esdl__setObjId();
       l._esdl__setHierParent(t);
       l._esdl__setRoot(t.getRoot);
+      l._esdl__setObjId();
       l._esdl__setIndices(indices);
       static if(is(typeof(l._esdl__elab_typeID): L)) {
 	l._esdl__elab_virtual();
@@ -1949,7 +1951,7 @@ public class NotificationObj(T): EventObj
   // This function is always called in the schedule phase, when only a
   // single thread is active -- do we need synchronization guards
   // here?
-  protected override void trigger(EsdlSimulator sim) {
+  override protected void trigger(EsdlSimulator sim) {
     _dataTriggered = _data;
     super.trigger(sim);
   }
@@ -2197,8 +2199,8 @@ public class NotificationObj(T): EventObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -2480,8 +2482,8 @@ public class NotificationQueueObj(T): NotificationObj!T
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -2490,6 +2492,9 @@ public class NotificationQueueObj(T): NotificationObj!T
 public class EventObj: EventAgent, NamedComp
   // , private EventClient
 {
+  // _async is true if the event can be triggered by an asynchronous agent
+  private immutable bool _async;
+  
   private SimEvent _simEvent;
 
   private long _triggeredAt = 0;
@@ -2506,14 +2511,17 @@ public class EventObj: EventAgent, NamedComp
   // Processes that are waiting for this event to trigger
   private Process[] _clientProcesses;
 
-  protected this(NamedComp parent=null) {
-    this(null, parent);
+  protected this(NamedComp parent=null, bool async=false) {
+    this(null, parent, async);
   }
 
-  protected this(SimEvent simEvent, NamedComp parent=null) {
+  protected this(SimEvent simEvent, NamedComp parent=null, bool async=false) {
     synchronized(this) {
-      if(parent is null) {parent = _esdl__getParentProc();}
-      this._esdl__parent = parent;
+      _async = async;
+      if(parent is null) {
+	parent = _esdl__getParentProc();
+      }
+      this._esdl__setParent(parent);
 
       if(simEvent !is null) {
 	this._simEvent = simEvent;
@@ -2564,10 +2572,22 @@ public class EventObj: EventAgent, NamedComp
     }
   }
 
+  protected void trigger(EsdlSimulator sim) {
+    if(_async is true) {
+      synchronized(this) {
+	this._trigger(sim);
+      }
+    }
+    else {
+      this._trigger(sim);
+    }
+  }
+
+
   // This function is always called in the schedule phase, when only a
   // single thread is active -- do we need synchronization guards
   // here?
-  protected void trigger(EsdlSimulator sim) {
+  protected void _trigger(EsdlSimulator sim) {
     _triggeredAt = sim.updateCount;
     debug(EVENTS) {
       import std.stdio: stderr;
@@ -2695,7 +2715,7 @@ public class EventObj: EventAgent, NamedComp
   public final SimEvent getTimed() {
     synchronized(this) {
       if(this._simEvent is null) {
-	this._simEvent = new TimedEvent(this);
+	this._simEvent = new TimedEvent(this, _async);
 	return this._simEvent;
       }
       if(this._simEvent.isTimed()) {
@@ -2783,31 +2803,39 @@ public class EventObj: EventAgent, NamedComp
       if(l is null) l = new L();
     }
   }
+
+  bool isAsync() { // _async is immutable
+    return _async;
+  }
+
 }
 
-// A struct wrapper for EventObj class -- this is basically to make
-// local instantiation more user-friendly. Also since an EventObj
+alias Event = EventWrapperStruct!(EventObj, false);
+alias AsyncEvent = EventWrapperStruct!(EventObj, true);
+// A struct wrapper for EventType class -- this is basically to make
+// local instantiation more user-friendly. Also since an EventType
 // object is copied by refence, named events become more difficult to
-// handle with EventObj.
-// Effectively an Event wrapper is exposed for the API.
-@_esdl__component struct Event
+// handle with EventType.
+// Effectively an AsyncEvent wrapper is exposed for the API.
+@_esdl__component struct EventWrapperStruct(EventType, bool ASYNC)
 {
+  alias EventStruct = typeof(this);
   // The wrapped object
-  package EventObj _eventObj = null;
+  package EventType _eventObj = null;
 
   // seek the object by reference. This function is used during the
   // elaboration phase. Do not use it otherwise.
-  package final ref EventObj _esdl__objRef() {
+  package final ref EventType _esdl__objRef() {
     return _eventObj;
   }
 
-  final EventObj _esdl__obj() {
+  final EventType _esdl__obj() {
     // Use double-locked checking -- assumption Intel Processor Architecture
     // All the pointer read writes are atomic
     if(this._eventObj is null) {
-      synchronized(typeid(Event)) {
+      synchronized(typeid(EventStruct)) {
 	if(this._eventObj is null) {
-	  EventObj be = new EventObj();
+	  EventType be = new EventType(null, ASYNC);
 	  this._eventObj = be;
 	}
       }
@@ -2837,8 +2865,8 @@ public class EventObj: EventAgent, NamedComp
   }
 
 
-  // Disallow Event assignment
-  @disable private void opAssign(Event e);
+  // Disallow EventStruct assignment
+  @disable private void opAssign(EventStruct e);
 
   // User API
 
@@ -2853,18 +2881,18 @@ public class EventObj: EventAgent, NamedComp
     }
   }
 
-  public final void opAssign(EventObj e) {
+  public final void opAssign(EventType e) {
     import std.exception: enforce;	// enforce
     enforce(this._eventObj is null);
     this._eventObj = e;
   }
 
-  public this(EventObj e) {
+  public this(EventType e) {
     this._eventObj = e;
   }
 
-  // public static Event opCall() {
-  //   Event event;
+  // public static EventStruct opCall() {
+  //   EventStruct event;
   //   event.init();
   //   return event;
   // }
@@ -2873,9 +2901,9 @@ public class EventObj: EventAgent, NamedComp
     this.init(name);
   }
 
-  public static Event[] opIndex(size_t n) {
-    Event[] events = new Event[n];
-    foreach(ref event;events) {
+  public static EventStruct[] opIndex(size_t n) {
+    EventStruct[] events = new EventStruct[n];
+    foreach(ref event; events) {
       synchronized {
 	event.init();
       }
@@ -2890,11 +2918,11 @@ public class EventObj: EventAgent, NamedComp
   public final void init(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
-	assert(false, "Must provide parent for EventObj being "
+	assert(false, "Must provide parent for EventType object "
 	       "\"init\" during elaboration");
       }
       if(_eventObj is null) {
-	_eventObj = new EventObj(parent);
+	_eventObj = new EventType(parent, ASYNC);
       }
       if(name !is null) {
 	_eventObj._esdl__nomenclate(name);
@@ -2912,7 +2940,7 @@ public class EventObj: EventAgent, NamedComp
   {
     debug(ELABORATE) {
       import std.stdio;
-      stderr.writeln("** Event: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+      stderr.writeln("** EventStruct: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
 		     typeof(l).stringof);
     }
     l._esdl__inst!I(t, l);
@@ -2921,11 +2949,11 @@ public class EventObj: EventAgent, NamedComp
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
-}
+}  
 
 
 // Event Queue -- just like event queues in SystemC.
@@ -2979,7 +3007,7 @@ public class EventQueueObj: EventObj
     }
   }
 
-  protected final override void trigger(EsdlSimulator sim) {
+  override protected final void trigger(EsdlSimulator sim) {
     super.trigger(sim);
     assert((_currentNotice.isValid),
 	   "Heap can not be empty when an EventQueueObj triggered");
@@ -3193,8 +3221,8 @@ public class EventQueueObj: EventObj
 	t._esdl__addChildObj(l._esdl__obj);
       }
       l._esdl__obj._esdl__nomenclate!I(t, indices);
+      l._esdl__obj._esdl__setParent(t);
       l._esdl__obj._esdl__setObjId();
-      l._esdl__obj._esdl__setHierParent(t);
     }
   }
 }
@@ -3335,6 +3363,9 @@ abstract private class SimEvent: EventClient
     }
   }
 
+  final EventObj _getObj() {	// call from TimedEvent
+    return this._eventObj;
+  }
 
   protected abstract void addAgent(EventObj agent);
 
@@ -3385,8 +3416,14 @@ private enum NotifyPolicy: bool
 
 final private class TimedEvent: SimEvent
 {
-  public this(EventObj event) {
-    super(event);
+  // Whether this event can be notified by an asynchronous agent
+  private immutable bool _async;
+  
+  public this(EventObj event, bool async) {
+    synchronized(this) {
+      super(event);
+      _async = async;
+    }
   }
 
   enum Schedule: ubyte
@@ -3406,55 +3443,71 @@ final private class TimedEvent: SimEvent
     return true;
   }
 
-  public final override void cancel() {
+  public final override void cancel() { // user interface
     synchronized(this) {
-      final switch(this._schedule) {
-      case Schedule.NONE:
-	// Not scheduled -- do nothing
-	break;
-      case Schedule.ASYNC:
-	this.getObj.getSimulator._scheduler.cancelAsyncEvent(this);
-	this._schedule = Schedule.NONE;
-	break;
-      case Schedule.NOW:
-	this.getObj.getSimulator._scheduler.cancelImmediateEvent(this);
-	this._schedule = Schedule.NONE;
-	break;
-      case Schedule.DELTA:
-	this.getObj.getSimulator._scheduler.cancelDeltaEvent(this);
-	this._schedule = Schedule.NONE;
-	break;
-      case Schedule.TIMED:
-	if(this._notice is null) {
-	  assert(false, "TimedEvent is schedules as TIMED, "
-		 "but associated notice is null");
-	}
-	this._notice.annul();
-	this._notice = null;
-	this._schedule = Schedule.NONE;
-	break;
+      this._cancel();
+    }
+  }
+
+  private final void _cancel() {
+    final switch(this._schedule) {
+    case Schedule.NONE:
+      // Not scheduled -- do nothing
+      break;
+    case Schedule.ASYNC:
+      this._getObj.getSimulator._scheduler.cancelAsyncEvent(this);
+      this._schedule = Schedule.NONE;
+      break;
+    case Schedule.NOW:
+      this._getObj.getSimulator._scheduler.cancelImmediateEvent(this);
+      this._schedule = Schedule.NONE;
+      break;
+    case Schedule.DELTA:
+      this._getObj.getSimulator._scheduler.cancelDeltaEvent(this);
+      this._schedule = Schedule.NONE;
+      break;
+    case Schedule.TIMED:
+      if(this._notice is null) {
+	assert(false, "TimedEvent is schedules as TIMED, "
+	       "but associated notice is null");
       }
+      this._notice.annul();
+      this._notice = null;
+      this._schedule = Schedule.NONE;
+      break;
     }
   }
 
   // called in the single threaded schedule phase, hence no need for
   // the synchronization
-  public final override void trigger(EsdlSimulator sim) {
+  private final void _trigger(EsdlSimulator sim) {
     if(_schedule == Schedule.DELTA ||
        _schedule == Schedule.NOW) {
       this._schedule = Schedule.NONE;
     }
     else {
-      this.cancel();
+      this._cancel();
     }
-    this.getObj.trigger(sim);
+    // if(asyncFlag) assert(this._getObj.isAsync());
+    this._getObj.trigger(sim);
   }
 
-  // Immediate notification -- TBD
+  override final void trigger(EsdlSimulator sim) {
+    if(_async) {
+      synchronized(this) {
+	_trigger(sim);
+      }
+    }
+    else {
+      _trigger(sim);
+    }
+  }
+
   public final override bool notify() {
     // Cancel the already scheduled notifications
     synchronized(this) {
-      if(Process.self is null) { // async notify
+      if(Procedure.self is null) { // async notify
+	assert(this._getObj().isAsync is true);
 	if(this._schedule != Schedule.ASYNC) {
 	  cancel();
 	  this._schedule = Schedule.ASYNC;
@@ -3561,6 +3614,10 @@ final private class TimedEvent: SimEvent
   protected final override void addAgent(EventObj agent) {
     assert(false, "TimedEvent not dependent on any other event: "
 	   ~ this._eventObj.getFullName() ~ " -- addAgent");
+  }
+
+  private bool isAsync() { // _async is immutable
+    return _async;
   }
 }
 
@@ -4189,22 +4246,22 @@ public Process routine(FunctionThunk fn, int stage = 0) {
   return f;
 }
 
-private void forkHelper(string NAME="fork", int C=0, F...)
-  (ref Process[] procs, F thunks) {
+private void forkHelper(int C=0, F...)
+  (string name, ref Process[] procs, F thunks) {
   static if(F.length == 0) {
     return;
   }
   else static if(is(F[0]: DelegateThunk) ||
 		 is(F[0]: FunctionThunk)) {
     Process proc = process(thunks[0], getStage);
-    proc._esdl__setName(NAME ~ "_" ~ C.stringof);
+    proc._esdl__setName(name ~ "_" ~ C.stringof);
     procs ~= proc;
-    forkHelper!(NAME, C+1)(procs, thunks[1..$]);
+    forkHelper!(C+1)(name, procs, thunks[1..$]);
   }
   else static if(is(F[0]: Process)) {
-    thunks[0]._esdl__setName(NAME ~ "_" ~ C.stringof);
+    thunks[0]._esdl__setName(name ~ "_" ~ C.stringof);
     procs ~= thunks[0];
-    forkHelper!(NAME, C+1)(procs, thunks[1..$]);
+    forkHelper!(C+1)(name, procs, thunks[1..$]);
   }
   else {
     static assert(false, "join can take only functions, delegates "
@@ -4235,19 +4292,29 @@ private void forkHelper(string NAME="fork", int C=0, F...)
 //   return retval;
 // }
 
-public Fork fork(string NAME="fork", F...)(F thunks) if(F.length > 1) {
-  Process[] procs;
-  forkHelper!NAME(procs, thunks);
-  Fork retval = new Fork(procs);
-  return retval;
- }
+public Fork fork(string NAME="fork", F...)(F thunks)
+  if(F.length > 1 && !is(F[0]: string)) {
+    return fork(NAME, thunks);
+  }
+
+public Fork fork(F...)(string name, F thunks)
+  if(F.length > 1) {
+    Process[] procs;
+    forkHelper(name, procs, thunks);
+    Fork retval = new Fork(procs);
+    return retval;
+  }
 
 public ForkMono fork(string NAME="fork", F)(F thunk) {
+  return fork(NAME, thunk);
+}
+
+public ForkMono fork(F)(string name, F thunk) {
   Process proc;
   static if(is(F: DelegateThunk) ||
 	    is(F: FunctionThunk)) {
     proc = process(thunk, getStage);
-    proc._esdl__setName(NAME);
+    proc._esdl__setName(name);
   }
   else static if(is(F: Process)) {
     proc = thunk;
@@ -4467,11 +4534,38 @@ interface EntityIntf: ElabContext, SimContext
   static EntityIntf getThreadContext() {
     return _esdl__threadContext;
   }
+  static RootEntity getContextRoot() {
+    EntityIntf parent;
+    auto process = Process.self();
+    if(process !is null) {
+      parent = process.getParentEntity();
+    }
+    else {
+      parent = getThreadContext();
+    }
+    if (parent !is null) {
+      return parent.getRoot();
+    }
+    else {
+      return null;
+    }
+  }
   static EntityIntf getContextEntity() {
     EntityIntf parent;
     auto process = Process.self();
     if(process !is null) {
       parent = process.getParentEntity();
+    }
+    else {
+      parent = getThreadContext();
+    }
+    return parent;
+  }
+  static NamedComp getContextParent() {
+    NamedComp parent;
+    auto process = Process.self();
+    if(process !is null) {
+      parent = process;
     }
     else {
       parent = getThreadContext();
@@ -4571,10 +4665,10 @@ template Worker(alias F, int R=0, size_t S=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
 	  l._esdl__setParentEntity(t);
+	  l._esdl__setObjId();
 	  t._esdl__register(l);
 	}
       }
@@ -4634,10 +4728,10 @@ template Task(alias F, int R=0, size_t S=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
 	  l._esdl__setParentEntity(t);
+	  l._esdl__setObjId();
 	  t._esdl__register(l);
 	}
       }
@@ -4694,10 +4788,10 @@ template Routine(alias F, int R=0)
 	  l._dynamic = false;
 	  l._esdl__setIndices(indices);
 	  l._esdl__nomenclate!I(t, indices);
-	  l._esdl__setObjId();
 	  l._esdl__setRoot(t.getRoot);
 	  l._esdl__setHierParent(t);
 	  l._esdl__setParentEntity(t);
+	  l._esdl__setObjId();
 	  t._esdl__register(l);
 	}
       }
@@ -4708,7 +4802,7 @@ template Routine(alias F, int R=0)
 private auto recreateDelegate(alias F, T)(T _entity)
 {
   import std.functional: toDelegate;
-  alias typeof(toDelegate(&F)) DG;
+  alias DG = typeof(toDelegate(&F));
   DG dg;
   dg.funcptr = &F;
   dg.ptr = *(cast(void **) (&_entity));
@@ -5333,9 +5427,9 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   private final void _execute() {
-    debug(PROC) {
+    debug(LOGPROCS) {
       import std.stdio;
-      stderr.writeln("Activating Process: ", getFullName());
+      stderr.writeln("Activating Process:    ", getFullName());
     }
     this.call();
   }
@@ -5374,6 +5468,10 @@ abstract class Process: Procedure, HierComp, EventClient
 
   // called at the end of simulation
   final protected void killProcess() {
+    debug(LOGPROCS) {
+      import std.stdio;
+      stderr.writeln("Terminating Process:   ", getFullName());
+    }
     debug(TERMINATE) {
       import std.stdio: stderr;
       stderr.writeln("Terminating thread in state: ", state);
@@ -5563,7 +5661,15 @@ abstract class Process: Procedure, HierComp, EventClient
 	_ended.notify();
       }
       getRoot().initProcess();
+      debug(LOGPROCS) {
+	import std.stdio;
+	stderr.writeln("Starting Process:      ", getFullName());
+      }
       fn();
+      debug(LOGPROCS) {
+	import std.stdio;
+	stderr.writeln("Finished Process:      ", getFullName());
+      }
     }
     catch(TermException e) {
       // Process got terminated at end of simulation
@@ -5605,7 +5711,15 @@ abstract class Process: Procedure, HierComp, EventClient
 	_ended.notify();
       }
       getRoot().initProcess();
+      debug(LOGPROCS) {
+	import std.stdio;
+	stderr.writeln("Starting Process:      ", getFullName());
+      }
       dg();
+      debug(LOGPROCS) {
+	import std.stdio;
+	stderr.writeln("Finished Process:      ", getFullName());
+      }
     }
     catch(TermException e) {
       // Process got terminated at end of simulation
@@ -5658,7 +5772,7 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   public final void waitSensitive(EventObj event) {
-    debug(PROC) {
+    debug(LOGPROCS) {
       import std.stdio;
       stderr.writeln("De-activating Process: ", getFullName());
     }
@@ -6250,8 +6364,10 @@ class Channel: ChannelIF, NamedComp // Primitive Channel
   this(string name="", NamedComp parent=null) {
     synchronized(this) {
       // _esdl__getParentProc returns null during elaboration
-      if(parent is null) {parent = _esdl__getParentProc();}
-      this._esdl__parent = parent;
+      if(parent is null) {
+	parent = _esdl__getParentProc();
+      }
+      this._esdl__setParent(parent);
     }
   }
 
@@ -6628,7 +6744,7 @@ class EsdlExecutor: EsdlExecutorIf
   private EsdlSimulator _simulator;
   // class ProcessMonitor {}
   import core.sync.semaphore: Semaphore;
-  import esdl.sync.barrier: Barrier;
+  import core.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
   private Barrier _workerBarrier;
   private Barrier _poolThreadExecBarrier;
@@ -6942,19 +7058,19 @@ class EsdlExecutor: EsdlExecutorIf
       }
       super(num);
     }
-    final override void reset(uint num) {
-      synchronized(this) {
-	assert(_num == 0 || _num == _size);
-	_num = num;
-	_size = num;
-	_count = 0;
-	debug(BARRIER) {
-	  import std.stdio;
-	  stderr.writeln("Resetting Barrier ", _name, " to size: ", _num);
-	}
-      }
-      super.reset(num);
-    }
+    /* final override void reset(uint num) { */
+    /*   synchronized(this) { */
+    /* 	assert(_num == 0 || _num == _size); */
+    /* 	_num = num; */
+    /* 	_size = num; */
+    /* 	_count = 0; */
+    /* 	debug(BARRIER) { */
+    /* 	  import std.stdio; */
+    /* 	  stderr.writeln("Resetting Barrier ", _name, " to size: ", _num); */
+    /* 	} */
+    /*   } */
+    /*   super.reset(num); */
+    /* } */
     final override void wait() {
       synchronized(this) {
 	// assert(_num >= 0, "Barrier moved beyond 0 " ~ _name);
@@ -7114,7 +7230,8 @@ class EsdlExecutor: EsdlExecutorIf
 
     this._terminalWorkers.length = 0;
 
-    _workerBarrier.reset(cast(uint)runProcs.length + 1);
+    _workerBarrier = new Barrier(cast(uint) runProcs.length + 1);
+    // _workerBarrier.reset(cast(uint)runProcs.length + 1);
 
     while(runProcs.length != 0) {
       Process[] workers = runProcs;
@@ -7296,6 +7413,7 @@ class EsdlHeapScheduler : EsdlScheduler
 
   public final size_t insertAsyncEvent(TimedEvent e) {
     synchronized(this) { // synchronized(e.getObj)
+      assert(e.isAsync());
       debug(ASYNCEVENT) {
 	import std.stdio: stderr;
 	stderr.writeln("======== Adding Async TimedNotice ",
@@ -7430,7 +7548,10 @@ class EsdlHeapScheduler : EsdlScheduler
     if(_asyncFlag) {
       synchronized(this) {
 	foreach(ref event; this._asyncQueue) {
-	  event.trigger(_simulator);
+	  synchronized(event) {
+	    assert(event.isAsync());
+	    event.trigger(_simulator);
+	  }
 	}
 	_asyncQueue.length = 0;
 	_asyncFlag = false;
@@ -7503,10 +7624,10 @@ class EsdlHeapScheduler : EsdlScheduler
 
 interface RootEntityIntf: EntityIntf
 {
-  import esdl.sync.barrier: Barrier;
+  import core.sync.barrier: Barrier;
   private __gshared RootEntityIntf[] _roots;
 
-  final private void message(string str, bool important = false) {
+  final void message(string str, bool important = false) {
     import std.stdio: stderr;
     if(important) stderr.writeln("[ESDL!", this.getName(), "]*", str);
     else stderr.writeln("[ESDL!", this.getName(), "] ", str);
@@ -7680,7 +7801,7 @@ interface RootEntityIntf: EntityIntf
   final public SimPhase getSimPhase() {
     auto simulator = getSimulator();
     synchronized(simulator) {
-      return getSimulator()._phase;
+      return simulator._phase;
     }
   }
 
@@ -7745,6 +7866,7 @@ abstract class RootEntity: RootEntityIntf
   mixin RootEntityMixin;
 
   EsdlSimulator _simulator;
+  private static RootEntity _esdl__rootEntity;
 
   public final EsdlSimulator simulator() {
     return _simulator;
@@ -7755,12 +7877,38 @@ abstract class RootEntity: RootEntityIntf
       _simulator = new EsdlSimulator(this);
       _esdl__root = this;
       _esdl__parent = this;
+      _esdl__rootId = _esdl__genRootId();
       _simulator._esdl__setRoot(this);
       _simulator._esdl__setHierParent(this);
       _simulator._esdl__setName("_simulator");
     }
   }
 
+  private uint _esdl__rootId;
+  private shared static uint _esdl__rootCount;
+  uint _esdl__genRootId() {
+    synchronized(typeid(RootEntity)) {
+      auto count = _esdl__rootCount;
+      _esdl__rootCount = _esdl__rootCount + 1;
+      return count;
+    }
+  }
+
+  private uint _esdl__compCount;
+  uint _esdl__genCompId() {
+    synchronized(this) {
+      return _esdl__compCount++;
+    }
+  }
+  
+  private uint _esdl__objCount;
+  uint _esdl__genObjId() {
+    synchronized(this) {
+      return _esdl__objCount++;
+    }
+  }
+  
+  
   protected bool _esdl__noUnboundPorts = true;
   protected bool _esdl__noUnboundExePorts = true;
 
@@ -8417,9 +8565,6 @@ class EsdlSimulator: EntityIntf
   }
 }
 
-private static RootEntity _esdl__rootEntity;
-
-
 // return the current PoolThread, otherwise null
 public PoolThread getPoolThread() {
   auto _thread = Thread.getThis();
@@ -8430,19 +8575,24 @@ public RootEntity getRootEntity() {
   // first handle the case for call within the
   // simulation tasks and routines
   // These need to be handled in the fastest possible manner
-  if(_esdl__rootEntity is null) {
+  if(RootEntity._esdl__rootEntity is null) {
     auto proc = Procedure.self();
     if(proc !is null) {
-      _esdl__rootEntity = Procedure.self.getRoot();
+      RootEntity._esdl__rootEntity = Procedure.self.getRoot();
     }
   }
+  if(RootEntity._esdl__rootEntity is null) {
+    RootEntity._esdl__rootEntity = RootEntityIntf.getContextRoot();
+  }
   // if still null, get the root entity from the EsdlThread
-  if(_esdl__rootEntity is null) {
+  if(RootEntity._esdl__rootEntity is null) {
     EsdlThread _thread = cast(EsdlThread) Thread.getThis();
-    _esdl__rootEntity = _thread.getRoot();
+    if (_thread !is null) {
+      RootEntity._esdl__rootEntity = _thread.getRoot();
+    }
   }
   // A null could still be returned for non-Esdl Threads
-  return _esdl__rootEntity;
+  return RootEntity._esdl__rootEntity;
 }
 
 public EsdlSimulator getSimulator() {
@@ -8450,11 +8600,11 @@ public EsdlSimulator getSimulator() {
 }
 
 private void setRootEntity(RootEntity root) {
-  if(_esdl__rootEntity is null) {
-    _esdl__rootEntity = root;
+  if(RootEntity._esdl__rootEntity is null) {
+    RootEntity._esdl__rootEntity = root;
   }
   else {
-    assert(_esdl__rootEntity == root);
+    assert(RootEntity._esdl__rootEntity == root);
   }
 }
 
@@ -8789,7 +8939,7 @@ struct SimTime
   public T to(T)()
     if(is(T == string)) {
       import std.conv;
-      return "#" ~ to!string(_value);
+      return "#" ~ _value.to!string();
     }
 
   public T to(T)()
