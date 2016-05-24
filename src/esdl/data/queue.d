@@ -11,6 +11,7 @@
 module esdl.data.queue;
 import std.format: FormatSpec, FormatException;
 import std.conv: to;
+import std.range: ElementType;
 
 
 /** The Queue class provides a random access container where appending and
@@ -34,7 +35,7 @@ public struct Queue(T) {
   */
   // we do not cover arrays in isIterable, because empty array "[]" is not iteratble
   public this(R)(R values) @safe
-    if(isIterable!R && !(isArray!R)) {
+    if(isIterable!R && is(ElementType!R: T) && !(isArray!R)) {
       this.pushBack(values);
     }
 
@@ -70,7 +71,7 @@ public struct Queue(T) {
   }
 
   public Queue!T opAssign(R)(R values) @safe
-    if(isIterable!R && !(isArray!R)) {
+    if(isIterable!R && is(ElementType!R: T) && !(isArray!R)) {
       this.clear;
       this.pushBack(values);
       return this;
@@ -628,7 +629,7 @@ public struct Queue(T) {
   }
 
   public Queue!(T) insert(R)(ptrdiff_t idx, R range) @safe
-    if(isIterable!R) {
+    if(isIterable!R && is(ElementType!R: T)) {
       foreach(it; range) {
 	this.insert(idx, it);
 	if(idx >= 0) {
@@ -1104,7 +1105,8 @@ public struct Queue(T) {
     }
   }
 
-  public void pushFront(R)(R values) @safe if(isIterable!R) {
+  public void pushFront(R)(R values) @safe
+    if(isIterable!R && is(ElementType!R: T)) {
     foreach(it; values) {
       this.pushFront(it);
     }
@@ -1183,7 +1185,7 @@ public struct Queue(T) {
   }
 
   public void pushBack(R)(R values) @trusted
-    if(isIterable!R && !(isArray!R)) {
+    if(isIterable!R && is(ElementType!R: T) && !(isArray!R)) {
       foreach(it; values) {
 	this.pushBack(it);
       }
@@ -1196,7 +1198,7 @@ public struct Queue(T) {
   }
 
   public void opOpAssign(string op, R)(R values) @trusted
-    if(op == "~" && isIterable!R) {
+    if(op == "~" && isIterable!R && is(ElementType!R: T)) {
       foreach(it; values) {
 	this.pushBack(it);
       }
@@ -1208,7 +1210,7 @@ public struct Queue(T) {
     }
 
   public Queue!T opBinary(string op, R)(R values) @safe
-    if(op == "~" && isIterable!R) {
+    if(op == "~" && isIterable!R && is(ElementType!R: T)) {
       Queue!T ret = this;
       ret ~= values;
       return ret;
@@ -1222,7 +1224,7 @@ public struct Queue(T) {
     }
 
   public Queue!T opBinaryRight(string op, R)(R values) @safe
-    if(op == "~" && isIterable!R) {
+    if(op == "~" && isIterable!R && is(ElementType!R: T)) {
       Queue!T ret;
       ret ~= values;
       ret ~= this;
