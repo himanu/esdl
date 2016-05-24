@@ -949,41 +949,41 @@ struct BitString(bool L)
    */
 
   auto opCatAssign(bool BIGENDIAN=false, T)(T t, size_t count = 0)
-  if(is(T == bool) || isIntegral!T ||
-     (isBitVector!T && (L || (! T.IS4STATE)))) {
-    static if(is(T == bool)) {
-      alias UBit!(1) V;
-      V v = t;
-    }
-    else static if(isIntegral!T) {
-        alias UBit!(T.sizeof*8) V;
-        V v = t;
+    if(is(T == bool) || isIntegral!T ||
+       (isBitVector!T && (L || (! T.IS4STATE)))) {
+      static if(is(T == bool)) {
+	alias UBit!(1) V;
+	V v = t;
+      }
+      else static if(isIntegral!T) {
+	alias V = UBit!(T.sizeof*8);
+	V v = t;
       }
       else {
         alias T V;
         alias t v;
       }
-    size_t bits;
-    if(count == 0) {
-      bits = V.SIZE;
-    }
-    else {
-      assert(count <= V.SIZE);
-      bits = count;
-    }
-    length = len + bits;
-    static if(BIGENDIAN) {
-      for (size_t i=0; i != bits; ++i) {
-        this[$-bits+i] = v[$-i-1];
+      size_t bits;
+      if(count == 0) {
+	bits = V.SIZE;
       }
-    }
-    else {
-      for (size_t i=0; i != bits; ++i) {
-        this[$-bits+i] = v[i];
+      else {
+	assert(count <= V.SIZE);
+	bits = count;
       }
+      length = len + bits;
+      static if(BIGENDIAN) {
+	for (size_t i=0; i != bits; ++i) {
+	  this[$-bits+i] = v[$-i-1];
+	}
+      }
+      else {
+	for (size_t i=0; i != bits; ++i) {
+	  this[$-bits+i] = v[i];
+	}
+      }
+      return this;
     }
-    return this;
-  }
 
   void pushBack(T)(T t, bool bigEndian=false, size_t count = 0)
     if(is(T == bool) || isIntegral!T ||
@@ -1022,7 +1022,7 @@ struct BitString(bool L)
           v[i] = this[index+i];
         }
       }
-      t = v;
+      t = cast(T) v;
     }
 
   void getBack(T)(out T t, size_t index, bool bigEndian=false)
