@@ -1131,7 +1131,7 @@ void _esdl__start(T)(T t) {
   }
 }
 
-// call doFinish for each wntity once the simulation is over
+// call doFinish for each entity once the simulation is over
 void _esdl__finish(T)(T t) {
   synchronized(t) {
     // static if(__traits(compiles, t.doFinish()))
@@ -2105,11 +2105,13 @@ public class NotificationObj(T): EventObj
 
   this(SimEvent e) {
     this.init;
-    synchronized(getNotification, e) {
-      import std.exception: enforce;
-      enforce((e._eventObj is null));
-      e._eventObj = this.getNotification;
-      this.getNotification._simEvent = e;
+    synchronized(e) {
+      synchronized(getNotification) {
+	import std.exception: enforce;
+	enforce((e._eventObj is null));
+	e._eventObj = this.getNotification;
+	this.getNotification._simEvent = e;
+      }
     }
   }
 
@@ -2121,12 +2123,14 @@ public class NotificationObj(T): EventObj
 
   public final void opAssign(SimEvent e) {
     this.init();
-    synchronized(getNotification, e) {
-      import std.exception: enforce;	// enforce
-      enforce(e._eventObj is null);
-      enforce(this.getNotification._simEvent is null);
-      e._eventObj = this.getNotification;
-      this.getNotification._simEvent = e;
+    synchronized(e) {
+      synchronized(getNotification) {
+	import std.exception: enforce;	// enforce
+	enforce(e._eventObj is null);
+	enforce(this.getNotification._simEvent is null);
+	e._eventObj = this.getNotification;
+	this.getNotification._simEvent = e;
+      }
     }
   }
 
@@ -2401,11 +2405,13 @@ public class NotificationQueueObj(T): NotificationObj!T
   }
 
   this(SimEvent e) {
-    synchronized(getNotificationQueue, e) {
-      import std.exception: enforce;	// enforce
-      enforce((e._eventObj is null));
-      e._eventObj = this.getNotificationQueue;
-      this.getNotificationQueue._simEvent = e;
+    synchronized(e) {
+      synchronized(getNotificationQueue) {
+	import std.exception: enforce;	// enforce
+	enforce((e._eventObj is null));
+	e._eventObj = this.getNotificationQueue;
+	this.getNotificationQueue._simEvent = e;
+      }
     }
   }
 
@@ -2416,12 +2422,14 @@ public class NotificationQueueObj(T): NotificationObj!T
   // User API
 
   public final void opAssign(SimEvent e) {
-    synchronized(getNotificationQueue, e) {
-      import std.exception: enforce;	// enforce
-      enforce(e._eventObj is null);
-      enforce(this.getNotificationQueue._simEvent is null);
-      e._eventObj = this.getNotificationQueue;
-      this.getNotificationQueue._simEvent = e;
+    synchronized(e) {
+      synchronized(getNotificationQueue) {
+	import std.exception: enforce;	// enforce
+	enforce(e._eventObj is null);
+	enforce(this.getNotificationQueue._simEvent is null);
+	e._eventObj = this.getNotificationQueue;
+	this.getNotificationQueue._simEvent = e;
+      }
     }
   }
 
@@ -2856,11 +2864,13 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
 
   this(SimEvent e) {
     this.init;
-    synchronized(getEvent, e) {
-      import std.exception: enforce;
-      enforce((e._eventObj is null));
-      e._eventObj = this.getEvent;
-      this.getEvent._simEvent = e;
+    synchronized(e) {
+      synchronized(getEvent) {
+	import std.exception: enforce;
+	enforce((e._eventObj is null));
+	e._eventObj = this.getEvent;
+	this.getEvent._simEvent = e;
+      }
     }
   }
 
@@ -2872,12 +2882,14 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
 
   public final void opAssign(SimEvent e) {
     this.init();
-    synchronized(getEvent, e) {
-      import std.exception: enforce;	// enforce
-      enforce(e._eventObj is null);
-      enforce(this.getEvent._simEvent is null);
-      e._eventObj = this.getEvent;
-      this.getEvent._simEvent = e;
+    synchronized(e) {
+      synchronized(getEvent) {
+	import std.exception: enforce;	// enforce
+	enforce(e._eventObj is null);
+	enforce(this.getEvent._simEvent is null);
+	e._eventObj = this.getEvent;
+	this.getEvent._simEvent = e;
+      }
     }
   }
 
@@ -3150,11 +3162,13 @@ public class EventQueueObj: EventObj
   }
 
   this(SimEvent e) {
-    synchronized(getEvent, e) {
-      import std.exception: enforce;	// enforce
-      enforce((e._eventObj is null));
-      e._eventObj = this.getEvent;
-      this.getEvent._simEvent = e;
+    synchronized(e) {
+      synchronized(getEvent) {
+	import std.exception: enforce;	// enforce
+	enforce((e._eventObj is null));
+	e._eventObj = this.getEvent;
+	this.getEvent._simEvent = e;
+      }
     }
   }
 
@@ -3165,12 +3179,14 @@ public class EventQueueObj: EventObj
   // User API
 
   public final void opAssign(SimEvent e) {
-    synchronized(getEvent, e) {
-      import std.exception: enforce;	// enforce
-      enforce(e._eventObj is null);
-      enforce(this.getEvent._simEvent is null);
-      e._eventObj = this.getEvent;
-      this.getEvent._simEvent = e;
+    synchronized(e) {
+      synchronized(getEvent) {
+	import std.exception: enforce;	// enforce
+	enforce(e._eventObj is null);
+	enforce(this.getEvent._simEvent is null);
+	e._eventObj = this.getEvent;
+	this.getEvent._simEvent = e;
+      }
     }
   }
 
@@ -3785,11 +3801,15 @@ final class EventNotice
       stderr.writeln("Creating Timed Event at time ", t.getVal);
     }
     EventNotice f;
+    // There is one _eventNoticeList per thread -- synchronization
+    // guards therefor not required
     if(PoolThread.self._eventNoticeList !is null) {
       f = PoolThread.self._eventNoticeList;
       PoolThread.self._eventNoticeList = f.next;
-      f.time = t;
-      f._event = event;
+      synchronized(f) {
+	f.time = t;
+	f._event = event;
+      }
     }
     else {
       f = new EventNotice(t, event, PoolThread.self);
@@ -3854,9 +3874,8 @@ final class EventNotice
   private final int opCmp(EventNotice rhs) {
     // if(rhs is null) return -1;
     // if(this is null) return 1;
-    synchronized(this, rhs) {
-      return this.time.opCmp(rhs.time);
-    }
+    // time is effectively immutable
+    return this.time.opCmp(rhs.time);
   }
 }
 
@@ -5429,7 +5448,8 @@ abstract class Process: Procedure, HierComp, EventClient
   private final void _execute() {
     debug(LOGPROCS) {
       import std.stdio;
-      stderr.writeln("Activating Process:    ", getFullName());
+      stderr.writeln("[", _esdl__parConfig._threadPoolIndex,
+		     "]Activating Process: ", getFullName());
     }
     this.call();
   }
