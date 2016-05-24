@@ -864,8 +864,9 @@ class SemaphoreObj: SemaphoreIF, NamedComp
   Event _event;
   ptrdiff_t   _value;
 
-  this(ptrdiff_t n=1) {
+  this(ptrdiff_t n=1, NamedComp parent=null) {
     synchronized(this) {
+      this._esdl__setParent(parent);
       _event.init(this);
       _value = n;
     }
