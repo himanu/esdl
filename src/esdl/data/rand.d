@@ -951,8 +951,8 @@ abstract class _esdl__SolverEnvRoot {
 
   Buddy _esdl__buddy;
 
-  // BddDomain[] _domains;
-  BddDomain* _domains;
+  BddDomain[] _domains;
+  // BddDomain* _domains;
 
   _esdl__SolverEnvRoot _parent = null;
 
@@ -974,9 +974,9 @@ abstract class _esdl__SolverEnvRoot {
 
   ~this() {
     _esdl__cstsList.length   = 0;
-    _esdl__cstWith          = null;
-    _esdl__cstWithChanged  = true;
-    _esdl__randsList.length = 0;
+    _esdl__cstWith           = null;
+    _esdl__cstWithChanged    = true;
+    _esdl__randsList.length  = 0;
   }
 
   public void _esdl__initRands() {}
@@ -1055,7 +1055,7 @@ abstract class _esdl__SolverEnvRoot {
   }
 
   void initDomains(T)(T t) {
-    if(_domains is null || _esdl__cstWithChanged is true) {
+    if(_domains.length is 0 || _esdl__cstWithChanged is true) {
       uint domIndex = 0;
       int[] domList;
 
@@ -1250,8 +1250,6 @@ abstract class _esdl__SolverEnvRoot {
 	  value = 0;
 	}
       }
-      // vec.value = value;
-      // vec.bddvec = null;
     }
     if(stage !is null) stage.id(stageIdx);
     ++stageIdx;
@@ -1779,6 +1777,10 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
     _parent = parent;
   }
 
+  ~this() {
+    _bddvec.reset();
+  }
+
   override public RndVecPrim[] preReqs() {
     return _preReqs ~ _parent.preReqs();
   }
@@ -2032,6 +2034,10 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
   string _name;
 
   RndVecPrim[] _preReqs;
+
+  ~this() {
+    _bddvec.reset();
+  }
 
   override string name() {
     return _name;
