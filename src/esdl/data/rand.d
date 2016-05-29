@@ -1233,8 +1233,8 @@ abstract class _esdl__SolverEnvRoot {
     }
 
     foreach(vec; stage._rndVecs) {
-      size_t value;
-      enum WORDSIZE = 8 * size_t.sizeof;
+      ulong value;
+      enum WORDSIZE = 8 * value.sizeof;
       auto bitvals = solveBDD.getIndices(vec.domIndex);
       foreach(uint i, ref j; bitvals) {
 	uint pos = i % WORDSIZE;
@@ -1243,7 +1243,7 @@ abstract class _esdl__SolverEnvRoot {
 	  value = value + ((cast(size_t) _esdl__rGen.flip()) << pos);
 	}
 	else if(bits[j] == 1) {
-	  value = value + ((cast(size_t) 1) << pos);
+	  value = value + ((cast(ulong) 1) << pos);
 	}
 	if(pos == WORDSIZE - 1 || i == bitvals.length - 1) {
 	  vec.value(value, word);
@@ -1445,8 +1445,8 @@ interface RndVecPrim
   abstract string name();
   abstract void doRandomization();
   abstract public bool isRand();
-  abstract public long value();
-  abstract public void value(size_t v, int word=0);
+  abstract public ulong value();
+  abstract public void value(ulong v, int word=0);
   abstract public CstStage stage();
   abstract public void stage(CstStage s);
   abstract public void _esdl__reset();
@@ -1918,11 +1918,11 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
     return false;
   }
 
-  public long value() {
+  public ulong value() {
     return _parent.getLen();
   }
 
-  public void value(size_t v, int word = 0) {
+  public void value(ulong v, int word = 0) {
     assert(word == 0);
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
@@ -2195,11 +2195,11 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       return _solver;
     }
 
-    public long value() {
+    public ulong value() {
       return cast(long) (_solver._esdl__outer.tupleof[I]);
     }
 
-    public void value(size_t v, int word = 0) {
+    public void value(ulong v, int word = 0) {
       static if(isIntegral!L) {
 	if(word == 0) {
 	  _solver._esdl__outer.tupleof[I] = cast(L) v; // = cast(L) toBitVec(v      }
@@ -2330,7 +2330,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       return _parent.getSolver();
     }
 
-    long value() {
+    ulong value() {
       if(_indexExpr) {
 	return _parent.getVal(cast(size_t) _indexExpr.evaluate());
       }
@@ -2339,7 +2339,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
       }
     }
 
-    void value(size_t v, int word = 0) {
+    void value(ulong v, int word = 0) {
       // import std.stdio;
       // writeln("Setting value of ", this.name(), " to: ", v);
       // writeln("Parent length value of ", this.name(),
@@ -2558,7 +2558,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
   }
 
-  static private void setVal(A, N...)(ref A arr, size_t v, int word, N idx)
+  static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
     if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
       static if(N.length == 1) {
 	alias AE = ElementType!A;
@@ -2567,15 +2567,14 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
 	    arr[idx[0]] = cast(AE) v;
 	  }
 	  else {
-	    static if(size_t.sizeof == 4) {
-	      assert(word == 1);	// 32 bit machine with long integral
-	      AE val = v;
-	      val = val << (8 * size_t.sizeof);
-	      arr[idx[0]] += val;
-	    }
-	    else {
-	      assert(false, "word has to be 0 for integrals");
-	    }
+	    // static if(size_t.sizeof == 4) {
+	    //   assert(word == 1);	// 32 bit machine with long integral
+	    //   AE val = v;
+	    //   val = val << (8 * size_t.sizeof);
+	    //   arr[idx[0]] += val;
+	    // }
+	    // else {
+	    assert(false, "word has to be 0 for integrals");
 	  }
 	}
 	else {
@@ -2591,11 +2590,11 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     assert(false, "isRand not implemented for RndVecVar");
   }
 
-  public long value() {
+  public ulong value() {
     assert(false, "value not implemented for RndVecVar");
   }
 
-  public void value(size_t v, int word = 0) {
+  public void value(ulong v, int word = 0) {
     assert(false, "value not implemented for RndVecVar");
   }
 
@@ -2703,7 +2702,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       return getVal(_solver._esdl__outer.tupleof[I], idx);
     }
 
-    public void setVal(J...)(size_t v, int word, J idx) if(isIntegral!(J[0])) {
+    public void setVal(J...)(ulong v, int word, J idx) if(isIntegral!(J[0])) {
       setVal(_solver._esdl__outer.tupleof[I], v, word, idx);
     }
 
@@ -2862,7 +2861,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       }
     }
 
-    public void setVal(N...)(size_t v, int word, N idx) if(isIntegral!(N[0])) {
+    public void setVal(N...)(ulong v, int word, N idx) if(isIntegral!(N[0])) {
       if(_indexExpr) {
 	assert(_indexExpr.isConst());
 	_parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
@@ -2929,14 +2928,14 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
   public bool isRand() {
     return _arrVar.arrLen.isRand();
   }
-  public long value() {
+  public ulong value() {
     return _arrVar.arrLen.value();
   }
-  public void value(size_t v, int word = 0) {
+  public void value(ulong v, int word = 0) {
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _arrVar.name, " to ", v);
     assert(word == 0);
-    _arrVar.arrLen.value(cast(size_t) v);
+    _arrVar.arrLen.value(v);
   }
   void doRandomization() {
     assert(false);
@@ -3096,11 +3095,11 @@ class RndVecConst(T = int): RndVecExpr, RndVecPrim
     return false;
   }
 
-  public long value() {
+  public ulong value() {
     assert(false);
   }
 
-  public void value(size_t v, int word = 0) {
+  public void value(ulong v, int word = 0) {
     assert(false);
   }
 

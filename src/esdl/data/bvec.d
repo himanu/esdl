@@ -762,7 +762,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
     else {
       enum bool MULTIDIM = false;
-      alias ELEMTYPE = _bvec!(S, L, 1UL);
+      alias ELEMTYPE = _bvec!(S, L, cast(size_t) 1);
     }
 
     // enum MIN = min();
@@ -849,12 +849,36 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     // Primarily for the ease of constraint solver to set value
-    package void _setNthWord(size_t v, int word = 0) {
-      import std.conv;
-      assert(word < STORESIZE, "trying to access " ~ word.to!string ~
-	     " when aval is only " ~ STORESIZE.to!string);
-      _aval[word] = cast(store_t) v;
-      _bval[word] = 0;
+    package void _setNthWord(T)(T v, int word = 0) if(isIntegral!T) {
+      // make sure that we are not going over the boundary
+      assert(word <= (SIZE-1)/(T.sizeof*8));
+      static if (T.sizeof * 8 >= WORDSIZE) {
+	enum scale = T.sizeof * 8 / WORDSIZE;
+	for (size_t i=0; i != scale; ++i) {
+	  if (word * scale + i < STORESIZE) {
+	    _aval[word * scale + i] = cast(store_t) v;
+	    _bval[word] = 0;
+	    v >>= WORDSIZE;
+	  }
+	}
+      }
+      else {
+	enum scale = WORDSIZE / (T.sizeof * 8);
+	auto n = word / scale;
+	auto m = word % scale;
+	auto mask = 1LU << ((m+1) * WORDSIZE) - (1LU << m * WORDSIZE);
+	ulong w = v;
+	w <<= (1LU << m * WORDSIZE);
+	_aval[n] &= ~mask;
+	_aval[n] |= w;
+	// bval
+	_bval[n] = 0;
+      }
+      // if MSB word
+      if(word == (SIZE-1)/(T.sizeof*8)) {
+	if(aValMSB) this._aval[$-1] |= SMASK;
+	else           this._aval[$-1] &= UMASK;
+      }
     }
 
     public void setAval(V)(V t)
@@ -1555,7 +1579,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	assert(i < SIZE);
       }
     body {
-      _bvec!(false, L, 1UL) retval;
+      _bvec!(false, L, cast(size_t) 1) retval;
       static if(STORESIZE == 1) {
 	retval._aval[0] = cast(ubyte)((this._aval[0] >>> i) & 1LU);
 	static if(L) {
