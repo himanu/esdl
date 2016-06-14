@@ -225,7 +225,7 @@ string declareWait(IF, string E, string CHANNEL)() {
 
   }
 
-  public final void init() {
+  public final void initialize() {
     if(_portObj is null) {
       _portObj = new PortObj!(IF,N,M);
       // writeln("Building Port");
@@ -400,7 +400,7 @@ public class ExePortObj(IF, size_t N=1, size_t M=N)
     // Disallow ExePort assignment
     @disable private void opAssign(ExePort e);
 
-    // public final void init() {
+    // public final void initialize() {
     //   if(_exeportObj is null) {
     //     _exeportObj = new ExePortObj!(IF);
     //     // writeln("Building ExePort");
@@ -686,7 +686,7 @@ class MutexObj: MutexIF, NamedComp
       }
       if(parent !is null) this._esdl__parent = parent;
       _mutex = new core.sync.mutex.Mutex();
-      _event.init(this);
+      _event.initialize(this);
     }
   }
 
@@ -788,7 +788,7 @@ class MutexObj: MutexIF, NamedComp
 
   // static public Mutex opCall() {
   //   Mutex mutex;
-  //   mutex.init();
+  //   mutex.initialize();
   //   return mutex;
   // }
 
@@ -796,21 +796,21 @@ class MutexObj: MutexIF, NamedComp
     Mutex[] mutexs = new Mutex[n];
     foreach(ref mutex;mutexs) {
       synchronized {
-	mutex.init();
+	mutex.initialize();
       }
     }
     return mutexs;
   }
 
-  public final void init(NamedComp parent=null) {
-    init(null, parent);
+  public final void initialize(NamedComp parent=null) {
+    initialize(null, parent);
   }
 
-  public final void init(string name, NamedComp parent=null) {
+  public final void initialize(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for MutexObj being "
-	       "\"init\" during elaboration");
+	       "\"initialize\" during elaboration");
       }
       if(_mutexObj is null) {
 	_mutexObj = new MutexObj(parent);
@@ -822,15 +822,15 @@ class MutexObj: MutexIF, NamedComp
   }
 
   final void lock() {
-    init();
+    initialize();
     _mutexObj.lock();
   }
   final bool tryLock() {
-    init();
+    initialize();
     return _mutexObj.tryLock();
   }
   final bool unlock() {
-    init();
+    initialize();
     return _mutexObj.unlock();
   }
 
@@ -867,7 +867,7 @@ class SemaphoreObj: SemaphoreIF, NamedComp
   this(ptrdiff_t n=1, NamedComp parent=null) {
     synchronized(this) {
       this._esdl__setParent(parent);
-      _event.init(this);
+      _event.initialize(this);
       _value = n;
     }
   }
@@ -948,7 +948,7 @@ class SemaphoreObj: SemaphoreIF, NamedComp
   @disable private void opAssign(Semaphore e);
   @disable private this(this);
 
-  public final void init() {
+  public final void initialize() {
     if(_semaphoreObj is null) {
       synchronized(typeid(Semaphore)) {
 	if(_semaphoreObj is null) {
@@ -967,22 +967,22 @@ class SemaphoreObj: SemaphoreIF, NamedComp
   }
   
   void wait() {
-    init();
+    initialize();
     _semaphoreObj.wait();
   }
 
   bool tryWait() {
-    init();
+    initialize();
     return _semaphoreObj.tryWait();
   }
 
   void post() {
-    init();
+    initialize();
     _semaphoreObj.post();
   }
 
   ptrdiff_t getValue() {
-    init();
+    initialize();
     return _semaphoreObj.getValue();
   }
 
@@ -1099,8 +1099,8 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
  public:
   this(string name="", NamedComp parent=null) {
     synchronized(this) {
-      _readEvent.init(this);
-      _writeEvent.init(this);
+      _readEvent.initialize(this);
+      _writeEvent.initialize(this);
       static if(N == 0) {_buffer.length = 4;}
       _free = _buffer.length;
       _esdl__setName(name);
@@ -1345,7 +1345,7 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
   @disable private void opAssign(Fifo e);
   @disable private this(this);
 
-  public final void init() {
+  public final void initialize() {
     if(this._fifoObj is null) {
       synchronized(typeid(Fifo!(T,N))) {
 	if(_fifoObj is null) {
@@ -1421,10 +1421,10 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   public this() {
     synchronized(this) {
       static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
-	_posedgeEvent.init("_posedgeEvent", this);
-	_negedgeEvent.init("_negedgeEvent", this);
+	_posedgeEvent.initialize("_posedgeEvent", this);
+	_negedgeEvent.initialize("_negedgeEvent", this);
       }
-      _changeEvent.init("_changeEvent", this);
+      _changeEvent.initialize("_changeEvent", this);
     }
   }
 
@@ -1640,13 +1640,13 @@ template Signal(uint WIDTH) {
 	  // otherwise these get autoconstructed in the update phase
 	  // where the parent object is not visible
 	
-	  _signalObj._changeEvent.init();
+	  _signalObj._changeEvent.initialize();
 
 	  import esdl.data.bvec;
 
 	  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
-	    _signalObj._posedgeEvent.init();
-	    _signalObj._negedgeEvent.init();
+	    _signalObj._posedgeEvent.initialize();
+	    _signalObj._negedgeEvent.initialize();
 	  }
 	}
       }
@@ -1730,7 +1730,7 @@ template Signal(uint WIDTH) {
     _esdl__obj.opOpAssign!op(other);
   }
 
-  public final void init() {
+  public final void initialize() {
     synchronized(typeid(Signal!(T, MULTI_DRIVER))) {
       if(_signalObj is null) {
 	_signalObj = new SignalObj!(T, MULTI_DRIVER);
@@ -1952,13 +1952,13 @@ template HdlSignal(uint WIDTH) {
 	  // otherwise these get autoconstructed in the update phase
 	  // where the parent object is not visible
 	
-	  _signalObj._changeEvent.init();
+	  _signalObj._changeEvent.initialize();
 
 	  import esdl.data.bvec;
 
 	  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
-	    _signalObj._posedgeEvent.init();
-	    _signalObj._negedgeEvent.init();
+	    _signalObj._posedgeEvent.initialize();
+	    _signalObj._negedgeEvent.initialize();
 	  }
 	}
       }
@@ -2042,7 +2042,7 @@ template HdlSignal(uint WIDTH) {
     _esdl__obj.opOpAssign!op(other);
   }
 
-  public final void init() {
+  public final void initialize() {
     synchronized(typeid(HdlSignal!(T, MULTI_DRIVER))) {
       if(_signalObj is null) {
 	_signalObj = new HdlSignalObj!(T, MULTI_DRIVER);

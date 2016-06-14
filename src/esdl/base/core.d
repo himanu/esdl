@@ -2104,7 +2104,7 @@ class NotificationObj(T): EventObj
   }
 
   this(SimEvent e) {
-    this.init;
+    this.initialize;
     synchronized(e) {
       synchronized(getNotification) {
 	import std.exception: enforce;
@@ -2122,7 +2122,7 @@ class NotificationObj(T): EventObj
   // User API
 
   final void opAssign(SimEvent e) {
-    this.init();
+    this.initialize();
     synchronized(e) {
       synchronized(getNotification) {
 	import std.exception: enforce;	// enforce
@@ -2137,33 +2137,33 @@ class NotificationObj(T): EventObj
 
   // static Notification!T opCall() {
   //   Notification!T notification;
-  //   notification.init();
+  //   notification.initialize();
   //   return notification;
   // }
 
   this(string name) {
-    this.init(name);
+    this.initialize(name);
   }
 
   static Notification!T[] opIndex(size_t n) {
     Notification!T[] notifications = new Notification!T[n];
     foreach(ref notification;notifications) {
       synchronized {
-	notification.init();
+	notification.initialize();
       }
     }
     return notifications;
   }
 
-  final void init(NamedComp parent=null) {
-    init(null, parent);
+  final void initialize(NamedComp parent=null) {
+    initialize(null, parent);
   }
 
-  final void init(string name, NamedComp parent=null) {
+  final void initialize(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for NotificationObj being "
-	       "\"init\" during elaboration");
+	       "\"initialize\" during elaboration");
       }
       if(_notificationObj is null) {
 	_notificationObj = new NotificationObj!T(parent);
@@ -2174,7 +2174,7 @@ class NotificationObj(T): EventObj
       }
     }
   }
-  // alias init init;
+  // alias initialize init;
 
   final void opAssign()(NotificationObj!T e) {
     import std.exception: enforce;	// enforce
@@ -2436,15 +2436,15 @@ class NotificationQueueObj(T): NotificationObj!T
 
   // static NotificationQueue!T opCall() {
   //   NotificationQueue!T notification;
-  //   notificationQueue.init();
+  //   notificationQueue.initialize();
   //   return notification;
   // }
 
   this(string name) {
-    this.init(name);
+    this.initialize(name);
   }
 
-  final void init() {
+  final void initialize() {
     synchronized {
       if(_notificationQueueObj is null) {
 	_notificationQueueObj = new NotificationQueueObj!T();
@@ -2452,7 +2452,7 @@ class NotificationQueueObj(T): NotificationObj!T
     }
   }
 
-  final void init(string name) {
+  final void initialize(string name) {
     synchronized {
       if(_notificationQueueObj is null) {
 	_notificationQueueObj = new NotificationQueueObj!T();
@@ -2461,7 +2461,7 @@ class NotificationQueueObj(T): NotificationObj!T
       _notificationQueueObj._esdl__setObjId();
     }
   }
-  // alias init init;
+  // alias initialize init;
 
   final void opAssign()(NotificationQueueObj!T e) {
     import std.exception: enforce;	// enforce
@@ -2863,7 +2863,7 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
   }
 
   this(SimEvent e) {
-    this.init;
+    this.initialize;
     synchronized(e) {
       synchronized(getEvent) {
 	import std.exception: enforce;
@@ -2881,7 +2881,7 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
   // User API
 
   final void opAssign(SimEvent e) {
-    this.init();
+    this.initialize();
     synchronized(e) {
       synchronized(getEvent) {
 	import std.exception: enforce;	// enforce
@@ -2905,33 +2905,33 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
 
   // static EventStruct opCall() {
   //   EventStruct event;
-  //   event.init();
+  //   event.initialize();
   //   return event;
   // }
 
   this(string name) {
-    this.init(name);
+    this.initialize(name);
   }
 
   static EventStruct[] opIndex(size_t n) {
     EventStruct[] events = new EventStruct[n];
     foreach(ref event; events) {
       synchronized {
-	event.init();
+	event.initialize();
       }
     }
     return events;
   }
 
-  final void init(NamedComp parent=null) {
-    init(null, parent);
+  final void initialize(NamedComp parent=null) {
+    initialize(null, parent);
   }
 
-  final void init(string name, NamedComp parent=null) {
+  final void initialize(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for EventType object "
-	       "\"init\" during elaboration");
+	       "\"initialize\" during elaboration");
       }
       if(_eventObj is null) {
 	_eventObj = new EventType(parent, ASYNC);
@@ -2942,7 +2942,7 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
       }
     }
   }
-  // alias init init;
+  // alias initialize init;
 
   static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
     l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
@@ -3193,15 +3193,15 @@ class EventQueueObj: EventObj
 
   // static EventQueue opCall() {
   //   EventQueue event;
-  //   event.init();
+  //   event.initialize();
   //   return event;
   // }
 
   this(string name) {
-    this.init(name);
+    this.initialize(name);
   }
 
-  final void init() {
+  final void initialize() {
     synchronized {
       if(_eventObj is null) {
 	_eventObj = new EventQueueObj();
@@ -3209,7 +3209,7 @@ class EventQueueObj: EventObj
     }
   }
 
-  final void init(string name) {
+  final void initialize(string name) {
     synchronized {
       if(_eventObj is null) {
 	_eventObj = new EventQueueObj();
@@ -3218,7 +3218,7 @@ class EventQueueObj: EventObj
       _eventObj._esdl__setObjId();
     }
   }
-  // alias init init;
+  // alias initialize init;
 
   static void _esdl__inst(size_t I=0, T, L)(T t, ref L l) {
     l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
@@ -3982,7 +3982,7 @@ void sleep()() { // sleep forever
 }
 
 void wait(ref Event e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEvent(event);
 }
@@ -3993,7 +3993,7 @@ void wait(Event e) {
 }
 
 void wait(ref EventQueue e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEvent(event);
 }
@@ -4004,7 +4004,7 @@ void wait(EventQueue e) {
 }
 
 void wait(T)(ref Notification!T e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEvent(event);
 }
@@ -4015,7 +4015,7 @@ void wait(T)(Notification!T e) {
 }
 
 void wait(T)(ref NotificationQueue!T e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEvent(event);
 }
@@ -4026,7 +4026,7 @@ void wait(T)(NotificationQueue!T e) {
 }
 
 void wait(IF, size_t N, size_t M)(ref Port!(IF, N, M) e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEvent(event);
 }
@@ -4037,7 +4037,7 @@ void wait(IF, size_t N, size_t M)(Port!(IF, N, M) e) {
 }
 
 void wait(T, bool M)(ref Signal!(T, M) e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEvent(event);
 }
@@ -4062,7 +4062,7 @@ void waitp(E)(E e)
     }
 
 void waitp(ref Event e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEventP(event);
 }
@@ -4073,7 +4073,7 @@ void waitp(Event e) {
 }
 
 void waitp(ref EventQueue e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEventP(event);
 }
@@ -4084,7 +4084,7 @@ void waitp(EventQueue e) {
 }
 
 void waitp(T)(ref Notification!T e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEventP(event);
 }
@@ -4095,7 +4095,7 @@ void waitp(T)(Notification!T e) {
 }
 
 void waitp(T)(ref NotificationQueue!T e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEventP(event);
 }
@@ -4106,7 +4106,7 @@ void waitp(T)(NotificationQueue!T e) {
 }
 
 void waitp(IF, size_t N, size_t M)(ref Port!(IF, N, M) e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEventP(event);
 }
@@ -4117,7 +4117,7 @@ void waitp(IF, size_t N, size_t M)(Port!(IF, N, M) e) {
 }
 
 void waitp(T, bool M)(ref Signal!(T, M) e) {
-  e.init();
+  e.initialize();
   auto event = getEventObj(e);
   waitForEventP(event);
 }
@@ -5393,8 +5393,8 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     synchronized(this) {
       _persist = new PersistFlag;
-      _ended.init(this);
-      _endedTree.init(this);
+      _ended.initialize(this);
+      _endedTree.initialize(this);
       _stage = stage;
 
       _timed = new EventObj(this);
@@ -5414,8 +5414,8 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     synchronized(this) {
       _persist = new PersistFlag;
-      _ended.init(this);
-      _endedTree.init(this);
+      _ended.initialize(this);
+      _endedTree.initialize(this);
       _stage = stage;
 
       _timed = new EventObj(this);
