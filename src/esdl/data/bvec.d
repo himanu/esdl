@@ -302,68 +302,86 @@ private ubyte _log2(size_t n) {
 private template VecParams(size_t SIZE, bool S=true) {
   static if(SIZE <= 8) {
     static if(S) {
-      private alias byte StoreT;
-      private alias byte ValueT;
+      private alias StoreT = byte;
+      private alias ValueT = byte;
     }
     else {
-      private alias ubyte StoreT;
-      private alias ubyte ValueT;
+      private alias StoreT = ubyte;
+      private alias ValueT = ubyte;
     }
   }
-  else
-  static if(SIZE <= 16) {
+  else static if(SIZE <= 16) {
     static if(S) {
-      private alias short StoreT;
-      private alias short ValueT;
+      private alias StoreT = short;
+      private alias ValueT = short;
     }
     else {
-      private alias ushort StoreT;
-      private alias ushort ValueT;
+      private alias StoreT = ushort;
+      private alias ValueT = ushort;
     }
   }
-  else
-  static if(SIZE <= 32 || size_t.sizeof*8 == 32) {
-    static if(SIZE <= 32) {
-      static if(S) {
-	private alias int StoreT;
-	private alias int ValueT;
-      }
-      else {
-	private alias uint StoreT;
-	private alias uint ValueT;
-      }
+  else static if(SIZE <= 32) {
+    static if(S) {
+      private alias StoreT = int;
+      private alias ValueT = int;
     }
     else {
-      static if(S) {
-	private alias int  StoreT;
-	private alias long ValueT;
-      }
-      else {
-	private alias uint  StoreT;
-	private alias ulong ValueT;
-      }
+      private alias StoreT = uint;
+      private alias ValueT = uint;
     }
   }
   else {
     static if(S) {
-      private alias long StoreT;
-      private alias long ValueT;
+      private alias StoreT = int;
+      private alias ValueT = long;
     }
     else {
-      private alias ulong StoreT;
-      private alias ulong ValueT;
+      private alias StoreT = uint;
+      private alias ValueT = ulong;
     }
   }
+  // else static if(SIZE <= 32 || size_t.sizeof*8 == 32) {
+  //   static if(SIZE <= 32) {
+  //     static if(S) {
+  // 	private alias StoreT = int;
+  // 	private alias ValueT = int;
+  //     }
+  //     else {
+  // 	private alias StoreT = uint;
+  // 	private alias ValueT = uint;
+  //     }
+  //   }
+  //   else {
+  //     static if(S) {
+  // 	private alias StoreT = int;
+  // 	private alias ValueT = long;
+  //     }
+  //     else {
+  // 	private alias StoreT = uint;
+  // 	private alias ValueT = ulong;
+  //     }
+  //   }
+  // }
+  // else {
+  //   static if(S) {
+  //     private alias StoreT = long;
+  //     private alias ValueT = long;
+  //   }
+  //   else {
+  //     private alias StoreT = ulong;
+  //     private alias ValueT = ulong;
+  //   }
+  // }
 
   // Word Size -- bits in a word
   private enum size_t WORDSIZE = 8*StoreT.sizeof;
   // _aval size(in words)
-  private enum size_t STORESIZE =(8*StoreT.sizeof + SIZE - 1)/(8*StoreT.sizeof);
+  private enum size_t STORESIZE = (8*StoreT.sizeof + SIZE - 1)/(8*StoreT.sizeof);
   // Word size of the Most Significant word
   // Make sure that MSWSIZE is never 0(is equal to WORDSIZE instead)
-  private enum size_t MSWSIZE =((SIZE-1) % WORDSIZE) + 1;
+  private enum size_t MSWSIZE = ((SIZE-1) % WORDSIZE) + 1;
   static if(MSWSIZE == WORDSIZE)	// All ones
-    // Shift by WORDSIZE(word size) is erroneous
+    // Shift by WORDSIZE is erroneous -- D gives compile time error
     {
       private enum StoreT UMASK =(cast(StoreT) -1);
       private enum StoreT SMASK = ~UMASK;
@@ -375,11 +393,25 @@ private template VecParams(size_t SIZE, bool S=true) {
 }
 
 // Make sure that all the parameters are of type size_t
+template ConvVecParams(N...) {
+  static if(N.length > 1) {
+    static assert(!is(typeof(N[$-1]) == bool) && // do not confuse bool as size_t
+		  is(typeof(N[$-1]): size_t));
+    static assert(N[$-1] >= 0, "Can not have vectors with non-positive dimension");
+    enum ConvVecParams = ConvVecParams!(N[0..$-1]) ~ cast(size_t) (N[$-1]);
+  }
+  else {
+    static assert(N.length == 1);
+    enum ConvVecParams = cast(size_t) (N[$-1]);
+  }
+}
+
+// Make sure that all the parameters are of type size_t
 template CheckVecParams(N...) {
   static if(N.length > 0) {
     import std.traits;
     static if(!is(typeof(N[0]) == bool) && // do not confuse bool as size_t
-	      is(typeof(N[0]) : size_t)) {
+	      is(typeof(N[0]) == size_t)) {
       static assert(N[0] != 0, "Can not have vectors with size 0");
       enum bool CheckVecParams = CheckVecParams!(N[1..$]);
     }
@@ -403,7 +435,7 @@ template VecSize(size_t L=1, N...) {
 }
 
 // One of the reasons for creating this function is that D operates
-// A.opCmp(B) as well as B.opCmp(B) in case both are defined. We want
+// A.opCmp(B) as well as B.opCmp(A) in case both are defined. We want
 // to avoid that situation.
 template _vecCmpT(T, U)	// return true if T >= U
   if(isBitVector!T && isBitVector!U) {
@@ -423,31 +455,47 @@ template _vecCmpT(T, U)	// return true if T >= U
 
 template _bvec(T, U, string OP)
   if(isBitVector!T && isBitVector!U) {
-  static if(T.ISSIGNED && U.ISSIGNED) {enum bool S = true;}
-  else                                {enum bool S = false;}
-  static if(T.IS4STATE || U.IS4STATE) {enum bool L = true;}
-  else                                {enum bool L = false;}
-  static if(OP == "|" || OP == "&" || OP == "^") {
-    static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
-    else                              {enum size_t N = U.SIZE;}
+    static if(T.ISSIGNED && U.ISSIGNED) {enum bool S = true;}
+    else                                {enum bool S = false;}
+    static if(T.IS4STATE || U.IS4STATE) {enum bool L = true;}
+    else                                {enum bool L = false;}
+    static if(OP == "~") {
+      alias _bvec!(T.ISSIGNED, L, T.SIZE + U.SIZE) _bvec;
+    }
+    else {
+      static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
+      else                              {enum size_t N = U.SIZE;}
+      alias _bvec = _bvec!(T.ISSIGNED, L, N);
+    }
   }
-  static if(OP == "COMPARE") {	// for operands of opCmp
-    static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
-    else                              {enum size_t N = U.SIZE;}
-  }
-  static if(OP == "+" || OP == "-") {
-    static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE + 1;}
-    else                              {enum size_t N = U.SIZE + 1;}
-  }
-  static if(OP == "*")                {enum size_t N = T.SIZE + U.SIZE;}
-  static if(OP == "/")                {enum size_t N = T.SIZE;}
-  static if(OP == "~") {
-    alias _bvec!(T.ISSIGNED, L, T.SIZE + U.SIZE) _bvec;
-  }
-  else {
-    alias _bvec!(S, L, N) _bvec;
-  }
-}
+
+// template _bvec(T, U, string OP)
+//   if(isBitVector!T && isBitVector!U) {
+//     static if(T.ISSIGNED && U.ISSIGNED) {enum bool S = true;}
+//     else                                {enum bool S = false;}
+//     static if(T.IS4STATE || U.IS4STATE) {enum bool L = true;}
+//     else                                {enum bool L = false;}
+//     static if(OP == "|" || OP == "&" || OP == "^") {
+//       static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
+//       else                              {enum size_t N = U.SIZE;}
+//     }
+//     static if(OP == "COMPARE") {	// for operands of opCmp
+//       static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
+//       else                              {enum size_t N = U.SIZE;}
+//     }
+//     static if(OP == "+" || OP == "-") {
+//       static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE + 1;}
+//       else                              {enum size_t N = U.SIZE + 1;}
+//     }
+//     static if(OP == "*")                {enum size_t N = T.SIZE + U.SIZE;}
+//     static if(OP == "/")                {enum size_t N = T.SIZE;}
+//     static if(OP == "~") {
+//       alias _bvec!(T.ISSIGNED, L, T.SIZE + U.SIZE) _bvec;
+//     }
+//     else {
+//       alias _bvec!(T.ISSIGNED, L, N) _bvec;
+//     }
+//   }
 
 struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
   enum size_t SIZE = stringBitSize(VAL, RADIX);
@@ -456,16 +504,17 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 
   enum size_t   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
   enum size_t   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
-  enum store_t UMASK      = VecParams!(SIZE,S).UMASK;
-  enum store_t SMASK      = VecParams!(SIZE,S).SMASK;
-  enum bool    IS4STATE   = L;
-  enum bool    ISSIGNED   = S;
+  enum store_t  UMASK      = VecParams!(SIZE,S).UMASK;
+  enum store_t  SMASK      = VecParams!(SIZE,S).SMASK;
+  enum bool     IS4STATE   = L;
+  enum bool     ISSIGNED   = S;
 
   private store_t[STORESIZE] _aval = void;
-  public bool aValSigned() {
+
+  public bool aValMSB() {
     static if(S) {
       if((this._aval[$-1] &
-	  (cast(store_t) 1) <<((SIZE-1) % WORDSIZE)))
+	  (cast(store_t) 1) << ((SIZE-1) % WORDSIZE)))
 	return true;
       else
 	return false;
@@ -476,10 +525,10 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 
   static if(L) {
     private store_t[STORESIZE] _bval = void;
-    public bool bValSigned() {
+    public bool bValMSB() {
       static if(S) {
 	if((this._bval[$-1] &
-	    (cast(store_t) 1) <<((SIZE-1) % WORDSIZE)))
+	    (cast(store_t) 1) << ((SIZE-1) % WORDSIZE)))
 	  return true;
 	else
 	  return false;
@@ -489,6 +538,7 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
     }
   }
 
+  // default constructor not allowed for structures
   public this(int dummy) {
     // sign extension
     _aval = mixin(stringToBits(extractBits!(true, RADIX)(VAL),
@@ -496,13 +546,13 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
     static if(L) {
       _bval = mixin(stringToBits(extractBits!(false, RADIX)(VAL),
 				 store_t.sizeof, STORESIZE));
-      if(this.aValSigned) {
+      if(this.aValMSB) {
 	_aval[$-1] |= SMASK;
       }
       else {
 	_aval[$-1] &= UMASK;
       }
-      if(this.bValSigned) {
+      if(this.bValMSB) {
 	_bval[$-1] |= SMASK;
       }
       else {
@@ -514,7 +564,7 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 				       store_t.sizeof, STORESIZE)))) {
 	_aval[i] &= ~n;
       }
-      if(this.aValSigned) {
+      if(this.aValMSB) {
 	_aval[$-1] |= SMASK;
       }
       else {
@@ -543,10 +593,10 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 	  }
 	}
 	// sign extension
-	if(result.aValSigned) result._aval[$-1] |= T.SMASK;
+	if(result.aValMSB) result._aval[$-1] |= T.SMASK;
 	else                  result._aval[$-1] &= T.UMASK;
 	static if(_L) {
-	  if(result.bValSigned) result._bval[$-1] |= T.SMASK;
+	  if(result.bValMSB) result._bval[$-1] |= T.SMASK;
 	  else                  result._bval[$-1] &= T.UMASK;
 	}
       }
@@ -566,11 +616,11 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 	}
 	for(size_t i=STORESIZE; i != T.STORESIZE; ++i) {
 	  // if RHS is signed, extend its sign
-	  if(this.aValSigned) result._aval[i] = -1;
+	  if(this.aValMSB) result._aval[i] = -1;
 	  else                 result._aval[i] = 0;
 	  static if(_L) {
 	    static if(L) {
-	      if(this.bValSigned) result._bval[i] = -1;
+	      if(this.bValMSB) result._bval[i] = -1;
 	      else                 result._bval[i] = 0;
 	    }
 	    else {
@@ -579,7 +629,7 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 	  }
 	  else {
 	    static if(L) // X/Z reduce to 0
-	      if(this.bValSigned) result._aval[i] = 0;
+	      if(this.bValMSB) result._aval[i] = 0;
 	  }
 	}
 	static if(!_S) {	// If result is not signed
@@ -599,74 +649,71 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
 
 enum UBit!1 BIT_0   = UBit!1(0);
 enum UBit!1 BIT_1   = UBit!1(1);
-alias BIT_0 _0;
-alias BIT_1 _1;
+alias _0 = BIT_0;
+alias _1 = BIT_1;
 
 enum ULogic!1 LOGIC_0 = ULogic!1(0);
 enum ULogic!1 LOGIC_1 = ULogic!1(1);
 enum ULogic!1 LOGIC_X = cast(ULogic!1)bin!"X";
 enum ULogic!1 LOGIC_Z = cast(ULogic!1)bin!"Z";
 
-alias LOGIC_X _X;
-alias LOGIC_Z _Z;
+alias _X = LOGIC_X;
+alias _Z = LOGIC_Z;
 
-alias LOGIC_X _x;
-alias LOGIC_Z _z;
+alias _x = LOGIC_X;
+alias _z = LOGIC_Z;
 
-// BIN HEX and OCT could be simplyfied but for
-// http://d.puremagic.com/issues/show_bug.cgi?id=9143
-@property public auto bin(string VAL)() {
+public auto bin(string VAL)() {
   enum bool L = isStr4State(VAL);
-  alias _bvec!(true, L, stringBitSize(VAL, 2)) vector_t;
+  alias vector_t = _bvec!(true, L, stringBitSize(VAL, 2));
   vector_t result = vector_t(_bvec!(true, L, VAL, 2)(0));
   return result;
 }
 
-@property public auto oct(string VAL)() {
+public auto oct(string VAL)() {
   enum bool L = isStr4State(VAL);
-  alias _bvec!(true, L, stringBitSize(VAL, 8)) vector_t;
+  alias vector_t = _bvec!(true, L, stringBitSize(VAL, 8));
   vector_t result = vector_t(_bvec!(true, L, VAL, 8)(0));
   return result;
 }
 
-@property public auto hex(string VAL)() {
+public auto hex(string VAL)() {
   enum bool L = isStr4State(VAL);
-  alias _bvec!(true, L, stringBitSize(VAL, 16)) vector_t;
+  alias vector_t = _bvec!(true, L, stringBitSize(VAL, 16));
   vector_t result = vector_t(_bvec!(true, L, VAL, 16)(0));
   return result;
 }
 
-// alias _bvec!(false, true, 1) logic;
-// alias _bvec!(false, false, 1) bit;
-
 template _bvec(T) if(is(T == bool)) {
-  alias _bvec!(false, false, 1) _bvec;
+  alias _bvec = _bvec!(false, false, 1);
 }
 
 template _bvec(T) if(isIntegral!T) {
-  alias _bvec!(isSigned!T, false, T.sizeof*8) _bvec;
+  alias _bvec = _bvec!(isSigned!T, false, T.sizeof*8);
 }
 
 template _bvec(T) if(isBitVector!T) {
-  alias T _bvec;
+  alias _bvec = T;
 }
 
-template BitVec(N...) if(CheckVecParams!N) {
-  alias _bvec!(true, false, N) BitVec;
+template BitVec(N...) {
+  alias  BitVec = _bvec!(true, false, ConvVecParams!N);
 }
 
-template UBitVec(N...) if(CheckVecParams!N) {
-  alias _bvec!(false, false, N) UBitVec;
+template UBitVec(N...) {
+  alias  UBitVec = _bvec!(false, false, ConvVecParams!N);
 }
 
-template LogicVec(N...) if(CheckVecParams!N) {
-  alias _bvec!(true, true, N) LogicVec;
+template LogicVec(N...) {
+  alias  LogicVec = _bvec!(true, true, ConvVecParams!N);
 }
 
-template ULogicVec(N...) if(CheckVecParams!N) {
-  alias _bvec!(false, true, N) ULogicVec;
+template ULogicVec(N...) {
+  alias  ULogicVec = _bvec!(false, true, ConvVecParams!N);
 }
 
+
+private alias makeMutable(V) = _bvec!(V.ISSIGNED, V.IS4STATE, V.DIMENSIONS);
 
 // A tightly packed fixed width vector of bits
 struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
@@ -674,29 +721,52 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     import esdl.data.time;
 
     enum size_t SIZE = VecSize!(1,N);
-    private alias VecParams!(SIZE,S).StoreT store_t;
+    private alias store_t = VecParams!(SIZE,S).StoreT;
 
-    enum size_t   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
-    enum size_t   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
+    enum size_t  STORESIZE  = VecParams!(SIZE,S).STORESIZE;
+    enum size_t  WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
     enum store_t UMASK      = VecParams!(SIZE,S).UMASK;
     enum store_t SMASK      = VecParams!(SIZE,S).SMASK;
     enum bool    IS4STATE   = L;
     enum bool    ISSIGNED   = S;
+    enum         DIMENSIONS = N;
 
-    alias SIZE opDollar;
+    alias opDollar = SIZE;
 
-    alias _bvec!(S, L, N) T;
+    alias T = _bvec!(S, L, N);
 
+    alias this_type = typeof(this);
+    
     enum size_t ELEMSIZE = N[$-1];
+
+    template isAssignable(Q) {
+      static if (isIntegral!Q && Q.sizeof*8 <= SIZE) {
+	enum bool isAssignable = true;
+      }
+      else static if (isBitVector!Q && Q.SIZE <= SIZE) {
+	static if (IS4STATE || (! Q.IS4STATE)) {
+	  enum bool isAssignable = true;
+	}
+	else {
+	  enum bool isAssignable = false;
+	}
+      }
+      else {
+	  enum bool isAssignable = true;
+      }
+    }
+    
     static if(N.length > 1) {
       enum bool MULTIDIM = true;
-      alias _bvec!(S, L, N[0..$-1]) ELEMTYPE;
+      alias ELEMTYPE = _bvec!(S, L, N[0..$-1]);
     }
     else {
       enum bool MULTIDIM = false;
-      alias _bvec!(S, L, 1)         ELEMTYPE;
+      alias ELEMTYPE = _bvec!(S, L, cast(size_t) 1);
     }
 
+    // enum MIN = min();
+    
     public static auto min() {
       alias _bvec!(S, L, N) _type;
       _type retval;
@@ -709,6 +779,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
     }
 
+    // enum MAX = max();
+    
     public static auto max() {
       alias _bvec!(S, L, N) _type;
       _type retval;
@@ -739,7 +811,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     static if(SIZE <= 64) {	// 32-bit size_t
-      alias VecParams!(SIZE,S).ValueT value_t;
+      alias value_t = VecParams!(SIZE,S).ValueT;
       // enum min        = VecParams!(SIZE,S).MAX;
       // enum max        = VecParams!(SIZE,S).MIN;
     }
@@ -754,6 +826,13 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       private enum store_t[STORESIZE] _bval = 0;
     }
 
+    public ubyte getByte(size_t index) const {
+      return (cast(ubyte*) _aval.ptr)[0..STORESIZE*store_t.sizeof][index];
+    }
+    
+    public void setByte(size_t index, ubyte val) {
+      (cast(ubyte*) _aval.ptr)[0..STORESIZE*store_t.sizeof][index] = val;
+    }
 
     public auto aVal() {
       // http://d.puremagic.com/issues/show_bug.cgi?id=9143
@@ -770,12 +849,36 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     // Primarily for the ease of constraint solver to set value
-    package void _setNthWord(size_t v, int word = 0) {
-      import std.conv;
-      assert(word < STORESIZE, "trying to access " ~ word.to!string ~
-	     " when aval is only " ~ STORESIZE.to!string);
-      _aval[word] = cast(store_t) v;
-      _bval[word] = 0;
+    package void _setNthWord(T)(T v, int word = 0) if(isIntegral!T) {
+      // make sure that we are not going over the boundary
+      assert(word <= (SIZE-1)/(T.sizeof*8));
+      static if (T.sizeof * 8 >= WORDSIZE) {
+	enum scale = T.sizeof * 8 / WORDSIZE;
+	for (size_t i=0; i != scale; ++i) {
+	  if (word * scale + i < STORESIZE) {
+	    _aval[word * scale + i] = cast(store_t) v;
+	    _bval[word] = 0;
+	    v >>= WORDSIZE;
+	  }
+	}
+      }
+      else {
+	enum scale = WORDSIZE / (T.sizeof * 8);
+	auto n = word / scale;
+	auto m = word % scale;
+	auto mask = 1LU << ((m+1) * WORDSIZE) - (1LU << m * WORDSIZE);
+	ulong w = v;
+	w <<= (1LU << m * WORDSIZE);
+	_aval[n] &= ~mask;
+	_aval[n] |= w;
+	// bval
+	_bval[n] = 0;
+      }
+      // if MSB word
+      if(word == (SIZE-1)/(T.sizeof*8)) {
+	if(aValMSB) this._aval[$-1] |= SMASK;
+	else           this._aval[$-1] &= UMASK;
+      }
     }
 
     public void setAval(V)(V t)
@@ -808,7 +911,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
     // some bits are X or Z
     alias isUnkown = isX;
-    @property public bool isX() {
+    public bool isX() const {
       static if(L) {
 	for (size_t i=0; i!=_bval.length-1; ++i) {
 	  if(_bval[i] != 0) return true;
@@ -820,7 +923,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     // returns true if all the logic bits are carrying Z
-    @property public bool isZ() {
+    @property public bool isZ() const {
      static if(L) {
        for (size_t i=0; i!= _bval.length-1; ++i) {
 	 if(cast(store_t) (_bval[i]+1) != 0) return false;
@@ -833,38 +936,38 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
      else return false;
    }
 
-    static if(SIZE >= 8) {
-      public this()(byte other) {
-	this._from(other);
-      }
-      public void opAssign()(byte other) {
-	this._from(other);
-      }
-    }
-
-    static if(SIZE >= 16) {
-      public this()(short other) {
-	this._from(other);
-      }
-      public void opAssign()(short  other) {
-	this._from(other);
-      }
-    }
-
-    static if(SIZE >= 32) {
-      public this()(int other) {
-	this._from(other);
-      }
-      public void opAssign()(int  other) {
-	this._from(other);
-      }
-    }
-
     static if(SIZE >= 64) {
-      public this()(long other) {
+      public this(long other) {
+    	this._from(other);
+      }
+      public void opAssign(long  other) {
+    	this._from(other);
+      }
+    }
+
+    else static if(SIZE >= 32) {
+      public this(int other) {
+    	this._from(other);
+      }
+      public void opAssign(int  other) {
+    	this._from(other);
+      }
+    }
+
+    else static if(SIZE >= 16) {
+      public this(short other) {
+    	this._from(other);
+      }
+      public void opAssign(short other) {
+    	this._from(other);
+      }
+    }
+
+    else static if(SIZE >= 8) {
+      public this(byte other) {
 	this._from(other);
       }
-      public void opAssign()(long  other) {
+      public void opAssign(byte other) {
 	this._from(other);
       }
     }
@@ -877,7 +980,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	this._from(other);
       }
 
-    public this()(bool other) {
+    public this(bool other) {
       this._from(other);
     }
 
@@ -916,53 +1019,103 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
     // declare this aliases -- only if SIZE <= 64
     static if(SIZE <= 64 && !L) {
-      static if(SIZE <= size_t.sizeof*8) { // 32-bit size_t
-	static assert(STORESIZE == 1);
+      static if(SIZE <= WORDSIZE) { // 32-bit size_t
+    	static assert(STORESIZE == 1);
       }
       else {
-	static assert(STORESIZE == 2);
+    	static assert(STORESIZE == 2);
       }
       static if(SIZE == 1) {
-	@property public bool getValue() {
-	  bool value =(this._aval[0] & 1);
-	  static if(L) {
-	    value &= cast(bool) ~(this._bval[0] & 1); // makes X/Z as 0
-	  }
-	  return value;
-	}
+    	public bool getValue() const {
+    	  bool value =(this._aval[0] & 1);
+    	  static if(L) {
+    	    value &= cast(bool) ~(this._bval[0] & 1); // makes X/Z as 0
+    	  }
+    	  return value;
+    	}
       }
       else {
-	@property public value_t getValue() {
-	  value_t value = this._aval[0];
-	  static if(L) {
-	    value &= ~(this._bval[0]); // makes X/Z as 0
-	  }
-	  static if(SIZE > size_t.sizeof*8) { // 32-bit machines
-	    value_t value32 = this._aval[1];
-	    static if(L) {
-	      value32 &= ~(this._bval[1]);
-	    }
-	    value |=(value32 << 32);
-	  }
-	  // asserts to make sure that sign extension is proper
-	  // static if(S && SIZE < value_t.sizeof*8) {
-	  //   if((value >> (SIZE-1)) & 1) { // negative
-	  //     // make sure that the returned value is sign extended
-	  //     import std.string;
-	  //     assert(isSigned!value_t);
-	  //     assert((value >> SIZE) == -1,
-	  // 	     format("value is %d, %b, %s", value, value, typeid(value_t))); // ">>" is sign-extending shift
-	  //   }
-	  // }
-	  // else
-	  //   static if(SIZE < value_t.sizeof*8) {
-	  //     assert((value >> SIZE) == 0);
-	  //   }
-	  return value;
-	}
+    	public value_t getValue() const {
+    	  value_t value = this._aval[0];
+    	  // static if(L) {
+    	  //   value &= ~(this._bval[0]); // makes X/Z as 0
+    	  // }
+    	  static if(SIZE > WORDSIZE) { // 32-bit machines
+    	    value_t value32 = this._aval[1];
+    	    // static if(L) {
+    	    //   value32 &= ~(this._bval[1]);
+    	    // }
+    	    value |= (value32 << WORDSIZE);
+    	  }
+    	  // asserts to make sure that sign extension is proper
+    	  // static if(S && SIZE < value_t.sizeof*8) {
+    	  //   if((value >> (SIZE-1)) & 1) { // negative
+    	  //     // make sure that the returned value is sign extended
+    	  //     import std.string;
+    	  //     assert(isSigned!value_t);
+    	  //     assert((value >> SIZE) == -1,
+    	  // 	     format("value is %d, %b, %s", value, value, typeid(value_t))); // ">>" is sign-extending shift
+    	  //   }
+    	  // }
+    	  // else
+    	  //   static if(SIZE < value_t.sizeof*8) {
+    	  //     assert((value >> SIZE) == 0);
+    	  //   }
+    	  return value;
+    	}
       }
       alias getValue this;
     }
+
+    // declare this aliases -- only if SIZE <= 64
+    // static if(SIZE <= 64 && !L) {
+    //   static if(SIZE <= size_t.sizeof*8) { // 32-bit size_t
+    // 	static assert(STORESIZE == 1);
+    //   }
+    //   else {
+    // 	static assert(STORESIZE == 2);
+    //   }
+    //   static if(SIZE == 1) {
+    // 	public bool getValue() {
+    // 	  bool value =(this._aval[0] & 1);
+    // 	  static if(L) {
+    // 	    value &= cast(bool) ~(this._bval[0] & 1); // makes X/Z as 0
+    // 	  }
+    // 	  return value;
+    // 	}
+    //   }
+    //   else {
+    // 	public value_t getValue() {
+    // 	  value_t value = this._aval[0];
+    // 	  static if(L) {
+    // 	    value &= ~(this._bval[0]); // makes X/Z as 0
+    // 	  }
+    // 	  static if(SIZE > size_t.sizeof*8) { // 32-bit machines
+    // 	    value_t value32 = this._aval[1];
+    // 	    static if(L) {
+    // 	      value32 &= ~(this._bval[1]);
+    // 	    }
+    // 	    value |= (value32 << 32);
+    // 	  }
+    // 	  // asserts to make sure that sign extension is proper
+    // 	  // static if(S && SIZE < value_t.sizeof*8) {
+    // 	  //   if((value >> (SIZE-1)) & 1) { // negative
+    // 	  //     // make sure that the returned value is sign extended
+    // 	  //     import std.string;
+    // 	  //     assert(isSigned!value_t);
+    // 	  //     assert((value >> SIZE) == -1,
+    // 	  // 	     format("value is %d, %b, %s", value, value, typeid(value_t))); // ">>" is sign-extending shift
+    // 	  //   }
+    // 	  // }
+    // 	  // else
+    // 	  //   static if(SIZE < value_t.sizeof*8) {
+    // 	  //     assert((value >> SIZE) == 0);
+    // 	  //   }
+    // 	  return value;
+    // 	}
+    //   }
+    //   alias getValue this;
+    // }
 
     public void randomize() {
       import std.random;
@@ -970,10 +1123,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	this._aval[i] = uniform!store_t();
 	static if(L) this._bval[i] = 0;
       }
-      if(aValSigned) this._aval[$-1] |= SMASK;
+      if(aValMSB) this._aval[$-1] |= SMASK;
       else           this._aval[$-1] &= UMASK;
       static if(L) {
-	if(bValSigned) this._bval[$-1] |= SMASK;
+	if(bValMSB) this._bval[$-1] |= SMASK;
 	else           this._bval[$-1] &= UMASK;
       }
     }
@@ -984,18 +1137,18 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	this._aval[i] = uniform!store_t(urng);
 	static if(L) this._bval[i] = 0;
       }
-      if(aValSigned) this._aval[$-1] |= SMASK;
+      if(aValMSB) this._aval[$-1] |= SMASK;
       else           this._aval[$-1] &= UMASK;
       static if(L) {
-	if(bValSigned) this._bval[$-1] |= SMASK;
+	if(bValMSB) this._bval[$-1] |= SMASK;
 	else           this._bval[$-1] &= UMASK;
       }
     }
 
-    public bool aValSigned() {
+    public bool aValMSB() const {
       static if(S) {
 	if((this._aval[$-1] &
-	    (cast(store_t) 1) <<((SIZE-1) % WORDSIZE)))
+	    (cast(store_t) 1) << ((SIZE-1) % WORDSIZE)))
 	  return true;
 	else
 	  return false;
@@ -1005,10 +1158,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     static if(L) {
-      public bool bValSigned() {
+      public bool bValMSB() const {
 	static if(S) {
 	  if((this._bval[$-1] &
-	      (cast(store_t) 1) <<((SIZE-1) % WORDSIZE)))
+	      (cast(store_t) 1) << ((SIZE-1) % WORDSIZE)))
 	    return true;
 	  else
 	    return false;
@@ -1031,10 +1184,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    _aval[j] |=(cast(Unsigned!store_t) c) << k*8;
 	  }
 	}
-	if(aValSigned) this._aval[$-1] |= SMASK;
+	if(aValMSB) this._aval[$-1] |= SMASK;
 	else           this._aval[$-1] &= UMASK;
 	static if(L) {
-	  if(bValSigned) this._bval[$-1] |= SMASK;
+	  if(bValMSB) this._bval[$-1] |= SMASK;
 	  else           this._bval[$-1] &= UMASK;
 	}
       }
@@ -1073,7 +1226,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     //	  this._from(other);
     //	}
 
-    public void opAssign()(bool other) {
+    public void opAssign(bool other) {
       this._from(other);
     }
 
@@ -1155,11 +1308,11 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
 	for(size_t i=V.STORESIZE; i != STORESIZE; ++i) {
 	  // if RHS is signed, extend its sign
-	  if(other.aValSigned) this._aval[i] = cast(store_t) -1;
+	  if(other.aValMSB && ISSIGNED) this._aval[i] = cast(store_t) -1;
 	  else                  this._aval[i] = 0;
 	  static if(L) {
 	    static if(_L) {
-	      if(other.bValSigned) this._bval[i] = cast(store_t) -1;
+	      if(other.bValMSB && ISSIGNED) this._bval[i] = cast(store_t) -1;
 	      else                  this._bval[i] = 0;
 	    }
 	    else {
@@ -1167,42 +1320,42 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    }
 	  }
 	}
-	if(aValSigned) this._aval[$-1] |= SMASK;
+	if(aValMSB && ISSIGNED) this._aval[$-1] |= SMASK;
 	else           this._aval[$-1] &= UMASK;
 	static if(L) {
-	  if(bValSigned) this._bval[$-1] |= SMASK;
+	  if(bValMSB && ISSIGNED) this._bval[$-1] |= SMASK;
 	  else           this._bval[$-1] &= UMASK;
 	}
       }
 
-    public void opAssign()(s_vpi_vecval[] other) {
+    public void opAssign(s_vpi_vecval[] other) {
       this._from(other);
     }
 
     private void _from() (s_vpi_vecval[] other) {
-      static if(WORDSIZE is 64) {
-	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	  if(i < other.length) {
-	    ulong word = other[i].aval;
-	    if(i%2 == 0) this._aval[i/2] = word;
-	    else this._aval[i/2] |= word << 32;
-	  }
-	  else {
-	    if(i%2 == 0) this._aval[i/2] = 0;
-	  }
-	  static if(IS4STATE) {
-	    if(i < other.length) {
-	      ulong cword = other[i].bval;
-	      if(i%2 == 0) this._bval[i/2] = cword;
-	      else this._bval[i/2] |= cword << 32;
-	    }
-	    else {
-	      if(i%2 == 0) this._bval[i/2] = 0;
-	    }
-	  }
-	}
-      }
-      else static if(WORDSIZE is 32) {
+      // static if(WORDSIZE is 64) {
+      // 	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
+      // 	  if(i < other.length) {
+      // 	    ulong word = other[i].aval;
+      // 	    if(i%2 == 0) this._aval[i/2] = word;
+      // 	    else this._aval[i/2] |= word << 32;
+      // 	  }
+      // 	  else {
+      // 	    if(i%2 == 0) this._aval[i/2] = 0;
+      // 	  }
+      // 	  static if(IS4STATE) {
+      // 	    if(i < other.length) {
+      // 	      ulong cword = other[i].bval;
+      // 	      if(i%2 == 0) this._bval[i/2] = cword;
+      // 	      else this._bval[i/2] |= cword << 32;
+      // 	    }
+      // 	    else {
+      // 	      if(i%2 == 0) this._bval[i/2] = 0;
+      // 	    }
+      // 	  }
+      // 	}
+      // }
+      static if(WORDSIZE is 32) {
 	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
 	  this._aval[i] = other[i].aval;
 	  static if(IS4STATE) {
@@ -1227,17 +1380,18 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       
     private void _to() (s_vpi_vecval[] other) {
       assert(other.length >= (SIZE+31)/32);
-      static if(WORDSIZE is 64) {
-	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
-	  if(i%2 == 0) other[i].aval = cast(uint) this._aval[i/2];
-	  else other[i].aval = cast(uint) (this._aval[i/2] >>> 32);
-	  static if(IS4STATE) {
-	    if(i%2 == 0) other[i].bval = cast(uint) this._bval[i/2];
-	    else other[i].bval = cast(uint) (this._bval[i/2] >>> 32);
-	  }
-	}
-      }
-      else static if(WORDSIZE is 32) {
+      // static if(WORDSIZE is 64) {
+      // 	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
+      // 	  if(i%2 == 0) other[i].aval = cast(uint) this._aval[i/2];
+      // 	  else other[i].aval = cast(uint) (this._aval[i/2] >>> 32);
+      // 	  static if(IS4STATE) {
+      // 	    if(i%2 == 0) other[i].bval = cast(uint) this._bval[i/2];
+      // 	    else other[i].bval = cast(uint) (this._bval[i/2] >>> 32);
+      // 	  }
+      // 	}
+      // }
+      // else
+      static if(WORDSIZE is 32) {
 	for (size_t i=0; i!=(SIZE+31)/32; ++i) {
 	  other[i].aval = this._aval[i];
 	  static if(IS4STATE) {
@@ -1310,11 +1464,11 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       case 'd'     : buff = this.toDecimalString(); break;
       case 's'     :		// should print as hex when %s
       case 'h'     :		// should print as hex for %h too
-      case 'x'     : buff = "0x" ~ toLower(this.to!(char[], 16)); break;
+      case 'x'     : buff = toLower(this.to!(char[], 16)); break;
       case 'H'     :		// should print as HEX for %H
-      case 'X'     : buff = "0x" ~ this.to!(char[], 16); break;
+      case 'X'     : buff = this.to!(char[], 16); break;
       case 'o'     : buff = this.to!(char[], 8); break;
-      case 'b'     : buff = "0b" ~ this.to!(char[], 2); break;
+      case 'b'     : buff = this.to!(char[], 2); break;
       default      :
 	throw new FormatException("Format specifier not understood: %" ~ f.spec);
       }
@@ -1425,7 +1579,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	assert(i < SIZE);
       }
     body {
-      _bvec!(false, L, 1) retval;
+      _bvec!(false, L, cast(size_t) 1) retval;
       static if(STORESIZE == 1) {
 	retval._aval[0] = cast(ubyte)((this._aval[0] >>> i) & 1LU);
 	static if(L) {
@@ -1433,11 +1587,17 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
       }
       else {
-	retval._aval[0] = cast(ubyte) bt(cast(const(size_t*)) this._aval.ptr, i);
+	retval._aval[0] = cast(ubyte)((this._aval[i/WORDSIZE] >>> (i % WORDSIZE)) & 1U);
 	static if(L) {
-	  retval._bval[0] = cast(ubyte) bt(cast(const(size_t*)) this._bval.ptr, i);
+	  retval._bval[0] = cast(ubyte)((this._bval[i/WORDSIZE] >>> (i % WORDSIZE)) & 1U);
 	}
       }
+      // else {
+      // 	retval._aval[0] = cast(ubyte) bt(cast(const(size_t*)) this._aval.ptr, i);
+      // 	static if(L) {
+      // 	  retval._bval[0] = cast(ubyte) bt(cast(const(size_t*)) this._bval.ptr, i);
+      // 	}
+      // }
       return retval;
     }
 
@@ -1451,25 +1611,32 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       Fun(a);
     }
 
-    bool opIndexAssign()(bool b, size_t i)
+    bool opIndexAssign(bool b, size_t i)
       in {
 	assert(i < SIZE);
       }
     body {
       static if(STORESIZE == 1) {
-	if(b) this._aval[0] |=(1L << i);
-	else   this._aval[0] &= ~(1L << i);
+	if(b) this._aval[0] |= (1LU << i);
+	else   this._aval[0] &= ~(1LU << i);
 	static if(L) {
-	  this._bval[0] &= ~(1L << i);
+	  this._bval[0] &= ~(1LU << i);
 	}
       }
       else {
-	if(b) bts((cast(size_t*) _aval.ptr), i);
-	else   btr((cast(size_t*) _aval.ptr), i);
+	if(b) this._aval[i/WORDSIZE] |= (1LU << (i % WORDSIZE));
+	else   this._aval[i/WORDSIZE] &= ~(1LU << (i % WORDSIZE));
 	static if(L) {
-	  btr((cast(size_t*) _bval.ptr), i);
+	  this._bval[i/WORDSIZE] &= ~(1LU << (i % WORDSIZE));
 	}
       }
+      // else {
+      // 	if(b) bts((cast(size_t*) _aval.ptr), i);
+      // 	else   btr((cast(size_t*) _aval.ptr), i);
+      // 	static if(L) {
+      // 	  btr((cast(size_t*) _bval.ptr), i);
+      // 	}
+      // }
       return b;
     }
 
@@ -1502,33 +1669,62 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
       }
       else {
+	auto i_ = i % WORDSIZE;
+	auto j_ = i / WORDSIZE;
 	static if(other.IS4STATE) {
 	  static if(L) {
-	    if(other.aVal) bts((cast(size_t*) _aval.ptr), i);
-	    else btr((cast(size_t*) _aval.ptr), i);
-	    if(other.bVal) bts((cast(size_t*) _bval.ptr), i);
-	    else btr((cast(size_t*) _bval.ptr), i);
+	    if(other.aVal) this._aval[j_] |=(1L << i_);
+	    else this._aval[j_] &= ~(1L << i_);
+	    if(other.bVal) this._bval[j_] |=(1L << i_);
+	    else this._bval[j_] &= ~(1L << i_);
 	  }
 	  else {
-	    if(other.aVal && !(other.bVal)) bts((cast(size_t*) _aval.ptr), i);
-	    else btr((cast(size_t*) _aval.ptr), i);
+	    if(other.aVal && !(other.bVal)) this._aval[j_] |=(1L << i_);
+	    else this._aval[j_] &= ~(1L << i_);
 	  }
 	}
 	else {
-	  if(other.aVal) bts((cast(size_t*) _aval.ptr), i);
-	  else btr((cast(size_t*) _aval.ptr), i);
+	  if(other.aVal)
+	    this._aval[j_] |=(1L << i_);
+	  else this._aval[j_] &= ~(1L << i_);
 	  static if(L) {
-	    btr((cast(size_t*) _bval.ptr), i);
+	    this._bval[j_] &= ~(1L << i_);
 	  }
 	}
       }
+      // else {
+      // 	static if(other.IS4STATE) {
+      // 	  static if(L) {
+      // 	    if(other.aVal) bts((cast(size_t*) _aval.ptr), i);
+      // 	    else btr((cast(size_t*) _aval.ptr), i);
+      // 	    if(other.bVal) bts((cast(size_t*) _bval.ptr), i);
+      // 	    else btr((cast(size_t*) _bval.ptr), i);
+      // 	  }
+      // 	  else {
+      // 	    if(other.aVal && !(other.bVal)) bts((cast(size_t*) _aval.ptr), i);
+      // 	    else btr((cast(size_t*) _aval.ptr), i);
+      // 	  }
+      // 	}
+      // 	else {
+      // 	  if(other.aVal) bts((cast(size_t*) _aval.ptr), i);
+      // 	  else btr((cast(size_t*) _aval.ptr), i);
+      // 	  static if(L) {
+      // 	    btr((cast(size_t*) _bval.ptr), i);
+      // 	  }
+      // 	}
+      // }
       return other;
     }
 
+    public auto opBinary(string op, V)(V other) const if(isIntegral!V) {
+      return this.opBinary!op(other.toBitVec());
+    }
+
     // And/Or/Xor
-    public auto opBinary(string op, V)(V other)
-      if((isBitVector!V || isIntegral!V) &&
-	 (op == "&" || op == "|" || op == "^")) {
+    public auto opBinary(string op, V)(V other) const if(isBitVector!V &&
+						   (op == "&" ||
+						    op == "|" ||
+						    op == "^")) {
 	_bvec!(typeof(this), V, op) result = this;
 	result.opOpAssign!op(other);
 	return result;
@@ -1567,7 +1763,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 		  ( rhs._aval[i] | rhs._bval[i]) &
 		  (  this._aval[i] |  this._bval[i]);
 		auto b =
-		  this._aval[i] &
+		  (this._aval[i] | this._bval[i]) &
+		  (rhs._aval[i] | rhs._bval[i]) &
 		  (this._bval[i] | rhs._bval[i]);
 		this._aval[i] = cast(store_t) a;
 		this._bval[i] = cast(store_t) b;
@@ -1643,10 +1840,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	      }
 	    }
 	  }
-	  if(this.aValSigned) this._aval[$-1] |= SMASK;
+	  if(this.aValMSB) this._aval[$-1] |= SMASK;
 	  else                this._aval[$-1] &= UMASK;
 	  static if(L) {
-	    if(this.bValSigned) this._bval[$-1] |= SMASK;
+	    if(this.bValMSB) this._bval[$-1] |= SMASK;
 	    else                this._bval[$-1] &= UMASK;
 	  }
 	}
@@ -1663,10 +1860,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	  static if(L) {
 	    this._bval[i] &= ~rhs._aval[i];
 	  }
-	  if(this.aValSigned) this._aval[$-1] |= SMASK;
+	  if(this.aValMSB) this._aval[$-1] |= SMASK;
 	  else                this._aval[$-1] &= UMASK;
 	  static if(L) {
-	    if(this.bValSigned) this._bval[$-1] |= SMASK;
+	    if(this.bValMSB) this._bval[$-1] |= SMASK;
 	    else                this._bval[$-1] &= UMASK;
 	  }
 	}
@@ -1682,10 +1879,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	  static if(V.IS4STATE && IS4STATE) {
 	    this._bval[i] |= rhs._bval[i];
 	  }
-	  if(this.aValSigned) this._aval[$-1] |= SMASK;
+	  if(this.aValMSB) this._aval[$-1] |= SMASK;
 	  else                this._aval[$-1] &= UMASK;
 	  static if(L) {
-	    if(this.bValSigned) this._bval[$-1] |= SMASK;
+	    if(this.bValMSB) this._bval[$-1] |= SMASK;
 	    else                this._bval[$-1] &= UMASK;
 	  }
 	}
@@ -1710,7 +1907,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
 	  enforce(i <= SIZE && j <= SIZE,
 		  "Slice operands may not be negative");
-	  enforce(max(i,j) - min(i,j) == _type.SIZE,
+	  enforce(std.algorithm.max(i,j) -
+		  std.algorithm.min(i,j) == _type.SIZE,
 		  "Slice size does not match with the RHS");
 	  if(i < j)		// bigendian
 	    {
@@ -1793,11 +1991,12 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     // 	return	u.f;
     //   }
 
-    public V opCast(V)()
+    public auto opCast(V)() const
       if(isBitVector!V) {
 	enum bool _L = V.IS4STATE;
 	enum bool _S = V.ISSIGNED;
-	V result;
+	alias R = makeMutable!V;
+	R result;
 	static if(V.STORESIZE <= STORESIZE) {
 	  for(size_t i=0; i != V.STORESIZE; ++i) {
 	    result._aval[i] = cast(V.store_t) this._aval[i];
@@ -1813,10 +2012,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    }
 	  }
 	  // sign extension
-	  if(result.aValSigned) result._aval[$-1] |= V.SMASK;
+	  if(result.aValMSB) result._aval[$-1] |= V.SMASK;
 	  else                  result._aval[$-1] &= V.UMASK;
 	  static if(_L) {
-	    if(result.bValSigned) result._bval[$-1] |= V.SMASK;
+	    if(result.bValMSB) result._bval[$-1] |= V.SMASK;
 	    else                  result._bval[$-1] &= V.UMASK;
 	  }
 	}
@@ -1836,11 +2035,11 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	  }
 	  for(size_t i=STORESIZE; i != V.STORESIZE; ++i) {
 	    // if RHS is signed, extend its sign
-	    if(this.aValSigned) result._aval[i] = -1;
+	    if(this.aValMSB) result._aval[i] = -1;
 	    else                 result._aval[i] = 0;
 	    static if(_L) {
 	      static if(L) {
-		if(this.bValSigned) result._bval[i] = -1;
+		if(this.bValMSB) result._bval[i] = -1;
 		else                 result._bval[i] = 0;
 	      }
 	      else {
@@ -1849,7 +2048,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    }
 	    else {
 	      static if(L)		// X/Z reduce to 0
-		if(this.bValSigned) result._aval[i] = 0;
+		if(this.bValMSB) result._aval[i] = 0;
 	    }
 	  }
 	  static if(!_S) {		// If result is not signed
@@ -1898,7 +2097,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     //	}
     //   }
 
-    public T opSlice(size_t i, size_t j)
+    public T opSlice(size_t i, size_t j) const
       in {
         assert(i < SIZE && i >= 0 && j <= SIZE && j >= 0);
         assert(i < j);
@@ -1959,7 +2158,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     private void reportX(string file = __FILE__,
-			 size_t line = __LINE__, V)(V other)
+			 size_t line = __LINE__, V)(const V other) const
       if(isBitVector!V) {
 	static if(this.IS4STATE || other.IS4STATE) {
 	  if(this.isX || other.isX) {
@@ -1971,7 +2170,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
 
     private void reportX(string file = __FILE__,
-			 size_t line = __LINE__, V)(V other)
+			 size_t line = __LINE__, V)(const V other) const
       if(isIntegral!V || isBoolean!V) {
 	static if(this.IS4STATE) {
 	  if(this.isX) {
@@ -1984,7 +2183,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
 
     public int opCmp(string file = __FILE__,
-		     size_t line = __LINE__, V)(V other)
+		     size_t line = __LINE__, V)(const V other) const
       if(isBitVector!V &&
 	 _vecCmpT!(typeof(this), V)) {
 	reportX!(file, line)(other);
@@ -1995,26 +2194,26 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
 
     public int opCmp(string file = __FILE__,
-		     size_t line = __LINE__, V)(V other)
+		     size_t line = __LINE__, V)(const V other) const
       if(isIntegral!V) {
 	reportX!(file, line)(other);
-	alias _bvec!(typeof(this), _bvec!V, "COMPARE") P;
+	alias P = _bvec!(typeof(this), _bvec!V, "COMPARE");
 	P lhs = this;
 	P rhs = other;
 	return lhs.compare(rhs);
       }
 
     public bool opEquals(string file = __FILE__,
-			 size_t line = __LINE__, V)(V other)
+			 size_t line = __LINE__, V)(const V other) const
       if(isIntegral!V || isBoolean!V) {
-	alias _bvec!(typeof(this), _bvec!V, "COMPARE") P;
+	alias P = _bvec!(typeof(this), _bvec!V, "COMPARE");
 	P lhs = this;
 	P rhs = other;
 	return lhs.isEqual(rhs);
       }
 
     public bool opEquals(string file = __FILE__,
-			 size_t line = __LINE__, V)(V other)
+			 size_t line = __LINE__, V)(const V other)
       if(isBitVector!V) {
 	reportX!(file, line)(other);
 	alias _bvec!(typeof(this), V, "COMPARE") P;
@@ -2022,6 +2221,27 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	P rhs = other;
 	return lhs.isEqual(rhs);
       }
+
+    public bool opEquals(ref const T other) const {
+	for(size_t i=1; i!=STORESIZE; ++i) {
+	  if(this._aval[$-1-i] != other._aval[$-1-i]) return false;
+	}
+	if((this._aval[$-1] & UMASK) != (other._aval[$-1] & T.UMASK)) return false;
+	return true;
+    }
+
+    public size_t toHash() const nothrow @safe {
+      size_t hash;
+      for (size_t i=0; i!=STORESIZE; ++i) {
+	hash ^= _aval[i];
+      }
+      static if(this.IS4STATE) {
+	for (size_t i=0; i!=STORESIZE; ++i) {
+	  hash ^= _bval[i];
+	}
+      }
+      return hash;
+    }
 
     public bool isSame(string file = __FILE__,
 		       size_t line = __LINE__, V)(V other)
@@ -2104,8 +2324,9 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 			   size_t line = __LINE__, V)(V other)
       if(isBitVector!V && (op == "+" || op == "-")) {
 	reportX!(file, line)(other);
+
 	auto rhs = cast(typeof(this)) other;
-	static if(this.SIZE <= 64) {
+	static if(this.SIZE <= WORDSIZE) {
 	  static if(op == "+") _aval[0] += rhs._aval[0];
 	  else                 _aval[0] -= rhs._aval[0];
 	  return;
@@ -2118,15 +2339,15 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    static if(op == "+") {
 	      long _r = carry + a[i] + b[i];
 	      a[i] = cast(typeof(a[i])) _r;
-	      carry = _r >> 32;
+	      carry = _r >> WORDSIZE;
 	    }
 	    static if(op == "-") {
 	      long _r = carry + a[i] - b[i];
 	      a[i] = cast(typeof(a[i])) _r;
-	      carry = _r >> 32;
+	      carry = _r >> WORDSIZE;
 	    }
 	  }
-	  if(this.aValSigned) {
+	  if(this.aValMSB) {
 	    _aval[$-1] |= SMASK;
 	  }
 	  else {
@@ -2135,18 +2356,23 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
       }
 
-    public auto opUnary(string op)()
+    public auto opUnary(string op)() if (op == "++")
+      {
+	this += 1;
+	return this;
+      }
+
+    public auto opUnary(string op)() if (op == "--")
+      {
+	this -= 1;
+	return this;
+      }
+
+    public auto opUnary(string op)() const
       if(op == "-") {
 	typeof(this) result = 0;
 	result -= this;
 	return result;
-      }
-
-    public auto opBinary(string op, V)(V other)
-      if(isIntegral!V &&
-	 (op == "+" || op == "-")) {
-	_bvec!V rhs = other;
-	return this.opBinary!op(rhs);
       }
 
     public auto opBinaryRight(string op, V)(V other)
@@ -2157,152 +2383,110 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
 
     // Addition and Substraction with other BitVec
-    public auto opBinary(string op, V)(V other)
+    public auto opBinary(string op, V)(V other) const
       if(isBitVector!V && (op == "+" || op == "-")) {
-	static if(SIZE >= V.SIZE) {
-	  // typeof(this) result = this;
-	  _bvec!(S, L, SIZE+1) result = this;
-	  static if(op == "+") result += other;
-	  else result -= other;
-	  return result;
-	}
-	else {
-	  static if(op == "+") {
-	    _bvec!(V.ISSIGNED, V.IS4STATE, V.SIZE+1) result = other;
-	  }
-	  else {
-	    _bvec!(V.IS4STATE, V.IS4STATE, V.SIZE+1) result = -other;
-	  }
-	  result += this;
-	  return result;
-	}
+	// static if(SIZE >= V.SIZE) {
+	// typeof(this) result = this;
+	_bvec!(this_type, V, "+") result = this;
+	static if(op == "+") result += other;
+	else result -= other;
+	return result;
+	// }
+	// else {
+	//   static if(op == "+") {
+	//     _bvec!(V.ISSIGNED, V.IS4STATE, V.SIZE+1) result = other;
+	//   }
+	//   else {
+	//     _bvec!(V.IS4STATE, V.IS4STATE, V.SIZE+1) result = -other;
+	//   }
+	//   result += this;
+	//   return result;
+	// }
       }
 
-    public auto opBinary(string op)(size_t shift)
+    public auto opBinary(string op)(size_t shift) const
       if(op == "<<" || op == ">>" || op == ">>>") {
-	typeof(this) result = this;
+	T result = this;
 	result.opOpAssign!(op)(shift);
 	return result;
       }
 
     public auto opBinary(string op, string file= __FILE__,
-			 size_t line = __LINE__, V)(V other)
+			 size_t line = __LINE__, V)(V other) const
       if(isBitVector!V && (op == "*")) {
 	reportX!(file, line)(other);
-	// The result is signed only if both the operands are signed
-	static if(ISSIGNED && other.ISSIGNED)
-	  enum bool _S = true;
-	else
-	  enum bool _S = false;
-	static if(IS4STATE && other.IS4STATE)
-	  enum bool _L = true;
-	else
-	  enum bool _L = false;
-	// result is addition of the SIZES
-	enum size_t _SIZE = SIZE + V.SIZE;
+	alias R = _bvec!(this_type, V, "*");
+	R result = 0;
 
-	_bvec!(_S,_L,_SIZE) result = 0;
-
-	static if(result.SIZE <= 16) {
-	  result.store_t[] r = result._aval;
+	static if(result.SIZE <= 32) {
+	  result._aval[0] = cast(R.store_t) (_aval[0] * other._aval[0]);
 	}
 	else {
 	  uint[] r = cast(uint[]) result._aval;
-	}
-
-	static if(this.SIZE <= 16) {
-	  store_t[] a = this._aval;
-	}
-	else {
 	  uint[] a = cast(uint[]) this._aval;
-	}
-
-	static if(other.SIZE <= 16) {
-	  other.store_t[] b = other._aval;
-	}
-	else {
 	  uint[] b = cast(uint[]) other._aval;
-	}
 
-	bool aNegative = this.aValSigned();
-	bool bNegative = other.aValSigned();
+	  bool aNegative = this.aValMSB();
+	  bool bNegative = other.aValMSB();
 
-	uint _a = void;
-	uint _b = void;
-	for(size_t i=0; i!=r.length; ++i) {
-	  uint carry = 0;
-	  if(i < a.length) {	     // initialize and sign extend if required
-	    _a = a[i];
-	    if(aNegative) {
-	      static if(store_t.sizeof == 8) {
-		// convert 64 bit mask to 32 bits
-		static if(SIZE % 64 <= 32) {
-		  if(i == a.length - 2)
-		    _a |= cast(uint) ~UMASK;
-		  if(i == a.length - 1)
-		    _a = uint.max;
-		}
-		else {
-		  if(i == a.length - 1)
-		    _a |= cast(uint) ~(UMASK >>> 32);
-		}
-	      }
-	      else {
-		if(i == a.length - 1)
-		  _a |= ~(cast(uint) UMASK);
-	      }
-	    }
-	  }
-	  else {
-	    if(aNegative)
-	      _a = uint.max;
-	    else
-	      if(carry == 0) break;
-	      else _a = 0;
-	  }
-	  for(size_t j=0; j!=r.length-i; ++j) {
-	    if(j < b.length) {     // initialize and sign extend if required
-	      _b = b[j];
-	      if(bNegative) {
-		static if(V.store_t.sizeof == 8) {
-		  // convert 64 bit mask to 32 bits
-		  static if(V.SIZE % 64 <= 32) {
-		    if(j == b.length - 2)
-		      _b |= cast(uint) ~V.UMASK;
-		    if(j == b.length - 1)
-		      _b = uint.max;
-		  }
-		  else {
-		    if(j == b.length - 1)
-		      _b |= cast(uint) ~(V.UMASK >>> 32);
-		  }
-		}
-		else {
-		  if(j == b.length - 1)
-		    _b |= ~(cast(uint) V.UMASK);
-		}
+	  uint _a = void;
+	  uint _b = void;
+	  for(size_t i=0; i!=r.length; ++i) {
+	    uint carry = 0;
+	    if(i < a.length) {	     // initialize and sign extend if required
+	      _a = a[i];
+	      if(aNegative) {
+		if(i == a.length - 1) _a |= ~(cast(uint) UMASK);
 	      }
 	    }
 	    else {
-	      if(bNegative)
-		_b = uint.max;
-	      else
-		if(carry == 0) break;
-		else _b = 0;
+	      if(aNegative) _a = uint.max;
+	      else if(carry == 0) break;
+	      else _a = 0;
 	    }
+	    for(size_t j=0; j!=r.length-i; ++j) {
+	      if(j < b.length) {     // initialize and sign extend if required
+		_b = b[j];
+		if(bNegative) {
+		  if(j == b.length - 1) _b |= ~(cast(uint) V.UMASK);
+		}
+	      }
+	      else {
+		if(bNegative) _b = uint.max;
+		else if(carry == 0) break;
+		else _b = 0;
+	      }
 
-	    ulong t = cast(ulong)carry + cast(ulong)r[i+j] +
-	      cast(ulong)_a * cast(ulong)_b;
-	    // writefln("i: %d, j: %d, carry: %X, r[i+j]: %X, _a: %X, _b: %X",
-	    //	       i, j, carry, r[i+j], _a, _b);
-	    r[i+j] = cast(typeof(r[i+j])) t;
-	    carry = cast(uint)(t >>> 32);
+	      ulong t = cast(ulong) carry + cast(ulong) r[i+j] + cast(ulong)_a * cast(ulong)_b;
+	      // writefln("i: %d, j: %d, carry: %X, r[i+j]: %X, _a: %X, _b: %X",
+	      //	       i, j, carry, r[i+j], _a, _b);
+	      r[i+j] = cast(uint) t;
+	      carry = cast(uint)(t >>> 32);
+	    }
 	  }
 	}
-
 	result._aval[$-1] &= result.UMASK;
+	if (result.aValMSB) result._aval[$-1] |= result.SMASK;
 	return result;
       }
+
+    public auto opBinary(string op, string file= __FILE__,
+			 size_t line = __LINE__, V)(V other) const
+      if(isBitVector!V && (op == "/")) {
+	reportX!(file, line)(other);
+	alias R = _bvec!(this_type, V, "/");
+	R result = 0;
+	static if(R.SIZE <= 64) {
+	  result = getValue() / other.getValue();
+	}
+	else {
+	  pragma(msg, "Not implemented yet -- TBD (use std.internal.math.biguintcore");
+	}
+
+	if (result.aValMSB) result._aval[$-1] |= result.SMASK;
+	return result;
+      }
+
 
     // Left Shift Assign
     public void opOpAssign(string op)(size_t shift)
@@ -2334,10 +2518,10 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	  }
 	}
 	// UMASK out the unused bits
-	if(this.aValSigned) _aval[$-1] |= SMASK;
+	if(this.aValMSB) _aval[$-1] |= SMASK;
 	else		     _aval[$-1] &= UMASK;
 	static if(L) {
-	  if(this.bValSigned) _bval[$-1] |= SMASK;
+	  if(this.bValMSB) _bval[$-1] |= SMASK;
 	  else		     _bval[$-1] &= UMASK;
 	}
       }
@@ -2353,8 +2537,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    if(i+wordShift < STORESIZE) _aval[i] = _aval[i+wordShift];
 	    else {
 	      static if(op == ">>") {
-		if(this.aValSigned) _aval[i] = ~0;
-		else                 _aval[i] = 0;
+		if(this.aValMSB) _aval[i] = cast(store_t) -1;
+		else             _aval[i] = 0;
 	      }
 	      static if(op == ">>>") {
 		_aval[i] = 0;
@@ -2364,7 +2548,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	      if(i+wordShift < STORESIZE) _bval[i] = _bval[i+wordShift];
 	      else {
 		static if(op == ">>") {
-		  if(this.bValSigned) _bval[i] = ~0;
+		  if(this.bValMSB) _bval[i] = ~0;
 		  else                 _bval[i] = 0;
 		}
 		static if(op == ">>>") {
@@ -2387,12 +2571,12 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    else {
 	      static if(op == ">>") _aval[i] >>= bitShift;
 	      static if(op == ">>>") _aval[i] >>>= bitShift;
-	      if(this.aValSigned) _aval[$-1] |= SMASK;
+	      if(this.aValMSB) _aval[$-1] |= SMASK;
 	      else                 _aval[$-1] &= UMASK;
 	      static if(L) {
 		static if(op == ">>") _bval[i] >>= bitShift;
 		static if(op == ">>>") _bval[i] >>>= bitShift;
-		if(this.bValSigned) _bval[$-1] |= SMASK;
+		if(this.bValMSB) _bval[$-1] |= SMASK;
 		else                 _bval[$-1] &= UMASK;
 	      }
 	    }
@@ -2402,14 +2586,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
 
     // Concatenation
-    public auto opBinary(string op, V)(V other)
-      if(isIntegral!V &&
-	 (op == "~")) {
-	_bvec!V rhs = other;
-	return this ~ rhs;
-      }
-
-    public auto opBinary(string op, V)(V other)
+    public auto opBinary(string op, V)(V other) const
       if(isBitVector!V && (op == "~")) {
 	_bvec!(T, V, "~") result = this;
 	result <<= V.SIZE;
@@ -2505,14 +2682,15 @@ private void toHexZeroPadded(char[] output, uint value) {
 }
 
 public auto toBits(T)(T val) {
-  static if(size_t.sizeof == 8 && T.sizeof >= 8) {
-    enum WSIZE = (T.sizeof+7)/8;
-    alias ulong U;
+  // static if(size_t.sizeof == 8 && T.sizeof >= 8) {
+  //   enum WSIZE = (T.sizeof+7)/8;
+  //   alias ulong U;
+  // }
+  // else
+  static if(T.sizeof >= 4) {
+    enum WSIZE = (T.sizeof+3)/4;
+    alias uint U;
   }
-  else static if(T.sizeof >= 4) {
-      enum WSIZE = (T.sizeof+3)/4;
-      alias uint U;
-    }
   else static if(T.sizeof >= 2) {
       enum WSIZE = (T.sizeof+1)/2;
       alias ushort U;
@@ -2544,11 +2722,12 @@ public void fromBits(T, B)(ref T val, B bv)
     static if(B.IS4STATE) {
       assert(bv.bVal == 0);
     }
-    static if(T.sizeof >= 8) {
-      enum WSIZE = (T.sizeof+7)/8;
-      alias ulong U;
-    }
-    else static if(T.sizeof >= 4) {
+    // static if(T.sizeof >= 8) {
+    //   enum WSIZE = (T.sizeof+7)/8;
+    //   alias ulong U;
+    // }
+    // else
+      static if(T.sizeof >= 4) {
 	enum WSIZE = (T.sizeof+3)/4;
 	alias uint U;
       }
@@ -2609,14 +2788,14 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 64 ; ++k){
-    static UBit!65     a ; 
-    static UBit!65     b ;  
+    static UBit!64     a ; 
+    static UBit!64     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(0, (pow(2,k)-1)); 
       auto b_1 = uniform(0, (pow(2,k)-1)); 
       a = a_1 ;
       b = b_1 ;
-      auto y = cast(UBit!65) (a + b) ;
+      auto y = cast(UBit!64) (a + b) ;
       assert(y == (a_1 + b_1));
     }
   }
@@ -2643,11 +2822,11 @@ unittest {
 
   UBit!8  a = cast(byte) 0xff ;
   UBit!8  b = cast(byte) 0xff ;
-  UBit!9  y = a + b;
-  assert(y == 510) ;
+  UBit!8  y = a + b;
+  assert(y == 254) ;
 
-  y = cast(UBit!9)(a + b) ;
-  assert(y == 510) ;
+  y = cast(UBit!8)(a + b) ;
+  assert(y == 254) ;
 
 }
 
@@ -2690,8 +2869,8 @@ unittest {
   import std.math ;
   import std.stdio ;
   for(ulong k = 1 ; k < 15 ; ++k){
-    static Bit!63     a ; 
-    static Bit!63     b ;  
+    static Bit!64     a ; 
+    static Bit!64     b ;  
     for(uint i = 0 ; i < 1000 ; ++i){
       auto a_1 = uniform(-1000, 1000); 
       auto b_1 = uniform(-1000, 1000); 
@@ -2875,9 +3054,9 @@ unittest {
    ubyte a1_s = 0b11111111 ;
    ubyte a2_s = 0b11111111 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(ubyte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(ubyte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(ubyte)(a1_s * a1_s) == cast(ubyte)(a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -2891,9 +3070,9 @@ unittest {
    a1_s = 0b00000000 ;
    a2_s = 0b00000000 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(ubyte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(ubyte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(ubyte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -2907,9 +3086,9 @@ unittest {
    a1_s = 0b10101010 ;
    a2_s = 0b10101010 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(ubyte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(ubyte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(ubyte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -2961,9 +3140,9 @@ unittest {
    a1_s = cast(byte)0b10101010 ;
    a2_s = cast(byte)0b10101010 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(byte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(byte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(byte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -2984,9 +3163,9 @@ unittest {
    ubyte a1_s = 0b11111111 ;
    ubyte a2_s = 0b11111111 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(ubyte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(ubyte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(ubyte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -3000,9 +3179,9 @@ unittest {
    a1_s = 0b00000000 ;
    a2_s = 0b00000000 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(ubyte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(ubyte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(ubyte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -3016,9 +3195,9 @@ unittest {
    a1_s = 0b10101010 ;
    a2_s = 0b10101010 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(ubyte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(ubyte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(ubyte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -3043,9 +3222,9 @@ unittest {
    byte a1_s = cast(byte)0b11111111 ;
    byte a2_s = cast(byte)0b11111111 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(byte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(byte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(byte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -3059,9 +3238,9 @@ unittest {
    a1_s = cast(byte)0b00000000 ;
    a2_s = cast(byte)0b00000000 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(byte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(byte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(byte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -3075,9 +3254,9 @@ unittest {
    a1_s = cast(byte)0b10101010 ;
    a2_s = cast(byte)0b10101010 ;
 
-   assert((a1_s + a1_s) == (a1 + a2));
-   assert((a1_s - a1_s) == (a1 - a2));
-   assert((a1_s * a1_s) == (a1 * a2));
+   assert(cast(byte)(a1_s + a1_s) == (a1 + a2));
+   assert(cast(byte)(a1_s - a1_s) == (a1 - a2));
+   assert(cast(byte)(a1_s * a1_s) == (a1 * a2));
    assert((a1_s | a1_s) == (a1 | a2));
    assert((a1_s || a1_s) == (a1 || a2));
    assert((a1_s & a1_s) == (a1 & a2));
@@ -4406,7 +4585,8 @@ unittest {
 
 unittest {
 
-   import std.stdio ;
+   import std.stdio;
+   import std.algorithm;
 
    size_t a = 100 ;
    size_t b = 200 ;
@@ -4471,8 +4651,6 @@ unittest {
  
     Logic!4 y = bin!q{1011};
     // FIXME
-    import std.stdio;
-    writeln(x, y);
     assert(z == y);
  
  }
@@ -5067,9 +5245,9 @@ unittest {
 
    import std.stdio ;
 
-   logic a = true  ;
-   logic b = false ;
-   logic y = false ;
+   Logic!1 a = true  ;
+   Logic!1 b = false ;
+   Logic!1 y = false ;
 
    assert(a);
    assert(!b);

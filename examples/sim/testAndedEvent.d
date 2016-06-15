@@ -22,13 +22,13 @@ class Foo: Entity {
     import std.random;
     // Event e3 = andEvents(e1, e2);
     foreach(i, ref e; e1) {
-      size_t j = uniform(0,1024);
+      size_t j = uniform!ubyte(Process.self.getRandGen);
       e.notify(j.nsec);
       writeln(j);
     }
     // e2.notify();
     waitAll(e1, 100000.nsec);
-    writeln("Waited till time: ", getSimTime());
+    writeln("Waited till time: ", getRootEntity().getSimTime());
   }
 
   Task!testEvent test;

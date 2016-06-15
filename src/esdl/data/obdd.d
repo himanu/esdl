@@ -17,7 +17,7 @@ import std.bigint;
 import std.container: Array;
 import std.algorithm;
 import std.conv;
-import core.memory: GC;
+// import core.memory: GC;
 import core.stdc.string: memset;
 
 
@@ -213,6 +213,12 @@ struct BddDomain
   //   this._ivar.length = binsize;
   // }
 
+  ~this() {
+    // import std.stdio;
+    // writeln("Calling destructor on BddDomain with BDD: ", _var._index);
+    _var.reset();
+  }
+  
   this(int index, size_t bits)
   {
     import std.conv;
@@ -224,6 +230,10 @@ struct BddDomain
     this._index = index;
     this._realsize = (cast(ulong) 2) ^^bits;
     this._ivar.length = bits;
+  }
+
+  public void reset() {
+    _var.reset();
   }
 
   public void setName(string name)
@@ -807,9 +817,12 @@ struct BddVec
     return val;
   }
 
-  public void remove()
+  public void reset()
   {
     // size = 0;
+    foreach(ref bdd; _bitvec) {
+      bdd.reset();
+    }
     _bitvec.length = 0;
   }
 
@@ -1122,7 +1135,7 @@ struct BddVec
       // throw new BddException();
       bdd_error(BddError.BVEC_SIZE);
     }
-    remove();
+    reset();
     this._bitvec = that.bitvec;
   }
 
@@ -1585,9 +1598,23 @@ struct BDD
     return _buddy;
   }
 
+  void delRef() {
+    if (_index !is 0 &&	_delref_enabled &&
+	_buddy !is null) {
+      _buddy.delRef(_index);
+    }
+    _index = 0;		// destructor might still get called
+  }
+  
+  void reset() {
+    // call this from the destructor of BddVec/BddDomain
+    _index = 0;
+  }
+
   public ~this()
   {
-    if (_buddy !is null && _index !is 0 && _delref_enabled) {
+    if (_index !is 0 && _delref_enabled &&
+	_buddy !is null) {
       _buddy.delRef(_index);
     }
   }
@@ -5652,10 +5679,12 @@ class Buddy
 
   int delRef(int root)
   {
-    if(root == INVALID_BDD)
+    if(root == INVALID_BDD) {
       bdd_error(BddError.BDD_BREAK); /* distinctive */
-    if(root < 2 || !isRunning())
+    }
+    if(root < 2 || !isRunning()) {
       return root;
+    }
     if(root >= _nodeSize) {
       return bdd_error(BddError.BDD_ILLBDD);
     }
@@ -5664,9 +5693,10 @@ class Buddy
     }
 
     /* if the following line is present, fails there much earlier */
-    if(!HASREF(root))
+    if(!HASREF(root)) {
       bdd_error(BddError.BDD_BREAK); /* distinctive */
-
+    }
+    
     DECREF(root);
 
     debug(BUDDY) {writeln("DECREF(", root, ") = ", GETREF(root));}
@@ -7093,12 +7123,15 @@ class Buddy
     int cache = getCacheSize();
 
     // FIXMALLOC
-    // _domains.length = 0;
-    if(_domains !is null) {
-      GC.free(cast(void*)_domains);
-      _domains = null;
+    foreach (ref dom; _domains) {
+      dom.reset();
     }
-    _domainsLen = 0;
+    _domains.length = 0;
+    // if(_domains !is null) {
+    //   GC.free(cast(void*)_domains);
+    //   _domains = null;
+    // }
+    // _domainsLen = 0;
     
     fdvarnum = 0;
     firstbddvar = 0;
@@ -9046,9 +9079,9 @@ class Buddy
   /**** FINITE DOMAINS ****/
 
   // FIXMALLOC
-  // protected BddDomain[] _domains;
-  protected BddDomain* _domains;
-  protected size_t _domainsLen;
+  protected BddDomain[] _domains;
+  // protected BddDomain* _domains;
+  // protected size_t _domainsLen;
   
   protected int fdvarnum;
   protected int firstbddvar;
@@ -9071,7 +9104,7 @@ class Buddy
     return extDomain(domains)[0];
   }
 
-  public BddDomain* extDomain(int[] dom)
+  public BddDomain[] extDomain(int[] dom)
   {
     size_t[] a = new size_t[](dom.length);
     for(int i = 0; i < a.length; ++i) {
@@ -9080,7 +9113,7 @@ class Buddy
     return extDomain(a);
   }
 
-  public BddDomain* extDomain(size_t[] domainSizes)
+  public BddDomain[] extDomain(size_t[] domainSizes)
   {
     int offset = fdvarnum;
     int binoffset;
@@ -9091,43 +9124,44 @@ class Buddy
 
     /* Build _domains table */
     // FIXMALLOC
-    // if(_domains.length == 0) /* First time */ {
-    //   _domains.length = num;
-    if(_domainsLen == 0) /* First time */ {
-      void* mem = GC.malloc(BddDomain.sizeof * num);
-      memset(mem, 0, BddDomain.sizeof * num);
-      _domains = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * num);
+    if(_domains.length == 0) /* First time */ {
+      _domains.length = num;
+      // if(_domainsLen == 0) /* First time */ {
+      //   void* mem = GC.malloc(BddDomain.sizeof * num);
+      //   memset(mem, 0, BddDomain.sizeof * num);
+      //   _domains = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * num);
       for (size_t i=0; i!=num; ++i) {
     	_domains[i] = BddDomain.init;
       }
-      _domainsLen = num;
+      // _domainsLen = num;
     } else /* Allocated before */ {
       // FIXMALLOC
-      // if(fdvarnum + num > _domains.length)
-      if(fdvarnum + num > _domainsLen)
+      if(fdvarnum + num > _domains.length)
+      // if(fdvarnum + num > _domainsLen)
 	{
 	  // FIXMALLOC
 	  // auto fdvaralloc = _domains.length + max(num, _domains.length);
-	  auto fdvaralloc = _domainsLen + max(num, _domainsLen);
+	  // auto fdvaralloc = _domainsLen + max(num, _domainsLen);
 
 	  // BddDomain[] d2 = _domains.dup;
 	  // d2.length = fdvaralloc;
 	  // _domains = d2;
+	  _domains.length = _domains.length + max(num, _domains.length); // fdvaralloc;
 
 	  // FIXMALLOC
 	  // _domains.length = fdvaralloc;
-	  void* mem2 = GC.malloc(BddDomain.sizeof * fdvaralloc);
-	  memset(mem2, 0, BddDomain.sizeof * fdvaralloc);
-	  BddDomain* d2 = cast(BddDomain*) mem2; // GC.malloc(BddDomain.sizeof * fdvaralloc);
-	  for (size_t i=0; i!=_domainsLen; ++i) {
-	    d2[i] = _domains[i];
-	  }
-	  for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
-	    d2[i] = BddDomain.init;
-	  }
-	  GC.free(cast(void*)_domains);
-	  _domains = d2;
-	  _domainsLen = fdvaralloc;
+	  // void* mem2 = GC.malloc(BddDomain.sizeof * fdvaralloc);
+	  // memset(mem2, 0, BddDomain.sizeof * fdvaralloc);
+	  // BddDomain* d2 = cast(BddDomain*) mem2; // GC.malloc(BddDomain.sizeof * fdvaralloc);
+	  // for (size_t i=0; i!=_domainsLen; ++i) {
+	  //   d2[i] = _domains[i];
+	  // }
+	  // for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
+	  //   d2[i] = BddDomain.init;
+	  // }
+	  // GC.free(cast(void*)_domains);
+	  // _domains = d2;
+	  // _domainsLen = fdvaralloc;
 	}
     }
 
@@ -9173,7 +9207,7 @@ class Buddy
     // BddDomain[] r = _domains[offset..offset+num];
     // return r.ptr;
 
-    return _domains + offset;
+    return _domains[offset..offset+num]; // _domains + offset;
   }
 
   /**
@@ -9189,28 +9223,28 @@ class Buddy
     int n;
 
     // FIXMALLOC
-    // auto fdvaralloc = _domains.length;
-    auto fdvaralloc = _domainsLen;
+    auto fdvaralloc = _domains.length;
+    // auto fdvaralloc = _domainsLen;
     if(fdvarnum + 1 > fdvaralloc)
       {
 	fdvaralloc += fdvaralloc;
 
 	// FIXMALLOC
-	// _domains.length = fdvaralloc;
-	void* mem = GC.malloc(BddDomain.sizeof * fdvaralloc);
-	memset(mem, 0, BddDomain.sizeof * fdvaralloc);
-	BddDomain* dom = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * fdvaralloc);
-	for (size_t i=0; i!=_domainsLen; ++i) {
-	  dom[i] = _domains[i];
-	}
-	for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
-	  dom[i] = BddDomain.init;
-	}
-	if(_domains !is null) {
-	  GC.free(cast(void*)_domains);
-	}
-	_domains = dom;
-	_domainsLen = fdvaralloc;
+	_domains.length = fdvaralloc;
+	// void* mem = GC.malloc(BddDomain.sizeof * fdvaralloc);
+	// memset(mem, 0, BddDomain.sizeof * fdvaralloc);
+	// BddDomain* dom = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * fdvaralloc);
+	// for (size_t i=0; i!=_domainsLen; ++i) {
+	//   dom[i] = _domains[i];
+	// }
+	// for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
+	//   dom[i] = BddDomain.init;
+	// }
+	// if(_domains !is null) {
+	//   GC.free(cast(void*)_domains);
+	// }
+	// _domains = dom;
+	// _domainsLen = fdvaralloc;
       }
 
     d = _domains[fdvarnum];
@@ -9256,13 +9290,16 @@ class Buddy
    */
   public void clearAllDomains()
   {
-    // FIXMALLOC
-    // _domains.length = 0;
-    if(_domains !is null) {
-      GC.free(cast(void*)_domains);
-      _domains = null;
+    foreach (ref dom; _domains) {
+      dom.reset();
     }
-    _domainsLen = 0;
+    // FIXMALLOC
+    _domains.length = 0;
+    // if(_domains !is null) {
+    //   GC.free(cast(void*)_domains);
+    //   _domains = null;
+    // }
+    // _domainsLen = 0;
     
     fdvarnum = 0;
     firstbddvar = 0;
@@ -9517,19 +9554,19 @@ class Buddy
     INSTANCE._varSet = this._varSet.dup;
 
     // FIXMALLOC
-    // INSTANCE._domains = this._domains.dup;
-    void* mem = GC.malloc(BddDomain.sizeof * this._domainsLen);
-    memset(mem, 0, BddDomain.sizeof * this._domainsLen);
-    BddDomain* d2 = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * this._domainsLen);
-    for (size_t i=0; i!=this._domainsLen; ++i) {
-      d2[i] = this._domains[i];
-    }
-    INSTANCE._domainsLen = this._domainsLen;
-    INSTANCE._domains = d2;
+    INSTANCE._domains = this._domains.dup;
+    // void* mem = GC.malloc(BddDomain.sizeof * this._domainsLen);
+    // memset(mem, 0, BddDomain.sizeof * this._domainsLen);
+    // BddDomain* d2 = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * this._domainsLen);
+    // for (size_t i=0; i!=this._domainsLen; ++i) {
+    //   d2[i] = this._domains[i];
+    // }
+    // INSTANCE._domainsLen = this._domainsLen;
+    // INSTANCE._domains = d2;
 
     
     // FIXMALLOC
-    for(int i = 0; i < INSTANCE._domainsLen; ++i)
+    for(int i = 0; i < INSTANCE._domains.length; ++i)
       // for(int i = 0; i < INSTANCE._domains.length; ++i)
       {
 	INSTANCE._domains[i] =

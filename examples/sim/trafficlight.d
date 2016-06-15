@@ -128,7 +128,7 @@ void main()
 
   // theRoot.doSim(25.nsec);
   // theRoot.waitSim();
-  theRoot.simulateUpto(25.nsec);
+  theRoot.simulateUpto(2500.nsec);
   // theRoot.simulate(2500.nsec);
   // theRoot.simulate(0.nsec);
   theRoot.finish();
