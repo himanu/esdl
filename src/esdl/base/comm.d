@@ -1824,7 +1824,8 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
       // the signal at the two sides match.
 
       static if(isBitVector!T) {
-	_newVal = v.value.vector;
+	enum WS = (T.SIZE+31)/32;
+	_newVal = v.value.vector[0..WS];
       }
       else {
 	enum size_t size = 8 * T.sizeof;
