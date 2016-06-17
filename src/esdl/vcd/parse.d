@@ -23,7 +23,7 @@ enum uint MaxVectorSize = 65536; // 16384; // 32768; // 65536;
 import core.bitop;
 
 // A tightly packed fixed width vector of bits
-struct VcdVec(size_t N)
+struct VcdVec(size_t N) if (N > 0)
 {
 
   static if(N <= 8)                     private alias ubyte  store_t;
@@ -252,7 +252,7 @@ abstract class VcdVar: VcdNode
       }
     }
     else {			// static if(A != 1)
-      size_t n = (size + 63 - 1) / 64;
+      size_t n = (size + 64 - 1) / 64;
       enum size_t N = (A + Z)/2;
       if(n == N) {	
 	return new VcdVecWave!(N*64)(parent, vcd, name, size);
@@ -261,7 +261,7 @@ abstract class VcdVar: VcdNode
 	return makeVarVec!(N+1, Z)(parent, vcd, name, size);
       }
       else {
-	return makeVarVec!(A, N-1)(parent, vcd, name, size);
+	return makeVarVec!(A, N)(parent, vcd, name, size);
       }
     }
   }
