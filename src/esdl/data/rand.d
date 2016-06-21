@@ -273,11 +273,11 @@ public auto _esdl__lth(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.lth(q);
   }
-  static if(is(Q: RndVecExpr)) {
+  else static if(is(Q: RndVecExpr)) {
     return q.gte(q);
   }
-  static if((isBitVector!P || isIntegral!P) &&
-	    (isBitVector!Q || isIntegral!Q)) {
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p < q);
   }
 }
@@ -286,10 +286,10 @@ public auto _esdl__lte(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.lte(q);
   }
-  static if(is(Q: RndVecExpr)) {
+  else static if(is(Q: RndVecExpr)) {
     return q.gth(q);
   }
-  static if((isBitVector!P || isIntegral!P) &&
+  else static if((isBitVector!P || isIntegral!P) &&
 	    (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p <= q);
   }
@@ -299,10 +299,10 @@ public auto _esdl__gth(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.gth(q);
   }
-  static if(is(Q: RndVecExpr)) {
+  else static if(is(Q: RndVecExpr)) {
     return q.lte(q);
   }
-  static if((isBitVector!P || isIntegral!P) &&
+  else static if((isBitVector!P || isIntegral!P) &&
 	    (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p > q);
   }
@@ -312,10 +312,10 @@ public auto _esdl__gte(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.gte(q);
   }
-  static if(is(Q: RndVecExpr)) {
+  else static if(is(Q: RndVecExpr)) {
     return q.lth(q);
   }
-  static if((isBitVector!P || isIntegral!P) &&
+  else static if((isBitVector!P || isIntegral!P) &&
 	    (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p >= q);
   }
@@ -325,10 +325,10 @@ public auto _esdl__equ(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.equ(q);
   }
-  static if(is(Q: RndVecExpr)) {
+  else static if(is(Q: RndVecExpr)) {
     return q.equ(q);
   }
-  static if((isBitVector!P || isIntegral!P) &&
+  else static if((isBitVector!P || isIntegral!P) &&
 	    (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p == q);
   }
@@ -338,10 +338,10 @@ public auto _esdl__neq(P, Q)(P p, Q q) {
   static if(is(P: RndVecExpr)) {
     return p.neq(q);
   }
-  static if(is(Q: RndVecExpr)) {
+  else static if(is(Q: RndVecExpr)) {
     return q.neq(q);
   }
-  static if((isBitVector!P || isIntegral!P) &&
+  else static if((isBitVector!P || isIntegral!P) &&
 	    (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p != q);
   }
@@ -2068,7 +2068,7 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
     }
     else if((! this.isRand) ||
 	    this.isRand && stage().solved()) { // work with the value
-      return buddy.buildVec(value());
+      return buddy.buildVec(getVal());
     }
     else {
       assert(false, "Constraint evaluation in wrong stage");
@@ -2193,6 +2193,10 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
 
     public _esdl__SolverThis getSolver() {
       return _solver;
+    }
+
+    public auto getVal() {
+      return _solver._esdl__outer.tupleof[I];
     }
 
     public ulong value() {
@@ -2328,6 +2332,15 @@ class RndVec(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, 
 	assert(false, "No parent associated with RndVec");
       }
       return _parent.getSolver();
+    }
+
+    auto getVal() {
+      if(_indexExpr) {
+	return _parent.getVal(cast(size_t) _indexExpr.evaluate());
+      }
+      else {
+	return _parent.getVal(_index);
+      }
     }
 
     ulong value() {
@@ -2549,7 +2562,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
   }
 
-  static private long getVal(A, N...)(ref A arr, N idx) if(isArray!A &&
+  static private auto getVal(A, N...)(ref A arr, N idx) if(isArray!A &&
 							   N.length > 0 &&
 							   isIntegral!(N[0])) {
     static if(N.length == 1) return arr[idx[0]];
@@ -2698,7 +2711,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
     }
 
 
-    public long getVal(J...)(J idx) if(isIntegral!(J[0])) {
+    public auto getVal(J...)(J idx) if(isIntegral!(J[0])) {
       return getVal(_solver._esdl__outer.tupleof[I], idx);
     }
 
@@ -2851,7 +2864,7 @@ class RndVecArr(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPri
       _parent.setLen(v, _index, idx);
     }
 
-    public long getVal(N...)(N idx) if(isIntegral!(N[0])) {
+    public auto getVal(N...)(N idx) if(isIntegral!(N[0])) {
       if(_indexExpr) {
 	assert(_indexExpr.isConst());
 	return _parent.getVal(cast(size_t) _indexExpr.evaluate(), idx);
