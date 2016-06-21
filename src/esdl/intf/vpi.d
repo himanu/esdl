@@ -7,6 +7,8 @@
 module esdl.intf.vpi;
 import core.vararg;
 import core.stdc.string: strlen;
+import esdl.base.core: simulateAllRootsUpto, terminateAllRoots;
+import esdl.data.time;
 
 version(LDC) {
   import ldc.attributes;
@@ -1064,19 +1066,19 @@ bool vpiIsUsable() {
 // extern(C) int vpi_mcd_vprintf (uint mcd, char *format, va_list ap) {
 //   assert(false, "Kindly link to a Verilog compiler that supports VPI");
 // }
-extern(C) int vpi_flush () {
+@weak extern(C) int vpi_flush () {
   assert(false, "Kindly link to a Verilog compiler that supports VPI");
 }
 
-extern(C) int vpi_mcd_flush (uint mcd) {
+@weak extern(C) int vpi_mcd_flush (uint mcd) {
   assert(false, "Kindly link to a Verilog compiler that supports VPI");
 }
 
-extern(C) int vpi_control (int operation, ...) {
+@weak extern(C) int vpi_control (int operation, ...) {
   assert(false, "Kindly link to a Verilog compiler that supports VPI");
 }
 
-extern(C) vpiHandle vpi_handle_by_multi_index (vpiHandle obj, int num_index,
+@weak extern(C) vpiHandle vpi_handle_by_multi_index (vpiHandle obj, int num_index,
 					       int *index_array) {
   assert(false, "Kindly link to a Verilog compiler that supports VPI");
 }
@@ -1085,9 +1087,9 @@ extern(C) vpiHandle vpi_handle_by_multi_index (vpiHandle obj, int num_index,
 /**************************** GLOBAL VARIABLES ****************************/
 // extern void (**vlog_startup_routines)()
 // extern void function() *vlog_startup_routines;
-alias void function() vpi_thunk;
+alias vpi_thunk = void function();
 
-extern vpi_thunk* vlog_startup_routines;
+// @weak shared extern(C) vpi_thunk* vlog_startup_routines;
 
 /* array of function pointers, last pointer should be null */
 
@@ -1217,4 +1219,94 @@ void vpiPutValues(T...)(vpiHandle iter, T t) {
   static if(T.length > 0) {
     vpiPutValuesByOne(iter, t[0], t[1..$]);
   }
+}
+
+int vpiCbNextSimTimeProc(p_cb_data cb) {
+  s_vpi_time  now;
+  now.type = vpiSimTime;
+  vpi_get_time(null, &now);
+  long time = now.high;
+  time <<= 32;
+  time += now.low;
+
+  // import std.stdio;
+
+  // writeln("vpiCbNextSimTimeProc: Running simulation till ", time);
+  simulateAllRootsUpto(time.psec);
+
+  // writeln("Done simulation till ", time);
+
+  auto new_cb = new s_cb_data();
+  new_cb.reason = vpiCbReadOnlySynch;
+  new_cb.cb_rtn = &vpiCbReadOnlySynchProc;//next callback address
+  new_cb.time = &now;
+  new_cb.obj = null;
+  new_cb.value = null;
+  new_cb.user_data = null;
+  vpi_register_cb(new_cb);
+  return 0;
+}
+
+int vpiCbReadOnlySynchProc(p_cb_data cb) {
+  s_vpi_time  now;
+  now.type = vpiSimTime;
+  vpi_get_time(null, &now);
+  long time = now.high;
+  time <<= 32;
+  time += now.low;
+
+  // writeln("callback_cbReadOnlySync: Running simulation till ", time);
+  simulateAllRootsUpto(time.psec);
+
+  auto new_cb = new s_cb_data();
+  new_cb.reason = vpiCbNextSimTime;
+  new_cb.cb_rtn = &vpiCbNextSimTimeProc;//next callback address
+  new_cb.time = null;
+  new_cb.obj = null;
+  new_cb.value = null;
+  new_cb.user_data = null;
+  vpi_register_cb(new_cb);
+  return 0;
+}
+
+int vpiCbStartSignalCosim(p_cb_data cb) {
+  import std.random: uniform;
+  s_vpi_time  now;
+  now.type = vpiSimTime;
+  vpi_get_time(null, &now);
+  long time = now.high;
+  time <<= 32;
+  time += now.low;
+
+  simulateAllRootsUpto(time.nsec);
+
+  auto new_cb = new s_cb_data();
+  new_cb.reason = vpiCbReadOnlySynch;
+  new_cb.cb_rtn = &vpiCbReadOnlySynchProc;//next callback address
+  new_cb.time = &now;
+  new_cb.obj = null;
+  new_cb.value = null;
+  new_cb.user_data = null;
+  vpi_register_cb(new_cb);
+  return 0;
+}
+
+int vpiTerminateESDL(p_cb_data cb) {
+  terminateAllRoots();
+  import core.runtime;  
+  Runtime.terminate();
+  return 0;
+}
+
+void vpiStartSignalCosim() {
+  auto new_cb = new s_cb_data();
+    
+  new_cb.reason = vpiCbStartOfSimulation;
+  new_cb.cb_rtn = &vpiCbStartSignalCosim;//next callback address
+  vpi_register_cb(new_cb);
+
+  auto end_cb = new s_cb_data();
+  end_cb.reason = vpiCbEndOfSimulation;
+  end_cb.cb_rtn = &vpiTerminateESDL;//next callback address
+  vpi_register_cb(end_cb);
 }
