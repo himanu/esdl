@@ -160,7 +160,7 @@ string declareWait(IF, string E, string CHANNEL)() {
     }
 
     public final void opAssign(V) (V val)
-      if(isAssignable!(V, T) &&
+      if(isAssignable!(T, V) &&
 	 !is(T == V) &&
 	 !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
 	this._portObj.channel.write(cast(T) val);
@@ -1405,6 +1405,8 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 {
   import esdl.data.bvec;
 
+  alias VAL_TYPE = T;
+
   protected Notification!T _changeEvent;
   protected T _curVal;
   protected T _newVal;
@@ -1480,7 +1482,7 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
   }
 
   public final void opAssign(V) (V val)
-    if(isAssignable!(V, T) &&
+    if(isAssignable!(T, V) &&
        !is(T == V) &&
        !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
       this.write(cast(T) val);
@@ -1618,12 +1620,14 @@ class SignalObj(T, bool MULTI_DRIVER = false): Channel, SignalInOutIF!T
 
 template Signal(uint WIDTH) {
   import esdl.data.bvec;
-  alias Signal=Signal!(Bit!WIDTH);
+  alias Signal=Signal!(UBit!WIDTH);
 }
 
 @_esdl__component struct Signal(T, bool MULTI_DRIVER = false)
 {
   // enum bool _thisIsSignal = true;
+  alias VAL_TYPE = T;
+
   public SignalObj!(T, MULTI_DRIVER) _signalObj = void;
 
   public ref SignalObj!(T, MULTI_DRIVER) _esdl__objRef() {
@@ -1672,7 +1676,7 @@ template Signal(uint WIDTH) {
   }
 
   public final void opAssign(V) (V val)
-    if(isAssignable!(V, T) &&
+    if(isAssignable!(T, V) &&
        !is(T == V) &&
        !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
       _esdl__obj.write(cast(T) val);
@@ -1758,6 +1762,8 @@ template Signal(uint WIDTH) {
 class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
 {
   import esdl.intf.vpi;
+
+  alias VAL_TYPE = T;
 
   alias read this;
 
@@ -1882,12 +1888,10 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
 	}
       }
 
-      import core.stdc.stdlib;
-      auto p_cb = cast(p_cb_data)
-	// core.stdc.stdlib.malloc(s_cb_data.sizeof);
-	GC.malloc(s_cb_data.sizeof);
-	  
-      // s_cb_data cb; //  = *p_cb;
+      // Reflect the HDL signal value here
+      hdlGet();
+
+      auto p_cb = new s_cb_data();	  
       p_cb.reason = vpiCbValueChange;
       p_cb.cb_rtn = &_hdlConnect;
       p_cb.obj = vpiNetHandle;
@@ -1897,14 +1901,12 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
       Object obj = this;
       p_cb.user_data = cast(void*) obj;
 
-      vpi_register_cb(p_cb); // Do not know why this will not work
-      // vpi_register_cb(&cb);
-      // }
+      vpi_register_cb(p_cb);
     }
   }
 
   public final void opAssign(V) (V val)
-    if(isAssignable!(V, T) &&
+    if(isAssignable!(T, V) &&
        !is(T == V) &&
        !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
       this.write(cast(T) val);
@@ -1931,12 +1933,13 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
 
 template HdlSignal(uint WIDTH) {
   import esdl.data.bvec;
-  alias HdlSignal=HdlSignal!(Bit!WIDTH);
+  alias HdlSignal=HdlSignal!(ULogic!WIDTH);
 }
 
 @_esdl__component struct HdlSignal(T, bool MULTI_DRIVER = false)
 {
   // enum bool _thisIsSignal = true;
+  alias VAL_TYPE = T;
   public HdlSignalObj!(T, MULTI_DRIVER) _signalObj = void;
 
   public ref HdlSignalObj!(T, MULTI_DRIVER) _esdl__objRef() {
@@ -1985,7 +1988,7 @@ template HdlSignal(uint WIDTH) {
   }
 
   public final void opAssign(V) (V val)
-    if(isAssignable!(V, T) &&
+    if(isAssignable!(T, V) &&
        !is(T == V) &&
        !(isBitVector!T && (isIntegral!V || is(V == bool)))) {
       _esdl__obj.write(cast(T) val);
