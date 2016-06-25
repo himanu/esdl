@@ -9500,13 +9500,13 @@ class Buddy
     import esdl.data.bvec: isBitVector;
     import std.traits;
     
-    size_t val_ = val;
+    ulong val_;
     int bitnum = 0;
     bool signed;
     
     static if(isBitVector!T) {
       bitnum = T.SIZE;
-      val_ = val;
+      val_ = cast(ulong) val;
       signed = T.ISSIGNED;
     }
     else static if(isIntegral!T) {

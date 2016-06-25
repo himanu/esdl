@@ -959,6 +959,8 @@ abstract class _esdl__SolverEnvRoot {
 
   CstBlock _esdl__cstStatements;
 
+  CstStage[] savedStages;
+  
   this(uint seed, string name, _esdl__SolverEnvRoot parent=null) {
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
@@ -1073,9 +1075,9 @@ abstract class _esdl__SolverEnvRoot {
 
       foreach(stmt; _esdl__cstStatements._exprs) {
         foreach(vec; stmt.getPrims()) {
-      	if(vec.domIndex != uint.max) {
-      	  vec.domIndex = uint.max;
-      	}
+	  if(vec.domIndex != uint.max) {
+	    vec.domIndex = uint.max;
+	  }
         }
       }
 
@@ -1121,19 +1123,9 @@ abstract class _esdl__SolverEnvRoot {
     // everything that remains.
 
 
-    // Ok before we start looking at the constraints, we create a
-    // stage for each and every @rand that we have at hand
     CstStage[] unsolvedStages;	// unresolved stages -- all
-    // foreach(rnd; _esdl__randsList) {
-    //   if(! rnd.isVecArr()) {
-    // 	addCstStage(rnd, unsolvedStages);
-    //   }
-    //   else {
-    //   }
-    // }
 
     int stageIdx=0;
-    // This variable is true when all the array lengths have been resolved
     CstBddExpr[] unsolvedExprs = _esdl__cstStatements._exprs;	// unstaged Expressions -- all
     while(unsolvedExprs.length > 0 || unsolvedStages.length > 0) {
       CstBddExpr[] cstExprs = unsolvedExprs;
@@ -1252,8 +1244,13 @@ abstract class _esdl__SolverEnvRoot {
 	}
       }
     }
-    if(stage !is null) stage.id(stageIdx);
-    ++stageIdx;
+    stage.id(stageIdx);
+
+    // save for future reference
+    if (savedStages.length <= stageIdx) {
+      savedStages.length = stageIdx + 1;
+    }
+    savedStages[stageIdx++] = stage;
   }
 
   void printSolution() {
@@ -1302,9 +1299,7 @@ class Randomizable {
 
 mixin template Randomization()
 {
-  static {
-    mixin(_esdl__SolverMixin("_esdl__SolverEnv"));
-  }
+  mixin(_esdl__SolverMixin("_esdl__SolverEnv"));
   
   enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
@@ -1560,7 +1555,43 @@ abstract class RndVecExpr
   public RndVec2VecExpr opBinary(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-	auto qq = new RndVecConst!Q(q);
+  	auto qq = new RndVecConst!Q(q);
+  	static if(op == "&") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.AND);
+  	}
+  	static if(op == "|") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.OR);
+  	}
+  	static if(op == "^") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.XOR);
+  	}
+  	static if(op == "+") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.ADD);
+  	}
+  	static if(op == "-") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.SUB);
+  	}
+  	static if(op == "*") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.MUL);
+  	}
+  	static if(op == "/") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.DIV);
+  	}
+  	static if(op == "%") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.REM);
+  	}
+  	static if(op == "<<") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.LSH);
+  	}
+  	static if(op == ">>") {
+  	  return new RndVec2VecExpr(this, qq, CstBinVecOp.RSH);
+  	}
+      }
+
+  public RndVec2VecExpr opBinary(string op, Q)(ref Q q)
+    if(isBitVector!Q || isIntegral!Q)
+      {
+	auto qq = new RndVecVar!Q(q);
 	static if(op == "&") {
 	  return new RndVec2VecExpr(this, qq, CstBinVecOp.AND);
 	}
@@ -1597,6 +1628,42 @@ abstract class RndVecExpr
     if(isBitVector!Q || isIntegral!Q)
       {
 	auto qq = new RndVecConst!Q(q);
+	static if(op == "&") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.AND);
+	}
+	static if(op == "|") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.OR);
+	}
+	static if(op == "^") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.XOR);
+	}
+	static if(op == "+") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.ADD);
+	}
+	static if(op == "-") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.SUB);
+	}
+	static if(op == "*") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.MUL);
+	}
+	static if(op == "/") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.DIV);
+	}
+	static if(op == "%") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.REM);
+	}
+	static if(op == "<<") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.LSH);
+	}
+	static if(op == ">>") {
+	  return new RndVec2VecExpr(qq, this, CstBinVecOp.RSH);
+	}
+      }
+
+  public RndVec2VecExpr opBinaryRight(string op, Q)(ref Q q)
+    if(isBitVector!Q || isIntegral!Q)
+      {
+	auto qq = new RndVecVar!Q(q);
 	static if(op == "&") {
 	  return new RndVec2VecExpr(qq, this, CstBinVecOp.AND);
 	}
@@ -2454,43 +2521,43 @@ abstract class RndVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 
   // }
 
   public bool isRand() {
-    assert(false, "isRand not implemented for RndVecVar");
+    assert(false, "isRand not implemented for RndVecArrBase");
   }
 
   public ulong value() {
-    assert(false, "value not implemented for RndVecVar");
+    assert(false, "value not implemented for RndVecArrBase");
   }
 
   public void value(ulong v, int word = 0) {
-    assert(false, "value not implemented for RndVecVar");
+    assert(false, "value not implemented for RndVecArrBase");
   }
 
   public void stage(CstStage s) {
-    assert(false, "stage not implemented for RndVecVar");
+    assert(false, "stage not implemented for RndVecArrBase");
   }
 
   public uint domIndex() {
-    assert(false, "domIndex not implemented for RndVecVar");
+    assert(false, "domIndex not implemented for RndVecArrBase");
   }
 
   public void domIndex(uint s) {
-    assert(false, "domIndex not implemented for RndVecVar");
+    assert(false, "domIndex not implemented for RndVecArrBase");
   }
 
   public uint bitcount() {
-    assert(false, "bitcount not implemented for RndVecVar");
+    assert(false, "bitcount not implemented for RndVecArrBase");
   }
 
   public bool signed() {
-    assert(false, "signed not implemented for RndVecVar");
+    assert(false, "signed not implemented for RndVecArrBase");
   }
 
   public BddVec bddvec() {
-    assert(false, "bddvec not implemented for RndVecVar");
+    assert(false, "bddvec not implemented for RndVecArrBase");
   }
 
   public void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for RndVecVar");
+    assert(false, "bddvec not implemented for RndVecArrBase");
   }
 
   void solveBefore(RndVecPrim other) {
@@ -2766,7 +2833,6 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 
       public CstStage stage() {
 	return arrLen().stage();
-	// assert(false, "stage not implemented for RndVecVar");
       }
 
     }
@@ -3112,7 +3178,6 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 
       public CstStage stage() {
 	return arrLen().stage();
-	// assert(false, "stage not implemented for RndVecVar");
       }
 
     }
@@ -3289,11 +3354,11 @@ abstract class RndVecIterVar: RndVecExpr
 
 }
 
-class RndVecConst(T = int): RndVecExpr, RndVecPrim
+class RndVecConst(T = int): RndVecValue!T
 {
   import std.conv;
 
-  T _value;			// the value of the constant
+  immutable T _value;			// the value of the constant
 
   override string name() {
     return _value.to!string();
@@ -3303,6 +3368,52 @@ class RndVecConst(T = int): RndVecExpr, RndVecPrim
     _value = value;
   }
 
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    return buddy.buildVec(_value);
+  }
+
+  public const T getVal() {
+    return _value;
+  }
+
+  override public long evaluate() {
+    return _value;
+  }
+
+}
+
+class RndVecVar(T = int): RndVecValue!T
+{
+  // Declared in RndVecValue
+  // T _value;			// the value of the constant
+  import std.conv: to;
+
+  T* _var;
+  
+  override string name() {
+    return (*_var).to!string();
+  }
+
+  public this(ref T var) {
+    _var = &var;
+  }
+
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    return buddy.buildVec(*_var);
+  }
+
+  public T getVal() {
+    return *_var;
+  }
+
+  override public long evaluate() {
+    return *_var;
+  }
+
+}
+
+abstract class RndVecValue(T = int): RndVecExpr, RndVecPrim
+{
   override public RndVecPrim[] preReqs() {
     return [];
   }
@@ -3321,18 +3432,6 @@ class RndVecConst(T = int): RndVecExpr, RndVecPrim
 
   public RndVecPrim[] getPrimLens() {
     assert(false);
-  }
-
-  // override public CstStage[] getStages() {
-  //   return [];
-  // }
-
-  override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    return buddy.buildVec(_value);
-  }
-
-  override public long evaluate() {
-    return _value;
   }
 
   public bool isRand() {
