@@ -24,6 +24,8 @@ import std.bitmanip;
 import std.range;
 import core.bitop;
 import core.exception;
+import esdl.base.comm;
+
 static import std.algorithm; 	// required for min, max
 
 import esdl.intf.vpi: s_vpi_vecval;
@@ -454,20 +456,25 @@ template _vecCmpT(T, U)	// return true if T >= U
 }
 
 template _bvec(T, U, string OP)
-  if(isBitVector!T && isBitVector!U) {
-    static if(T.ISSIGNED && U.ISSIGNED) {enum bool S = true;}
-    else                                {enum bool S = false;}
-    static if(T.IS4STATE || U.IS4STATE) {enum bool L = true;}
-    else                                {enum bool L = false;}
-    static if(OP == "~") {
-      alias _bvec!(T.ISSIGNED, L, T.SIZE + U.SIZE) _bvec;
-    }
-    else {
-      static if(T.SIZE > U.SIZE)        {enum size_t N = T.SIZE;}
-      else                              {enum size_t N = U.SIZE;}
-      alias _bvec = _bvec!(T.ISSIGNED, L, N);
-    }
+  if((isBitVector!T || isIntegral!T) &&
+     (isBitVector!U || isIntegral!U)) {
+  static if (isIntegral!U) alias UU = _bvec!U;
+  else alias UU = U;
+  static if (isIntegral!T) alias TT = _bvec!U;
+  else alias TT = T;
+  static if(TT.ISSIGNED && UU.ISSIGNED) {enum bool S = true;}
+  else                                {enum bool S = false;}
+  static if(TT.IS4STATE || UU.IS4STATE) {enum bool L = true;}
+  else                                {enum bool L = false;}
+  static if(OP == "~") {
+    alias _bvec!(TT.ISSIGNED, L, TT.SIZE + UU.SIZE) _bvec;
   }
+  else {
+    static if(TT.SIZE > UU.SIZE)        {enum size_t N = TT.SIZE;}
+    else                              {enum size_t N = UU.SIZE;}
+    alias _bvec = _bvec!(TT.ISSIGNED, L, N);
+  }
+}
 
 // template _bvec(T, U, string OP)
 //   if(isBitVector!T && isBitVector!U) {
@@ -739,20 +746,20 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     
     enum size_t ELEMSIZE = N[$-1];
 
-    template isAssignable(Q) {
+    template isAssignableBitVec(Q) {
       static if (isIntegral!Q && Q.sizeof*8 <= SIZE) {
-	enum bool isAssignable = true;
+	enum bool isAssignableBitVec = true;
       }
       else static if (isBitVector!Q && Q.SIZE <= SIZE) {
 	static if (IS4STATE || (! Q.IS4STATE)) {
-	  enum bool isAssignable = true;
+	  enum bool isAssignableBitVec = true;
 	}
 	else {
-	  enum bool isAssignable = false;
+	  enum bool isAssignableBitVec = false;
 	}
       }
       else {
-	  enum bool isAssignable = true;
+	  enum bool isAssignableBitVec = true;
       }
     }
     
@@ -972,9 +979,31 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
     }
 
+
+    public void opAssign(V)(V other)
+      if(isIntegral!V && (NO_CHECK_SIZE || SIZE >= V.sizeof*8)) {
+	this._from(other);
+      }
+
+    public void opAssign(V)(V other)
+      if((isBitVector!V ||
+	  is(V == _bvec!(_S, _L, _VAL, _RADIX),
+	     bool _S, bool _L, string _VAL, size_t _RADIX))
+	 && (NO_CHECK_SIZE || SIZE >= V.SIZE)
+	 &&(IS4STATE || !V.IS4STATE)) {
+	this._from(other);
+      }
+
+    public void opAssign(V)(V other)
+      if((is(V: SignalObj!VV, VV) || is(V: HdlSignal!VV, VV) ||
+	  is(V: HdlSignalObj!VV, VV) || is(V: Signal!VV, VV)) &&
+	 isAssignable!(typeof(this), V.VAL_TYPE)) {
+	this._from(other.read());
+      }
+
     public this(V)(V other)
       if((isBitVector!V ||
-	  is(V unused == _bvec!(S_, L_, _VAL, _RADIX),
+	  is(V == _bvec!(S_, L_, _VAL, _RADIX),
 	     bool S_, bool L_, string _VAL, size_t _RADIX)) &&
 	 (NO_CHECK_SIZE || SIZE >= V.SIZE)) {
 	this._from(other);
@@ -1066,6 +1095,22 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
       alias getValue this;
     }
+    // else {
+    //   static if(ISSIGNED) {
+    // 	_bvec!(false, IS4STATE, SIZE) getSigned() {
+    // 	  auto val = cast(_bvec!(false, IS4STATE, SIZE)) this;
+    // 	  return val;
+    // 	}
+    // 	alias getSigned this;
+    //   }
+    //   static if(! ISSIGNED) {
+    // 	_bvec!(true, IS4STATE, SIZE) getSigned() {
+    // 	  auto val = cast(_bvec!(true, IS4STATE, SIZE)) this;
+    // 	  return val;
+    // 	}
+    // 	alias getSigned this;
+    //   }
+    // }
 
     // declare this aliases -- only if SIZE <= 64
     // static if(SIZE <= 64 && !L) {
@@ -1173,7 +1218,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
 
     public void storeString(V)(V other)
-      if(is(V unused == string)) {
+      if(is(V == string)) {
 	foreach(ref a; _aval) a = 0;
 	static if(L) foreach(ref b; _bval) b = 0;
 	foreach(size_t i, char c; other) {
@@ -1192,12 +1237,6 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	}
       }
 
-
-
-    public void opAssign(V)(V other)
-      if(isIntegral!V && (NO_CHECK_SIZE || SIZE >= V.sizeof*8)) {
-	this._from(other);
-      }
 
     private void _from(V)(V other)
       if(isIntegral!V) {
@@ -1283,17 +1322,9 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     // 	this._aval[0] = other.getVal();
     //   }
 
-    public void opAssign(V)(V other)
-      if((isBitVector!V ||
-	  is(V unused == _bvec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX))
-	 && (NO_CHECK_SIZE || SIZE >= V.SIZE)
-	 &&(IS4STATE || !V.IS4STATE)) {
-	this._from(other);
-      }
-
     private void _from(V)(V other)
       if(isBitVector!V ||
-	 is(V unused == _bvec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX)) {
+	 is(V == _bvec!(_S, _L, _VAL, _RADIX), bool _S, bool _L, string _VAL, size_t _RADIX)) {
 	static assert(NO_CHECK_SIZE || SIZE >= V.SIZE);
 	static assert(IS4STATE || !V.IS4STATE,
 		      "Can not implicitly convert LogicVec to BitVec");
@@ -1964,15 +1995,15 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     // public V opCast(V)()
     //   if(isFloatingPoint!V &&
     // 	 V.sizeof*8 <= SIZE) {
-    // 	static if(is(V unused == real)) {
+    // 	static if(is(V == real)) {
     // 	  enum WSIZE =(V.sizeof+7)/8;
     // 	  alias ulong ftype;
     // 	}
-    // 	static if(is(V unused == double)) {
+    // 	static if(is(V == double)) {
     // 	  enum WSIZE = 1;
     // 	  alias ulong ftype;
     // 	}
-    // 	static if(is(V unused == float)) {
+    // 	static if(is(V == float)) {
     // 	  enum WSIZE = 1;
     // 	  alias uint ftype;
     // 	}
@@ -2187,7 +2218,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       if(isBitVector!V &&
 	 _vecCmpT!(typeof(this), V)) {
 	reportX!(file, line)(other);
-	alias _bvec!(typeof(this), V, "COMPARE") P;
+	alias P = _bvec!(typeof(this), V, "COMPARE");
 	P lhs = this;
 	P rhs = other;
 	return lhs.compare(rhs);
@@ -2204,19 +2235,82 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       }
 
     public bool opEquals(string file = __FILE__,
-			 size_t line = __LINE__, V)(const V other) const
-      if(isIntegral!V || isBoolean!V) {
-	alias P = _bvec!(typeof(this), _bvec!V, "COMPARE");
+			 size_t line = __LINE__, V)(const V other)
+      if(isBitVector!V) {
+	reportX!(file, line)(other);
+	alias _bvec!(typeof(this), V, "COMPARE") P;
 	P lhs = this;
 	P rhs = other;
 	return lhs.isEqual(rhs);
       }
 
     public bool opEquals(string file = __FILE__,
-			 size_t line = __LINE__, V)(const V other)
-      if(isBitVector!V) {
-	reportX!(file, line)(other);
-	alias _bvec!(typeof(this), V, "COMPARE") P;
+			 size_t line = __LINE__)(const bool other) const {
+      alias P = _bvec!(typeof(this), bool, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const byte other) const {
+      alias P = _bvec!(typeof(this), byte, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const short other) const {
+      alias P = _bvec!(typeof(this), short, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const int other) const {
+      alias P = _bvec!(typeof(this), int, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const long other) const {
+      alias P = _bvec!(typeof(this), long, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const ubyte other) const {
+      alias P = _bvec!(typeof(this), ubyte, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const ushort other) const {
+      alias P = _bvec!(typeof(this), ushort, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const uint other) const {
+      alias P = _bvec!(typeof(this), uint, "COMPARE");
+      P lhs = this;
+      P rhs = other;
+      return lhs.isEqual(rhs);
+    }
+
+    public bool opEquals(string file = __FILE__,
+			 size_t line = __LINE__)(const ulong other) const {
+	alias P = _bvec!(typeof(this), ulong, "COMPARE");
 	P lhs = this;
 	P rhs = other;
 	return lhs.isEqual(rhs);
