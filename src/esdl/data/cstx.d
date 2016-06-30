@@ -649,17 +649,30 @@ struct CstParser {
     if(! dryRun) outBuffer[cursor] = c;
   }
 
-  char[] translate() {
-
-    fill("override public CstBlock getCstExpr() {"
-	 "\n  auto cstExpr = new CstBlock;\n");
+  char[] translate(string name) {
+    if (name == "") {
+      fill("override CstBlock getCstExpr() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+    else {
+      fill("CstBlock " ~ name ~ "() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+      
 
     procBlock();
 
     setupBuffer();
 
-    fill("override public CstBlock getCstExpr() {"
-	 "\n  auto cstExpr = new CstBlock;\n");
+    if (name == "") {
+      fill("override CstBlock getCstExpr() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+    else {
+      fill("CstBlock " ~ name ~ "() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+      
 
     procBlock();
 

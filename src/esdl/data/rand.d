@@ -34,7 +34,7 @@ template _esdl__SolverEnvBase(T) {
     // static if(__traits(compiles, _esdl__Solver!U)) {
     static if(__traits(compiles, U._esdl__thisHasRandomization()) &&
 	      is(U == typeof(U._esdl__thisHasRandomization()))) {
-      alias _esdl__SolverEnvBase = _esdl__Solver!U;
+      alias _esdl__SolverEnvBase = _esdl__Solver!U.Type;
     }
     else {
       alias _esdl__SolverEnvBase = _esdl__SolverEnvBase!U;
@@ -86,6 +86,25 @@ string _esdl__SolverMixin(string name) {
 	}
       }
 
+      class _esdl__Constraint(string _esdl__CstString, string NAME):
+	Constraint!_esdl__CstString
+      {
+	this() {
+	  super(this.outer, NAME,
+		cast(uint) this.outer._esdl__cstsList.length);
+	}
+	// This mixin writes out the bdd functions after parsing the
+	// constraint string at compile time
+	// mixin(constraintXlate(_esdl__CstString));
+	override CstBlock getCstExpr() {
+	  mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
+	}
+	
+	debug(CONSTRAINTS) {
+	  pragma(msg, constraintXlate(_esdl__CstString));
+	}
+      }
+
       class _esdl__Constraint(string _esdl__CstString):
 	Constraint!_esdl__CstString
       {
@@ -100,7 +119,8 @@ string _esdl__SolverMixin(string name) {
 	}
       }
 
-      class _esdl__Constraint(string _esdl__CstString, size_t N): Constraint!_esdl__CstString
+      class _esdl__Constraint(string _esdl__CstString, size_t N):
+	Constraint!_esdl__CstString
 	{
 	  long[N] _withArgs;
 
@@ -139,22 +159,120 @@ string _esdl__SolverMixin(string name) {
       mixin(_esdl__randsMixin!_esdl__T);
 
       debug(CONSTRAINTS) {
-	pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
-	pragma(msg, _esdl__randsMixin!_esdl__T);
+      	pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
+      	pragma(msg, _esdl__randsMixin!_esdl__T);
       }
     }
   };
 }
 
-mixin(_esdl__SolverMixin("_esdl__SolverEnvStruct"));
+class _esdl__SolverEnvStruct(_esdl__T): _esdl__SolverEnvBase!_esdl__T
+{
+  _esdl__T* _esdl__outer;
+  public void _esdl__setOuter()(ref _esdl__T outer) {
+    _esdl__outer = &outer;
+  }
+  public this(uint seed, string name, ref _esdl__T outer,
+	      _esdl__SolverEnvRoot parent=null) {
+    _esdl__outer = &outer;
+    static if(_esdl__baseHasRandomization!_esdl__T) {
+      super(seed, name, outer, parent);
+    }
+    else {
+      super(seed, name, parent);
+    }
+    _esdl__initRands();
+    _esdl__initCsts();
+  }
+
+  class _esdl__Constraint(string _esdl__CstString, string NAME):
+    Constraint!_esdl__CstString
+  {
+    this() {
+      super(this.outer, NAME,
+	    cast(uint) this.outer._esdl__cstsList.length);
+    }
+    // This mixin writes out the bdd functions after parsing the
+    // constraint string at compile time
+    // mixin(constraintXlate(_esdl__CstString));
+    override CstBlock getCstExpr() {
+      mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
+    }
+	
+    debug(CONSTRAINTS) {
+      pragma(msg, constraintXlate(_esdl__CstString));
+    }
+  }
+
+  class _esdl__Constraint(string _esdl__CstString):
+    Constraint!_esdl__CstString
+  {
+    this(string name) {
+      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+    }
+    // This mixin writes out the bdd functions after parsing the
+    // constraint string at compile time
+    mixin(constraintXlate(_esdl__CstString));
+    debug(CONSTRAINTS) {
+      pragma(msg, constraintXlate(_esdl__CstString));
+    }
+  }
+
+  class _esdl__Constraint(string _esdl__CstString, size_t N):
+    Constraint!_esdl__CstString
+  {
+    long[N] _withArgs;
+
+    void withArgs(V...)(V values) if(allIntengral!V) {
+      static assert(V.length == N);
+      foreach(i, v; values) {
+	_withArgs[i] = v;
+      }
+    }
+
+    this(string name) {
+      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+    }
+
+    public long _esdl__arg(size_t VAR)() {
+      static assert(VAR < N, "Can not map specified constraint with argument: @" ~
+		    VAR.stringof);
+      return _withArgs[VAR];
+    }
+
+    // This mixin writes out the bdd functions after parsing the
+    // constraint string at compile time
+    mixin(constraintXlate(_esdl__CstString));
+    debug(CONSTRAINTS) {
+      pragma(msg, "// randomizeWith!\n");
+      pragma(msg, constraintXlate(_esdl__CstString));
+    }
+  }
+
+  void _esdl__with(string _esdl__CstString, V...)(V values) {
+    auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
+    cstWith.withArgs(values);
+    _esdl__cstWith = cstWith;
+  }
+
+  mixin(_esdl__randsMixin!_esdl__T);
+
+  debug(CONSTRAINTS) {
+    pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
+    pragma(msg, _esdl__randsMixin!_esdl__T);
+  }
+}
+// mixin(_esdl__SolverMixin("_esdl__SolverEnvStruct"));
 
 template _esdl__Solver(T) {
   // static if(__traits(compiles, T._esdl__hasRandomization)) {
   static if(is(T == class)) {
-    alias _esdl__Solver = T._esdl__SolverEnv!T;
+    // alias _esdl__Solver = T._esdl__SolverEnv;
+    alias Type          = T._esdl__SolverEnv;
   }
   else {
-    alias _esdl__Solver = _esdl__SolverEnvStruct!T;
+    // alias _esdl__Solver = _esdl__SolverEnvStruct!T;
+    alias Type          = _esdl__SolverEnvStruct!T;
   }
 }
 
@@ -523,7 +641,7 @@ template _esdl__RandDeclFuncs(T, int I=0)
 	// use explicit tupleof[N], since that does not use access
 	// permissions
 	// enum _esdl__RandDeclFuncs =
-	  //   "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
+	//   "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
 	  enum _esdl__RandDeclFuncs =
 	    "  const auto " ~ NAME ~ "() { return this._esdl__outer.tupleof[" ~ I.stringof ~ "]; }\n" ~
 	    _esdl__RandDeclFuncs!(T, I+1);
@@ -601,8 +719,12 @@ template _esdl__ConstraintsDecl(T, int I=0)
       enum NAME = __traits(identifier, T.tupleof[I]);
       // skip the constraints and _esdl__ variables
       static if(is(L f == Constraint!C, immutable (char)[] C)) {
+	enum CST = _esdl__constraintString!(T, I);
 	enum _esdl__ConstraintsDecl =
-	  "  Constraint!(_esdl__constraintString!(_esdl__T, " ~ I.stringof ~ ")) " ~
+	  "  enum string _esdl__string_" ~ NAME ~
+	  " = _esdl__constraintString!(_esdl__T, " ~ I.stringof ~ ");\n" ~
+	  cast(string) constraintXlate(CST, "_esdl__cst_func_" ~ NAME) ~
+	  "  Constraint!(_esdl__string_" ~ NAME ~ ") " ~
 	  NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
       }
       else {
@@ -610,7 +732,6 @@ template _esdl__ConstraintsDecl(T, int I=0)
       }
     }
 }
-
 
 template _esdl__constraintString(T, int I)
 {
@@ -637,8 +758,8 @@ template _esdl__CstInits(T, int I=0)
       enum string NAME = __traits(identifier, T.tupleof[I]);
       static if(is(L f == Constraint!C, immutable (char)[] C)) {
 	enum string _esdl__CstInits = "    " ~ NAME ~
-	  " = new _esdl__Constraint!(_esdl__constraintString!(_esdl__T, " ~
-	  I.stringof ~ "))(\"" ~ NAME ~ "\");\n    _esdl__cstsList ~= " ~
+	  " = new _esdl__Constraint!(_esdl__string_" ~ NAME ~
+	  ",\"" ~ NAME ~ "\")();\n    _esdl__cstsList ~= " ~
 	  NAME ~ // ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~
 	  ";\n" ~ _esdl__CstInits!(T, I+1);
       }
@@ -671,7 +792,7 @@ template _esdl__ListRands(T, int I=0) {
 }
 
 template hasRandAttr(T, int I=0) {
-  alias hasRandAttr = hasRandInList!(__traits(getAttributes, T.tupleof[I]));
+  enum hasRandAttr = hasRandInList!(__traits(getAttributes, T.tupleof[I]));
 }
 
 template hasRandInList(A...) {
@@ -804,16 +925,16 @@ abstract class _esdl__ConstraintBase
   abstract public CstBlock getCstExpr();
 }
 
+static char[] constraintXlate(string CST, string NAME="") {
+  import esdl.data.cstx;
+  CstParser parser = CstParser(CST);
+  return parser.translate(NAME);
+}
+
 abstract class Constraint(string C): _esdl__ConstraintBase
 {
   this(_esdl__SolverEnvRoot eng, string name, uint index) {
     super(eng, name, C, index);
-  }
-
-  static char[] constraintXlate(string CST) {
-    import esdl.data.cstx;
-    CstParser parser = CstParser(CST);
-    return parser.translate();
   }
 };
 
@@ -1299,7 +1420,111 @@ class Randomizable {
 
 mixin template Randomization()
 {
-  mixin(_esdl__SolverMixin("_esdl__SolverEnv"));
+  debug(CONSTRAINTS) {
+    pragma(msg, "// _esdl__SolverMixin(" ~ typeof(this).stringof ~ ")");
+    pragma(msg, _esdl__SolverMixin("_esdl__SolverEnv"));
+  }
+
+  alias _esdl__T = typeof(this);
+  
+  class _esdl__SolverEnv: _esdl__SolverEnvBase!_esdl__T
+  {
+    _esdl__T _esdl__outer;
+    public void _esdl__setOuter()(_esdl__T outer) {
+      _esdl__outer = outer;
+    }
+    public this(uint seed, string name, _esdl__T outer,
+		_esdl__SolverEnvRoot parent=null) {
+      _esdl__outer = outer;
+      static if(_esdl__baseHasRandomization!_esdl__T) {
+	super(seed, name, outer, parent);
+      }
+      else {
+	super(seed, name, parent);
+      }
+      _esdl__initRands();
+      _esdl__initCsts();
+    }
+
+    class _esdl__Constraint(string _esdl__CstString, string NAME):
+      Constraint!_esdl__CstString
+    {
+      this() {
+	super(this.outer, NAME,
+	      cast(uint) this.outer._esdl__cstsList.length);
+      }
+      // This mixin writes out the bdd functions after parsing the
+      // constraint string at compile time
+      // mixin(constraintXlate(_esdl__CstString));
+      override CstBlock getCstExpr() {
+	mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
+      }
+	
+      debug(CONSTRAINTS) {
+	pragma(msg, constraintXlate(_esdl__CstString));
+      }
+    }
+
+    class _esdl__Constraint(string _esdl__CstString):
+      Constraint!_esdl__CstString
+    {
+      this(string name) {
+	super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+      }
+      // This mixin writes out the bdd functions after parsing the
+      // constraint string at compile time
+      mixin(constraintXlate(_esdl__CstString));
+      debug(CONSTRAINTS) {
+	pragma(msg, constraintXlate(_esdl__CstString));
+      }
+    }
+
+    class _esdl__Constraint(string _esdl__CstString, size_t N):
+      Constraint!_esdl__CstString
+    {
+      long[N] _withArgs;
+
+      void withArgs(V...)(V values) if(allIntengral!V) {
+	static assert(V.length == N);
+	foreach(i, v; values) {
+	  _withArgs[i] = v;
+	}
+      }
+
+      this(string name) {
+	super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+      }
+
+      public long _esdl__arg(size_t VAR)() {
+	static assert(VAR < N, "Can not map specified constraint with argument: @" ~
+		      VAR.stringof);
+	return _withArgs[VAR];
+      }
+
+      // This mixin writes out the bdd functions after parsing the
+      // constraint string at compile time
+      mixin(constraintXlate(_esdl__CstString));
+      debug(CONSTRAINTS) {
+	pragma(msg, "// randomizeWith!\n");
+	pragma(msg, constraintXlate(_esdl__CstString));
+      }
+    }
+
+    void _esdl__with(string _esdl__CstString, V...)(V values) {
+      auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
+      cstWith.withArgs(values);
+      _esdl__cstWith = cstWith;
+    }
+
+    mixin(_esdl__randsMixin!_esdl__T);
+
+    debug(CONSTRAINTS) {
+      pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
+      pragma(msg, _esdl__randsMixin!_esdl__T);
+    }
+  }
+
+  // mixin(_esdl__SolverMixin("_esdl__SolverEnv"));
   
   enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
@@ -1308,7 +1533,7 @@ mixin template Randomization()
     return null;
   }
 
-  alias _esdl__SolverThis = _esdl__Solver!_esdl__Type;
+  alias _esdl__SolverThis = _esdl__Solver!_esdl__Type.Type;
 
   // final auto _esdl__randEval(string NAME)() {
   //   return mixin(NAME);
@@ -1385,7 +1610,7 @@ public void randomizeWith(string C, T, V...)(ref T t, V values)
       // t._esdl__solverInst._esdl__cstWith = withCst;
     }
     else {
-      alias CST = _esdl__Solver!(T)._esdl__Constraint!(C, V.length);
+      alias CST = _esdl__Solver!T.Type._esdl__Constraint!(C, V.length);
       auto cstWith = _esdl__staticCast!CST(t._esdl__solverInst._esdl__cstWith);
       cstWith.withArgs(values);
       t._esdl__solverInst._esdl__cstWithChanged = false;
@@ -1482,7 +1707,7 @@ abstract class RndVecExpr
   abstract string name();
   
   public CstBddExpr toBdd() {
-    auto zero = new RndVecConst!int(0);
+    auto zero = new ConstVec!int(0);
     return new RndVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
@@ -1555,7 +1780,7 @@ abstract class RndVecExpr
   public RndVec2VecExpr opBinary(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-  	auto qq = new RndVecConst!Q(q);
+  	auto qq = new ConstVec!Q(q);
   	static if(op == "&") {
   	  return new RndVec2VecExpr(this, qq, CstBinVecOp.AND);
   	}
@@ -1627,7 +1852,7 @@ abstract class RndVecExpr
   public RndVec2VecExpr opBinaryRight(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-	auto qq = new RndVecConst!Q(q);
+	auto qq = new ConstVec!Q(q);
 	static if(op == "&") {
 	  return new RndVec2VecExpr(qq, this, CstBinVecOp.AND);
 	}
@@ -1704,7 +1929,7 @@ abstract class RndVecExpr
 
   public RndVecExpr opSlice(P)(P p)
     if(isIntegral!P || isBitVector!P) {
-      return new RndVecSliceExpr(this, new RndVecConst!P(p));
+      return new RndVecSliceExpr(this, new ConstVec!P(p));
     }
 
   public RndVecExpr opSlice(RndVecExpr lhs, RndVecExpr rhs)
@@ -1714,13 +1939,13 @@ abstract class RndVecExpr
 
   public RndVecExpr opSlice(P, Q)(P p, Q q)
     if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
-      return new RndVecSliceExpr(this, new RndVecConst!P(p),
-				 new RndVecConst!Q(q));
+      return new RndVecSliceExpr(this, new ConstVec!P(p),
+				 new ConstVec!Q(q));
     }
 
   public RndVec2BddExpr lth(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new RndVecConst!Q(q);
+      auto qq = new ConstVec!Q(q);
       return this.lth(qq);
     }
 
@@ -1730,7 +1955,7 @@ abstract class RndVecExpr
 
   public RndVec2BddExpr lte(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new RndVecConst!Q(q);
+      auto qq = new ConstVec!Q(q);
       return this.lte(qq);
     }
 
@@ -1740,7 +1965,7 @@ abstract class RndVecExpr
 
   public RndVec2BddExpr gth(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new RndVecConst!Q(q);
+      auto qq = new ConstVec!Q(q);
       return this.gth(qq);
     }
 
@@ -1750,7 +1975,7 @@ abstract class RndVecExpr
 
   public RndVec2BddExpr gte(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new RndVecConst!Q(q);
+      auto qq = new ConstVec!Q(q);
       return this.gte(qq);
     }
 
@@ -1760,7 +1985,7 @@ abstract class RndVecExpr
 
   public RndVec2BddExpr equ(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new RndVecConst!Q(q);
+      auto qq = new ConstVec!Q(q);
       return this.equ(qq);
     }
 
@@ -1770,7 +1995,7 @@ abstract class RndVecExpr
 
   public RndVec2BddExpr neq(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new RndVecConst!Q(q);
+      auto qq = new ConstVec!Q(q);
       return this.neq(qq);
     }
 
@@ -1817,6 +2042,1353 @@ abstract class RndVecExpr
 
 }
 
+
+mixin template EnumConstraints(T) {
+  static if(is(T == enum)) {
+    BDD _primBdd;
+    override public BDD getPrimBdd(Buddy buddy) {
+      // return this.bddvec.lte(buddy.buildVec(_maxValue));
+      import std.traits;
+      if(_primBdd.isZero()) {
+	_primBdd = buddy.zero();
+	foreach(e; EnumMembers!T) {
+	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
+	}
+      }
+      return _primBdd;
+    }
+  }
+}
+
+template _esdl__Rand(T, int I)
+{
+  import std.traits;
+  alias L = typeof(T.tupleof[I]);
+  alias RAND = getRandAttr!(T, I);
+  static if(__traits(isSame, RAND, _esdl__norand)) {
+    static if(isArray!L) {
+      alias _esdl__Rand = VarVecArr!(T, I);
+    }
+    else static if(isBitVector!L || isIntegral!L) {
+      alias _esdl__Rand = VarVec!(T, I);
+    }
+    else static if(is(L == class) || is(L == struct)) {
+      alias _esdl__Rand = _esdl__Solver!L.Type;
+    }
+    else static if(is(L == U*, U) && is(U == struct)) {
+      alias _esdl__Rand = _esdl__Solver!U.Type;
+    }
+  }
+  else {
+    static if(isArray!L) {
+      alias _esdl__Rand = RndVecArr!(T, I);
+    }
+    else static if(isBitVector!L || isIntegral!L) {
+      alias _esdl__Rand = RndVec!(T, I);
+    }
+    else static if(is(L == class) || is(L == struct)) {
+      alias _esdl__Rand = _esdl__Solver!L.Type;
+    }
+    else static if(is(L == U*, U) && is(U == struct)) {
+      alias _esdl__Rand = _esdl__Solver!U.Type;
+    }
+  }
+}
+
+template ElementTypeN(T, int N=0)
+{
+  import std.range;		// ElementType
+  static if(N==0) {
+    alias ElementTypeN = T;
+  }
+  else {
+    alias ElementTypeN = ElementTypeN!(ElementType!T, N-1);
+  }
+}
+
+template _esdl__ArrOrder(T) {
+  import std.traits;
+  import std.range;
+  static if(isArray!T) {
+    enum int _esdl__ArrOrder = 1 + _esdl__ArrOrder!(ElementType!T);
+  }
+  else {
+    enum int _esdl__ArrOrder = 0;
+  }
+}
+
+template _esdl__ArrOrder(T, int I, int N=0) {
+  enum int _esdl__ArrOrder = _esdl__ArrOrder!(typeof(T.tupleof[I])) - N;
+}
+
+
+abstract class RndVecBase(T, int I, int N=0)
+  if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, RndVecPrim
+{
+
+  alias L = typeof(T.tupleof[I]);
+  alias R = getRandAttr!(T, I);
+  alias E = ElementTypeN!(L, N);
+  alias RV = typeof(this);
+  // enum int ORDER = _esdl__ArrOrder!(T, I, N);
+
+  string _name;
+
+  RndVecPrim[] _preReqs;
+
+  ~this() {
+    _bddvec.reset();
+  }
+
+  override string name() {
+    return _name;
+  }
+
+  mixin EnumConstraints!E;
+
+  BddVec _bddvec;
+  uint _domIndex = uint.max;
+  CstStage _stage = null;
+
+  void _esdl__reset() {
+    stage = null;
+  }
+
+  bool isVecArr() {
+    return false;
+  }
+
+  BDD getPrimBdd(Buddy buddy) {
+    return buddy.one();
+  }
+
+  override public long evaluate() {
+    if(! this.isRand || stage().solved()) {
+      return value();
+    }
+    else {
+      import std.conv;
+      assert(false, "Rand variable " ~ _name ~
+	     " evaluation in wrong stage: " ~ stage()._id.to!string);
+    }
+  }
+
+  public bool isRand() {
+    return true;
+  }
+
+  public CstStage stage() {
+    return _stage;
+  }
+
+  public void stage(CstStage s) {
+    _stage = s;
+  }
+
+  public uint domIndex() {
+    return _domIndex;
+  }
+
+  public void domIndex(uint s) {
+    _domIndex = s;
+  }
+
+  public BddVec bddvec() {
+    return _bddvec;
+  }
+
+  public void bddvec(BddVec b) {
+    _bddvec = b;
+  }
+
+  uint bitcount() {
+    static if(isIntegral!E)        return E.sizeof * 8;
+    else static if(isBitVector!E)  return E.SIZE;
+    else static assert(false, "bitcount can not operate on: " ~ E.stringof);
+  }
+
+  bool signed() {
+    static if(isVarSigned!E) {
+      return true;
+    }
+    else  {
+      return false;
+    }
+  }
+
+  public S to(S)()
+    if(is(S == string)) {
+      import std.conv;
+      if(isRand) {
+	return "RAND-" ~ "#" ~ _name ~ ":" ~ value().to!string();
+      }
+      else {
+	return "VAL#" ~ _name ~ ":" ~ value().to!string();
+      }
+    }
+
+  override public string toString() {
+    return this.to!string();
+  }
+
+  void solveBefore(RndVecPrim other) {
+    other.addPreRequisite(this);
+  }
+
+  void addPreRequisite(RndVecPrim prim) {
+    _preReqs ~= prim;
+  }
+
+  void build() {}
+    
+}
+
+// T represents the type of the declared array/non-array member
+// N represents the level of the array-elements we have to traverse
+// for the elements this RndVec represents
+class RndVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
+  RndVecBase!(T, I, N)
+    {
+      import std.traits;
+      import std.range;
+      import esdl.data.bvec;
+
+      alias U = typeof(this.getVal());
+  
+      alias _esdl__SolverThis = _esdl__Solver!T.Type;
+      _esdl__SolverThis _solver;
+
+    
+      public this(string name, _esdl__SolverThis solver) {
+	_name = name;
+	_solver = solver;
+      }
+
+      override RndVecPrim[] preReqs() {
+	return _preReqs;
+      }
+
+      override RndVecIterVar[] idxVars() {
+	return [];
+      }
+
+      override public RndVecPrim[] getPrims() {
+	if(isRand) return [this];
+	else return [];
+      }
+
+      public RndVecPrim[] getPrimLens() {
+	assert(false);
+      }
+
+      override public RV unroll(RndVecIterVar l, uint n) {
+	// idxVars is always empty
+	return this;
+      }
+
+      public void doRandomization() {
+	if(stage is null) {
+	  _solver._esdl__getRandGen().gen(_solver._esdl__outer.tupleof[I]);
+	}
+      }
+
+      public _esdl__SolverThis getSolver() {
+	return _solver;
+      }
+
+      public auto getVal() {
+	return _solver._esdl__outer.tupleof[I];
+      }
+
+      public ulong value() {
+	return cast(long) (_solver._esdl__outer.tupleof[I]);
+      }
+
+      public void value(ulong v, int word = 0) {
+	static if(isIntegral!L) {
+	  if(word == 0) {
+	    _solver._esdl__outer.tupleof[I] = cast(L) v; // = cast(L) toBitVec(v      }
+	  }
+	  else {
+	    static if(size_t.sizeof == 4 && (is(L == long) || is(L == ulong))) {
+	      assert(word == 1);	// 32 bit machine with long integral
+	      L val = v;
+	      val = val << (8 * size_t.sizeof);
+	      _solver._esdl__outer.tupleof[I] += val;
+	    }
+	    else {
+	      assert(false, "word has to be 0 for integrals");
+	    }
+	  }
+	}
+	else {
+	  _solver._esdl__outer.tupleof[I]._setNthWord(v, word); // = cast(L) toBitVec(v);
+	}
+      }
+
+      override public BddVec getBDD(CstStage s, Buddy buddy) {
+	assert(stage(), "Stage not set for " ~ this.name());
+	if(this.isRand && s is stage()) {
+	  return _bddvec;
+	}
+	else if((! this.isRand) ||
+		this.isRand && stage().solved()) { // work with the value
+	  return buddy.buildVec(getVal());
+	}
+	else {
+	  assert(false, "Constraint evaluation in wrong stage");
+	}
+      }
+
+    }
+
+class RndVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
+  RndVecBase!(T, I, N)
+    {
+      import std.traits;
+      import std.range;
+      import esdl.data.bvec;
+
+      alias P = RndVecArr!(T, I, N-1);
+      P _parent;
+
+      alias U = typeof(this.getVal());
+
+      RndVecExpr _indexExpr = null;
+      int _index = 0;
+
+      public this(string name, P parent, RndVecExpr indexExpr) {
+	_name = name;
+	_parent = parent;
+	_indexExpr = indexExpr;
+      }
+
+      public this(string name, P parent, uint index) {
+	_name = name;
+	_parent = parent;
+	_index = index;
+      }
+
+      override RndVecPrim[] preReqs() {
+	if(_indexExpr) {
+	  return _preReqs ~ _parent.arrLen() ~
+	    _parent.preReqs() ~ _indexExpr.preReqs();
+	}
+	else {
+	  return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
+	}
+      }
+
+      override RndVecIterVar[] idxVars() {
+	if(_indexExpr) {
+	  return _parent.idxVars() ~ _indexExpr.idxVars();
+	}
+	else {
+	  return _parent.idxVars();
+	}
+      }
+
+      public RndVecPrim[] getPrimLens() {
+	assert(false);
+      }
+
+      // What is required here
+      // we could be dealing with an _index or an _indexExpr. Further
+      // the indexExpr could be either a solvable constraint expression
+      // or an array length iterator that iterates over the length of
+      // the given array. To add to the complexity here, we could have a
+      // case where the given element has a parent that too a
+      // non-elementary one (involving non-integer indexes). In such
+      // cases we need to list all the elements of the array that could
+      // finally represent the given element that we are currently
+      // dealing with.
+      override public RndVecPrim[] getPrims() {
+	RndVecPrim[] prims;
+	if(_indexExpr) {
+	  // FIXME -- if the expression has been solved
+	  // return _parent.getPrims(_indexExpr.evaluate()) ;
+	  prims = _indexExpr.getPrims();
+	  foreach(pp; _parent.getPrims(-1)) {
+	    prims ~= pp;
+	  }
+	}
+	else {
+	  foreach(pp; _parent.getPrims(_index)) {
+	    prims ~= pp;
+	  }
+	}
+	return prims;
+      }
+
+      override public RV unroll(RndVecIterVar l, uint n) {
+	bool idx = false;
+	foreach(var; idxVars()) {
+	  if(l is var) {
+	    idx = true;
+	    break;
+	  }
+	}
+	if(! idx) return this;
+	else {
+	  if(_indexExpr) {
+	    auto vec = _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
+	    // import std.stdio;
+	    // writeln(_indexExpr.name(), " has been unrolled as: ",
+	    // 	  _indexExpr.unroll(l,n).name());
+	    return vec;
+	    // return _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
+	  }
+	  else {
+	    return _parent.unroll(l,n)[_index];
+	  }
+	}
+      }
+
+      public void doRandomization() {
+	if(stage is null) {
+	  E val;
+	  getSolver()._esdl__getRandGen().gen(val);
+	  value(val);
+	}
+      }
+
+      public _esdl__Solver!T.Type getSolver() {
+	if(_parent is null) {
+	  assert(false, "No parent associated with RndVec");
+	}
+	return _parent.getSolver();
+      }
+
+      auto getVal() {
+	if(_indexExpr) {
+	  return _parent.getVal(cast(size_t) _indexExpr.evaluate());
+	}
+	else {
+	  return _parent.getVal(this._index);
+	}
+      }
+
+      ulong value() {
+	if(_indexExpr) {
+	  return _parent.getVal(_indexExpr.evaluate());
+	}
+	else {
+	  return _parent.getVal(this._index);
+	}
+      }
+
+      void value(ulong v, int word = 0) {
+	// import std.stdio;
+	// writeln("Setting value of ", this.name(), " to: ", v);
+	// writeln("Parent length value of ", this.name(),
+	// 	      " is: ", _parent.getLen());
+	if(_indexExpr) {
+	  _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
+	}
+	else {
+	  return _parent.setVal(v, word, _index);
+	}
+      }
+
+      override public BddVec getBDD(CstStage s, Buddy buddy) {
+	assert(stage(), "Stage not set for " ~ this.name());
+	if(this.isRand && s is stage()) {
+	  return _bddvec;
+	}
+	else if((! this.isRand) ||
+		this.isRand && stage().solved()) { // work with the value
+	  return buddy.buildVec(getVal());
+	}
+	else {
+	  assert(false, "Constraint evaluation in wrong stage");
+	}
+      }
+
+    }
+
+// Arrays (Multidimensional arrays as well)
+abstract class RndVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPrim
+{
+  alias M = typeof(T.tupleof[I]);
+  alias L = ElementTypeN!(M, N);
+  alias R = getRandAttr!(T, I);
+  alias E = ElementTypeN!(M, N+1);
+  enum int ORDER = _esdl__ArrOrder!(T, I, N);
+
+  static if(ORDER > 1) {
+    alias EV = RndVecArr!(T, I, N+1);
+  }
+  else {
+    alias EV = RndVec!(T, I, N+1);
+  }
+
+  EV[] _elems;
+
+  RndVecPrim[] _preReqs;
+
+  string _name;
+  override string name() {
+    return _name;
+  }
+
+  size_t maxArrLen() {
+    static if(isStaticArray!L) {
+      return L.length;
+    }
+    else {
+      return getRandAttr!(T, I, N);
+    }
+  }
+
+  void opIndexAssign(EV c, size_t idx) {
+    _elems[idx] = c;
+  }
+
+  public bool isVecArr() {
+    return true;
+  }
+
+  BDD getPrimBdd(Buddy buddy) {
+    return buddy.one();
+  }
+
+  // override public RndVec2VecExpr opIndex(RndVecExpr idx) {
+  //   return new RndVec2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
+  // }
+
+  public bool isRand() {
+    assert(false, "isRand not implemented for RndVecArrBase");
+  }
+
+  public ulong value() {
+    assert(false, "value not implemented for RndVecArrBase");
+  }
+
+  public void value(ulong v, int word = 0) {
+    assert(false, "value not implemented for RndVecArrBase");
+  }
+
+  public void stage(CstStage s) {
+    assert(false, "stage not implemented for RndVecArrBase");
+  }
+
+  public uint domIndex() {
+    assert(false, "domIndex not implemented for RndVecArrBase");
+  }
+
+  public void domIndex(uint s) {
+    assert(false, "domIndex not implemented for RndVecArrBase");
+  }
+
+  public uint bitcount() {
+    assert(false, "bitcount not implemented for RndVecArrBase");
+  }
+
+  public bool signed() {
+    assert(false, "signed not implemented for RndVecArrBase");
+  }
+
+  public BddVec bddvec() {
+    assert(false, "bddvec not implemented for RndVecArrBase");
+  }
+
+  public void bddvec(BddVec b) {
+    assert(false, "bddvec not implemented for RndVecArrBase");
+  }
+
+  void solveBefore(RndVecPrim other) {
+    other.addPreRequisite(this);
+  }
+
+  void addPreRequisite(RndVecPrim prim) {
+    _preReqs ~= prim;
+  }
+
+  public _esdl__Solver!T.Type getSolver() {
+    assert(false, "this function is overridden");
+  }
+}
+
+// Arrays (Multidimensional arrays as well)
+class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
+  RndVecArrBase!(T, I, N)
+    {
+      alias RV = typeof(this);
+      RndVecLen!RV _arrLen;
+
+      _esdl__Solver!T.Type _solver;
+
+      static if(isStaticArray!L) {
+	static assert(__traits(isSame, R, rand));
+	enum int maxLen = L.length;
+	public this(string name, _esdl__Solver!T.Type solver) {
+	  _name = name;
+	  _solver = solver;
+	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
+	}
+      }
+
+      static if(isDynamicArray!L) {
+	enum int maxLen = getRandAttr!(T, I, N);
+	public this(string name, _esdl__Solver!T.Type solver) {
+	  _name = name;
+	  _solver = solver;
+	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
+
+	}
+      }
+
+      public RndVecPrim[] preReqs() {
+	return _preReqs;		// N = 0 -- no _parent
+      }
+
+      RndVecIterVar[] idxVars() {
+	return [];
+      }
+
+      public EV[] getPrims(int idx) {
+	if(idx < 0) return _elems;
+	else return [_elems[idx]];
+      }
+
+      public RndVecPrim[] getPrims() {
+	RndVecPrim[] prims;
+	foreach(elem; _elems) {
+	  prims ~= elem;
+	}
+	return prims;
+      }
+
+      public RndVecPrim[] getPrimLens() {
+	RndVecPrim[] prims;
+	if(_arrLen.isRand) prims ~= _arrLen;
+	return prims;
+      }
+    
+      public RV unroll(RndVecIterVar l, uint n) {
+	return this;
+      }
+
+      override public _esdl__Solver!T.Type getSolver() {
+	return _solver;
+      }
+
+
+      static private auto getVal(A, N...)(ref A arr, N idx) if(isArray!A &&
+							       N.length > 0 &&
+							       isIntegral!(N[0])) {
+	static if(N.length == 1) return arr[idx[0]];
+	else {
+	  return getVal(arr[idx[0]], idx[1..$]);
+	}
+      }
+
+      public auto getVal(J...)(J idx) if(isIntegral!(J[0])) {
+	return getVal(_solver._esdl__outer.tupleof[I], idx);
+      }
+
+      static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
+	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	  static if(N.length == 1) {
+	    alias AE = ElementType!A;
+	    static if(isIntegral!AE) {
+	      if(word == 0) {
+		arr[idx[0]] = cast(AE) v;
+	      }
+	      else {
+		// static if(size_t.sizeof == 4) {
+		//   assert(word == 1);	// 32 bit machine with long integral
+		//   AE val = v;
+		//   val = val << (8 * size_t.sizeof);
+		//   arr[idx[0]] += val;
+		// }
+		// else {
+		assert(false, "word has to be 0 for integrals");
+	      }
+	    }
+	    else {
+	      arr[idx[0]]._setNthWord(v, word);
+	    }
+	  }
+	  else {
+	    setVal(arr[idx[0]], v, word, idx[1..$]);
+	  }
+	}
+
+      public void setVal(J...)(ulong v, int word, J idx) if(isIntegral!(J[0])) {
+	setVal(_solver._esdl__outer.tupleof[I], v, word, idx);
+      }
+
+      static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
+	static if(N.length == 0) return arr.length;
+	else {
+	  return getLen(arr[idx[0]], idx[1..$]);
+	}
+      }
+
+      static private void setLen(A, N...)(ref A arr, size_t v, N idx) if(isArray!A) {
+	static if(N.length == 0) {
+	  static if(isDynamicArray!A) {
+	    arr.length = v;
+	    // import std.stdio;
+	    // writeln(arr, " idx: ", N.length);
+	  }
+	  else {
+	    assert(false, "Can not set length of a fixed length array");
+	  }
+	}
+	else {
+	  // import std.stdio;
+	  // writeln(arr, " idx: ", N.length);
+	  setLen(arr[idx[0]], v, idx[1..$]);
+	}
+      }
+
+      public size_t getLen(N...)(N idx) {
+	return getLen(_solver._esdl__outer.tupleof[I], idx);
+      }
+
+      public void setLen(N...)(size_t v, N idx) {
+	setLen(_solver._esdl__outer.tupleof[I], v, idx);
+      }
+
+      public EV opIndex(RndVecExpr idx) {
+	if(idx.isConst()) {
+	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
+		 " have not been built");
+	  // if(idx.evaluate() >= _elems.length || idx.evaluate() < 0 || _elems is null) {
+	  // 	import std.stdio;
+	  // 	writeln(this.name(), ":", idx.evaluate());
+	  // }
+	  // import std.stdio;
+	  // writeln(idx.evaluate());
+	  return _elems[cast(size_t) idx.evaluate()];
+	}
+	else {
+	  static if(isStaticArray!E) {
+	    // static array
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  }
+	  else static if(isDynamicArray!E) {
+	    // dynamic array
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  }
+	  else {
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  }
+	}
+      }
+
+      public EV opIndex(size_t idx) {
+	build();
+	assert(_elems[idx]._indexExpr is null);
+	return _elems[idx];
+      }
+
+      public void doRandomization() {
+	if(_elems.length == 0) this.build();
+	assert(arrLen !is null);
+	for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	  this[i].doRandomization();
+	}
+      }
+
+      auto elements() {
+	this.build();
+	auto idx = arrLen.makeIdxVar();
+	return this[idx];
+      }
+
+      bool built() {
+	return (_elems.length == maxArrLen() &&
+		_elems[0] !is null);
+      }
+    
+      void build() {
+	if(built()) return;
+	_elems.length = maxArrLen();
+	// static if(isIntegral!E || isBitVector!E) {
+	// if(! built()) {
+	for (uint i=0; i!=maxArrLen; ++i) {
+	  if(_elems[i] is null) {
+	    import std.conv: to;
+	    _elems[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]", this, i);
+	    if(_elems[i].isVecArr()) {
+	      _elems[i].build();
+	    }
+	  }
+	}
+	// }
+	// }
+	// else static if(isDynamicArray!E) {
+	// 	// if(! built()) {
+	// 	for (size_t i=0; i!=maxArrLen; ++i) {
+	// 	  if(this[i] is null) {
+	// 	    import std.conv: to;
+	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
+	// 			     this, new ConstVec!size_t(i));
+	// 	  }
+	// 	}
+	// 	// }
+	//   }
+	// else static if(isStaticArray!E) {
+	// 	// if(! built()) {
+	// 	for (size_t i=0; i!=maxArrLen; ++i) {
+	// 	  if(this[i] is null) {
+	// 	    import std.conv: to;
+	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
+	// 			     this, new ConstVec!size_t(i));
+	// 	  }
+	// 	}
+	// 	// }
+	//   }
+      }
+	
+      auto iterator() {
+	this.build();
+	auto idx = arrLen.makeIdxVar();
+	return idx;
+      }
+
+      public RndVecLen!RV length() {
+	return _arrLen;
+      }
+
+      public RndVecLen!RV arrLen() {
+	return _arrLen;
+      }
+
+      public void _esdl__reset() {
+	_arrLen.stage = null;
+	foreach(elem; _elems) {
+	  if(elem !is null) {
+	    elem._esdl__reset();
+	  }
+	}
+      }
+
+      public CstStage stage() {
+	return arrLen().stage();
+      }
+
+    }
+
+class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
+  RndVecArrBase!(T, I, N)
+    {
+      import std.traits;
+      import std.range;
+      import esdl.data.bvec;
+      alias P = RndVecArr!(T, I, N-1);
+      P _parent;
+      RndVecExpr _indexExpr = null;
+      int _index = 0;
+
+      alias RV = typeof(this);
+      RndVecLen!RV _arrLen;
+      public this(string name, P parent, RndVecExpr indexExpr) {
+	_name = name;
+	_parent = parent;
+	_indexExpr = indexExpr;
+	_arrLen = new RndVecLen!RV(name ~ ".len", this);
+      }
+
+      public this(string name, P parent, uint index) {
+	_name = name;
+	_parent = parent;
+	_index = index;
+	_arrLen = new RndVecLen!RV(name ~ ".len", this);
+      }
+
+      public RndVecPrim[] preReqs() {
+	if(_indexExpr) {
+	  return  _preReqs ~ _parent.arrLen() ~
+	    _indexExpr.preReqs() ~ _parent.preReqs();
+	}
+	else {
+	  return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
+	}
+      }
+
+      RndVecIterVar[] idxVars() {
+	if(_indexExpr) {
+	  return _parent.idxVars() ~ _indexExpr.idxVars();
+	}
+	else {
+	  return _parent.idxVars();
+	}
+      }
+
+      public EV[] getPrims(int idx) {
+	EV[] prims;
+	if(_indexExpr) {
+	  foreach(pp; _parent.getPrims(-1)) {
+	    if(idx < 0) prims ~= pp._elems;
+	    else prims ~= pp._elems[idx];
+	  }
+	}
+	else {
+	  foreach(pp; _parent.getPrims(_index)) {
+	    if(idx < 0) prims ~= pp._elems;
+	    else prims ~= pp._elems[idx];
+	  }
+	}
+	return prims;
+      }
+    
+      // This is slightly tricky in case we are pointing directly to
+      // just one element of the array, this function should return just
+      // that element. But it could be that the index or an upper
+      // hierarchy index is not a constant, but an iterator or a
+      // randomized epression. In that case, we shall have to return
+      // more primary elements
+      public RndVecPrim[] getPrims() {
+	RndVecPrim[] prims;
+	if(_indexExpr) {
+	  prims = _indexExpr.getPrims();
+	  foreach(pp; _parent.getPrims(-1)) {
+	    prims ~= pp;
+	  }
+	}
+	else {
+	  foreach(pp; _parent.getPrims(_index)) {
+	    prims ~= pp;
+	  }
+	}
+	return prims;
+      }
+
+      public RndVecPrim[] getPrimLens() {
+	// if(_index.idxVars.length is 0)
+	if(_indexExpr is null) {
+	  return [_parent[_index].arrLen()];
+	}
+	if(_indexExpr.isConst()) {
+	  RndVecPrim[] prims;
+	  prims ~= _parent[cast(size_t) _indexExpr.evaluate()].getPrimLens();
+	  return prims;
+	}
+	else {
+	  RndVecPrim[] prims;
+	  foreach(p; getPrims()) {
+	    // import std.stdio;
+	    // writeln(_parent.name(), " ", p.name());
+	    prims ~= p.getPrimLens();
+	  }
+	  return prims;
+	}
+      }
+
+      public RV unroll(RndVecIterVar l, uint n) {
+	bool idx = false;
+	foreach(var; idxVars()) {
+	  if(l is var) {
+	    idx = true;
+	    break;
+	  }
+	}
+	if(! idx) return this;
+	else {
+	  // return new RV(name ~ "unrolled_" ~ n.to!string,
+	  // 	      _parent.unroll(), _index.unroll());
+	  if(_indexExpr) {
+	    return _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
+	  }
+	  else {
+	    return _parent.unroll(l,n)[_index];
+	  }
+	}
+      }
+
+      override public _esdl__Solver!T.Type getSolver() {
+	if(_parent is null) {
+	  assert(false, "No parent associated with RndVec");
+	}
+	return _parent.getSolver();
+      }
+
+      static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
+	static if(N.length == 0) return arr.length;
+	else {
+	  return getLen(arr[idx[0]], idx[1..$]);
+	}
+      }
+
+      static private void setLen(A, N...)(ref A arr, size_t v, N idx) if(isArray!A) {
+	static if(N.length == 0) {
+	  static if(isDynamicArray!A) {
+	    arr.length = v;
+	    // import std.stdio;
+	    // writeln(arr, " idx: ", N.length);
+	  }
+	  else {
+	    assert(false, "Can not set length of a fixed length array");
+	  }
+	}
+	else {
+	  // import std.stdio;
+	  // writeln(arr, " idx: ", N.length);
+	  setLen(arr[idx[0]], v, idx[1..$]);
+	}
+      }
+
+      public size_t getLen(N...)(N idx) {
+	return _parent.getLen(_index, idx);
+      }
+
+      public void setLen(N...)(size_t v, N idx) {
+	_parent.setLen(v, _index, idx);
+      }
+
+      static private auto getVal(A, N...)(ref A arr, N idx) if(isArray!A &&
+							       N.length > 0 &&
+							       isIntegral!(N[0])) {
+	static if(N.length == 1) return arr[idx[0]];
+	else {
+	  return getVal(arr[idx[0]], idx[1..$]);
+	}
+      }
+
+      public auto getVal(N...)(N idx) if(isIntegral!(N[0])) {
+	if(_indexExpr) {
+	  assert(_indexExpr.isConst());
+	  return _parent.getVal(cast(size_t) _indexExpr.evaluate(), idx);
+	}
+	else {
+	  return _parent.getVal(this._index, idx);
+	}
+      }
+
+      static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
+	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	  static if(N.length == 1) {
+	    alias AE = ElementType!A;
+	    static if(isIntegral!AE) {
+	      if(word == 0) {
+		arr[idx[0]] = cast(AE) v;
+	      }
+	      else {
+		// static if(size_t.sizeof == 4) {
+		//   assert(word == 1);	// 32 bit machine with long integral
+		//   AE val = v;
+		//   val = val << (8 * size_t.sizeof);
+		//   arr[idx[0]] += val;
+		// }
+		// else {
+		assert(false, "word has to be 0 for integrals");
+	      }
+	    }
+	    else {
+	      arr[idx[0]]._setNthWord(v, word);
+	    }
+	  }
+	  else {
+	    setVal(arr[idx[0]], v, word, idx[1..$]);
+	  }
+	}
+
+      public void setVal(N...)(ulong v, int word, N idx) if(isIntegral!(N[0])) {
+	if(_indexExpr) {
+	  assert(_indexExpr.isConst());
+	  _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
+	}
+	else {
+	  _parent.setVal(v, word, _index, idx);
+	}
+      }
+
+      public EV opIndex(RndVecExpr idx) {
+	if(idx.isConst()) {
+	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
+		 " have not been built");
+	  // if(idx.evaluate() >= _elems.length || idx.evaluate() < 0 || _elems is null) {
+	  // 	import std.stdio;
+	  // 	writeln(this.name(), ":", idx.evaluate());
+	  // }
+	  // import std.stdio;
+	  // writeln(idx.evaluate());
+	  return _elems[cast(size_t) idx.evaluate()];
+	}
+	else {
+	  static if(isStaticArray!E) {
+	    // static array
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  }
+	  else static if(isDynamicArray!E) {
+	    // dynamic array
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  }
+	  else {
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  }
+	}
+      }
+
+      public EV opIndex(size_t idx) {
+	build();
+	assert(_elems[idx]._indexExpr is null);
+	return _elems[idx];
+      }
+
+      public void doRandomization() {
+	if(_elems.length == 0) this.build();
+	assert(arrLen !is null);
+	for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	  this[i].doRandomization();
+	}
+      }
+
+      auto elements() {
+	this.build();
+	auto idx = arrLen.makeIdxVar();
+	return this[idx];
+      }
+
+      bool built() {
+	return (_elems.length == maxArrLen() &&
+		_elems[0] !is null);
+      }
+    
+      void build() {
+	if(built()) return;
+	_elems.length = maxArrLen();
+	// static if(isIntegral!E || isBitVector!E) {
+	// if(! built()) {
+	for (uint i=0; i!=maxArrLen; ++i) {
+	  if(_elems[i] is null) {
+	    import std.conv: to;
+	    _elems[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]", this, i);
+	    if(_elems[i].isVecArr()) {
+	      _elems[i].build();
+	    }
+	  }
+	}
+	// }
+	// }
+	// else static if(isDynamicArray!E) {
+	// 	// if(! built()) {
+	// 	for (size_t i=0; i!=maxArrLen; ++i) {
+	// 	  if(this[i] is null) {
+	// 	    import std.conv: to;
+	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
+	// 			     this, new ConstVec!size_t(i));
+	// 	  }
+	// 	}
+	// 	// }
+	//   }
+	// else static if(isStaticArray!E) {
+	// 	// if(! built()) {
+	// 	for (size_t i=0; i!=maxArrLen; ++i) {
+	// 	  if(this[i] is null) {
+	// 	    import std.conv: to;
+	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
+	// 			     this, new ConstVec!size_t(i));
+	// 	  }
+	// 	}
+	// 	// }
+	//   }
+      }
+	
+      auto iterator() {
+	this.build();
+	auto idx = arrLen.makeIdxVar();
+	return idx;
+      }
+
+      public RndVecLen!RV length() {
+	return _arrLen;
+      }
+
+      public RndVecLen!RV arrLen() {
+	return _arrLen;
+      }
+
+      public void _esdl__reset() {
+	_arrLen.stage = null;
+	foreach(elem; _elems) {
+	  if(elem !is null) {
+	    elem._esdl__reset();
+	  }
+	}
+      }
+
+      public CstStage stage() {
+	return arrLen().stage();
+      }
+
+    }
+
+class RndVecIter(RV): RndVecIterVar, RndVecPrim
+{
+  RV _arrVar;
+
+  RV arrVar() {
+    return _arrVar;
+  }
+
+  this(RV arrVar) {
+    super("idxVar");
+    _arrVar = arrVar;
+    _arrVar._arrLen.idxVar(this);
+  }
+
+  override RndVecIterVar[] idxVars() {
+    return _arrVar.idxVars() ~ this;
+  }
+
+  public auto getSolver() {
+    if(_arrVar is null) {
+      assert(false, "No arrVar associated RndVecIterVar");
+    }
+    return _arrVar.getSolver();
+  }
+
+  override uint maxVal() {
+    if(! this.isUnrollable()) {
+      assert(false, "Can not find maxVal since the "
+	     "Idx Variable is unrollable");
+    }
+    // import std.stdio;
+    // writeln("maxVal for arrVar: ", _arrVar.name(), " is ",
+    // 	    _arrVar.arrLen.value);
+    return cast(uint) _arrVar.arrLen.value;
+  }
+
+  override bool isUnrollable() {
+    if(! _arrVar.arrLen.isRand()) return true;
+    if(_arrVar.arrLen.stage !is null &&
+       _arrVar.arrLen.stage.solved()) return true;
+    else return false;
+  }
+
+  // get all the primary bdd vectors that constitute a given bdd expression
+  override public RndVecPrim[] getPrims() {
+    return []; // _arrVar.arrLen.getPrims();
+  }
+
+  public RndVecPrim[] getPrimLens() {
+    return [_arrVar.arrLen];
+  }
+
+  public bool isRand() {
+    return _arrVar.arrLen.isRand();
+  }
+  public ulong value() {
+    return _arrVar.arrLen.value();
+  }
+  public void value(ulong v, int word = 0) {
+    // import std.stdio;
+    // writeln("Setting value for arrlen for ", _arrVar.name, " to ", v);
+    assert(word == 0);
+    _arrVar.arrLen.value(v);
+  }
+  void doRandomization() {
+    assert(false);
+  }
+  public CstStage stage() {
+    return _arrVar.arrLen.stage();
+  }
+  public void stage(CstStage s) {
+    _arrVar.arrLen.stage(s);
+  }
+  public uint domIndex() {
+    return _arrVar.arrLen.domIndex;
+  }
+  public void domIndex(uint s) {
+    _arrVar.arrLen.domIndex(s);
+  }
+  public uint bitcount() {
+    return _arrVar.arrLen.bitcount();
+  }
+  public bool signed() {
+    // return _arrVar.arrLen.signed();
+    return false;
+  }
+  public BddVec bddvec() {
+    return _arrVar.arrLen.bddvec();
+  }
+  public void bddvec(BddVec b) {
+    _arrVar.bddvec(b);
+  }
+  override public string name() {
+    string n = _arrVar.arrLen.name();
+    return n[0..$-3] ~ "iter";
+  }
+  override public RndVecExpr unroll(RndVecIterVar l, uint n) {
+    // import std.stdio;
+    // writeln("unrolling: ", arrVar.name());
+    if(this !is l) {
+      return _arrVar.unroll(l,n).arrLen().makeIdxVar();
+    }
+    else {
+      return new ConstVec!size_t(n);
+    }
+  }
+
+  void _esdl__reset() {
+    stage = null;
+  }
+
+  bool isVecArr() {
+    return false;
+  }
+
+  BDD getPrimBdd(Buddy buddy) {
+    return buddy.one();
+  }
+
+  void solveBefore(RndVecPrim other) {
+    assert(false);
+  }
+
+  void addPreRequisite(RndVecPrim other) {
+    assert(false);
+  }
+
+}
+				    
+// This class represents an unrolled Foreach idx at vec level
+abstract class RndVecIterVar: RndVecExpr
+{
+  string _name;
+
+  override string name() {
+    return name;
+  }
+
+  this(string name) {
+    _name = name;
+  }
+
+  // _idxVar will point to the array this RndVecIterVar is tied to
+
+  uint maxVal();
+
+  // this will not return the arrVar since the length variable is
+  // not getting constrained here
+  override RndVecPrim[] preReqs() {
+    return [];
+  }
+
+  bool isUnrollable();
+
+  // get all the primary bdd vectors that constitute a given bdd expression
+  override public RndVecPrim[] getPrims();
+
+  // get the list of stages this expression should be avaluated in
+  // override public CstStage[] getStages() {
+  //   return arrVar.arrLen.getStages();
+  // }
+
+  override public BddVec getBDD(CstStage stage, Buddy buddy) {
+    assert(false, "Can not getBDD for a Idx Variable without unrolling");
+  }
+
+  override public long evaluate() {
+    assert(false, "Can not evaluate a Idx Variable without unrolling");
+  }
+
+}
 
 class RndVecLen(RV): RndVecExpr, RndVecPrim
 {
@@ -2022,73 +3594,10 @@ class RndVecLen(RV): RndVecExpr, RndVecPrim
   }
 }
 
-mixin template EnumConstraints(T) {
-  static if(is(T == enum)) {
-    BDD _primBdd;
-    override public BDD getPrimBdd(Buddy buddy) {
-      // return this.bddvec.lte(buddy.buildVec(_maxValue));
-      import std.traits;
-      if(_primBdd.isZero()) {
-	_primBdd = buddy.zero();
-	foreach(e; EnumMembers!T) {
-	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
-	}
-      }
-      return _primBdd;
-    }
-  }
-}
 
-template _esdl__Rand(T, int I)
+abstract class VarVecBase(T, int I, int N=0)
+  if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, RndVecPrim
 {
-  import std.traits;
-  alias L = typeof(T.tupleof[I]);
-  static if(isArray!L) {
-    alias _esdl__Rand = RndVecArr!(T, I);
-  }
-  else static if(isBitVector!L || isIntegral!L) {
-    alias _esdl__Rand = RndVec!(T, I);
-  }
-  else static if(is(L == class) || is(L == struct)) {
-    alias _esdl__Rand = _esdl__Solver!L;
-  }
-  else static if(is(L == U*, U) && is(U == struct)) {
-    alias _esdl__Rand = _esdl__Solver!U;
-  }
-}
-
-template ElementTypeN(T, int N=0)
-{
-  import std.range;		// ElementType
-  static if(N==0) {
-    alias ElementTypeN = T;
-  }
-  else {
-    alias ElementTypeN = ElementTypeN!(ElementType!T, N-1);
-  }
-}
-
-template _esdl__ArrOrder(T) {
-  import std.traits;
-  import std.range;
-  static if(isArray!T) {
-    enum int _esdl__ArrOrder = 1 + _esdl__ArrOrder!(ElementType!T);
-  }
-  else {
-    enum int _esdl__ArrOrder = 0;
-  }
-}
-
-template _esdl__ArrOrder(T, int I, int N=0) {
-  enum int _esdl__ArrOrder = _esdl__ArrOrder!(typeof(T.tupleof[I])) - N;
-}
-
-
-abstract class RndVecBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0): RndVecExpr, RndVecPrim
-{
-  import std.traits;
-  import std.range;
-  import esdl.data.bvec;
 
   alias L = typeof(T.tupleof[I]);
   alias R = getRandAttr!(T, I);
@@ -2210,8 +3719,8 @@ abstract class RndVecBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) == 0):
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the elements this RndVec represents
-class RndVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
-  RndVecBase!(T, I, N)
+class VarVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
+  VarVecBase!(T, I, N)
     {
       import std.traits;
       import std.range;
@@ -2219,7 +3728,7 @@ class RndVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
 
       alias U = typeof(this.getVal());
   
-      alias _esdl__SolverThis = _esdl__Solver!T._esdl__Solver;
+      alias _esdl__SolverThis = _esdl__Solver!T.Type;
       _esdl__SolverThis _solver;
 
     
@@ -2232,7 +3741,7 @@ class RndVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
 	return _preReqs;
       }
 
-      override RndVecIterVar[] idxVars() {
+      override VarVecIterVar[] idxVars() {
 	return [];
       }
 
@@ -2245,7 +3754,7 @@ class RndVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
 	assert(false);
       }
 
-      override public RV unroll(RndVecIterVar l, uint n) {
+      override public RV unroll(VarVecIterVar l, uint n) {
 	// idxVars is always empty
 	return this;
       }
@@ -2306,14 +3815,14 @@ class RndVec(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) == 0):
 
     }
 
-class RndVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
-  RndVecBase!(T, I, N)
+class VarVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
+  VarVecBase!(T, I, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = RndVecArr!(T, I, N-1);
+      alias P = VarVecArr!(T, I, N-1);
       P _parent;
 
       alias U = typeof(this.getVal());
@@ -2343,7 +3852,7 @@ class RndVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
 	}
       }
 
-      override RndVecIterVar[] idxVars() {
+      override VarVecIterVar[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -2384,7 +3893,7 @@ class RndVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
 	return prims;
       }
 
-      override public RV unroll(RndVecIterVar l, uint n) {
+      override public RV unroll(VarVecIterVar l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -2416,9 +3925,9 @@ class RndVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
 	}
       }
 
-      public _esdl__Solver!(T)._esdl__Solver getSolver() {
+      public _esdl__Solver!T.Type getSolver() {
 	if(_parent is null) {
-	  assert(false, "No parent associated with RndVec");
+	  assert(false, "No parent associated with VarVec");
 	}
 	return _parent.getSolver();
       }
@@ -2471,7 +3980,7 @@ class RndVec(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) == 0):
     }
 
 // Arrays (Multidimensional arrays as well)
-abstract class RndVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPrim
+abstract class VarVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 0): RndVecPrim
 {
   alias M = typeof(T.tupleof[I]);
   alias L = ElementTypeN!(M, N);
@@ -2480,10 +3989,10 @@ abstract class RndVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 
   enum int ORDER = _esdl__ArrOrder!(T, I, N);
 
   static if(ORDER > 1) {
-    alias EV = RndVecArr!(T, I, N+1);
+    alias EV = VarVecArr!(T, I, N+1);
   }
   else {
-    alias EV = RndVec!(T, I, N+1);
+    alias EV = VarVec!(T, I, N+1);
   }
 
   EV[] _elems;
@@ -2521,43 +4030,43 @@ abstract class RndVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 
   // }
 
   public bool isRand() {
-    assert(false, "isRand not implemented for RndVecArrBase");
+    assert(false, "isRand not implemented for VarVecArrBase");
   }
 
   public ulong value() {
-    assert(false, "value not implemented for RndVecArrBase");
+    assert(false, "value not implemented for VarVecArrBase");
   }
 
   public void value(ulong v, int word = 0) {
-    assert(false, "value not implemented for RndVecArrBase");
+    assert(false, "value not implemented for VarVecArrBase");
   }
 
   public void stage(CstStage s) {
-    assert(false, "stage not implemented for RndVecArrBase");
+    assert(false, "stage not implemented for VarVecArrBase");
   }
 
   public uint domIndex() {
-    assert(false, "domIndex not implemented for RndVecArrBase");
+    assert(false, "domIndex not implemented for VarVecArrBase");
   }
 
   public void domIndex(uint s) {
-    assert(false, "domIndex not implemented for RndVecArrBase");
+    assert(false, "domIndex not implemented for VarVecArrBase");
   }
 
   public uint bitcount() {
-    assert(false, "bitcount not implemented for RndVecArrBase");
+    assert(false, "bitcount not implemented for VarVecArrBase");
   }
 
   public bool signed() {
-    assert(false, "signed not implemented for RndVecArrBase");
+    assert(false, "signed not implemented for VarVecArrBase");
   }
 
   public BddVec bddvec() {
-    assert(false, "bddvec not implemented for RndVecArrBase");
+    assert(false, "bddvec not implemented for VarVecArrBase");
   }
 
   public void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for RndVecArrBase");
+    assert(false, "bddvec not implemented for VarVecArrBase");
   }
 
   void solveBefore(RndVecPrim other) {
@@ -2568,36 +4077,36 @@ abstract class RndVecArrBase(T, int I, int N=0) if(_esdl__ArrOrder!(T, I, N) != 
     _preReqs ~= prim;
   }
 
-  public _esdl__Solver!(T)._esdl__Solver getSolver() {
+  public _esdl__Solver!T.Type getSolver() {
     assert(false, "this function is overridden");
   }
 }
 
 // Arrays (Multidimensional arrays as well)
-class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
-  RndVecArrBase!(T, I, N)
+class VarVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
+  VarVecArrBase!(T, I, N)
     {
       alias RV = typeof(this);
-      RndVecLen!RV _arrLen;
+      VarVecLen!RV _arrLen;
 
-      _esdl__Solver!(T)._esdl__Solver _solver;
+      _esdl__Solver!T.Type _solver;
 
       static if(isStaticArray!L) {
 	static assert(__traits(isSame, R, rand));
 	enum int maxLen = L.length;
-	public this(string name, _esdl__Solver!(T)._esdl__Solver solver) {
+	public this(string name, _esdl__Solver!T.Type solver) {
 	  _name = name;
 	  _solver = solver;
-	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
+	  _arrLen = new VarVecLen!RV(name ~ ".len", this);
 	}
       }
 
       static if(isDynamicArray!L) {
 	enum int maxLen = getRandAttr!(T, I, N);
-	public this(string name, _esdl__Solver!(T)._esdl__Solver solver) {
+	public this(string name, _esdl__Solver!T.Type solver) {
 	  _name = name;
 	  _solver = solver;
-	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
+	  _arrLen = new VarVecLen!RV(name ~ ".len", this);
 
 	}
       }
@@ -2606,7 +4115,7 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	return _preReqs;		// N = 0 -- no _parent
       }
 
-      RndVecIterVar[] idxVars() {
+      VarVecIterVar[] idxVars() {
 	return [];
       }
 
@@ -2629,11 +4138,11 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	return prims;
       }
     
-      public RV unroll(RndVecIterVar l, uint n) {
+      public RV unroll(VarVecIterVar l, uint n) {
 	return this;
       }
 
-      override public _esdl__Solver!(T)._esdl__Solver getSolver() {
+      override public _esdl__Solver!T.Type getSolver() {
 	return _solver;
       }
 
@@ -2790,7 +4299,7 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	// 	  if(this[i] is null) {
 	// 	    import std.conv: to;
 	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new RndVecConst!size_t(i));
+	// 			     this, new ConstVec!size_t(i));
 	// 	  }
 	// 	}
 	// 	// }
@@ -2801,7 +4310,7 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	// 	  if(this[i] is null) {
 	// 	    import std.conv: to;
 	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new RndVecConst!size_t(i));
+	// 			     this, new ConstVec!size_t(i));
 	// 	  }
 	// 	}
 	// 	// }
@@ -2814,11 +4323,11 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	return idx;
       }
 
-      public RndVecLen!RV length() {
+      public VarVecLen!RV length() {
 	return _arrLen;
       }
 
-      public RndVecLen!RV arrLen() {
+      public VarVecLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -2837,31 +4346,31 @@ class RndVecArr(T, int I, int N=0) if(N == 0 && _esdl__ArrOrder!(T, I, N) != 0):
 
     }
 
-class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
-  RndVecArrBase!(T, I, N)
+class VarVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
+  VarVecArrBase!(T, I, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = RndVecArr!(T, I, N-1);
+      alias P = VarVecArr!(T, I, N-1);
       P _parent;
       RndVecExpr _indexExpr = null;
       int _index = 0;
 
       alias RV = typeof(this);
-      RndVecLen!RV _arrLen;
+      VarVecLen!RV _arrLen;
       public this(string name, P parent, RndVecExpr indexExpr) {
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new RndVecLen!RV(name ~ ".len", this);
+	_arrLen = new VarVecLen!RV(name ~ ".len", this);
       }
 
       public this(string name, P parent, uint index) {
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new RndVecLen!RV(name ~ ".len", this);
+	_arrLen = new VarVecLen!RV(name ~ ".len", this);
       }
 
       public RndVecPrim[] preReqs() {
@@ -2874,7 +4383,7 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	}
       }
 
-      RndVecIterVar[] idxVars() {
+      VarVecIterVar[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -2943,7 +4452,7 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	}
       }
 
-      public RV unroll(RndVecIterVar l, uint n) {
+      public RV unroll(VarVecIterVar l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -2964,9 +4473,9 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	}
       }
 
-      override public _esdl__Solver!(T)._esdl__Solver getSolver() {
+      override public _esdl__Solver!T.Type getSolver() {
 	if(_parent is null) {
-	  assert(false, "No parent associated with RndVec");
+	  assert(false, "No parent associated with VarVec");
 	}
 	return _parent.getSolver();
       }
@@ -3135,7 +4644,7 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	// 	  if(this[i] is null) {
 	// 	    import std.conv: to;
 	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new RndVecConst!size_t(i));
+	// 			     this, new ConstVec!size_t(i));
 	// 	  }
 	// 	}
 	// 	// }
@@ -3146,7 +4655,7 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	// 	  if(this[i] is null) {
 	// 	    import std.conv: to;
 	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new RndVecConst!size_t(i));
+	// 			     this, new ConstVec!size_t(i));
 	// 	  }
 	// 	}
 	// 	// }
@@ -3159,11 +4668,11 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 	return idx;
       }
 
-      public RndVecLen!RV length() {
+      public VarVecLen!RV length() {
 	return _arrLen;
       }
 
-      public RndVecLen!RV arrLen() {
+      public VarVecLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -3182,7 +4691,7 @@ class RndVecArr(T, int I, int N=0) if(N != 0 && _esdl__ArrOrder!(T, I, N) != 0):
 
     }
 
-class RndVecIter(RV): RndVecIterVar, RndVecPrim
+class VarVecIter(RV): VarVecIterVar, RndVecPrim
 {
   RV _arrVar;
 
@@ -3196,13 +4705,13 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
     _arrVar._arrLen.idxVar(this);
   }
 
-  override RndVecIterVar[] idxVars() {
+  override VarVecIterVar[] idxVars() {
     return _arrVar.idxVars() ~ this;
   }
 
   public auto getSolver() {
     if(_arrVar is null) {
-      assert(false, "No arrVar associated RndVecIterVar");
+      assert(false, "No arrVar associated VarVecIterVar");
     }
     return _arrVar.getSolver();
   }
@@ -3278,14 +4787,14 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override public RndVecExpr unroll(RndVecIterVar l, uint n) {
+  override public RndVecExpr unroll(VarVecIterVar l, uint n) {
     // import std.stdio;
     // writeln("unrolling: ", arrVar.name());
     if(this !is l) {
       return _arrVar.unroll(l,n).arrLen().makeIdxVar();
     }
     else {
-      return new RndVecConst!size_t(n);
+      return new ConstVec!size_t(n);
     }
   }
 
@@ -3312,7 +4821,7 @@ class RndVecIter(RV): RndVecIterVar, RndVecPrim
 }
 				    
 // This class represents an unrolled Foreach idx at vec level
-abstract class RndVecIterVar: RndVecExpr
+abstract class VarVecIterVar: RndVecExpr
 {
   string _name;
 
@@ -3324,7 +4833,7 @@ abstract class RndVecIterVar: RndVecExpr
     _name = name;
   }
 
-  // _idxVar will point to the array this RndVecIterVar is tied to
+  // _idxVar will point to the array this VarVecIterVar is tied to
 
   uint maxVal();
 
@@ -3354,7 +4863,211 @@ abstract class RndVecIterVar: RndVecExpr
 
 }
 
-class RndVecConst(T = int): RndVecValue!T
+class VarVecLen(RV): RndVecExpr, RndVecPrim
+{
+
+  // This bdd has the constraint on the max length of the array
+  BDD _primBdd;
+  
+  VarVecIter!RV _idxVar;
+
+  RV _parent;
+
+  BddVec _bddvec;
+  uint _domIndex = uint.max;
+  CstStage _stage = null;
+
+  string _name;
+
+  RndVecPrim[] _preReqs;
+
+  override string name() {
+    return _name;
+  }
+
+  public this(string name, RV parent) {
+    _name = name;
+    _parent = parent;
+  }
+
+  ~this() {
+    _bddvec.reset();
+  }
+
+  override public RndVecPrim[] preReqs() {
+    return _preReqs ~ _parent.preReqs();
+  }
+
+  override VarVecIterVar[] idxVars() {
+    return _parent.idxVars();
+  }
+
+  public auto getSolver() {
+    if(_parent is null) {
+      assert(false, "No parent associated with VarVecLen");
+    }
+    return _parent.getSolver();
+  }
+
+  override public RndVecPrim[] getPrims() {
+    return _parent.getPrimLens();
+  }
+
+  public RndVecPrim[] getPrimLens() {
+    assert(false);
+  }
+  
+  // override public CstStage[] getStages() {
+  //   CstStage[] stages;
+  //   if(isRand) stages = [this.stage()];
+  //   return stages;
+  // }
+
+  override public BddVec getBDD(CstStage s, Buddy buddy) {
+    assert(stage() !is null, "stage null for: " ~ name());
+    if(this.isRand && stage() is s) {
+      return _bddvec;
+    }
+    else if((! this.isRand) ||
+	    this.isRand && stage().solved()) { // work with the value
+      return buddy.buildVec(value());
+    }
+    else {
+      assert(false, "Constraint evaluation in wrong stage");
+    }
+  }
+
+  override public long evaluate() {
+    if(! this.isRand || stage().solved()) {
+      return value();
+    }
+    else {
+      import std.conv;
+      assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
+	     stage()._id.to!string);
+    }
+  }
+
+  void doRandomization() {
+    assert(false);
+  }
+  
+  public bool isRand() {
+    import std.traits;
+    if(isStaticArray!(RV.L)) return false;
+    else return true;
+  }
+
+  public CstStage stage() {
+    return _stage;
+  }
+
+  public void stage(CstStage s) {
+    _stage = s;
+  }
+
+  public uint domIndex() {
+    return _domIndex;
+  }
+
+  public void domIndex(uint s) {
+    _domIndex = s;
+  }
+
+  public BddVec bddvec() {
+    return _bddvec;
+  }
+
+  public void bddvec(BddVec b) {
+    _bddvec = b;
+  }
+
+  public T to(T)()
+    if(is(T == string)) {
+      import std.conv;
+      if(isRand) {
+	return "RAND-" ~ "#" ~ _name ~ ":" ~ value().to!string();
+      }
+      else {
+	return "VAL#" ~ _name ~ ":" ~ value().to!string();
+      }
+    }
+
+  override public string toString() {
+    return this.to!string();
+  }
+
+  public BDD getPrimBdd(Buddy buddy) {
+    if(_primBdd.isZero()) {
+      _primBdd = this.bddvec.lte(buddy.buildVec(_parent.maxArrLen));
+    }
+    return _primBdd;
+  }
+  
+  public void idxVar(VarVecIter!RV var) {
+    _idxVar = var;
+  }
+
+  public VarVecIter!RV idxVar() {
+    return _idxVar;
+  }
+
+  public VarVecIter!RV makeIdxVar() {
+    if(_idxVar is null) {
+      _idxVar = new VarVecIter!RV(_parent);
+    }
+    return _idxVar;
+  }
+
+  uint bitcount() {
+    uint i = 1;
+    for (size_t c=1; c < _parent.maxArrLen; c *= 2) {
+      i++;
+    }
+    return i;
+  }
+
+  bool signed() {
+    return false;
+  }
+
+  public ulong value() {
+    return _parent.getLen();
+  }
+
+  public void value(ulong v, int word = 0) {
+    assert(word == 0);
+    // import std.stdio;
+    // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
+    // import std.stdio;
+    // writeln("Setting length for array: ", _parent.name(), " to ", v);
+    _parent.setLen(cast(size_t) v);
+    // writeln("Getting length for array: ", _parent.name(), " as ", _parent.getLen());
+    
+  }
+
+  override public VarVecLen!RV unroll(VarVecIterVar l, uint n) {
+    return _parent.unroll(l,n).arrLen();
+  }
+
+  void _esdl__reset() {
+    stage = null;
+  }
+
+  bool isVecArr() {
+    return false;
+  }
+
+  void solveBefore(RndVecPrim other) {
+    other.addPreRequisite(this);
+  }
+
+  void addPreRequisite(RndVecPrim prim) {
+    _preReqs ~= prim;
+  }
+}
+
+class ConstVec(T = int): ValVec!T
 {
   import std.conv;
 
@@ -3382,9 +5095,9 @@ class RndVecConst(T = int): RndVecValue!T
 
 }
 
-class RndVecVar(T = int): RndVecValue!T
+class RndVecVar(T = int): ValVec!T
 {
-  // Declared in RndVecValue
+  // Declared in ValVec
   // T _value;			// the value of the constant
   import std.conv: to;
 
@@ -3412,7 +5125,7 @@ class RndVecVar(T = int): RndVecValue!T
 
 }
 
-abstract class RndVecValue(T = int): RndVecExpr, RndVecPrim
+abstract class ValVec(T = int): RndVecExpr, RndVecPrim
 {
   override public RndVecPrim[] preReqs() {
     return [];
@@ -3451,23 +5164,23 @@ abstract class RndVecValue(T = int): RndVecExpr, RndVecPrim
   }
   
   public CstStage stage() {
-    assert(false, "no stage for RndVecConst");
+    assert(false, "no stage for ConstVec");
   }
 
   public void stage(CstStage s) {
-    assert(false, "no stage for RndVecConst");
+    assert(false, "no stage for ConstVec");
   }
 
   public uint domIndex() {
-    assert(false, "no domIndex for RndVecConst");
+    assert(false, "no domIndex for ConstVec");
   }
 
   public void domIndex(uint s) {
-    assert(false, "no domIndex for RndVecConst");
+    assert(false, "no domIndex for ConstVec");
   }
 
   public uint bitcount() {
-    assert(false, "no bitcount for RndVecConst");
+    assert(false, "no bitcount for ConstVec");
   }
 
   public bool signed() {
@@ -3475,11 +5188,11 @@ abstract class RndVecValue(T = int): RndVecExpr, RndVecPrim
   }
 
   public BddVec bddvec() {
-    assert(false, "no bddvec for RndVecConst");
+    assert(false, "no bddvec for ConstVec");
   }
 
   public void bddvec(BddVec b) {
-    assert(false, "no bddvec for RndVecConst");
+    assert(false, "no bddvec for ConstVec");
   }
 
   void _esdl__reset() {
