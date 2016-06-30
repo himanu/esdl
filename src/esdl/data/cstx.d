@@ -1051,8 +1051,9 @@ struct CstParser {
       case OpUnaryToken.INV: fill("~"); continue loop;
       case OpUnaryToken.NONE: break;
       }
-
+      fill("_esdl__vec(");
       procIdentifier();
+      fill(")");
       srcTag = moveToRightParens();
       
       // fill(CST[srcTag..srcCursor]);

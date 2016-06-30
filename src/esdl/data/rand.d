@@ -45,146 +45,9 @@ template _esdl__SolverEnvBase(T) {
   }
 }
 
-string _esdl__SolverMixin(string name) {
-  return "class " ~ name ~ q{(_esdl__T): _esdl__SolverEnvBase!_esdl__T
-    {
-      static if(is(_esdl__T == struct)) {
-	_esdl__T* _esdl__outer;
-	public void _esdl__setOuter()(ref _esdl__T outer) {
-	  _esdl__outer = &outer;
-	}
-	public this(uint seed, string name, ref _esdl__T outer,
-		    _esdl__SolverEnvRoot parent=null) {
-	  _esdl__outer = &outer;
-	  static if(_esdl__baseHasRandomization!_esdl__T) {
-	    super(seed, name, outer, parent);
-	  }
-	  else {
-	    super(seed, name, parent);
-	  }
-	  _esdl__initRands();
-	  _esdl__initCsts();
-	}
-      }
 
-      static if(is(_esdl__T == class)) {
-	_esdl__T _esdl__outer;
-	public void _esdl__setOuter()(_esdl__T outer) {
-	  _esdl__outer = outer;
-	}
-	public this(uint seed, string name, _esdl__T outer,
-		    _esdl__SolverEnvRoot parent=null) {
-	  _esdl__outer = outer;
-	  static if(_esdl__baseHasRandomization!_esdl__T) {
-	    super(seed, name, outer, parent);
-	  }
-	  else {
-	    super(seed, name, parent);
-	  }
-	  _esdl__initRands();
-	  _esdl__initCsts();
-	}
-      }
-
-      class _esdl__Constraint(string _esdl__CstString, string NAME):
-	Constraint!_esdl__CstString
-      {
-	this() {
-	  super(this.outer, NAME,
-		cast(uint) this.outer._esdl__cstsList.length);
-	}
-	// This mixin writes out the bdd functions after parsing the
-	// constraint string at compile time
-	// mixin(constraintXlate(_esdl__CstString));
-	override CstBlock getCstExpr() {
-	  mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
-	}
-	
-	debug(CONSTRAINTS) {
-	  pragma(msg, constraintXlate(_esdl__CstString));
-	}
-      }
-
-      class _esdl__Constraint(string _esdl__CstString):
-	Constraint!_esdl__CstString
-      {
-	this(string name) {
-	  super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-	}
-	// This mixin writes out the bdd functions after parsing the
-	// constraint string at compile time
-	mixin(constraintXlate(_esdl__CstString));
-	debug(CONSTRAINTS) {
-	  pragma(msg, constraintXlate(_esdl__CstString));
-	}
-      }
-
-      class _esdl__Constraint(string _esdl__CstString, size_t N):
-	Constraint!_esdl__CstString
-	{
-	  long[N] _withArgs;
-
-	  void withArgs(V...)(V values) if(allIntengral!V) {
-	    static assert(V.length == N);
-	    foreach(i, v; values) {
-	      _withArgs[i] = v;
-	    }
-	  }
-
-	  this(string name) {
-	    super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-	  }
-
-	  public long _esdl__arg(size_t VAR)() {
-	    static assert(VAR < N, "Can not map specified constraint with argument: @" ~
-			  VAR.stringof);
-	    return _withArgs[VAR];
-	  }
-
-	  // This mixin writes out the bdd functions after parsing the
-	  // constraint string at compile time
-	  mixin(constraintXlate(_esdl__CstString));
-	  debug(CONSTRAINTS) {
-	    pragma(msg, "// randomizeWith!\n");
-	    pragma(msg, constraintXlate(_esdl__CstString));
-	  }
-	}
-
-      void _esdl__with(string _esdl__CstString, V...)(V values) {
-	auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
-	cstWith.withArgs(values);
-	_esdl__cstWith = cstWith;
-      }
-
-      mixin(_esdl__randsMixin!_esdl__T);
-
-      debug(CONSTRAINTS) {
-      	pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
-      	pragma(msg, _esdl__randsMixin!_esdl__T);
-      }
-    }
-  };
-}
-
-class _esdl__SolverEnvStruct(_esdl__T): _esdl__SolverEnvBase!_esdl__T
+mixin template _esdl__SolverMixin()
 {
-  _esdl__T* _esdl__outer;
-  public void _esdl__setOuter()(ref _esdl__T outer) {
-    _esdl__outer = &outer;
-  }
-  public this(uint seed, string name, ref _esdl__T outer,
-	      _esdl__SolverEnvRoot parent=null) {
-    _esdl__outer = &outer;
-    static if(_esdl__baseHasRandomization!_esdl__T) {
-      super(seed, name, outer, parent);
-    }
-    else {
-      super(seed, name, parent);
-    }
-    _esdl__initRands();
-    _esdl__initCsts();
-  }
-
   class _esdl__Constraint(string _esdl__CstString, string NAME):
     Constraint!_esdl__CstString
   {
@@ -255,6 +118,18 @@ class _esdl__SolverEnvStruct(_esdl__T): _esdl__SolverEnvBase!_esdl__T
     _esdl__cstWith = cstWith;
   }
 
+  auto ref _esdl__vec(L)(ref L l) {
+    return l;
+  }
+
+  auto const ref _esdl__vec(L)(const ref L l) {
+    return l;
+  }
+
+  auto _esdl__vec(L)(L l) {
+    return l;
+  }
+  
   mixin(_esdl__randsMixin!_esdl__T);
 
   debug(CONSTRAINTS) {
@@ -262,7 +137,28 @@ class _esdl__SolverEnvStruct(_esdl__T): _esdl__SolverEnvBase!_esdl__T
     pragma(msg, _esdl__randsMixin!_esdl__T);
   }
 }
-// mixin(_esdl__SolverMixin("_esdl__SolverEnvStruct"));
+
+class _esdl__SolverEnvStruct(_esdl__T): _esdl__SolverEnvBase!_esdl__T
+{
+  _esdl__T* _esdl__outer;
+  public void _esdl__setOuter()(ref _esdl__T outer) {
+    _esdl__outer = &outer;
+  }
+  public this(uint seed, string name, ref _esdl__T outer,
+	      _esdl__SolverEnvRoot parent=null) {
+    _esdl__outer = &outer;
+    static if(_esdl__baseHasRandomization!_esdl__T) {
+      super(seed, name, outer, parent);
+    }
+    else {
+      super(seed, name, parent);
+    }
+    _esdl__initRands();
+    _esdl__initCsts();
+  }
+
+  mixin _esdl__SolverMixin;
+}
 
 template _esdl__Solver(T) {
   // static if(__traits(compiles, T._esdl__hasRandomization)) {
@@ -508,7 +404,8 @@ template _esdl__RandInits(T, int I=0)
 	enum _esdl__RandInits =
 	  "    assert(this._esdl__outer." ~ NAME ~
 	  " !is null);\n    _esdl__" ~ NAME ~
-	  " = new typeof(_esdl__" ~ NAME ~
+	  " = this._esdl__outer." ~ NAME ~
+	  ".new typeof(_esdl__" ~ NAME ~
 	  ")(this._esdl__outer._esdl__randSeed, \"" ~
 	  NAME ~ "\", this._esdl__outer." ~ NAME ~
 	  ", this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
@@ -1420,11 +1317,6 @@ class Randomizable {
 
 mixin template Randomization()
 {
-  debug(CONSTRAINTS) {
-    pragma(msg, "// _esdl__SolverMixin(" ~ typeof(this).stringof ~ ")");
-    pragma(msg, _esdl__SolverMixin("_esdl__SolverEnv"));
-  }
-
   alias _esdl__T = typeof(this);
   
   class _esdl__SolverEnv: _esdl__SolverEnvBase!_esdl__T
@@ -1446,86 +1338,9 @@ mixin template Randomization()
       _esdl__initCsts();
     }
 
-    class _esdl__Constraint(string _esdl__CstString, string NAME):
-      Constraint!_esdl__CstString
-    {
-      this() {
-	super(this.outer, NAME,
-	      cast(uint) this.outer._esdl__cstsList.length);
-      }
-      // This mixin writes out the bdd functions after parsing the
-      // constraint string at compile time
-      // mixin(constraintXlate(_esdl__CstString));
-      override CstBlock getCstExpr() {
-	mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
-      }
-	
-      debug(CONSTRAINTS) {
-	pragma(msg, constraintXlate(_esdl__CstString));
-      }
-    }
-
-    class _esdl__Constraint(string _esdl__CstString):
-      Constraint!_esdl__CstString
-    {
-      this(string name) {
-	super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-      }
-      // This mixin writes out the bdd functions after parsing the
-      // constraint string at compile time
-      mixin(constraintXlate(_esdl__CstString));
-      debug(CONSTRAINTS) {
-	pragma(msg, constraintXlate(_esdl__CstString));
-      }
-    }
-
-    class _esdl__Constraint(string _esdl__CstString, size_t N):
-      Constraint!_esdl__CstString
-    {
-      long[N] _withArgs;
-
-      void withArgs(V...)(V values) if(allIntengral!V) {
-	static assert(V.length == N);
-	foreach(i, v; values) {
-	  _withArgs[i] = v;
-	}
-      }
-
-      this(string name) {
-	super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-      }
-
-      public long _esdl__arg(size_t VAR)() {
-	static assert(VAR < N, "Can not map specified constraint with argument: @" ~
-		      VAR.stringof);
-	return _withArgs[VAR];
-      }
-
-      // This mixin writes out the bdd functions after parsing the
-      // constraint string at compile time
-      mixin(constraintXlate(_esdl__CstString));
-      debug(CONSTRAINTS) {
-	pragma(msg, "// randomizeWith!\n");
-	pragma(msg, constraintXlate(_esdl__CstString));
-      }
-    }
-
-    void _esdl__with(string _esdl__CstString, V...)(V values) {
-      auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
-      cstWith.withArgs(values);
-      _esdl__cstWith = cstWith;
-    }
-
-    mixin(_esdl__randsMixin!_esdl__T);
-
-    debug(CONSTRAINTS) {
-      pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
-      pragma(msg, _esdl__randsMixin!_esdl__T);
-    }
+    mixin _esdl__SolverMixin;
   }
 
-  // mixin(_esdl__SolverMixin("_esdl__SolverEnv"));
-  
   enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
 
