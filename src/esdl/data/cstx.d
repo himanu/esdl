@@ -249,12 +249,13 @@ struct CstParser {
       }
       srcTag = srcCursor;
       parseSpace();
-      fill(CST[srcTag..srcCursor]);
       if(CST[srcCursor] == '.') {
+	fill(CST[srcTag..srcCursor]);
 	++srcCursor;
 	continue;
       }
       else {
+	srcCursor = srcTag;
 	result[2*i + 2] = -1;
 	break;
       }
@@ -262,8 +263,9 @@ struct CstParser {
     return result;
   }
 
-  void procIdentifier() {
+  size_t procIdentifier() {
     // parse an identifier and the following '.' heirarcy if any
+    auto start = srcCursor;
     auto srcTag = srcCursor;
     int[MaxHierDepth * 2] idChain = parseIdentifierChain();
     if(idChain[0] != -1) {
@@ -300,6 +302,7 @@ struct CstParser {
 	}
       }
     }
+    return start;
   }
 
   size_t parseLineComment() {
@@ -649,17 +652,30 @@ struct CstParser {
     if(! dryRun) outBuffer[cursor] = c;
   }
 
-  char[] translate() {
-
-    fill("override public CstBlock getCstExpr() {"
-	 "\n  auto cstExpr = new CstBlock;\n");
+  char[] translate(string name) {
+    if (name == "") {
+      fill("override CstBlock getCstExpr() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+    else {
+      fill("CstBlock " ~ name ~ "() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+      
 
     procBlock();
 
     setupBuffer();
 
-    fill("override public CstBlock getCstExpr() {"
-	 "\n  auto cstExpr = new CstBlock;\n");
+    if (name == "") {
+      fill("override CstBlock getCstExpr() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+    else {
+      fill("CstBlock " ~ name ~ "() {"
+	   "\n  auto cstExpr = new CstBlock;\n");
+    }
+      
 
     procBlock();
 
@@ -1038,8 +1054,16 @@ struct CstParser {
       case OpUnaryToken.INV: fill("~"); continue loop;
       case OpUnaryToken.NONE: break;
       }
-
-      procIdentifier();
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+      fill("_esdl__vec(");
+      srcTag = procIdentifier();
+      fill(", \"");
+      fill(CST[srcTag..srcCursor]);
+      fill("\"");
+      fill(")");
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
       srcTag = moveToRightParens();
       
       // fill(CST[srcTag..srcCursor]);

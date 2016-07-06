@@ -1249,12 +1249,14 @@ struct BddVec
     BddVec res = getBuddy.buildVec(size, false);
 
     size_t n;
-    for(n = 0; n < minnum; n++)
-      res.bitvec[n] = c.dup();
-
-    for(n = minnum; n < size; n++)
-      res.bitvec[n] = this.bitvec[n-pos].dup();
-
+    for(n = 0; n != size; ++n) {
+      if (n < minnum) {
+	res.bitvec[n] = c;
+      }
+      else {
+	res.bitvec[n] = this.bitvec[n-pos];
+      }
+    }
     return res;
   }
 
@@ -1270,11 +1272,12 @@ struct BddVec
 	val = getBuddy.buildVec(r.size, n);
 	rEquN = r.equ(val);
 
-	for(size_t m = 0 ; m < this.size ; m++)
+	for(size_t m = 0 ; m < this.size ; ++m)
 	  {
-	    /* Set the m'th new location to be the(m+n)'th old location */
-	    if(m  >= n)
+	    /* Set the m'th new location to be the(m-n)'th old location */
+	    if(m  >= n) {
 	      tmp1 = rEquN.and(this.bitvec[m-n]);
+	    }
 	    else
 	      tmp1 = rEquN.and(c);
 	    tmp2 = res.bitvec[m].or(tmp1);
@@ -1309,10 +1312,10 @@ struct BddVec
     BddVec res = getBuddy.buildVec(size, false);
 
     for(size_t n=maxnum; n < size; ++n)
-      res.bitvec[n] = c.dup();
+      res.bitvec[n] = c;
 
     for(size_t n = 0; n < maxnum; ++n)
-      res.bitvec[n] = this.bitvec[n+pos].dup();
+      res.bitvec[n] = this.bitvec[n+pos];
 
     return res;
   }
@@ -1532,14 +1535,14 @@ struct BddVec
     if(m > size) throw new BddException();
     BddVec res = getBuddy.buildVec(cast (int) (m - n), false);
     for(size_t i = 0; i < m - n; ++i) {
-      res.bitvec[i] = this.bitvec[n+i].dup();
+      res.bitvec[i] = this.bitvec[n+i];
     }
     return res;
   }
 
   public BDD opIndex(size_t i) {
     if(i >= size) throw new BddException();
-    return bitvec[i].dup;
+    return bitvec[i];
   }
 }
 
@@ -9477,20 +9480,46 @@ class Buddy
     return v;
   }
 
-  public BddVec buildVec(long val)
-  {
-    uint bits()
-    {
-      import std.math: abs;
-      long aval = abs(val);
-      for(uint _bits=1; _bits != 64; ++_bits)
-	if((1L << _bits) > aval) {
-	  if(aval == val) return _bits; // positive numbers
-	  else return _bits + 1; // neg numbers need another bit for sign
-	}
-      return 64;
+  // public BddVec buildVec(long val)
+  // {
+  //   uint bits()
+  //   {
+  //     import std.math: abs;
+  //     long aval = abs(val);
+  //     for(uint _bits=1; _bits != 64; ++_bits)
+  // 	if((1L << _bits) > aval) {
+  // 	  if(aval == val) return _bits; // positive numbers
+  // 	  else return _bits + 1; // neg numbers need another bit for sign
+  // 	}
+  //     return 64;
+  //   }
+  //   return buildVec(bits(), val, val < 0);
+  // }
+
+  public BddVec buildVec(T)(T val) {
+    import esdl.data.bvec: isBitVector;
+    import std.traits;
+    
+    ulong val_;
+    int bitnum = 0;
+    bool signed;
+    
+    static if(isBitVector!T) {
+      bitnum = T.SIZE;
+      val_ = cast(ulong) val;
+      signed = T.ISSIGNED;
     }
-    return buildVec(bits(), val, val < 0);
+    else static if(isIntegral!T) {
+      bitnum = T.sizeof * 8;
+      val_ = val;
+      signed = isSigned!T;
+    }
+    else static if(is(T == bool)) {
+      bitnum = 1;
+      val_ = val;
+      signed = false;
+    }
+    return buildVec(bitnum, val_, signed);
   }
 
   public BddVec buildVec(size_t bitnum, int offset, int step, bool signed = false)
