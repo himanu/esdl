@@ -22,6 +22,9 @@ import std.range: ElementType;
 private import std.typetuple: staticIndexOf;
 private import std.traits: BaseClassesTuple, ParameterTypeTuple; // required for staticIndexOf
 
+static alias Unconst(T) = T;
+static alias Unconst(T: const U, U) = U;
+
 // For a given class, this template returns the Solver for first
 // class in the ancestory that has Randomization mixin -- if there is
 // none, returns _esdl__SolverRoot
@@ -136,15 +139,22 @@ mixin template _esdl__SolverMixin()
    }
 
   auto const ref _esdl__vec(L)(const ref L l, string name="unnamed") {
-    import std.traits: isIntegral;
+    import std.traits: isIntegral, isArray;
     static if (isIntegral!L || isBitVector!L) {
-      // writeln("Creating const RndVecVar");
-      return new RndVecVar!L(l);
+      // import std.stdio;
+      // writeln("Creating VarVec");
+      return new VarVec!L(name, l);
+    }
+    else static if(isArray!L) {
+      // import std.stdio;
+      // writeln("Creating VarVecArr");
+      return new VarVecArr!L(name, l);
     }
     else {
       return l;
     }
-  }
+   }
+
 
   auto _esdl__vec(L)(L l, string name="unnamed") {
     import std.traits: isIntegral;
@@ -956,7 +966,7 @@ class CstStage {
   // CstVecPrim[] _preReqs;
   CstBddExpr[] _bddExprsWithUnmetReqs;
   
-
+  BDD _solveBDD;
   public void id(uint i) {
     _id = i;
   }
@@ -1157,14 +1167,16 @@ abstract class _esdl__SolverRoot {
 
     initDomains(t);
 
-    _esdl__cstStatements._esdl__reset(); // start empty
+    // _esdl__cstStatements._esdl__reset(); // start empty
     
     // take all the constraints -- even if disabled
-    foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
-      _esdl__cstStatements ~= cst.getCstExpr();
-    }
-    if(_esdl__cstWith !is null) {
-      _esdl__cstStatements ~= _esdl__cstWith.getCstExpr();
+    if (_esdl__cstStatements.isEmpty()) {
+      foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
+	_esdl__cstStatements ~= cst.getCstExpr();
+      }
+      if(_esdl__cstWith !is null) {
+	_esdl__cstStatements ~= _esdl__cstWith.getCstExpr();
+      }
     }
 
     // First we solve the constraint groups that are responsible for
@@ -1250,19 +1262,25 @@ abstract class _esdl__SolverRoot {
 
     // make the bdd tree
     auto exprs = stage._bddExprs;
-
-    foreach(expr; exprs) {
-      // import std.stdio;
-      // writeln(expr.name());
-      solveBDD = solveBDD & expr.getBDD(stage, _esdl__buddy);
-      // writeln(expr.name());
+    bool refreshed = false;
+    foreach (expr; exprs) {
+      refreshed |= expr.refresh(stage, _esdl__buddy);
     }
-
-    // The idea is that we apply the max length constraint only if
-    // there is another constraint on the lenght. If there is no
-    // other constraint, then the array is taken care of later at
-    // the time of setting the non-constrained random variables
-
+    if ((! refreshed) &&
+	savedStages.length > stageIdx &&
+	savedStages[stageIdx]._bddExprs == stage._bddExprs) {
+      stage._solveBDD = savedStages[stageIdx]._solveBDD;
+      solveBDD = stage._solveBDD;
+    }
+    else {
+      foreach(expr; exprs) {
+	// import std.stdio;
+	// writeln(expr.name());
+	solveBDD = solveBDD & expr.getBDD(stage, _esdl__buddy);
+	// writeln(expr.name());
+      }
+      stage._solveBDD = solveBDD;
+    }
 
     double[uint] bddDist;
     solveBDD.satDist(bddDist);
@@ -1298,10 +1316,13 @@ abstract class _esdl__SolverRoot {
     stage.id(stageIdx);
 
     // save for future reference
-    if (savedStages.length <= stageIdx) {
-      savedStages.length = stageIdx + 1;
+    while (savedStages.length <= stageIdx) {
+      savedStages ~= new CstStage();
     }
-    savedStages[stageIdx++] = stage;
+    assert(savedStages[stageIdx] !is stage);
+    auto swapping = stage;
+    stage = savedStages[stageIdx];
+    savedStages[stageIdx++] = swapping;
   }
 
   void printSolution() {
@@ -1587,6 +1608,9 @@ abstract class CstVecExpr
   // abstract public CstStage[] getStages();
   abstract public BddVec getBDD(CstStage stage, Buddy buddy);
 
+  // refresh the _valvec if the current value is not the same as previous value
+  abstract public bool refresh(CstStage stage, Buddy buddy);
+
   abstract public long evaluate();
 
   abstract public CstVecExpr unroll(CstVecIterVar l, uint n);
@@ -1661,41 +1685,41 @@ abstract class CstVecExpr
   	}
       }
 
-  public CstVec2VecExpr opBinary(string op, Q)(ref Q q)
-    if(isBitVector!Q || isIntegral!Q)
-      {
-	auto qq = new RndVecVar!Q(q);
-	static if(op == "&") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
-	}
-	static if(op == "|") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.OR);
-	}
-	static if(op == "^") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.XOR);
-	}
-	static if(op == "+") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.ADD);
-	}
-	static if(op == "-") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.SUB);
-	}
-	static if(op == "*") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.MUL);
-	}
-	static if(op == "/") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.DIV);
-	}
-	static if(op == "%") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.REM);
-	}
-	static if(op == "<<") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.LSH);
-	}
-	static if(op == ">>") {
-	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RSH);
-	}
-      }
+  // public CstVec2VecExpr opBinary(string op, Q)(ref Q q)
+  //   if(isBitVector!Q || isIntegral!Q)
+  //     {
+  // 	auto qq = new RndVecVar!Q(q);
+  // 	static if(op == "&") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
+  // 	}
+  // 	static if(op == "|") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.OR);
+  // 	}
+  // 	static if(op == "^") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.XOR);
+  // 	}
+  // 	static if(op == "+") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.ADD);
+  // 	}
+  // 	static if(op == "-") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.SUB);
+  // 	}
+  // 	static if(op == "*") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.MUL);
+  // 	}
+  // 	static if(op == "/") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.DIV);
+  // 	}
+  // 	static if(op == "%") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.REM);
+  // 	}
+  // 	static if(op == "<<") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.LSH);
+  // 	}
+  // 	static if(op == ">>") {
+  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RSH);
+  // 	}
+  //     }
 
   public CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
@@ -1733,41 +1757,41 @@ abstract class CstVecExpr
 	}
       }
 
-  public CstVec2VecExpr opBinaryRight(string op, Q)(ref Q q)
-    if(isBitVector!Q || isIntegral!Q)
-      {
-	auto qq = new RndVecVar!Q(q);
-	static if(op == "&") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
-	}
-	static if(op == "|") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.OR);
-	}
-	static if(op == "^") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.XOR);
-	}
-	static if(op == "+") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.ADD);
-	}
-	static if(op == "-") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.SUB);
-	}
-	static if(op == "*") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.MUL);
-	}
-	static if(op == "/") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.DIV);
-	}
-	static if(op == "%") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.REM);
-	}
-	static if(op == "<<") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.LSH);
-	}
-	static if(op == ">>") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
-	}
-      }
+  // public CstVec2VecExpr opBinaryRight(string op, Q)(ref Q q)
+  //   if(isBitVector!Q || isIntegral!Q)
+  //     {
+  // 	auto qq = new RndVecVar!Q(q);
+  // 	static if(op == "&") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
+  // 	}
+  // 	static if(op == "|") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.OR);
+  // 	}
+  // 	static if(op == "^") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.XOR);
+  // 	}
+  // 	static if(op == "+") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.ADD);
+  // 	}
+  // 	static if(op == "-") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.SUB);
+  // 	}
+  // 	static if(op == "*") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.MUL);
+  // 	}
+  // 	static if(op == "/") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.DIV);
+  // 	}
+  // 	static if(op == "%") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.REM);
+  // 	}
+  // 	static if(op == "<<") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.LSH);
+  // 	}
+  // 	static if(op == ">>") {
+  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
+  // 	}
+  //     }
 
   public CstVecExpr opIndex(CstVecExpr index)
   {
@@ -1984,10 +2008,13 @@ abstract class VarVecBase(L, int N=0)
 
   string _name;
 
+  BddVec _valvec;
+  Unconst!E _val;
+
   // CstVecPrim[] _preReqs;
 
   ~this() {
-    _bddvec.reset();
+    _valvec.reset();
   }
 
   override string name() {
@@ -1996,7 +2023,6 @@ abstract class VarVecBase(L, int N=0)
 
   // mixin EnumConstraints!E;
 
-  BddVec _bddvec;
   // uint _domIndex = uint.max;
   // CstStage _stage = null;
 
@@ -2048,12 +2074,12 @@ abstract class VarVecBase(L, int N=0)
   }
 
   public BddVec bddvec() {
-    return _bddvec;
+    return _valvec;
   }
 
   public void bddvec(BddVec b) {
     assert(false);
-    // _bddvec = b;
+    // _valvec = b;
   }
 
   uint bitcount() {
@@ -2093,6 +2119,24 @@ abstract class VarVecBase(L, int N=0)
 
   void build() {}
     
+  abstract public E getVal();
+
+  override public bool refresh(CstStage s, Buddy buddy) {
+    auto val = getVal();
+    if ((! _valvec.isNull) && _val == val) {
+      return false;
+    }
+    else {
+      _val = val;
+      _valvec = buddy.buildVec(val);
+      return true;
+    }
+  }
+
+  // returns true if refresh was required
+  override public BddVec getBDD(CstStage s, Buddy buddy) {
+    return _valvec;
+  }
 }
 
 // T represents the type of the declared array/non-array member
@@ -2112,7 +2156,6 @@ class VarVec(L, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
       import esdl.data.bvec;
 
       const L* _var;
-
     
       public this(string name, ref L var) {
 	_name = name;
@@ -2150,7 +2193,7 @@ class VarVec(L, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
 	// }
       }
 
-      public auto getVal() {
+      override public E getVal() {
 	return *_var;
       }
 
@@ -2178,20 +2221,6 @@ class VarVec(L, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
 	// }
 	// else {
 	//   _var._setNthWord(v, word); // = cast(L) toBitVec(v);
-	// }
-      }
-
-      override public BddVec getBDD(CstStage s, Buddy buddy) {
-	// assert(stage(), "Stage not set for " ~ this.name());
-	// if(this.isRand && s is stage()) {
-	//   return _bddvec;
-	// }
-	// else if((! this.isRand) ||
-	// 	this.isRand && stage().solved()) { // work with the value
-	return buddy.buildVec(getVal());
-	// }
-	// else {
-	//   assert(false, "Constraint evaluation in wrong stage");
 	// }
       }
 
@@ -2305,7 +2334,7 @@ class VarVec(L, int N=0) if(N != 0 && _esdl__ArrOrder!(L, N) == 0):
 	// }
       }
 
-      auto getVal() {
+      override public E getVal() {
 	if(_indexExpr) {
 	  return _parent.getVal(cast(size_t) _indexExpr.evaluate());
 	}
@@ -2334,20 +2363,6 @@ class VarVec(L, int N=0) if(N != 0 && _esdl__ArrOrder!(L, N) == 0):
 	// }
 	// else {
 	//   return _parent.setVal(v, word, _index);
-	// }
-      }
-
-      override public BddVec getBDD(CstStage s, Buddy buddy) {
-	// assert(stage(), "Stage not set for " ~ this.name());
-	// if(this.isRand && s is stage()) {
-	//   return _bddvec;
-	// }
-	// else if((! this.isRand) ||
-	// 	this.isRand && stage().solved()) { // work with the value
-	return buddy.buildVec(getVal());
-	// }
-	// else {
-	//   assert(false, "Constraint evaluation in wrong stage");
 	// }
       }
 
@@ -3162,6 +3177,10 @@ abstract class CstVecIterVar: CstVecExpr
   //   return arrVar.arrLen.getStages();
   // }
 
+  override public bool refresh(CstStage s, Buddy buddy) {
+    assert(false, "Can not refresh for a Idx Variable without unrolling");
+  }
+  
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
     assert(false, "Can not getBDD for a Idx Variable without unrolling");
   }
@@ -3182,7 +3201,9 @@ class VarVecLen(RV): CstVecExpr, CstVecPrim
 
   RV _parent;
 
-  BddVec _bddvec;
+  BddVec _valvec;
+  size_t _val;
+  
   uint _domIndex = uint.max;
   CstStage _stage = null;
 
@@ -3200,7 +3221,7 @@ class VarVecLen(RV): CstVecExpr, CstVecPrim
   }
 
   ~this() {
-    _bddvec.reset();
+    _valvec.reset();
   }
 
   override public CstVecPrim[] preReqs() {
@@ -3225,29 +3246,24 @@ class VarVecLen(RV): CstVecExpr, CstVecPrim
   //   return stages;
   // }
 
-  override public BddVec getBDD(CstStage s, Buddy buddy) {
-    assert(stage() !is null, "stage null for: " ~ name());
-    if(this.isRand && stage() is s) {
-      return _bddvec;
-    }
-    else if((! this.isRand) ||
-	    this.isRand && stage().solved()) { // work with the value
-      return buddy.buildVec(value());
+  override public bool refresh(CstStage s, Buddy buddy) {
+    auto val = _parent.getLen();
+    if ((! _valvec.isNull()) && _val == val) {
+      return false;
     }
     else {
-      assert(false, "Constraint evaluation in wrong stage");
+      _val = val;
+      _valvec = buddy.buildVec(val);
+      return true;
     }
+  }
+  
+  override public BddVec getBDD(CstStage s, Buddy buddy) {
+    return _valvec;
   }
 
   override public long evaluate() {
-    if(! this.isRand || stage().solved()) {
-      return value();
-    }
-    else {
-      import std.conv;
-      assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
-	     stage()._id.to!string);
-    }
+    return value();
   }
 
   void doRandomize(_esdl__SolverRoot solver) {
@@ -3255,44 +3271,37 @@ class VarVecLen(RV): CstVecExpr, CstVecPrim
   }
   
   public bool isRand() {
-    import std.traits;
-    if(isStaticArray!(RV.L)) return false;
-    else return true;
+    return false;
   }
 
   public CstStage stage() {
-    return _stage;
+    assert(false);
   }
 
   public void stage(CstStage s) {
-    _stage = s;
+    assert(false);
   }
 
   public uint domIndex() {
-    return _domIndex;
+    assert(false);
   }
 
   public void domIndex(uint s) {
-    _domIndex = s;
+    assert(false);
   }
 
   public BddVec bddvec() {
-    return _bddvec;
+    return _valvec;
   }
 
   public void bddvec(BddVec b) {
-    _bddvec = b;
+    assert(false);
   }
 
   public T to(T)()
     if(is(T == string)) {
       import std.conv;
-      if(isRand) {
-	return "RAND-" ~ "#" ~ _name ~ ":" ~ value().to!string();
-      }
-      else {
-	return "VAL#" ~ _name ~ ":" ~ value().to!string();
-      }
+      return "VAL#" ~ _name ~ ":" ~ value().to!string();
     }
 
   override public string toString() {
@@ -3386,7 +3395,7 @@ abstract class RndVecBase(L, alias R=_esdl__norand, int N=0)
   CstVecPrim[] _preReqs;
 
   ~this() {
-    _bddvec.reset();
+    _domvec.reset();
   }
 
   override string name() {
@@ -3395,7 +3404,10 @@ abstract class RndVecBase(L, alias R=_esdl__norand, int N=0)
 
   mixin EnumConstraints!E;
 
-  BddVec _bddvec;
+  BddVec _domvec;
+  BddVec _valvec;
+  E      _val;
+  
   uint _domIndex = uint.max;
   CstStage _stage = null;
 
@@ -3443,11 +3455,11 @@ abstract class RndVecBase(L, alias R=_esdl__norand, int N=0)
   }
 
   public BddVec bddvec() {
-    return _bddvec;
+    return _domvec;
   }
 
   public void bddvec(BddVec b) {
-    _bddvec = b;
+    _domvec = b;
   }
 
   uint bitcount() {
@@ -3489,7 +3501,45 @@ abstract class RndVecBase(L, alias R=_esdl__norand, int N=0)
   }
 
   void build() {}
-    
+
+  abstract public E getVal();
+  
+  override public bool refresh(CstStage s, Buddy buddy) {
+    assert(stage(), "Stage not set for " ~ this.name());
+    if(this.isRand && s is stage()) {
+      return false;
+    }
+    else if((! this.isRand) ||
+	    this.isRand && stage().solved()) { // work with the value
+      auto val = getVal();
+      if ((! _valvec.isNull()) && _val == val) {
+	return false;
+      }
+      else {
+	_val = val;
+	_valvec = buddy.buildVec(val);
+	return true;
+      }
+    }
+    else {
+      assert(false, "Constraint evaluation in wrong stage");
+    }
+  }
+  
+  override public BddVec getBDD(CstStage s, Buddy buddy) {
+    assert(stage(), "Stage not set for " ~ this.name());
+    if(this.isRand && s is stage()) {
+      return _domvec;
+    }
+    else if((! this.isRand) ||
+	    this.isRand && stage().solved()) { // work with the value
+      return _valvec;
+    }
+    else {
+      assert(false, "Constraint evaluation in wrong stage");
+    }
+  }
+
 }
 
 // T represents the type of the declared array/non-array member
@@ -3544,7 +3594,7 @@ class RndVec(L, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(L,
 	}
       }
 
-      public auto getVal() {
+      override public E getVal() {
 	return *_var;
       }
 
@@ -3574,19 +3624,6 @@ class RndVec(L, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(L,
 	}
       }
 
-      override public BddVec getBDD(CstStage s, Buddy buddy) {
-	assert(stage(), "Stage not set for " ~ this.name());
-	if(this.isRand && s is stage()) {
-	  return _bddvec;
-	}
-	else if((! this.isRand) ||
-		this.isRand && stage().solved()) { // work with the value
-	  return buddy.buildVec(getVal());
-	}
-	else {
-	  assert(false, "Constraint evaluation in wrong stage");
-	}
-      }
 
     }
 
@@ -3698,7 +3735,7 @@ class RndVec(L, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(L, N) == 0):
 	}
       }
 
-      auto getVal() {
+      override public E getVal() {
 	if(_indexExpr) {
 	  return _parent.getVal(cast(size_t) _indexExpr.evaluate());
 	}
@@ -3726,20 +3763,6 @@ class RndVec(L, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(L, N) == 0):
 	}
 	else {
 	  return _parent.setVal(v, word, _index);
-	}
-      }
-
-      override public BddVec getBDD(CstStage s, Buddy buddy) {
-	assert(stage(), "Stage not set for " ~ this.name());
-	if(this.isRand && s is stage()) {
-	  return _bddvec;
-	}
-	else if((! this.isRand) ||
-		this.isRand && stage().solved()) { // work with the value
-	  return buddy.buildVec(getVal());
-	}
-	else {
-	  assert(false, "Constraint evaluation in wrong stage");
 	}
       }
 
@@ -4585,7 +4608,10 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
 
   RV _parent;
 
-  BddVec _bddvec;
+  BddVec _domvec;
+  BddVec _valvec;
+  size_t _val;
+  
   uint _domIndex = uint.max;
   CstStage _stage = null;
 
@@ -4603,7 +4629,7 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
   }
 
   ~this() {
-    _bddvec.reset();
+    _domvec.reset();
   }
 
   override public CstVecPrim[] preReqs() {
@@ -4627,15 +4653,36 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
   //   if(isRand) stages = [this.stage()];
   //   return stages;
   // }
+  override public bool refresh(CstStage s, Buddy buddy) {
+    assert(stage() !is null, "stage null for: " ~ name());
+    if(this.isRand && stage() is s) {
+      return false;
+    }
+    else if((! this.isRand) ||
+	    this.isRand && stage().solved()) { // work with the value
+      auto val = _parent.getLen();
+      if ((! _valvec.isNull()) && _val == val) {
+	return false;
+      }
+      else {
+	_val = val;
+	_valvec = buddy.buildVec(val);
+	return true;
+      }
+    }
+    else {
+      assert(false, "Constraint evaluation in wrong stage");
+    }
+  }
 
   override public BddVec getBDD(CstStage s, Buddy buddy) {
     assert(stage() !is null, "stage null for: " ~ name());
     if(this.isRand && stage() is s) {
-      return _bddvec;
+      return _domvec;
     }
     else if((! this.isRand) ||
 	    this.isRand && stage().solved()) { // work with the value
-      return buddy.buildVec(value());
+      return _valvec;
     }
     else {
       assert(false, "Constraint evaluation in wrong stage");
@@ -4680,11 +4727,11 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
   }
 
   public BddVec bddvec() {
-    return _bddvec;
+    return _domvec;
   }
 
   public void bddvec(BddVec b) {
-    _bddvec = b;
+    _domvec = b;
   }
 
   public T to(T)()
@@ -4777,59 +4824,70 @@ class ConstVec(T = int): ValVec!T
 {
   import std.conv;
 
-  immutable T _value;			// the value of the constant
+  immutable T _val;			// the value of the constant
+  BddVec _valvec;
 
   override string name() {
-    return _value.to!string();
+    return _val.to!string();
   }
 
   public this(T value) {
-    _value = value;
+    _val = value;
   }
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    if (_valvec.isNull()) {
+      _valvec = buddy.buildVec(_val);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    return buddy.buildVec(_value);
+    return _valvec;
   }
 
   public const T getVal() {
-    return _value;
+    return _val;
   }
 
   override public long evaluate() {
-    return _value;
+    return _val;
   }
 
 }
 
-class RndVecVar(T = int): ValVec!T
-{
-  // Declared in ValVec
-  // T _value;			// the value of the constant
-  import std.conv: to;
+// class RndVecVar(T = int): ValVec!T
+// {
+//   // Declared in ValVec
+//   // T _value;			// the value of the constant
+//   import std.conv: to;
 
-  T* _var;
+//   T* _var;
   
-  override string name() {
-    return (*_var).to!string();
-  }
+//   override string name() {
+//     return (*_var).to!string();
+//   }
 
-  public this(ref T var) {
-    _var = &var;
-  }
+//   public this(ref T var) {
+//     _var = &var;
+//   }
 
-  override public BddVec getBDD(CstStage stage, Buddy buddy) {
-    return buddy.buildVec(*_var);
-  }
+//   override public BddVec getBDD(CstStage stage, Buddy buddy) {
+//     return buddy.buildVec(*_var);
+//   }
 
-  public T getVal() {
-    return *_var;
-  }
+//   public T getVal() {
+//     return *_var;
+//   }
 
-  override public long evaluate() {
-    return *_var;
-  }
+//   override public long evaluate() {
+//     return *_var;
+//   }
 
-}
+// }
 
 abstract class ValVec(T = int): CstVecExpr, CstVecPrim
 {
@@ -4978,6 +5036,12 @@ class CstVec2VecExpr: CstVecExpr
     return solvables;
   }
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    auto l = _lhs.refresh(stage, buddy);
+    auto r = _rhs.refresh(stage, buddy);
+    return r || l;
+  }
+  
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
@@ -5143,6 +5207,12 @@ class CstVecSliceExpr: CstVecExpr
   //   // }
   // }
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    auto l = _lhs.refresh(stage, buddy);
+    auto r = _rhs.refresh(stage, buddy);
+    return r || l;
+  }
+  
   override public BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
@@ -5241,6 +5311,8 @@ abstract class CstBddExpr
   // In case this expr is unRolled, the _idxVars here would be empty
   CstVecIterVar[] _idxVars;
 
+  abstract public bool refresh(CstStage stage, Buddy buddy);
+  
   public CstVecIterVar[] idxVars() {
     return _idxVars;
   }
@@ -5375,6 +5447,13 @@ class CstBdd2BddExpr: CstBddExpr
   CstBddExpr _rhs;
   CstBddOp _op;
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    auto l = _lhs.refresh(stage, buddy);
+    auto r = _rhs.refresh(stage, buddy);
+    return r || l;
+  }
+  
+  
   override public string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
@@ -5480,6 +5559,10 @@ class CstIteBddExpr: CstBddExpr
   override public string name() {
     return "CstIteBddExpr";
   }
+
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    assert(false);
+  }
 }
 
 class CstVec2BddExpr: CstBddExpr
@@ -5494,6 +5577,12 @@ class CstVec2BddExpr: CstBddExpr
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    auto l = _lhs.refresh(stage, buddy);
+    auto r = _rhs.refresh(stage, buddy);
+    return r || l;
+  }
+  
   override CstVecPrim[] preReqs() {
     CstVecPrim[] reqs;
     foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
@@ -5588,12 +5677,16 @@ class CstVec2BddExpr: CstBddExpr
 
 class CstBddConst: CstBddExpr
 {
-  bool _expr;
+  immutable bool _expr;
 
   public this(bool expr) {
     _expr = expr;
   }
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    return false;
+  }
+  
   override public BDD getBDD(CstStage stage, Buddy buddy) {
     if(_expr) return buddy.one();
     else return buddy.zero();
@@ -5626,6 +5719,10 @@ class CstNotBddExpr: CstBddExpr
     return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
   }
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    return _expr.refresh(stage, buddy);
+  }
+  
   override CstVecPrim[] preReqs() {
     return _expr.preReqs();
   }
@@ -5674,6 +5771,15 @@ class CstBlock: CstBddExpr
   CstBddExpr[] _exprs;
   bool[] _booleans;
 
+  override public bool refresh(CstStage stage, Buddy buddy) {
+    bool result = false;
+    foreach (expr; _exprs) {
+      result |= expr.refresh(stage, buddy);
+    }
+    return result;
+  }
+  
+  
   override public string name() {
     string name_ = "";
     foreach(expr; _exprs) {
@@ -5690,6 +5796,10 @@ class CstBlock: CstBddExpr
     _exprs.length = 0;
   }
 
+  public bool isEmpty() {
+    return _exprs.length == 0;
+  }
+  
   override public CstVecPrim[] getRndPrims() {
     assert(false);
   }
