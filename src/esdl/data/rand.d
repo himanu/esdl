@@ -3948,7 +3948,7 @@ class RndVecArr(M, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(M, N) != 0):
       }
 
       auto getVal(J...)(J idx) if(isIntegral!(J[0])) {
-	return getVal(*_var, idx);
+	return getVal(*_var, cast(size_t) idx);
       }
 
       static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
