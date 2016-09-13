@@ -39,9 +39,9 @@ struct Time
   }
 
   Time normalize() {
-    if(_unit is 0) return this;
+    if (_unit is 0) return this;
     auto du = _unit % 3;
-    if(du != 0 || _value % 1000 == 0) {
+    if (du != 0 || _value % 1000 == 0) {
       ulong value = _value;
       byte unit = _unit;
       if(du != 0) {
@@ -49,7 +49,7 @@ struct Time
 	unit -= du;
 	value *= 10 ^^ du;
       }
-      if(value % 1000 == 0) {
+      if (value % 1000 == 0) {
 	value /= 1000;
 	unit  = cast(byte) (unit + 3);
       }
@@ -139,7 +139,11 @@ struct Time
   S to(S)() if(is(S == string)) {
     import std.conv: to;
     import std.string: toLower;
-    Time t = this.normalize();
+    Time t = this;
+    if (_unit % 3 != 0) {
+      t._unit = (_unit/3) * 3;
+      t._value = _value * 10 ^ (_unit - t._unit);
+    }
     string value_ = t._value.to!string;
     string unit_ = (cast(TimeUnit) t._unit).to!string;
     if(t._unit >= -15 && t._unit <= 0) {
