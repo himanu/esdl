@@ -1363,5 +1363,32 @@ struct Vpi {
     Runtime.terminate();
     return 0;
   }
+
+  static int getTimeUnit() {
+    auto hndl = vpi_handle(vpiScope, vpi_handle(vpiSysTfCall, null));
+    return vpi_get(vpiTimeUnit, hndl);
+  }
   
+  static int getTimePrecision() {
+    return vpi_get(vpiTimePrecision, null);
+  }
+
+  static ulong getSimTime() {
+    s_vpi_time stime;
+    stime.type = vpiSimTime;
+    vpi_get_time(null, &stime);
+    ulong ltime = stime.high;
+    ltime = (ltime << 32) + stime.low;
+    return ltime;
+  }
+
+  static Time getTime() {
+    s_vpi_time stime;
+    stime.type = vpiSimTime;
+    vpi_get_time(null, &stime);
+    ulong ltime = stime.high;
+    ltime = (ltime << 32) + stime.low;
+    Time t = Time(ltime, cast(byte) getTimePrecision());
+    return t;
+  }
 }
