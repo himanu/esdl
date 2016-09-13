@@ -6543,6 +6543,10 @@ class PoolThread: SimThread
 
   private static PoolThread _self;
 
+  public size_t getPoolIndex() {
+    return _poolIndex;
+  }
+
   static PoolThread self() {
     return _self;
   }
