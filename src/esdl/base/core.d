@@ -1886,7 +1886,7 @@ interface EventClient
   bool notify(SimTime steps);
   // While notify expects time increment as argument, schedule takes
   // absolute simulator time. Meant to be called by external actors
-  bool schedule(SimTime steps);
+  bool schedule(SimTime steps, bool waits=true);
 }
 
 final class IndexedSimEvent
@@ -2588,9 +2588,9 @@ class EventObj: EventAgent, NamedComp
       // The synchronization guard is required since the same event
       // may otherwise be getting notified simultaneously by an
       // external actor
-      synchronized(this) {
-	this._trigger(sim);
-      }
+      // synchronized(this) {
+      this._trigger(sim);
+      // }
     }
     else {
       this._trigger(sim);
@@ -2605,7 +2605,7 @@ class EventObj: EventAgent, NamedComp
     _triggeredAt = sim.updateCount;
     debug(EVENTS) {
       import std.stdio: stderr;
-      stderr.writeln("Event Triggered: ", this.getFullName);
+      stderr.writefln("Event %s Triggered @%s", this.getFullName, getRoot.getSimTime);
     }
 
     foreach(c; _clientProcesses) {
@@ -2623,12 +2623,14 @@ class EventObj: EventAgent, NamedComp
 	_clientEvents ~= c;
 	debug(EVENTS) {
 	  import std.stdio: stderr;
-	  stderr.writeln("Event Triggered: ", this.getFullName, " client ", index);
+	  stderr.writeln("Event Triggered: ", this.getFullName,
+			 " client ", c.index);
 	}
 	c.client.poke(sim, this, c.index);
 	debug(EVENTS) {
 	  import std.stdio: stderr;
-	  stderr.writeln("Event Triggered: ", this.getFullName, " poked client ", index);
+	  stderr.writeln("Event Triggered: ", this.getFullName,
+			 " poked client ", c.index);
 	}
       }
     }
@@ -2684,6 +2686,7 @@ class EventObj: EventAgent, NamedComp
   final OrSimEvent opBinary(string op)(SimTime rhs)
     if(op == "|" || op == "||") {
       Event event = Event();
+      event.initialize(getName() ~ "||" ~ rhs.getName(), this.getParent());
       event.notify(rhs);
       return this.opBinary!op(event);
     }
@@ -2696,6 +2699,7 @@ class EventObj: EventAgent, NamedComp
   final AndSimEvent opBinary(string op)(SimTime rhs)
     if(op == "&" || op == "&&") {
       Event event = Event();
+      event.initialize(getName() ~ "&&" ~ rhs.getName(), this.getParent());
       event.notify(rhs);
       return this.opBinary!op(event);
     }
@@ -2708,6 +2712,7 @@ class EventObj: EventAgent, NamedComp
   final OrSimEvent opBinaryRight(string op)(SimTime lhs)
     if(op == "|" || op == "||") {
       Event event = Event();
+      event.initialize(getName() ~ "||" ~ rhs.getName(), this.getParent());
       event.notify(lhs);
       return this.opBinary!op(event);
     }
@@ -2720,6 +2725,7 @@ class EventObj: EventAgent, NamedComp
   final AndSimEvent opBinaryRight(string op)(SimTime lhs)
     if(op == "&" || op == "&&") {
       Event event = Event();
+      event.initialize(getName() ~ "&&" ~ rhs.getName(), this.getParent());
       event.notify(lhs);
       return this.opBinary!op(event);
     }
@@ -2806,22 +2812,28 @@ class EventObj: EventAgent, NamedComp
     this.getTimed().notify(t);
   }
 
-  void schedule(ulong t) {
-    this.schedule(SimTime(t * getTimeScale()));
+  // void schedule(bool waits=false) {		// immediate
+  //   import std.stdio;
+  //   writeln("Time now is: ", getRoot.getSimTime());
+  //   this.getTimed().schedule(getRoot().getSimTime(), waits);
+  // }
+
+  void schedule(ulong t, bool waits=true) {
+    this.schedule(SimTime(t * getTimeScale()), waits);
   }
 
   // Timed notification with Time as argument
-  void schedule(Time t) {
+  void schedule(Time t, bool waits=true) {
     auto sim = this.getSimulator();
     SimTime stime = SimTime(sim, t);
     assert(sim !is null);
-    this.schedule(SimTime(this.getSimulator, t));
+    this.schedule(SimTime(this.getSimulator, t), waits);
   }
 
 
   // Timed notification with simulation time steps as argument
-  void schedule(SimTime t) {
-    this.getTimed().schedule(t);
+  void schedule(SimTime t, bool waits=true) {
+    this.getTimed().schedule(t, waits);
   }
 
   // Hierarchy
@@ -3278,6 +3290,7 @@ private EventObj getEventObj(E)(ref E e) {
   static if(is(E unused: SimTime) ||
 	    is(E unused: Time)) {
     Event event = Event();
+    event.initialize("getEventObj");
     event.notify(e);
     return event;
   }
@@ -3286,6 +3299,7 @@ private EventObj getEventObj(E)(ref E e) {
   }
   else static if(is(E unused: SimEvent)) {
     Event event = e;
+    event.initialize("getEventObj");
     return event;
   }
   else static if(is(E unused: Process)) {
@@ -3295,13 +3309,14 @@ private EventObj getEventObj(E)(ref E e) {
       assert(false, "getEventObj called for a terminated task");
     }
     else {
-      return e.getEvent;
+      return e.getEndedEvent;
     }
   }
   else static if(isIntegral!E) {
     // if the task is already terminated, return null
     // wait(SimTime(n * this.getTimeScale));
     Event event = Event();
+    event.initialize("getEventObj");
     event.notify(e);
     return event.getEvent();
   }
@@ -3337,6 +3352,7 @@ SimEvent andEvents(E...)(ref E events) {
   AndSimEvent simE = new AndSimEvent();
   if(simEventsAdd(simE, 0, events) == 0) {
     Event dummy = Event();
+    event.initialize("andEvents");
     simEventsAdd(simE, 0, dummy);
     dummy.notify();
   }
@@ -3423,7 +3439,7 @@ abstract private class SimEvent: EventClient
 
   bool notify(SimTime steps) {assert(false, "Can notify only a timed event");}
 
-  bool schedule(SimTime steps) {assert(false, "Can notify only a timed event");}
+  bool schedule(SimTime steps, bool waits=true) {assert(false, "Can notify only a timed event");}
 
   // Called only during the schedule phase
   protected abstract void poke(EsdlSimulator sim, EventObj agent, size_t index);
@@ -3539,9 +3555,7 @@ final private class TimedEvent: SimEvent
 
   override final void trigger(EsdlSimulator sim) {
     if(_async) {
-      synchronized(this) {
-	_trigger(sim);
-      }
+      _trigger(sim);
     }
     else {
       _trigger(sim);
@@ -3551,6 +3565,11 @@ final private class TimedEvent: SimEvent
   final override bool notify() {
     // Cancel the already scheduled notifications
     synchronized(this) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Immediate notification for %s at time %s",
+			_eventObj.getFullName(), _eventObj.getRoot.getSimTime());
+      }
       if(Procedure.self is null) { // async notify
 	assert(this._getObj().isAsync is true);
 	if(this._schedule != Schedule.ASYNC) {
@@ -3583,6 +3602,11 @@ final private class TimedEvent: SimEvent
 
   final override bool notify(SimTime steps) {
     synchronized(this) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Timed notification for %s at time %s after %s",
+			_eventObj.getFullName(), _eventObj.getRoot.getSimTime(), steps);
+      }
       if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
 	if(this._schedule != Schedule.NONE) {
 	  this.cancel();
@@ -3649,13 +3673,18 @@ final private class TimedEvent: SimEvent
   }
 
   // should only be called by external actor on an AsyncEvent
-  final override bool schedule(SimTime stime) {
+  final override bool schedule(SimTime stime, bool waits=true) {
     synchronized(this) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Scheduled notification for %s for time %s waits %s",
+			_eventObj.getFullName(), stime, waits);
+      }
       if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
 	if(this._schedule != Schedule.NONE) {
 	  this.cancel();
 	}
-	auto anotice = AsyncEventNotice(stime, this);
+	auto anotice = AsyncEventNotice(stime, this, waits);
 	// Create a new timed event
 	// _notice = EventNotice.alloc(stime, this);
 	// // register the timed event with the simulator
@@ -3677,7 +3706,7 @@ final private class TimedEvent: SimEvent
 	  }
 	}
 	// Create a new timed event
-	auto anotice = AsyncEventNotice(stime, this);
+	auto anotice = AsyncEventNotice(stime, this, waits);
 	// register the timed event with the simulator
 	// this._schedule = Schedule.TIMED;
 	// writeln("Before Insert");
@@ -3831,8 +3860,9 @@ private class AndSimEvent: EventExpr
 
 struct AsyncEventNotice
 {
-  private SimTime _time;
+  private SimTime    _time;
   private TimedEvent _event;
+  private bool       _waits;
 }
 
 final class EventNotice
@@ -3868,9 +3898,9 @@ final class EventNotice
 
   private TimedEvent _event;
 
-  bool _isAsync = false;
+  int _delta;
 
-  static EventNotice alloc(SimTime t, TimedEvent event, bool async = false) {
+  static EventNotice alloc(SimTime t, TimedEvent event, int delta=0) {
     // assert(t > SimTime(0));
     debug(ALLOC) {
       import std.stdio: stderr;
@@ -3886,10 +3916,11 @@ final class EventNotice
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
+	  f._delta = delta;
 	}
       }
       else {
-	f = new EventNotice(t, event, PoolThread.self, async);
+	f = new EventNotice(t, event, PoolThread.self, delta);
       }
     }
     else if (BaseWorker.self !is null) {
@@ -3899,10 +3930,11 @@ final class EventNotice
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
+	  f._delta = delta;
 	}
       }
       else {
-	f = new EventNotice(t, event, BaseWorker.self._thread, async);
+	f = new EventNotice(t, event, BaseWorker.self._thread, delta);
       }
     }
     else if (RootThread.self !is null) {
@@ -3912,10 +3944,11 @@ final class EventNotice
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
+	  f._delta = delta;
 	}
       }
       else {
-	f = new EventNotice(t, event, RootThread.self._thread, async);
+	f = new EventNotice(t, event, RootThread.self._thread, delta);
       }
     }
     return f;
@@ -3931,6 +3964,13 @@ final class EventNotice
       }
     }
     else {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Triggering Timed Event %s @%s, aync delta %s",
+			_event._eventObj.getFullName(),
+			_event._eventObj.getRoot.getSimTime,
+			_delta);
+      }
       this._event.trigger(sim);
     }
     // once notified, let the event go back to freelist.
@@ -3939,9 +3979,11 @@ final class EventNotice
 
   static void dealloc(EventNotice f) {
     auto thread = f._thread;
-    f._event = null;
-    f.next = thread._eventNoticeList;
-    thread._eventNoticeList = f;
+    if (thread !is null) {
+      f._event = null;
+      f.next = thread._eventNoticeList;
+      thread._eventNoticeList = f;
+    }
   }
 
   // _time is effectively immutable
@@ -3967,12 +4009,12 @@ final class EventNotice
 
   private EsdlThread _thread;
   // make new not callable directly -- private
-  private this(SimTime t, TimedEvent event, EsdlThread thread, bool async=false) {
+  private this(SimTime t, TimedEvent event, EsdlThread thread, int delta=0) {
     synchronized(this) {
       this.time = t;
       this._event = event;
       this._thread = thread;
-      this._isAsync = async;
+      this._delta = delta;
     }
   }
 
@@ -3982,9 +4024,9 @@ final class EventNotice
     // time is effectively immutable
     auto retval = this.time.opCmp(rhs.time);
     if (retval) return retval;
-    else if (this._isAsync is rhs._isAsync) return 0;
-    else if (this._isAsync) return 1;
-    else return -1;
+    else if (this._delta == rhs._delta) return 0;
+    else if (this._delta < rhs._delta) return -1;
+    else return 1;
   }
 }
 
@@ -4030,9 +4072,11 @@ void waitAll(E...)(E events) {
   AndSimEvent simE = new AndSimEvent();
   auto count = simEventsAdd(simE, 0, events);
   if(count == 0) {
-    Event dummy = Event();
-    simEventsAdd(simE, 0, dummy);
-    dummy.notify();
+    auto event = Process.self._timed;
+    // Event dummy = Event();
+    // dummy.initialize("waitAll");
+    simEventsAdd(simE, 0, event);
+    event.notify();
   }
   wait(simE);
 }
@@ -4281,6 +4325,7 @@ private void waitForEvent()(EventObj event) {
 
 void waitDelta() {
   Event event = Event();
+  event.initialize("waitDelta");
   event.notify(DELTA);
   wait(event);
 }
@@ -4294,7 +4339,7 @@ void waitForks() {
   Process[] procs = Process.self._esdl__getChildProcsHier();
   EventObj[] events;
   foreach(proc; procs) {
-    events ~= proc.getRecEvent();
+    events ~= proc.getEndedTreeEvent();
   }
   waitAll(events);
 }
@@ -5514,11 +5559,13 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     synchronized(this) {
       _persist = new PersistFlag;
-      _ended.initialize(this);
-      _endedTree.initialize(this);
+      _ended.initialize("_ended", this);
+      _endedTree.initialize("_endedTree", this);
       _stage = stage;
 
       _timed = new EventObj(this);
+      _timed._esdl__nomenclate("_timed(wait)");
+      _timed._esdl__setObjId();
 
       state = ProcState.STARTING;
       this.setRandomSeed();
@@ -5535,11 +5582,13 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     synchronized(this) {
       _persist = new PersistFlag;
-      _ended.initialize(this);
-      _endedTree.initialize(this);
+      _ended.initialize("_ended", this);
+      _endedTree.initialize("_endedTree", this);
       _stage = stage;
 
       _timed = new EventObj(this);
+      _timed._esdl__nomenclate("_timed(wait)");
+      _timed._esdl__setObjId();
 
       state = ProcState.STARTING;
       this.setRandomSeed();
@@ -5680,7 +5729,7 @@ abstract class Process: Procedure, HierComp, EventClient
     assert(false, "Cannot notify a Process: " ~ this.getFullName);
   }
 
-  final bool schedule(SimTime steps) {
+  final bool schedule(SimTime steps, bool waits=true) {
     assert(false, "Cannot notify a Process: " ~ this.getFullName);
   }
 
@@ -5768,11 +5817,11 @@ abstract class Process: Procedure, HierComp, EventClient
     this._endedTree.wait();
   }
 
-  final EventObj getEvent() {
+  final EventObj getEndedEvent() {
     return _ended;
   }
 
-  final EventObj getRecEvent() {
+  final EventObj getEndedTreeEvent() {
     return _endedTree;
   }
 
@@ -6334,22 +6383,24 @@ class Fork
 {
   protected Process[] _procs;
 
-  Event _allDone;
-  Event _anyDone;
+  // Event _allDone;
+  // Event _anyDone;
 
   private this(Process[] tasks) {
     synchronized(this) {
       _procs = tasks;
-      AndSimEvent allDone = new AndSimEvent();
-      OrSimEvent  anyDone = new OrSimEvent();
+      // AndSimEvent allDone = new AndSimEvent();
+      // OrSimEvent  anyDone = new OrSimEvent();
       foreach(_proc; _procs) {
-	auto event = _proc.getEvent;
-	simEventsAdd(allDone, 0, event);
-	simEventsAdd(anyDone, 0, event);
+	// auto event = _proc.getEndedEvent;
+	// simEventsAdd(allDone, 0, event);
+	// simEventsAdd(anyDone, 0, event);
 	_proc.setFork(this);
       }
-      _allDone = allDone;
-      _anyDone = anyDone;
+      // _allDone.initialize("_allDone", Process.self);
+      // _allDone = allDone;
+      // _anyDone.initialize("_anyDone", Process.self);
+      // _anyDone = anyDone;
     }
   }
 
@@ -6368,7 +6419,7 @@ class Fork
     EventObj[] events;
     foreach(task; _esdl__getChildProcs()) {
       if(task.isRunnable) {
-	events ~= task.getEvent();
+	events ~= task.getEndedEvent();
       }
     }
     waitAll(events);
@@ -6380,7 +6431,7 @@ class Fork
     EventObj[] events;
     foreach(task; _esdl__getChildProcs()) {
       if(task.isRunnable) {
-	events ~= task.getEvent();
+	events ~= task.getEndedEvent();
       }
       if(task.isDefunct) {
 	return;
@@ -6396,7 +6447,7 @@ class Fork
     EventObj[] events;
     foreach(task; _esdl__getChildProcs()) {
       if(task.isRunnable) {
-	events ~= task.getEvent();
+	events ~= task.getEndedEvent();
       }
     }
     waitAll(events);
@@ -6412,7 +6463,7 @@ class Fork
     EventObj[] events;
     foreach(task; tasks) {
       if(task.isRunnable) {
-	events ~= task.getEvent();
+	events ~= task.getEndedEvent();
       }
     }
     waitAll(events);
@@ -7491,12 +7542,16 @@ abstract class EsdlScheduler
   private TimedEvent[] _immediateQueueAlt;
   // used only when running in slave mode
   private SimTime _masterTime = SimTime(0);
+  private bool _asyncMasterWaits = true;
 
   private bool _asyncDeltaFlag = false;
   private TimedEvent[] _asyncDeltaQueue;
 
   private bool _asyncNoticeFlag = false;
+  private SimTime _asyncLastTime;
+  private int     _asyncDelta = uint.min;
   private AsyncEventNotice[] _asyncNoticeQueue;
+  private AsyncEventNotice[] _asyncNoticeQueueAlt;
 
   // void cancel(EventNotice e);
   // An EventObj can be queued up
@@ -7538,12 +7593,15 @@ abstract class EsdlScheduler
   }
 
   final void insertAsyncNotice(AsyncEventNotice e) {
-    _simulator._asyncSlaveSemaphore.wait();
     synchronized(this) {
       this._asyncNoticeQueue ~= e;
       this._asyncNoticeFlag = true;
     }
-    _simulator._asyncMasterSemaphore.notify();
+    assert(e._time >= _simulator._simTime);
+    _simulator._asyncSimSemaphore.notify();
+    if (e._waits) {
+      _simulator._asyncExtSemaphore.wait();
+    }
   }
   
   final size_t insertDelta(TimedEvent e) {
@@ -7661,6 +7719,10 @@ abstract class EsdlScheduler
     _deltaQueue.length = 0;
 
     foreach(ref event; this._deltaQueueAlt) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Triggering Delta Event %s", event._eventObj.getFullName());
+      }
       event.trigger(_simulator);
     }
     debug(SCHEDULER) {
@@ -7677,6 +7739,10 @@ abstract class EsdlScheduler
 	  foreach(ref event; _asyncDeltaQueue) {
 	    synchronized(event) {
 	      assert(event.isAsync());
+	      debug(EVENTS) {
+		import std.stdio: stderr;
+		stderr.writefln("Triggering Async Event %s", event._eventObj.getFullName());
+	      }
 	      event.trigger(_simulator);
 	    }
 	  }
@@ -7708,6 +7774,10 @@ abstract class EsdlScheduler
     _immediateQueue.length = 0;
 
     foreach(ref event; this._immediateQueueAlt) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Triggering Immediate Event %s", event._eventObj.getFullName());
+      }
       event.trigger(_simulator);
     }
     // tasks = _executor.getRunnableProcs();
@@ -7795,23 +7865,46 @@ class EsdlHeapScheduler : EsdlScheduler
     if (_asyncNoticeFlag) {
       synchronized (this) {
 	if (_asyncNoticeFlag) {
-	  foreach (ref anotice; this._asyncNoticeQueue) {
-	    auto notice = EventNotice.alloc(anotice._time, anotice._event, true);
-	    anotice._event._notice = notice;
-	    // register the timed event with the simulator
-	    anotice._event._schedule = TimedEvent.Schedule.TIMED;
-	    
-	    auto stime = anotice._time;
-	    this.insertNotice(notice);
-	    assert (stime >= _masterTime);
-	    if (stime > _masterTime) {
-	      _masterTime = stime;
-	    }
-	  }
-	  _asyncNoticeQueue.length = 0;
+	  auto asyncNoticeQueueSwap = _asyncNoticeQueueAlt;
+	  _asyncNoticeQueueAlt = _asyncNoticeQueue;
+	  _asyncNoticeQueue = asyncNoticeQueueSwap;
+	  assert(_asyncNoticeQueue.length == 0);
 	  _asyncNoticeFlag = false;
 	}
       }
+      foreach (ref anotice; this._asyncNoticeQueueAlt) {
+	import std.string: format;
+
+	if (_asyncLastTime == anotice._time) {
+	  _asyncDelta += 1;
+	}
+	else {
+	  _asyncLastTime = anotice._time;
+	  _asyncDelta = uint.min;
+	}
+	assert (anotice._event !is null);
+	auto notice = EventNotice.alloc(anotice._time, anotice._event,
+					_asyncDelta);
+	// auto notice = new EventNotice(anotice._time, anotice._event,
+	// 				  null, _asyncDelta);
+
+	anotice._event._notice = notice;
+	// register the timed event with the simulator
+	anotice._event._schedule = TimedEvent.Schedule.TIMED;
+	    
+	auto stime = anotice._time;
+	this.insertNotice(notice);
+
+	_asyncMasterWaits = anotice._waits;
+	    
+	assert (stime >= _masterTime,
+		format("stime is %s and _masterTime is %s",
+		       stime, _masterTime));
+	if (stime > _masterTime) {
+	  _masterTime = stime;
+	}
+      }
+      _asyncNoticeQueueAlt.length = 0;
     }
     if(this._noticeHeap.empty()) {
       debug(SCHEDULER) {
@@ -7848,21 +7941,21 @@ class EsdlHeapScheduler : EsdlScheduler
       stderr.writeln(" > Advancing simulation time to #",
 		     firstEvent.atTime.getVal);
     }
+
     _simulator._simTime = firstEvent.atTime;
+
+    EventNotice nextEvent = firstEvent;
+    
     debug(EVENTS) {size_t numTriggered = 0;}
-    while(firstEvent.atTime == _simulator._simTime) {
-      debug(EVENTS) {
-	import std.stdio: stderr;
-	stderr.writeln("Notifying Timed Event");
-      }
-      firstEvent.trigger(_simulator);
+    while(firstEvent == nextEvent) {
+      nextEvent.trigger(_simulator);
       debug(EVENTS) {++numTriggered;}
       this._noticeHeap.removeFront();
       if(this._noticeHeap.empty()) {
 	break;
       }
       else {
-	firstEvent = this._noticeHeap.front();
+	nextEvent = this._noticeHeap.front();
       }
     }
     debug(EVENTS) {
@@ -8600,23 +8693,38 @@ class EsdlSimulator: EntityIntf
     
 	  while(this.phase is SimPhase.SIMULATE &&
 		_executor.executableThreadsCount is 0) {
-	    if (_schedMode !is SchedMode.MASTER &&
-		_scheduler._masterTime <= _simTime &&
-		nextSimTime() != _simTime) {
-	      assert(_scheduler._masterTime == _simTime);
-	      // Tell the master that we are ready
-	      _asyncSlaveSemaphore.notify();
-	      // _scheduler.loopAsyncNotice();
-	      // Wait to receive the external event from Master
-	      _asyncMasterSemaphore.wait();
-	    }
 	    schedPhase = SchedPhase.TIMED;
 	    _deltaCount = 0;
 	    debug(SCHEDULER) {
 	      import std.stdio: stderr;
 	      stderr.writeln(" > Looking for Timed tasks");
 	    }
-	    final switch(_scheduler.triggerNextEventNotices(runUntil)) {
+
+	    SimRunPhase nextPhase = void;
+
+	    if (_schedMode is SchedMode.MASTER) {
+	      nextPhase = _scheduler.triggerNextEventNotices(runUntil);
+	    }
+	    else {
+	      if (_scheduler._masterTime <= _simTime &&
+		  nextSimTime() != _simTime) { // wait for external master
+		import std.string: format;
+		assert(_scheduler._masterTime == _simTime,
+		       format("_masterTime = %s, _simTime = %s",
+			      _scheduler._masterTime, _simTime));
+		// _scheduler.loopAsyncNotice();
+		// Wait to receive the external event from Master
+		_asyncSimSemaphore.wait();
+	      }
+	      nextPhase = _scheduler.triggerNextEventNotices(runUntil);
+	      // Tell the master that we are ready
+	      if (_scheduler._masterTime <= _simTime &&
+		  _scheduler._asyncMasterWaits) {
+		_asyncExtSemaphore.notify();
+	      }
+	    }
+	    
+	    final switch(nextPhase) {
 	    case SimRunPhase.SIMULATE_DONE:
 	      timeLeft = false;
 	      break;
@@ -8708,8 +8816,8 @@ class EsdlSimulator: EntityIntf
   Semaphore _simTermLock;
   Semaphore _simExitLock;
 
-  Semaphore _asyncSlaveSemaphore;
-  Semaphore _asyncMasterSemaphore;
+  Semaphore _asyncExtSemaphore;
+  Semaphore _asyncSimSemaphore;
 
   final Semaphore elabDoneLock() {
     // synchronized(this) // effectively immutable
@@ -8791,8 +8899,8 @@ class EsdlSimulator: EntityIntf
 	_simDoneLock = new Semaphore(0);
 	_simTermLock = new Semaphore(0);
 	_simExitLock = new Semaphore(0);
-	_asyncMasterSemaphore = new Semaphore(0);
-	_asyncSlaveSemaphore  = new Semaphore(0);
+	_asyncSimSemaphore = new Semaphore(0);
+	_asyncExtSemaphore  = new Semaphore(0);
       }
       catch(Throwable e) {
 	import std.conv: to;
@@ -8826,7 +8934,7 @@ class EsdlSimulator: EntityIntf
 	  catch(Throwable e) {
 	    import std.stdio: stderr;
 	    stderr.writeln("Simulation Root Thread threw exception: ", e);
-	    // throw(e);
+	    throw(e);
 	  }
 	},
 	getRoot().getNumFirstCore());
