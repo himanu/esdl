@@ -686,7 +686,7 @@ class MutexObj: MutexIF, NamedComp
       }
       if(parent !is null) this._esdl__parent = parent;
       _mutex = new core.sync.mutex.Mutex();
-      _event.initialize(this);
+      _event.initialize("_event", this);
     }
   }
 
@@ -867,7 +867,7 @@ class SemaphoreObj: SemaphoreIF, NamedComp
   this(ptrdiff_t n=1, NamedComp parent=null) {
     synchronized(this) {
       this._esdl__setParent(parent);
-      _event.initialize(this);
+      _event.initialize("_event", this);
       _value = n;
     }
   }
@@ -1099,8 +1099,8 @@ class FifoObj(T, size_t N=0): Channel, FifoInIF!T, FifoOutIF!T
  public:
   this(string name="", NamedComp parent=null) {
     synchronized(this) {
-      _readEvent.initialize(this);
-      _writeEvent.initialize(this);
+      _readEvent.initialize("_readEvent", this);
+      _writeEvent.initialize("_writeEvent", this);
       static if(N == 0) {_buffer.length = 4;}
       _free = _buffer.length;
       _esdl__setName(name);
@@ -1649,8 +1649,8 @@ template Signal(uint WIDTH) {
 	  import esdl.data.bvec;
 
 	  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
-	    _signalObj._posedgeEvent.initialize();
-	    _signalObj._negedgeEvent.initialize();
+	    _signalObj._posedgeEvent.initialize("_posedgeEvent");
+	    _signalObj._negedgeEvent.initialize("_negedgeEvent");
 	  }
 	}
       }
