@@ -1420,6 +1420,9 @@ mixin template Randomization()
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
 	  new _esdl__SolverThis(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
+	static if(__traits(compiles, _esdl__setupSolver())) {
+	  _esdl__setupSolver();
+	}
       }
       else {
 	_esdl__getSolver()._esdl__setObjOuter();
@@ -1441,15 +1444,23 @@ mixin template Randomization()
     }
     void seedRandom(int seed) {
       _esdl__randSeed = seed;
+      _esdl__randSeeded = true;
       if(_esdl__solverInst !is null) {
 	_esdl__solverInst._esdl__rGen.seed(seed);
       }
+    }
+    bool _esdl__randSeeded;
+    bool _esdl__isRandSeeded() {
+      return _esdl__randSeeded;
     }
     alias srandom = seedRandom;	// SV names the similar method srandom
     void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
 	  new _esdl__SolverThis(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
+	static if(__traits(compiles, _esdl__setupSolver())) {
+	  _esdl__setupSolver();
+	}
       }
       else {
 	_esdl__getSolver()._esdl__setObjOuter();
