@@ -1392,3 +1392,24 @@ struct Vpi {
     return t;
   }
 }
+
+enum VpiReturnStatus: int {
+    SUCCESS = 0x0,
+    FAILURE = 0x1,
+    DISABLED = 0x2,
+    UNKNOWN = 0x3,
+    FINISHED = 0x4
+}
+
+void vpiReturnFromFunc(T)(T t) {
+  static if (is (T: int)) {
+    vpiHandle systf_handle = vpi_handle(vpiSysTfCall, null);
+    s_vpi_value value;
+    value.format = vpiIntVal;
+    value.value.integer = t;
+    vpi_put_value(systf_handle, &value, null, vpiNoDelay);
+  }
+  else {
+    static assert ("vpiReturnFromFunc undefined for non int values");
+  }
+}
