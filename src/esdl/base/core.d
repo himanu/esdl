@@ -39,6 +39,7 @@ private extern (C) void rt_detachDisposeEvent(Object h, DEvent e);
 /// C++ type static_cast for down-casting when you are sure
 private import std.typetuple: staticIndexOf;
 private import std.traits: BaseClassesTuple, ParameterTypeTuple; // required for staticIndexOf
+private import core.sync.semaphore: CoreSemaphore = Semaphore;
 
 // Coerced casting to help in efficiently upcast when we are sure
 // about the given objects type.
@@ -144,10 +145,12 @@ package interface NamedComp: EsdlObj, TimeContext
   protected void removeProcess(Process t);
 
   final string getFullName() {
-    synchronized(this) {
-      if(this.getParent is this) return(this.getName); // RootEntity
-      else return this.getParent.getFullName ~ "." ~ this.getName;
-    }
+    // do not use synchronized guard here since this traverses through
+    // the hierarchy making dead locks possible
+    // synchronized(this) {
+    if(this.getParent is this) return(this.getName); // RootEntity
+    else return this.getParent.getFullName ~ "." ~ this.getName;
+    // }
   }
 
   void _esdl__nomenclate()(string name);
@@ -1133,15 +1136,17 @@ void _esdl__start(T)(T t) {
 
 // call doFinish for each entity once the simulation is over
 void _esdl__finish(T)(T t) {
-  synchronized(t) {
-    // static if(__traits(compiles, t.doFinish()))
-    // {
-    t.doFinish();
-    // }
-    foreach(child; t.getChildComps()) {
-      _esdl__finish(child);
-    }
+  // traverses through the hierarchy, putting synchronized locks here
+  // is an invitation to dead-locks
+  // synchronized(t) {
+  // static if(__traits(compiles, t.doFinish()))
+  // {
+  t.doFinish();
+  // }
+  foreach(child; t.getChildComps()) {
+    _esdl__finish(child);
   }
+  // }
 }
 
 
@@ -1417,7 +1422,6 @@ interface ElabContext: HierComp
     }
     l._esdl__inst!I(t, l);
     synchronized(l) {
-      import core.sync.semaphore: Semaphore;
       static assert(is(T unused: ElabContext),
 		    "Only ElabContext components are allowed to instantiate "
 		    "other ElabContext components");
@@ -2583,25 +2587,10 @@ class EventObj: EventAgent, NamedComp
     }
   }
 
-  protected void trigger(EsdlSimulator sim) {
-    if(_async is true) {
-      // The synchronization guard is required since the same event
-      // may otherwise be getting notified simultaneously by an
-      // external actor
-      // synchronized(this) {
-      this._trigger(sim);
-      // }
-    }
-    else {
-      this._trigger(sim);
-    }
-  }
-
-
   // This function is always called in the schedule phase, when only a
   // single thread is active -- do we need synchronization guards
   // here?
-  protected void _trigger(EsdlSimulator sim) {
+  protected void trigger(EsdlSimulator sim) {
     _triggeredAt = sim.updateCount;
     debug(EVENTS) {
       import std.stdio: stderr;
@@ -2735,7 +2724,12 @@ class EventObj: EventAgent, NamedComp
   final SimEvent getTimed() {
     synchronized(this) {
       if(this._simEvent is null) {
-	this._simEvent = new TimedEvent(this, _async);
+	if (this._async) {
+	  this._simEvent = new AsyncTimedEvent(this);
+	}
+	else {
+	  this._simEvent = new TimedEvent(this);
+	}
 	return this._simEvent;
       }
       if(this._simEvent.isTimed()) {
@@ -2852,6 +2846,9 @@ class EventObj: EventAgent, NamedComp
     return _async;
   }
 
+  void disableWait() {
+    _simEvent.disableWait();
+  }
 }
 
 alias Event = EventWrapperStruct!(EventObj, false);
@@ -3453,6 +3450,10 @@ abstract private class SimEvent: EventClient
     return getRoot().simulator();
   }
 
+  void disableWait() {
+    // do nothing -- only the AsyncTimedEvent instances have
+    // actionable code in this method 
+  }
 }
 
 abstract class EventExpr: SimEvent
@@ -3470,20 +3471,124 @@ abstract class EventList: SimEvent
   private EventObj[] _agents;
 }
 
+private class AsyncTimedEvent: TimedEvent
+{
+  // _waits is set/reset only by the RootThread
+  bool _waits = false;
+
+  // Effectively immutable
+  AsyncLock _asyncWaitLock;
+  
+  override AsyncLock asyncWaitLock() {
+    return _asyncWaitLock;
+  }
+
+  override bool waits() {
+    return _waits;
+  }
+
+  override void waits(bool w) {
+    _waits = w;
+  }
+
+  this(EventObj event) {
+    synchronized(this) {
+      super(event);
+      _asyncWaitLock  = new AsyncLock(event.getRoot());
+    }
+  }
+
+  override void trigger(EsdlSimulator sim) {
+    debug(EVENTS) {
+      import std.stdio;
+      stderr.writeln("Triggered AsyncTimedEvent: ", _eventObj.getFullName);
+      stderr.writeln("Async Pending Count decremented to: ",
+		     sim._asyncPendingCount);
+    }
+    --(sim._asyncPendingCount);
+    if (this._waits) {
+      debug(EVENTS) {
+	stderr.writeln("Triggered AsyncTimedEvent _waits: ",
+		       _eventObj.getFullName);
+      }
+      _waits = false;
+      _asyncWaitLock.notify();
+    }
+    super.trigger(sim);
+  }
+
+  override bool schedule(SimTime stime, bool waits=true) {
+    synchronized(this) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Scheduled notification for %s for time %s waits %s",
+			_eventObj.getFullName(), stime, waits);
+      }
+      if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
+	if(this._schedule != Schedule.NONE) {
+	  this.cancel();
+	}
+	auto anotice = AsyncEventNotice(stime, this, waits);
+	// Create a new timed event
+	// _notice = EventNotice.alloc(stime, this);
+	// // register the timed event with the simulator
+	// this._schedule = Schedule.TIMED;
+	this.getSimulator._scheduler.insertAsyncNotice(anotice);
+	return true;
+      }
+      else { // ! if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
+	// Check if the event is already scheduled and at what time
+	if(this._schedule == Schedule.TIMED) {
+	  // Compare if the new schedule is sooner than the old
+	  if(stime >= _notice.atTime) {
+	    // Event already scheduled for an earlier time
+	    return false;
+	  }
+	  else {
+	    // Event needs rescheduling
+	    this.cancel();
+	  }
+	}
+	// Create a new timed event
+	auto anotice = AsyncEventNotice(stime, this, waits);
+	// register the timed event with the simulator
+	// this._schedule = Schedule.TIMED;
+	// writeln("Before Insert");
+	this.getSimulator._scheduler.insertAsyncNotice(anotice);
+	return true;
+      }
+    }
+  }
+
+  override bool isAsync() { // _async is immutable
+    return true;
+  }
+
+  override void disableWait() {
+    // if (this._waits) {
+    debug (EVENTS) {
+      import std.stdio;
+      stderr.writeln("Disable wait on AsyncTimedEvent: ",
+		     _eventObj.getFullName);
+    }
+    _waits = false;
+    _asyncWaitLock.disable();
+    // }
+  }
+}
+
 private enum NotifyPolicy: bool
   {   EARLIER = false,
       OVERRIDE = true
       }
 
-final private class TimedEvent: SimEvent
+private class TimedEvent: SimEvent
 {
-  // Whether this event can be notified by an asynchronous agent
-  private immutable bool _async;
-  
-  this(EventObj event, bool async) {
+  import core.sync.semaphore: Semaphore;
+
+  this(EventObj event) {
     synchronized(this) {
       super(event);
-      _async = async;
     }
   }
 
@@ -3500,17 +3605,17 @@ final private class TimedEvent: SimEvent
   private EventNotice _notice;
   private size_t _eventQueueIndex;
 
-  final override bool isTimed() {
+  override bool isTimed() {
     return true;
   }
 
-  final override void cancel() { // user interface
+  override void cancel() { // user interface
     synchronized(this) {
       this._cancel();
     }
   }
 
-  private final void _cancel() {
+  private void _cancel() {
     final switch(this._schedule) {
     case Schedule.NONE:
       // Not scheduled -- do nothing
@@ -3541,7 +3646,7 @@ final private class TimedEvent: SimEvent
 
   // called in the single threaded schedule phase, hence no need for
   // the synchronization
-  private final void _trigger(EsdlSimulator sim) {
+  override void trigger(EsdlSimulator sim) {
     if(_schedule == Schedule.DELTA ||
        _schedule == Schedule.NOW) {
       this._schedule = Schedule.NONE;
@@ -3553,16 +3658,7 @@ final private class TimedEvent: SimEvent
     this._getObj.trigger(sim);
   }
 
-  override final void trigger(EsdlSimulator sim) {
-    if(_async) {
-      _trigger(sim);
-    }
-    else {
-      _trigger(sim);
-    }
-  }
-
-  final override bool notify() {
+  override bool notify() {
     // Cancel the already scheduled notifications
     synchronized(this) {
       debug(EVENTS) {
@@ -3600,7 +3696,7 @@ final private class TimedEvent: SimEvent
     // }
   }
 
-  final override bool notify(SimTime steps) {
+  override bool notify(SimTime steps) {
     synchronized(this) {
       debug(EVENTS) {
 	import std.stdio: stderr;
@@ -3673,65 +3769,42 @@ final private class TimedEvent: SimEvent
   }
 
   // should only be called by external actor on an AsyncEvent
-  final override bool schedule(SimTime stime, bool waits=true) {
-    synchronized(this) {
-      debug(EVENTS) {
-	import std.stdio: stderr;
-	stderr.writefln("Scheduled notification for %s for time %s waits %s",
-			_eventObj.getFullName(), stime, waits);
-      }
-      if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
-	if(this._schedule != Schedule.NONE) {
-	  this.cancel();
-	}
-	auto anotice = AsyncEventNotice(stime, this, waits);
-	// Create a new timed event
-	// _notice = EventNotice.alloc(stime, this);
-	// // register the timed event with the simulator
-	// this._schedule = Schedule.TIMED;
-	this.getSimulator._scheduler.insertAsyncNotice(anotice);
-	return true;
-      }
-      else { // ! if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
-	// Check if the event is already scheduled and at what time
-	if(this._schedule == Schedule.TIMED) {
-	  // Compare if the new schedule is sooner than the old
-	  if(stime >= _notice.atTime) {
-	    // Event already scheduled for an earlier time
-	    return false;
-	  }
-	  else {
-	    // Event needs rescheduling
-	    this.cancel();
-	  }
-	}
-	// Create a new timed event
-	auto anotice = AsyncEventNotice(stime, this, waits);
-	// register the timed event with the simulator
-	// this._schedule = Schedule.TIMED;
-	// writeln("Before Insert");
-	this.getSimulator._scheduler.insertAsyncNotice(anotice);
-	return true;
-      }
-    }
+  override bool schedule(SimTime stime, bool waits=true) {
+    assert(false, "schedule can be called only for AsyncTimedEvent");
   }
 
   // called in the single threaded schedule phase, hence no need for
   // the synchronization
-  protected final override void poke(EsdlSimulator sim, EventObj agent, size_t index) {
+  protected override void poke(EsdlSimulator sim, EventObj agent, size_t index) {
     assert(false, "TimedEvent not dependent on any other event: "
 	   ~ this._eventObj.getFullName() ~ " -- poked");
   }
 
 
-  protected final override void addAgent(EventObj agent) {
+  protected override void addAgent(EventObj agent) {
     assert(false, "TimedEvent not dependent on any other event: "
 	   ~ this._eventObj.getFullName() ~ " -- addAgent");
   }
 
-  private bool isAsync() { // _async is immutable
-    return _async;
+  bool isAsync() { // _async is immutable
+    return false;
   }
+
+  Semaphore asyncWaitLock() {
+    assert (false, "Property asyncWaitLock is defined only for" ~
+	    " AsyncTimedEvent");
+  }
+
+  bool waits() {
+    assert (false, "Property waits is defined only for" ~
+	    " AsyncTimedEvent");
+  }
+
+  void waits(bool w) {
+    assert (false, "Property waits is defined only for" ~
+	    " AsyncTimedEvent");
+  }
+
 }
 
 // Mostly like the OrSimEvent -- the only difference is that a
@@ -3898,7 +3971,8 @@ final class EventNotice
 
   private TimedEvent _event;
 
-  int _delta;
+  private int _asyncDelta;
+  private bool _nulled = false;
 
   static EventNotice alloc(SimTime t, TimedEvent event, int delta=0) {
     // assert(t > SimTime(0));
@@ -3916,7 +3990,8 @@ final class EventNotice
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
-	  f._delta = delta;
+	  f._nulled = false;
+	  f._asyncDelta = delta;
 	}
       }
       else {
@@ -3930,7 +4005,8 @@ final class EventNotice
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
-	  f._delta = delta;
+	  f._nulled = false;
+	  f._asyncDelta = delta;
 	}
       }
       else {
@@ -3944,7 +4020,8 @@ final class EventNotice
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
-	  f._delta = delta;
+	  f._nulled = false;
+	  f._asyncDelta = delta;
 	}
       }
       else {
@@ -3957,10 +4034,11 @@ final class EventNotice
   // called in the single threaded schedule phase, hence no need for
   // the synchronization
   final void trigger(EsdlSimulator sim) {
-    if(this._event is null) {
+    if(this._nulled is true) {
       debug(EVENTS) {
 	import std.stdio: stderr;
-	stderr.writeln("An annulled event notice got triggered");
+	stderr.writefln("Annulled event %s notice got triggered time(%s) delta(%s)",
+			_event._eventObj.getFullName(), unionTimeNext._time, _asyncDelta);
       }
     }
     else {
@@ -3969,7 +4047,7 @@ final class EventNotice
 	stderr.writefln("Triggering Timed Event %s @%s, aync delta %s",
 			_event._eventObj.getFullName(),
 			_event._eventObj.getRoot.getSimTime,
-			_delta);
+			_asyncDelta);
       }
       this._event.trigger(sim);
     }
@@ -3981,6 +4059,7 @@ final class EventNotice
     auto thread = f._thread;
     if (thread !is null) {
       f._event = null;
+      f._nulled = true;
       f.next = thread._eventNoticeList;
       thread._eventNoticeList = f;
     }
@@ -4003,7 +4082,7 @@ final class EventNotice
 
   final void annul() {
     synchronized(this) {
-      this._event = null;
+      this._nulled = true;
     }
   }
 
@@ -4013,8 +4092,9 @@ final class EventNotice
     synchronized(this) {
       this.time = t;
       this._event = event;
+      this._nulled = false;
       this._thread = thread;
-      this._delta = delta;
+      this._asyncDelta = delta;
     }
   }
 
@@ -4023,10 +4103,68 @@ final class EventNotice
     // if(this is null) return 1;
     // time is effectively immutable
     auto retval = this.time.opCmp(rhs.time);
+    // return retval;
     if (retval) return retval;
-    else if (this._delta == rhs._delta) return 0;
-    else if (this._delta < rhs._delta) return -1;
+    else if (this._asyncDelta == rhs._asyncDelta) return 0;
+    else if (this._asyncDelta < rhs._asyncDelta) return -1;
     else return 1;
+  }
+}
+
+class SimTerminatedException: Throwable
+{
+  this() {
+    super("Simulation has been Terminated!!");
+  }
+}
+
+class AsyncLockDisabledException: Throwable
+{
+  this() {
+    super("Wait on AsyncLock has been disabled!!");
+  }
+}
+
+class AsyncLock: CoreSemaphore
+{
+  RootEntityIntf _root;
+  bool _disabled;
+
+  bool disabled() {
+    synchronized(this) {
+      return _disabled;
+    }
+  }
+  
+  override void wait() {
+    if (! disabled()) {
+      super.wait();
+    }
+    if (_root.isTerminated()) {
+      throw (new SimTerminatedException());
+    }
+    if (disabled()) {
+      throw (new AsyncLockDisabledException());
+    }
+  }
+  
+  override void notify() {
+    super.notify();
+  }
+
+  this(RootEntityIntf root, int tokens=0) {
+    synchronized(this) {
+      super(tokens);
+      _root = root;
+      _root.getSimulator().registerAsyncLock(this);
+    }
+  }
+
+  void disable() {
+    synchronized(this) {
+      _disabled = true;
+    }
+    this.notify();
   }
 }
 
@@ -4830,7 +4968,6 @@ template Worker(alias F, int R=0, size_t S=0)
 	}
 	l._esdl__inst!I(t, l);
 	synchronized(l) {
-	  import core.sync.semaphore: Semaphore;
 	  static if(is(T unused: ElabContext)) {
 	    t._esdl__addChildObj(l);
 	    t._esdl__addChildTask(l);
@@ -4893,7 +5030,6 @@ template Task(alias F, int R=0, size_t S=0)
 	}
 	l._esdl__inst!I(t, l);
 	synchronized(l) {
-	  import core.sync.semaphore: Semaphore;
 	  static if(is(T unused: ElabContext)) {
 	    t._esdl__addChildObj(l);
 	    t._esdl__addChildTask(l);
@@ -4953,7 +5089,6 @@ template Routine(alias F, int R=0)
 	}
 	l._esdl__inst!I(t, l);
 	synchronized(l) {
-	  import core.sync.semaphore: Semaphore;
 	  static if(is(T unused: ElabContext)) {
 	    t._esdl__addChildObj(l);
 	    t._esdl__addChildTask(l);
@@ -7541,15 +7676,15 @@ abstract class EsdlScheduler
   private TimedEvent[] _immediateQueue;
   private TimedEvent[] _immediateQueueAlt;
   // used only when running in slave mode
-  private SimTime _masterTime = SimTime(0);
-  private bool _asyncMasterWaits = true;
+  // private SimTime _masterTime = SimTime(0);
+  // private bool _asyncMasterWaits = true;
 
   private bool _asyncDeltaFlag = false;
   private TimedEvent[] _asyncDeltaQueue;
 
   private bool _asyncNoticeFlag = false;
   private SimTime _asyncLastTime;
-  private int     _asyncDelta = uint.min;
+  private int     _asyncDelta = int.min;
   private AsyncEventNotice[] _asyncNoticeQueue;
   private AsyncEventNotice[] _asyncNoticeQueueAlt;
 
@@ -7557,8 +7692,10 @@ abstract class EsdlScheduler
   // An EventObj can be queued up
   abstract void insertNotice(EventNotice e);
   abstract SimTime nextSimTime();
+  abstract void assimilateAsyncNotices();
   abstract SimRunPhase triggerNextEventNotices(SimTime maxTime);
-
+  abstract void finalize();
+  
   this(EsdlSimulator simulator) {
     synchronized(this) {
       this._simulator = simulator;
@@ -7571,6 +7708,7 @@ abstract class EsdlScheduler
 	import std.stdio;
 	stderr.writeln("Resetting the scheduler");
       }
+      this.finalize();
       _deltaQueue.length = 0;
       _deltaQueueAlt.length = 0;
       _immediateQueueAlt.length = 0;
@@ -7593,14 +7731,29 @@ abstract class EsdlScheduler
   }
 
   final void insertAsyncNotice(AsyncEventNotice e) {
+    import std.string: format;
     synchronized(this) {
       this._asyncNoticeQueue ~= e;
       this._asyncNoticeFlag = true;
+      assert(e._time >= _simulator._simTime,
+	     format("AsyncEventNotice time (%s) < Simulator time (%s)",
+		    e._time, _simulator._simTime));
+      if (_asyncNoticeQueue.length == 1) {
+	_simulator._asyncSimSemaphore.notify();
+      }
     }
-    assert(e._time >= _simulator._simTime);
-    _simulator._asyncSimSemaphore.notify();
     if (e._waits) {
-      _simulator._asyncExtSemaphore.wait();
+      debug(EVENTS) {
+	import std.stdio;
+	stderr.writefln("Master waits (@%s) on: %s",
+			e._time, e._event._eventObj.getFullName());
+      }
+      e._event.asyncWaitLock.wait();
+      debug(EVENTS) {
+	import std.stdio;
+	stderr.writefln("Master unlocked (@%s) on: %s",
+			e._time, e._event._eventObj.getFullName());
+      }
     }
   }
   
@@ -7783,11 +7936,13 @@ abstract class EsdlScheduler
     // tasks = _executor.getRunnableProcs();
     debug(SCHEDULER) {
       import std.stdio: stderr;
-      stderr.writeln(" > Got Immediate workers: ", _executor.executableWorkersCount);
+      stderr.writeln(" > Got Immediate workers: ",
+		     _simulator._executor.executableWorkersCount);
     }
     debug(SCHEDULER) {
       import std.stdio: stderr;
-      stderr.writeln(" > Got Immediate tasks: ", _executor.executableTasksCount);
+      stderr.writeln(" > Got Immediate tasks: ",
+		     _simulator._executor.executableTasksCount);
     }
 
   }
@@ -7862,50 +8017,6 @@ class EsdlHeapScheduler : EsdlScheduler
   }
 
   final override SimRunPhase triggerNextEventNotices(SimTime maxTime) {
-    if (_asyncNoticeFlag) {
-      synchronized (this) {
-	if (_asyncNoticeFlag) {
-	  auto asyncNoticeQueueSwap = _asyncNoticeQueueAlt;
-	  _asyncNoticeQueueAlt = _asyncNoticeQueue;
-	  _asyncNoticeQueue = asyncNoticeQueueSwap;
-	  assert(_asyncNoticeQueue.length == 0);
-	  _asyncNoticeFlag = false;
-	}
-      }
-      foreach (ref anotice; this._asyncNoticeQueueAlt) {
-	import std.string: format;
-
-	if (_asyncLastTime == anotice._time) {
-	  _asyncDelta += 1;
-	}
-	else {
-	  _asyncLastTime = anotice._time;
-	  _asyncDelta = uint.min;
-	}
-	assert (anotice._event !is null);
-	auto notice = EventNotice.alloc(anotice._time, anotice._event,
-					_asyncDelta);
-	// auto notice = new EventNotice(anotice._time, anotice._event,
-	// 				  null, _asyncDelta);
-
-	anotice._event._notice = notice;
-	// register the timed event with the simulator
-	anotice._event._schedule = TimedEvent.Schedule.TIMED;
-	    
-	auto stime = anotice._time;
-	this.insertNotice(notice);
-
-	_asyncMasterWaits = anotice._waits;
-	    
-	assert (stime >= _masterTime,
-		format("stime is %s and _masterTime is %s",
-		       stime, _masterTime));
-	if (stime > _masterTime) {
-	  _masterTime = stime;
-	}
-      }
-      _asyncNoticeQueueAlt.length = 0;
-    }
     if(this._noticeHeap.empty()) {
       debug(SCHEDULER) {
 	import std.stdio;
@@ -7965,6 +8076,59 @@ class EsdlHeapScheduler : EsdlScheduler
     }
     return SimRunPhase.SIMULATE;
   }
+
+  final override void assimilateAsyncNotices() {
+    synchronized (this) {
+      auto asyncNoticeQueueSwap = _asyncNoticeQueueAlt;
+      _asyncNoticeQueueAlt = _asyncNoticeQueue;
+      _asyncNoticeQueue = asyncNoticeQueueSwap;
+      assert(_asyncNoticeQueue.length == 0);
+    }
+    foreach (ref anotice; this._asyncNoticeQueueAlt) {
+      import std.string: format;
+
+      if (_asyncLastTime == anotice._time) {
+	_asyncDelta += 1;
+      }
+      else {
+	_asyncLastTime = anotice._time;
+	_asyncDelta = int.min;
+      }
+      assert (anotice._event !is null);
+      anotice._event.waits = anotice._waits;
+	
+      auto notice = EventNotice.alloc(anotice._time, anotice._event,
+				      _asyncDelta);
+      // auto notice = new EventNotice(anotice._time, anotice._event,
+      // 				  null, _asyncDelta);
+
+      anotice._event._notice = notice;
+      // register the timed event with the simulator
+      anotice._event._schedule = TimedEvent.Schedule.TIMED;
+	    
+      auto stime = anotice._time;
+      this.insertNotice(notice);
+
+      _simulator._asyncPendingCount++;
+      debug(EVENTS) {
+	import std.stdio;
+	stderr.writeln("Async Pending Count incremented to: ",
+		       _simulator._asyncPendingCount);
+      }
+    }
+    _asyncNoticeQueueAlt.length = 0;
+  }
+
+  override void finalize() {
+    while (! this._noticeHeap.empty()) {
+      EventNotice event = this._noticeHeap.front();
+      event._event.disableWait();
+      this._noticeHeap.removeFront();
+    }
+    foreach (event; _asyncNoticeQueue) {
+      event._event.disableWait();
+    }
+  }
 }
 
 interface RootEntityIntf: EntityIntf
@@ -8010,6 +8174,8 @@ interface RootEntityIntf: EntityIntf
   void _esdl__unboundPorts();
   void _esdl__unboundExePorts();
 
+  void setMasterMode();
+  
   // Exit status
   abstract ubyte getExitStatus();
 
@@ -8213,6 +8379,7 @@ interface RootEntityIntf: EntityIntf
 	}
       }
       if(allWithdrawn) {
+	setMasterMode();
 	this.finish();
       }
     }
@@ -8409,6 +8576,10 @@ abstract class RootEntity: RootEntityIntf
   void setVhpiMode() {
     this._simulator.setMode(SchedMode.VHPI);
   }
+
+  void setMasterMode() {
+    this._simulator.setMode(SchedMode.MASTER);
+  }
 }
 
 enum SchedMode: byte {
@@ -8424,6 +8595,8 @@ class EsdlSimulator: EntityIntf
   mixin Elaboration;
 
   SchedMode _schedMode;
+
+  AsyncLock[] _asyncLocks;
 
   void setMode(SchedMode mode) {
     synchronized(this) {
@@ -8448,6 +8621,8 @@ class EsdlSimulator: EntityIntf
   private SimTime _simTime = SimTime(0);
   // number of delta cycles at the current simulation time
   private size_t  _deltaCount = 0;
+
+  private int _asyncPendingCount = 0;
 
   void addSimHook(SimPhase phase, DelegateThunk thunk) {
     synchronized(this) {
@@ -8612,6 +8787,21 @@ class EsdlSimulator: EntityIntf
     forkSim(runTime-getRoot().getSimTime());
   }
 
+  final void registerAsyncLock(AsyncLock lock) {
+    synchronized(this) {
+      _asyncLocks ~= lock;
+    }
+  }
+  
+  final void finalize() {
+    this._scheduler.finalize();
+    synchronized(this) {
+      foreach (lock; _asyncLocks) {
+	lock.disable();
+      }
+    }
+  }
+
   final void terminate() {
     synchronized(this) {
       if(phase !is SimPhase.PAUSE) {
@@ -8626,6 +8816,7 @@ class EsdlSimulator: EntityIntf
       this._executor.terminateProcs(getRoot()._esdl__getChildProcsHier());
       this._executor.joinPoolThreads();
       getRoot.message("Simulation Complete");
+      this.finalize();
       RootEntity.delRoot(this.getRoot());
       getRoot._esdl__finish();
       simTermLock.notify();
@@ -8667,11 +8858,13 @@ class EsdlSimulator: EntityIntf
 
       // Reset the scheduler if termStage has been requested
       if(_termStageRequested is true) {
-	_scheduler.reset();
-	_termStageRequested = false;
 	if(_termSimRequested is true) {
 	  _executor._incrMaxStage();
 	  _termSimRequested = false;
+	}
+	else {
+	  _scheduler.reset();
+	  _termStageRequested = false;
 	}
       }
 
@@ -8702,26 +8895,32 @@ class EsdlSimulator: EntityIntf
 
 	    SimRunPhase nextPhase = void;
 
-	    if (_schedMode is SchedMode.MASTER) {
+	    if (_schedMode is SchedMode.MASTER ||
+		nextSimTime() == _simTime) {
 	      nextPhase = _scheduler.triggerNextEventNotices(runUntil);
 	    }
 	    else {
-	      if (_scheduler._masterTime <= _simTime &&
-		  nextSimTime() != _simTime) { // wait for external master
-		import std.string: format;
-		assert(_scheduler._masterTime == _simTime,
-		       format("_masterTime = %s, _simTime = %s",
-			      _scheduler._masterTime, _simTime));
+	      if (_asyncPendingCount <= 0 //  &&
+		  // nextSimTime() != _simTime
+		  ) {
+		assert (_asyncPendingCount == 0, "Negative _asyncPendingCount!!");
+		// if (_scheduler._masterTime <= _simTime &&
+		// 	  nextSimTime() != _simTime) { // wait for external master
+		// 	import std.string: format;
+		// 	assert(_scheduler._masterTime == _simTime,
+		// 	       format("_masterTime = %s, _simTime = %s",
+		// 		      _scheduler._masterTime, _simTime));
 		// _scheduler.loopAsyncNotice();
 		// Wait to receive the external event from Master
 		_asyncSimSemaphore.wait();
 	      }
+	      _scheduler.assimilateAsyncNotices();
 	      nextPhase = _scheduler.triggerNextEventNotices(runUntil);
 	      // Tell the master that we are ready
-	      if (_scheduler._masterTime <= _simTime &&
-		  _scheduler._asyncMasterWaits) {
-		_asyncExtSemaphore.notify();
-	      }
+	      // if (_scheduler._masterTime <= _simTime &&
+	      // 	  _scheduler._asyncMasterWaits) {
+	      // 	_asyncExtSemaphore.notify();
+	      // }
 	    }
 	    
 	    final switch(nextPhase) {
@@ -8737,6 +8936,7 @@ class EsdlSimulator: EntityIntf
 	      break;
 	    case SimRunPhase.SIMULATION_DONE:
 	      this.setPhase(SimPhase.SIMULATION_DONE);
+	      this._scheduler.finalize();
 	      break;
 	    case SimRunPhase.STAGE_DONE:
 	      if(checkPersistFlags()) {
@@ -8816,7 +9016,7 @@ class EsdlSimulator: EntityIntf
   Semaphore _simTermLock;
   Semaphore _simExitLock;
 
-  Semaphore _asyncExtSemaphore;
+  // Semaphore _asyncExtSemaphore;
   Semaphore _asyncSimSemaphore;
 
   final Semaphore elabDoneLock() {
@@ -8900,7 +9100,7 @@ class EsdlSimulator: EntityIntf
 	_simTermLock = new Semaphore(0);
 	_simExitLock = new Semaphore(0);
 	_asyncSimSemaphore = new Semaphore(0);
-	_asyncExtSemaphore  = new Semaphore(0);
+	// _asyncExtSemaphore  = new Semaphore(0);
       }
       catch(Throwable e) {
 	import std.conv: to;
