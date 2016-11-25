@@ -33,6 +33,14 @@ struct Time
   ulong _value;
   byte _unit;
 
+  ulong value() {
+    return _value;
+  }
+
+  byte unit() {
+    return _unit;
+  }
+
   this(long value, byte unit) {
     _value = value;
     _unit = unit;
