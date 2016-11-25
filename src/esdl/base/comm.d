@@ -809,7 +809,7 @@ class MutexObj: MutexIF, NamedComp
   public final void initialize(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
-	assert(false, "Must provide parent for MutexObj being "
+	assert(false, "Must provide parent for MutexObj being " ~
 	       "\"initialize\" during elaboration");
       }
       if(_mutexObj is null) {
@@ -1871,19 +1871,19 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
       auto size = vpi_get(vpiSize, vpiNetHandle);
       static if(isBitVector!T) {
 	if(size !is T.SIZE) {
-	  assert(false, "hdlBind: Signal size does not match with the size"
+	  assert(false, "hdlBind: Signal size does not match with the size " ~
 		 "of the net " ~ net);
 	}
       }
       else static if(isBoolean!T) {
 	if(size !is 1) {
-	  assert(false, "hdlBind: Signal size does not match with the size"
+	  assert(false, "hdlBind: Signal size does not match with the size " ~
 		 "of the net" ~ net);
 	}
       }
       else {
 	if(size !is 8 * T.sizeof) {
-	  assert(false, "hdlBind: Signal size does not match with the size"
+	  assert(false, "hdlBind: Signal size does not match with the size " ~
 		 "of the net" ~ net);
 	}
       }
