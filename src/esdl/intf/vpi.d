@@ -1393,7 +1393,7 @@ struct Vpi {
   }
 }
 
-enum VpiReturnStatus: int {
+enum VpiStatus: int {
     SUCCESS = 0x0,
     FAILURE = 0x1,
     DISABLED = 0x2,
@@ -1401,7 +1401,7 @@ enum VpiReturnStatus: int {
     FINISHED = 0x4
 }
 
-void vpiReturnFromFunc(T)(T t) {
+void vpiReturnVal(T)(T t) {
   static if (is (T: int)) {
     vpiHandle systf_handle = vpi_handle(vpiSysTfCall, null);
     s_vpi_value value;
@@ -1410,6 +1410,6 @@ void vpiReturnFromFunc(T)(T t) {
     vpi_put_value(systf_handle, &value, null, vpiNoDelay);
   }
   else {
-    static assert ("vpiReturnFromFunc undefined for non int values");
+    static assert ("vpiReturnVal undefined for non int values");
   }
 }
