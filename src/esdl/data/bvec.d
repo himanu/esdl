@@ -654,6 +654,30 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
   }
 }
 
+template ToBitSize(alias N) if (isIntegral!(typeof(N)) && N >= 0) {
+  static if (N == 0 || N == 1) enum ToBitSize = 1;
+  else enum ToBitSize = ToBitSize!(N/2) + 1;
+}
+
+template ToBitSize(alias N) if (isIntegral!(typeof(N)) && N < 0) {
+  static if (N == 0) enum ToBitSize = 1;
+  static if (N == -1) enum ToBitSize = 2;
+  else enum ToBitSize = ToBitSize!(N/2) + 1;
+}
+
+auto toBit(alias N)() if (isIntegral!(typeof(N))) {
+  static if (N >= 0) {
+    UBit!(ToBitSize!N) val;
+    val._from(N);
+    return val;
+  }
+  else {
+    Bit!(ToBitSize!N) val;
+    val._from(N);
+    return val;
+  }
+}
+
 enum UBit!1 BIT_0   = UBit!1(0);
 enum UBit!1 BIT_1   = UBit!1(1);
 alias _0 = BIT_0;
@@ -1246,8 +1270,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	static if(L) _bval[0] = 0;
 	static if(STORESIZE > 1) {
 	  for(size_t i=1; i != STORESIZE; ++i) {
-	    rhs >>= store_t.sizeof*4; // '>>' is sign-extending shift
-	    rhs >>= store_t.sizeof*4; // '>>' is sign-extending shift
+	    rhs >>= store_t.sizeof*8; // '>>' is sign-extending shift
 	    _aval[i] = cast(store_t) rhs;
 	    static if(L) _bval[i] = 0;
 	  }
