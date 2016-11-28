@@ -62,41 +62,406 @@ private interface EsdlObj {}
 struct _esdl__ignore {};
 struct _esdl__component {};
 
-enum ParallelPolicy: byte
-  {   MULTI = byte.min,
-      _UNDEFINED_ = -1,
+enum MulticorePolicy: byte
+  {   _UNDEFINED_ = -1,
       INHERIT = 0,
-      SINGLE = 1,
+      SINGLE = 1,	 // Single thread hierarchically
+      CONTEXT = 2,	 // single thread in a context (not hierarchy)
+      MULTI = byte.max,
       }
 
 // This struct is used to control homw many threads can be
 // simultaneously active. A value of 0 here would mean maximum
 // constraint -- only one thread active down the hierarchy. Default
 // value is 1 and that means that per Entity, there is one thread
-// active. If a user just puts @parallelize (no arguments), that would
+// active. If a user just puts @multicore (no arguments), that would
 // result in unbounded number of threads (limited by the number of
 // processors available) getting simultaneoulsy active. The UDA would
 // be activated hierarchically unless the user provides another UDA
 // down the hierarchy.
-struct parallelize
+
+// This struct is used only to collect the parallelization attributes
+// that the user has provided -- These attributes are combined with
+// the MulticoreConfig object of the upper hierarchy to define the MulticoreConfig
+// of this hierarchy -- Keep this struct simple, just collect the
+// information and leave the processing of information to MulticoreConfig
+// object
+struct _esdl__Multicore
 {
-  ParallelPolicy _parallel = ParallelPolicy.MULTI;
-  // When the user does not provide any _poolIndex, a _poolIndex would
+  MulticorePolicy _parallel = MulticorePolicy._UNDEFINED_;
+  // When the user does not provide any _threadIndex, a _threadIndex would
   // be automatically generated
-  uint _poolIndex = uint.max;	// relevant only if _parallel is 1
+  uint _threadIndex = uint.max;
+  // Thread indexes for the hierarchy
+  uint[] _threadPool;
+
+  bool validate() {		// return false if property is invalid
+    // _threadIndex should not be defined if MulticorePolicy.MULTI
+    if (_parallel is MulticorePolicy.MULTI) {
+      return (_threadIndex is uint.max);
+    }
+    // _threadPool should not be defined if MulticorePolicy.SINGLE
+    if (_parallel is MulticorePolicy.SINGLE) {
+      return (_threadPool.length is 0);
+    }
+    return true;
+  }
+
+  _esdl__Multicore merge(_esdl__Multicore other) { // return false is merger fails
+    if (_parallel is MulticorePolicy._UNDEFINED_) {
+      _parallel = other._parallel;
+    }
+    else {
+      if (other._parallel is MulticorePolicy._UNDEFINED_ ||
+	  _parallel is other._parallel) {
+	return this;
+      }
+      else {
+	assert(false, "Unable to merge");
+      }
+    }
+    if (_threadIndex is uint.max) {
+      _threadIndex = other._threadIndex;
+    }
+    else {
+      if (other._threadIndex is uint.max ||
+	  other._threadIndex is _threadIndex) {
+	return this;
+      }
+      else {
+	assert(false, "Unable to merge");
+      }
+    }
+    if (_threadPool.length is 0) {
+      _threadPool = other._threadPool;
+    }
+    else {
+      if (other._threadPool.length is 0) {
+	return this;
+      }
+      else {
+	assert(false, "Unable to merge");
+      }
+    }
+    return this;
+  }
+  
+
   bool isUndefined() {
-    return _parallel == ParallelPolicy._UNDEFINED_;
+    return _parallel == MulticorePolicy._UNDEFINED_;
+  }
+  // true or false
+  // when false, this hierarchy will determine (in cosultation with
+  // the parallization information inherited from upper hierarchies)
+  // which core to use for tasks associated with this hierarchy and
+  // below this hierarchy
+  // this(bool multi) {
+  //   if (multi is true) {
+  //     _parallel = MulticorePolicy.MULTI;
+  //   }
+  //   else {
+  //     _parallel = MulticorePolicy.SINGLE;
+  //   }
+  // }
+  // false, n
+  // this(bool multi, uint index) {
+  //   assert(multi is false);
+  //   _parallel = MulticorePolicy.SINGLE;
+  //   _threadIndex = index;
+  //   _threadPool.length = 1;
+  //   _threadPool[0] = index;
+  // }
+  // // true, n, m
+  // this(bool multi, uint index, uint count) {
+  //   assert(multi is true);
+  //   _parallel = MulticorePolicy.MULTI;
+  //   _threadPool.length = count;
+  //   for (int i=0; i!=_threadPool.length; ++i) {
+  //     _threadPool[i] = index + i;
+  //   }
+  // }
+
+  this(uint[] pool) {
+    assert(pool.length > 0);
+    _parallel = MulticorePolicy.CONTEXT;
+    _threadPool = pool;
+  }
+
+  // n, m
+  this(uint index, uint count) {
+    _parallel = MulticorePolicy.CONTEXT;
+    _threadPool.length = count;
+    for (int i=0; i!=_threadPool.length; ++i) {
+      _threadPool[i] = index + i;
+    }
+  }
+  // n
+  this(uint index) {
+    _parallel = MulticorePolicy.CONTEXT;
+    _threadIndex = index;
+  }
+  
+  this(MulticorePolicy parallel) {
+    _parallel = parallel;
+  }
+
+  this(MulticorePolicy parallel, uint index) {
+    assert (parallel != MulticorePolicy.MULTI);
+    _parallel = parallel;
+    _threadIndex = index;
+  }
+
+  this(MulticorePolicy parallel, uint[] pool) {
+    assert (parallel != MulticorePolicy.SINGLE);
+    _parallel = parallel;
+    assert(pool.length > 0);
+    _threadPool = pool;
+  }
+
+  this(MulticorePolicy parallel, uint index, uint count) {
+    assert (parallel != MulticorePolicy.SINGLE);
+    _parallel = parallel;
+    _threadPool.length = count;
+    for (int i=0; i!=_threadPool.length; ++i) {
+      _threadPool[i] = index + i;
+    }
+  }
+
+  MulticoreConfig makeCfg(MulticoreConfig pCfg) {
+    if (pCfg._parallel == MulticorePolicy.SINGLE) { // take hier information
+      return pCfg;
+    }
+
+    if (pCfg._parallel == MulticorePolicy.MULTI &&
+	(_parallel == MulticorePolicy._UNDEFINED_ ||
+	 _parallel == MulticorePolicy.INHERIT ||
+	 _parallel == MulticorePolicy.MULTI) &&
+	_threadPool.length == 0) { // take hier information
+      return pCfg;
+    }
+
+
+    MulticoreConfig cfg = new MulticoreConfig(_threadIndex);
+
+    if(_parallel == MulticorePolicy._UNDEFINED_ ||
+       _parallel == MulticorePolicy.INHERIT) { // take hier information
+      cfg._parallel = pCfg._parallel;
+      cfg._threadPool = pCfg._threadPool;
+      return cfg;
+    }
+
+    final switch(pCfg._parallel) {
+      // Since we have already configured the upper hierarchy, it can
+      // not be _UNDEFINED_ or INHERIT
+    case MulticorePolicy._UNDEFINED_, MulticorePolicy.INHERIT:
+      assert(false);
+
+      // It can not be SINGLE either since that case has been handled
+      // above
+    case MulticorePolicy.SINGLE:
+      assert(false);
+
+    case MulticorePolicy.CONTEXT, MulticorePolicy.MULTI:
+      // for MULTI and for CONTEXT, since both these are really
+      // multicore, the policy provided for the local hierarchy should
+      // be it
+      cfg._parallel = _parallel;
+
+      // Work out the threads to use
+      if (_threadPool.length is 0) {
+	cfg._threadPool = pCfg._threadPool.dup;
+      }
+      else {
+	uint[] thisPool;
+	thisPool = _threadPool.dup;
+	foreach (ref index; thisPool) {
+	  assert (pCfg._threadPool.length > index);
+	  index = pCfg._threadPool[index];
+	}
+	cfg._threadPool = thisPool;
+      }
+      return cfg;
+    }
+  }
+
+  MulticoreConfig makePhyCfg(MulticoreConfig rCfg) {
+    MulticoreConfig cfg = new MulticoreConfig(_threadIndex);
+
+    // rCfg is always CONTEXT
+    assert (rCfg._parallel == MulticorePolicy.CONTEXT);
+    // default for root
+    if(_parallel == MulticorePolicy._UNDEFINED_ ||
+       _parallel == MulticorePolicy.INHERIT) { // take hier information
+      cfg._parallel = MulticorePolicy.CONTEXT;
+    }
+    else {
+      cfg._parallel = rCfg._parallel;
+    }
+
+    cfg._threadIndex = _threadIndex;
+
+    // the root multicore config thread pool will have thread indeces
+    // in incremental order
+    uint[] threadPool;
+    threadPool.length = rCfg._threadPool.length;
+
+    foreach (uint i, ref index; threadPool) {
+      index = i;
+    }
+    cfg._threadPool = threadPool;
+    return cfg;
+  }  
+}
+
+_esdl__Multicore multicore(bool policy)(int index, int count) {
+  assert (policy is true);
+  return _esdl__Multicore(MulticorePolicy.MULTI, index, count);
+}
+
+_esdl__Multicore multicore(bool policy)(uint[] pool) {
+  assert (policy is true);
+  return _esdl__Multicore(MulticorePolicy.MULTI, pool);
+}
+
+_esdl__Multicore multicore(int index, int count) {
+  return _esdl__Multicore(MulticorePolicy.CONTEXT, index, count);
+}
+
+_esdl__Multicore multicore(uint[] pool) {
+  return _esdl__Multicore(MulticorePolicy.CONTEXT, pool);
+}
+
+_esdl__Multicore multicore(bool policy)(int index) {
+  assert (policy is false);
+  return _esdl__Multicore(MulticorePolicy.SINGLE, index);
+}
+
+_esdl__Multicore multicore(int index) {
+  return _esdl__Multicore(MulticorePolicy.CONTEXT, index);
+}
+
+_esdl__Multicore multicore(bool policy)() {
+  if (policy is false) {
+    return _esdl__Multicore(MulticorePolicy.SINGLE);
+  }
+  else {
+    return _esdl__Multicore(MulticorePolicy.MULTI);
   }
 }
+
+void multicore(bool policy)(RootEntity t, int index, int count) {
+  assert (policy is true);
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.MULTI, index, count));
+}
+
+void multicore(bool policy)(RootEntity t, uint[] pool) {
+  assert (policy is true);
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.MULTI, pool));
+}
+
+void multicore(RootEntity t, int index, int count) {
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.CONTEXT, index, count));
+}
+
+void multicore(RootEntity t, uint[] pool) {
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.CONTEXT, pool));
+}
+
+void multicore(bool policy)(RootEntity t, int index) {
+  assert (policy is false);
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.SINGLE, index));
+}
+
+void multicore(RootEntity t, int index) {
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.CONTEXT, index));
+}
+
+void multicore(RootEntity t, bool policy)() {
+  if (policy is false) {
+    t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.SINGLE));
+  }
+  else {
+    t._esdl__multicore.merge( _esdl__Multicore(MulticorePolicy.MULTI));
+  }
+}
+
+void multicore(RootEntity t, MulticorePolicy parallel, uint index=int.max) {
+  t._esdl__multicore.merge(_esdl__Multicore(parallel, index));
+}
+
+class MulticoreConfig
+{
+  MulticorePolicy _parallel = MulticorePolicy._UNDEFINED_;
+  // When the user does not provide any _threadIndex, a _threadIndex would
+  // be automatically generated
+  uint _threadIndex = uint.max;
+  // Thread indexes for the hierarchy
+  uint[] _threadPool;
+
+  void setThreadIndex(uint index) {
+    _threadIndex = index;
+  }
+
+  uint getPoolThreadIndex() {
+    return _threadPool[_threadIndex];
+  }
+
+  this(uint index=uint.max) {
+    _threadIndex = index;
+  }
+
+  void print() {
+    import std.stdio;
+    writefln("MulticoreConfig:\n Multicore Policy: %s\n Index Thread: %s\n: Threads: %s",
+	     _parallel, _threadIndex, _threadPool);
+  }
+}
+
 
 struct timeUnit
 {
   Time _unit;
+  bool validate() {
+    return _isPowerOf10(_unit.value);
+  }
+  timeUnit merge(timeUnit other) {
+    if (isUndefined()) {
+      _unit = other._unit;
+      return this;
+    }
+    if (_unit == other._unit) {
+      return this;
+    }
+    else {
+      assert(false, "Unable to merge");
+    }
+  }
+  bool isUndefined() {
+    return _unit == Time.init;
+  }
 }
 
 struct timePrecision
 {
   Time _precision;
+  bool validate() {
+    return _isPowerOf10(_precision.value);
+  }
+  timePrecision merge(timePrecision other) {
+    if (isUndefined()) {
+      _precision = other._precision;
+      return this;
+    }
+    if (_precision == other._precision) {
+      return this;
+    }
+    else {
+      assert(false, "Unable to merge");
+    }
+  }
+  bool isUndefined() {
+    return _precision == Time.init;
+  }
 }
 
 // All ESDL designs are pseudo static. This basically means that any
@@ -162,7 +527,7 @@ package interface NamedComp: EsdlObj, TimeContext
     if(this.getSimulator) {
       return this.getSimulator.phase();
     }
-    assert(false, "Not possible to know the simulation phase "
+    assert(false, "Not possible to know the simulation phase " ~
 	   "without connection to the getSimulator simulator");
   }
 
@@ -271,7 +636,7 @@ package interface NamedComp: EsdlObj, TimeContext
     // Return the parent object and if it not set, signal an error
     final NamedComp getParent() {
       if(_esdl__parent !is null) return _esdl__parent;
-      assert(false, "Tried to seek parent for a NamedComp "
+      assert(false, "Tried to seek parent for a NamedComp " ~
 	     "which does not have it set: " ~ _esdl__name);
       // synchronized(this) {
       //   _esdl__parent = _esdl__getParentProc();
@@ -337,44 +702,6 @@ package interface NamedComp: EsdlObj, TimeContext
 
 }
 
-
-auto _esdl__get_parallelism(L)(L l) {
-  enum int Q = _esdl__attr!(parallelize, L);
-  static if(Q is -1) {
-    enum par = parallelize(ParallelPolicy._UNDEFINED_,
-			   uint.max); // inherit from parent
-  }
-  else {
-    static if(__traits(isSame, __traits(getAttributes, L)[Q],
-		       parallelize)) {
-      enum par = parallelize(ParallelPolicy.MULTI, uint.max);
-    }
-    else {
-      enum par = __traits(getAttributes, L)[Q];
-    }
-  }
-  return par;
-}
-
-auto _esdl__get_parallelism(size_t I, T)(T t) {
-  enum int P = _esdl__attr!(parallelize, t, I);
-  static if(P is -1) {
-    enum par = parallelize(ParallelPolicy._UNDEFINED_,
-			   uint.max); // inherit from parent
-  }
-  else {
-    // first check if the attribute is just @parallelize
-    static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
-		       parallelize)) {
-      enum par = parallelize(ParallelPolicy.MULTI, uint.max);
-    }
-    else {
-      enum par = __traits(getAttributes, t.tupleof[I])[P];
-    }
-  }
-  return par;
-}
-
 interface HierComp: NamedComp, ConfigContext
 {
   import core.sync.semaphore: CoreSemaphore = Semaphore;
@@ -427,121 +754,10 @@ interface HierComp: NamedComp, ConfigContext
   void kill();
   void killTree();
 
-  // Interface functions for enabling parallelize UDP
+  // Interface functions for enabling _esdl__Multicore UDP
   CoreSemaphore _esdl__getParLock();
-  parallelize _esdl__getParInfo();
-  void _esdl__setEntityMutex(parallelize linfo);
-
-  static auto _esdl__get_parallelism(L)(L l) {
-    enum int Q = _esdl__attr!(parallelize, L);
-    static if(Q is -1) {
-      enum par = parallelize(ParallelPolicy._UNDEFINED_,
-			     uint.max); // inherit from parent
-    }
-    else {
-      static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			 parallelize)) {
-	enum par = parallelize(ParallelPolicy.MULTI, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, L)[Q];
-      }
-    }
-    return par;
-  }
-
-  static auto _esdl__get_parallelism(size_t I, T)(T t) {
-    enum int P = _esdl__attr!(parallelize, t, I);
-    static if(P is -1) {
-      enum par = parallelize(ParallelPolicy._UNDEFINED_,
-			     uint.max); // inherit from parent
-    }
-    else {
-      // first check if the attribute is just @parallelize
-      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
-			 parallelize)) {
-	enum par = parallelize(ParallelPolicy.MULTI, uint.max);
-      }
-      else {
-	enum par = __traits(getAttributes, t.tupleof[I])[P];
-      }
-    }
-    return par;
-  }
-
-  static Time _esdl__get_timeUnit(L)(L l) {
-    enum int Q = _esdl__attr!(timeUnit, L);
-    static if(Q is -1) {
-      enum Time par = 0.sec; // inherit from parent
-    }
-    else {
-      static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			 timeUnit)) {
-	static assert(false, "Must supply a Time value with @timeUnit");
-      }
-      else {
-	enum attr = __traits(getAttributes, L)[Q];
-	enum Time par = attr._unit;
-      }
-    }
-    return par;
-  }
-
-  static Time _esdl__get_timeUnit(size_t I, T)(T t) {
-    enum int P = _esdl__attr!(timeUnit, t, I);
-    static if(P is -1) {
-      enum Time par = 0.sec; // inherit from parent
-    }
-    else {
-      // first check if the attribute is just @timeUnit
-      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
-			 timeUnit)) {
-	static assert(false, "Must supply a Time value with @timeUnit");
-      }
-      else {
-	enum attr = __traits(getAttributes, t.tupleof[I])[P];
-	enum Time par = attr._unit;
-      }
-    }
-    return par;
-  }
-
-  static Time _esdl__get_timePrecision(L)(L l) {
-    enum int Q = _esdl__attr!(timePrecision, L);
-    static if(Q is -1) {
-      enum Time par = 0.sec; // inherit from parent
-    }
-    else {
-      static if(__traits(isSame, __traits(getAttributes, L)[Q],
-			 timePrecision)) {
-	static assert(false, "Must supply a Time value with @timePrecision");
-      }
-      else {
-	enum attr = __traits(getAttributes, L)[Q];
-	enum Time par = attr._precision;
-      }
-    }
-    return par;
-  }
-
-  static Time _esdl__get_timePrecision(size_t I, T)(T t) {
-    enum int P = _esdl__attr!(timePrecision, t, I);
-    static if(P is -1) {
-      enum Time par = 0.sec; // inherit from parent
-    }
-    else {
-      // first check if the attribute is just @timePrecision
-      static if(__traits(isSame, __traits(getAttributes, t.tupleof[I])[P],
-			 timePrecision)) {
-	static assert(false, "Must supply a Time value with @timePrecision");
-      }
-      else {
-	enum attr = __traits(getAttributes, t.tupleof[I])[P];
-	enum Time par = attr._precision;
-      }
-    }
-    return par;
-  }
+  _esdl__Multicore _esdl__getParInfo();
+  void _esdl__setEntityMutex(_esdl__Multicore linfo);
 
   mixin template HierMixin()
   {
@@ -606,7 +822,7 @@ interface HierComp: NamedComp, ConfigContext
 	// }
 	return _esdl__hier_parent;
       }
-      assert(false, "Tried to seek parent for a HierComp "
+      assert(false, "Tried to seek parent for a HierComp " ~
 	     "which does not have it set");
       // synchronized(this) {
       //   _esdl__parent = _esdl__getParentProc();
@@ -677,25 +893,25 @@ interface HierComp: NamedComp, ConfigContext
     }
 
     // Create a new Semaphore for a given HierComp when required,
-    // based on the UDP option @parallelize. This function is called
+    // based on the UDP option @multicore. This function is called
     // during the elaboration phase.
-    final void _esdl__setEntityMutex(parallelize linfo) {
+    final void _esdl__setEntityMutex(_esdl__Multicore linfo) {
       // defaults for root
       CoreSemaphore parentLock = null;
-      parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
+      _esdl__Multicore plinfo = _esdl__Multicore(MulticorePolicy.MULTI, uint.max);
       // but if not root then get from parent
       if(getParent !is this && getParent !is null) {
 	parentLock = getParent._esdl__getParLock;
 	plinfo = getParent._esdl__getParInfo;
       }
-      if(linfo._parallel == ParallelPolicy._UNDEFINED_) {
+      if(linfo._parallel == MulticorePolicy._UNDEFINED_) {
 	// take hier information
 	_esdl__parInfo = plinfo;
-	if(plinfo._parallel == ParallelPolicy.MULTI) {
-	  // UDP @parallelize without argument
+	if(plinfo._parallel == MulticorePolicy.MULTI) {
+	  // UDP @multicore without argument
 	  _esdl__parLock = null;
 	}
-	else if(plinfo._parallel == ParallelPolicy.INHERIT) {
+	else if(plinfo._parallel == MulticorePolicy.INHERIT) {
 	  _esdl__parLock = parentLock;
 	}
 	else {
@@ -703,14 +919,14 @@ interface HierComp: NamedComp, ConfigContext
 	}
       }
       else {
-	if(plinfo._parallel == ParallelPolicy.INHERIT) {
+	if(plinfo._parallel == MulticorePolicy.INHERIT) {
 	  // FIXME -- give out warning
 	}
 	_esdl__parInfo = linfo;
-	if(linfo._parallel == ParallelPolicy.MULTI) {	// parallelize
+	if(linfo._parallel == MulticorePolicy.MULTI) {	// parallelize
 	  _esdl__parLock = null;
 	}
-	else if(linfo._parallel == ParallelPolicy.INHERIT) {
+	else if(linfo._parallel == MulticorePolicy.INHERIT) {
 	  _esdl__parLock = new CoreSemaphore(1);
 	}
 	else {
@@ -729,34 +945,25 @@ interface HierComp: NamedComp, ConfigContext
       return _esdl__compId;
     }
 
-    final void _esdl__setParConfig(parallelize linfo) {
+    string _esdl__getName() {
+      return getFullName();
+    }
+    
+    final void _esdl__setMulticoreConfig(_esdl__Multicore linfo) {
       _esdl__setEntityMutex(linfo);
-      // default for root
-      ParConfig parentCfg = null;
-      parallelize plinfo = parallelize(ParallelPolicy.MULTI, uint.max);
-      if(getParent !is this && getParent !is null) {
-	parentCfg = getParent.getParConfig;
-	plinfo = getParent._esdl__getParInfo;
-      }
-      if(linfo._parallel == ParallelPolicy._UNDEFINED_) { // take hier information
-	_esdl__parInfo = plinfo;
+      if (getParent is this) {
+	assert (_esdl__multicoreConfig !is null);
       }
       else {
-	_esdl__parInfo = linfo;
+	assert (_esdl__multicoreConfig is null);
+	auto pconf = getParent._esdl__getMulticoreConfig();
+	assert(pconf !is null);
+	_esdl__multicoreConfig = linfo.makeCfg(pconf);
       }
 
-      if(_esdl__parInfo._parallel == ParallelPolicy.INHERIT) {
-	_esdl__parConfig = parentCfg;
-      }
-      else {
-	auto nthreads = getSimulator._executor._poolThreads.length;
-	if(_esdl__parInfo._poolIndex != uint.max) {
-	  assert(_esdl__parInfo._poolIndex < nthreads);
-	  _esdl__parConfig = new ParConfig(_esdl__parInfo._poolIndex);
-	}
-	else {
-	  _esdl__parConfig = new ParConfig(_esdl__parComponentId() % nthreads);
-	}
+      if(_esdl__multicoreConfig._threadIndex == uint.max) {
+	_esdl__multicoreConfig._threadIndex = _esdl__parComponentId() %
+	  _esdl__multicoreConfig._threadPool.length;
       }
     }
 
@@ -827,7 +1034,7 @@ template CheckInstObj(L)
   }
 }
 
-void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
+void _esdl__configMems(ATTR, size_t I=0, size_t CI=0, T)(ref T t)
   if(is(T : ElabContext) && is(T == class)) {
     static if(I < t.tupleof.length) {
       import std.string;
@@ -840,40 +1047,29 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
 	  // multidimensional arrays would need special (recursive)
 	  // handling, therefor arrays are handled by a separate
 	  // function
-	  static if(is(FOO == parallelize)) {
-	    auto tinfo = t._esdl__get_parallelism!(I)(t);
-	  }
-	  else static if(is(FOO == timePrecision)) {
-	    auto tinfo = t._esdl__get_timePrecision!(I)(t);
-	  }
-	  else static if(is(FOO == timeUnit)) {
-	    auto tinfo = t._esdl__get_timeUnit!I(t);
-	  }
-	  else {
-	    static assert(false);
-	  }
+	  ATTR tinfo = _esdl__uda!(ATTR, T, I);
 	  static if(isArray!L) {
-	    _esdl__configArray!(FOO)(t.tupleof[I], tinfo);
+	    _esdl__configArray!(ATTR)(t.tupleof[I], tinfo);
 	  }
 	  else {
-	    // neither ignored, nor an array, so fooorate the object
-	    static if(is(FOO == parallelize)) {
+	    // neither ignored, nor an array, so configure the object
+	    static if(is(ATTR == _esdl__Multicore)) {
 	      static if(is(typeof(t.tupleof[I]._esdl__elab_typeID): L)) {
 		// call the virtual function
-		t.tupleof[I]._esdl__config_parallelim(tinfo);
+		t.tupleof[I]._esdl__config_parallelism(tinfo);
 	      }
 	      else {
 		// call generic fucntion
-		t.tupleof[I]._esdl__config!(parallelize)(t.tupleof[I], tinfo);
+		t.tupleof[I]._esdl__config!(_esdl__Multicore)(t.tupleof[I], tinfo);
 	      }
 	      debug(ATTRCONFIG) {
 		// debug message for listing the fooorated objects
 		import std.stdio;
-		stderr.writeln("Configure parallelize " ~ typeof(t.tupleof[I]).stringof ~ " : ",
+		stderr.writeln("Configure _esdl__Multicore " ~ typeof(t.tupleof[I]).stringof ~ " : ",
 			       I, "/", t.tupleof.length);
 	      }
 	    }
-	    static if(is(FOO == timePrecision)) {
+	    static if(is(ATTR == timePrecision)) {
 	      static if(is(typeof(t.tupleof[I]._esdl__elab_typeID): L)) {
 		// call the virtual function
 		t.tupleof[I]._esdl__config_timePrecision(tinfo);
@@ -889,7 +1085,7 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
 			       I, "/", t.tupleof.length);
 	      }
 	    }
-	    static if(is(FOO == timeUnit)) {
+	    static if(is(ATTR == timeUnit)) {
 	      static if(is(typeof(t.tupleof[I]._esdl__elab_typeID): L)) {
 		t.tupleof[I]._esdl__config_timeUnit(tinfo);
 	      }
@@ -925,7 +1121,7 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
 	}
       }
       // iterate through the next element in the object tuple
-      _esdl__configMems!(FOO, I+1, CI+1)(t);
+      _esdl__configMems!(ATTR, I+1, CI+1)(t);
     }
     // recurse through the objects found in the base classes
     else static if(is(T B == super)
@@ -938,19 +1134,19 @@ void _esdl__configMems(FOO, size_t I=0, size_t CI=0, T)(ref T t)
 	import std.stdio;
 	stderr.writeln("*** Configuring " ~ typeof(b).stringof);
       }
-      _esdl__configMems!(FOO, 0, CI)(b);
+      _esdl__configMems!(ATTR, 0, CI)(b);
     }
   }
 
-void _esdl__configArray(FOO, L, ATTR)(ref L l, ATTR attr)
+void _esdl__configArray(ATTR, L, PROP)(ref L l, PROP prop)
 {
   for(size_t j = 0; j < l.length; ++j) {
     // pragma(msg, "Adding: ", typeof(l[j]));
     static if(isArray!(typeof(l[j]))) {
-      _esdl__configArray!(FOO)(l[j], attr);
+      _esdl__configArray!(ATTR)(l[j], prop);
     }
     else {
-      l[j]._esdl__config!(FOO)(l[j], attr);
+      l[j]._esdl__config!(ATTR)(l[j], prop);
     }
   }
 }
@@ -1181,96 +1377,7 @@ void _esdl__register(T, L)(T t, ref L l)
 
   }
 
-
-// void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
-//   if(is(L f : Worker!(F, S), alias F, size_t S)) {
-//     synchronized(t) {
-//       // import std.functional; // used for toDelegate
-//       // import std.traits;
-
-//       alias L._FUNCTION F;
-//       alias L._STACKSIZE S;
-
-//       l = t.new t.Worker!(T, F, S)(t);
-//       // string getFuncName()
-//       // {
-//       //   return "t." ~ __traits(identifier, F);
-//       // }
-
-//       // import std.stdio;
-//       // stderr.writeln("New thread for: ", t.getFullName);
-//       // // does not work for functions with default arguments
-//       // // typeof(toDelegate(&F)) dg;
-//       // // pragma(msg, getFuncName());
-//       // typeof(& mixin(getFuncName())) dg;
-
-//       // dg.funcptr = &F;
-//       // dg.ptr = cast(void *)t;
-
-//       // static if((ParameterTypeTuple!dg).length > 0)
-//       //   {
-//       //     auto fun = delegate()
-//       //	 {
-//       //	   dg(ARGS);
-//       //	 };
-//       //     l = new Worker!(F, A)(fun, 0);
-//       //     // l = new Process(fun, 0);
-//       //   }
-//       // else
-//       //   {
-//       //     l = new Worker!(F, A)(dg, 0);
-//       //     // l = new Process(dg, 0);
-//       //   }
-//     }
-//   }
-
-// {
-
-//   // Workers
-//   // else static if(is(L f == Worker!(T, N), immutable(char)[] T, ulong N))
-//   //	     {
-//   //	       synchronized(t)
-//   //		 {
-//   //		   l = new Process(&t._esdl__thunk!(L._THUNK), L._STACKSIZE);
-//   //		 }
-//   //	     }
-
-
-//   // handle ports events mutexes semaphores channels etc.
-//   static
-//	{
-//	  pragma(msg, "MeInstantiating: " ~ L.stringof);
-//	  if(l is null) l = new L();
-//	}
-
-//   // else static if(is(L == class) &&
-//   //		     is(L c: NamedComp) &&
-//   //		     ! is(L: RootThread))
-//   //	     {
-//   //	       // static if(is(L f == Worker!(S, T), alias S, T...) ||
-//   //	       //	    is(L f == Worker!(T, N), immutable(char)[] T, ulong N) ||
-//   //	       //	    is(L g == Inst!E, E : ElabContext))
-//   //	       pragma(msg, "Instantiating: " ~ L.stringof);
-//   //	       if(l is null) l = new L();
-//   //	     }
-
-// }
-
-class ParConfig
-{
-  private uint _threadPoolIndex = uint.max;
-  uint getThreadIndex() {
-    return _threadPoolIndex;
-  }
-  void setThreadIndex(uint index) {
-    _threadPoolIndex = index;
-  }
-  this(uint index) {
-    _threadPoolIndex = index;
-  }
-}
-
-// @parallelize(0) would result in the ParContext using the same
+// @multicore(0) would result in the ParContext using the same
 // thread as the parEnclosing context
 interface ParContext
 {
@@ -1278,7 +1385,9 @@ interface ParContext
   // In case of Entity, this would be defined to be the parent entity
   ParContext _esdl__parInheritFrom();
   uint _esdl__parComponentId();
-  ParConfig getParConfig();
+  MulticoreConfig _esdl__getMulticoreConfig();
+  MulticoreConfig _esdl__getHierMulticoreConfig();
+  string _esdl__getName();
   mixin template ParContextMixin()
   {
     //////////////////////////////////////////////////////
@@ -1295,14 +1404,20 @@ interface ParContext
     // when a process wakes up and subsequently, when the process
     // deactivates (starts waiting for an event), the simulator
     // gives away the Lock
-    ParConfig _esdl__parConfig;
-    ParConfig getParConfig() {
-      // of the ParContext does not have a ParConfig Object, get it
+    MulticoreConfig _esdl__multicoreConfig;
+    MulticoreConfig _esdl__getHierMulticoreConfig() {
+      // of the ParContext does not have a MulticoreConfig Object, get it
       // from the enclosing ParContext
-      if(_esdl__parConfig is null) {
-	_esdl__parConfig = _esdl__parInheritFrom().getParConfig();
+      if (_esdl__multicoreConfig is null) {
+      	_esdl__multicoreConfig =
+	  _esdl__parInheritFrom()._esdl__getHierMulticoreConfig();
       }
-      return _esdl__parConfig;
+      return _esdl__multicoreConfig;
+    }
+    MulticoreConfig _esdl__getMulticoreConfig() {
+      // of the ParContext does not have a MulticoreConfig Object, get it
+      // from the enclosing ParContext
+      return _esdl__multicoreConfig;
     }
     static if(!__traits(compiles, _esdl__parLock)) {
       import core.sync.semaphore: CoreSemaphore = Semaphore;
@@ -1316,9 +1431,9 @@ interface ParContext
     // This variable is set and used only during the elaboration
     // phase
     static if(!__traits(compiles, _esdl__parInfo)) {
-      parallelize _esdl__parInfo = parallelize(ParallelPolicy._UNDEFINED_,
+      _esdl__Multicore _esdl__parInfo = _esdl__Multicore(MulticorePolicy._UNDEFINED_,
 					       uint.max); // default value
-      final parallelize _esdl__getParInfo() {
+      final _esdl__Multicore _esdl__getParInfo() {
 	return _esdl__parInfo;
       }
     }
@@ -1417,13 +1532,14 @@ interface ElabContext: HierComp
     (T t, ref L l, uint[] indices=null) {
     debug(ELABORATE) {
       import std.stdio;
-      stderr.writeln("** ElabContext: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+      stderr.writeln("** ElabContext: Elaborating " ~
+		     t.tupleof[I].stringof ~ ":" ~
 		     typeof(l).stringof);
     }
     l._esdl__inst!I(t, l);
     synchronized(l) {
       static assert(is(T unused: ElabContext),
-		    "Only ElabContext components are allowed to instantiate "
+		    "Only ElabContext components are allowed to instantiate " ~
 		    "other ElabContext components");
       static if(is(T unused: ElabContext)) {
 	t._esdl__addChildObj(l);
@@ -1443,47 +1559,61 @@ interface ElabContext: HierComp
     }
   }
 
-  static void _esdl__config(FOO, L, ATTR)(L l, ATTR attr) {
+  static void _esdl__config(ATTR, L, V)(L l, V val)
+    if (is(V == Time) && (is(ATTR == timeUnit) ||
+			  is(ATTR == timePrecision))) {
+      static if (is(ATTR == timeUnit)) {
+	_esdl__config!ATTR(l, timeUnit(val));
+	return;
+      }
+      static if (is(ATTR == timePrecision)) {
+	_esdl__config!ATTR(l, timePrecision(val));
+	return;
+      }
+  }
+  
+  static void _esdl__config(ATTR, L)(L l, ATTR prop) {
     debug(ATTRCONFIG) {
       import std.stdio;
-      stderr.writeln("** ElabContext: Configuring " ~ l.tupleof[I].stringof ~ ":" ~
+      stderr.writeln("** ElabContext: Configuring "
+		     ~ l.tupleof[I].stringof ~ ":" ~
 		     typeof(l).stringof);
     }
     synchronized(l) {
       static assert(is(L unused: ElabContext),
-		    "Only ElabContext components are allowed to instantiate "
+		    "Only ElabContext components are allowed to instantiate " ~
 		    "other ElabContext components");
-      static if(is(FOO == parallelize)) {
-	parallelize pinfo;
-	if(attr.isUndefined) {
-	  pinfo = _esdl__get_parallelism(l);
+      static if(is(ATTR == _esdl__Multicore)) {
+	ATTR pinfo;
+	if(prop.isUndefined) {
+	  pinfo = _esdl__uda!(_esdl__Multicore, L);
 	}
 	else {
-	  pinfo = attr;
+	  pinfo = prop;
 	}
-	l._esdl__setParConfig(pinfo);
+	l._esdl__setMulticoreConfig(pinfo);
       }
-      static if(is(FOO == timePrecision)) {
-	Time tpinfo;
-	if(attr.isZero) {
-	  tpinfo = _esdl__get_timePrecision(l);
+      static if(is(ATTR == timePrecision)) {
+	ATTR tpinfo;
+	if(prop.isUndefined) {
+	  tpinfo = _esdl__uda!(timePrecision, L);
 	}
 	else {
-	  tpinfo = attr;
+	  tpinfo = prop;
 	}
-	l._esdl__setTimePrecision(tpinfo);
+	l._esdl__setTimePrecision(tpinfo._precision);
       }
-      static if(is(FOO == timeUnit)) {
-	Time tuinfo;
-	if(attr.isZero) {
-	  tuinfo = _esdl__get_timeUnit(l);
+      static if(is(ATTR == timeUnit)) {
+	ATTR tuinfo;
+	if(prop.isUndefined) {
+	  tuinfo = _esdl__uda!(timeUnit, L);
 	}
 	else {
-	  tuinfo = attr;
+	  tuinfo = prop;
 	}
-	l._esdl__setTimeUnit(tuinfo);
+	l._esdl__setTimeUnit(tuinfo._unit);
       }
-      _esdl__configMems!(FOO)(l);
+      _esdl__configMems!(ATTR)(l);
     }
   }
 
@@ -1580,16 +1710,16 @@ interface ElabContext: HierComp
       return null;
     }
 
-    void _esdl__config_parallelim(parallelize par) {
-      this._esdl__config!parallelize(this, par);
+    void _esdl__config_parallelism(_esdl__Multicore par) {
+      this._esdl__config!_esdl__Multicore(this, par);
     }
 
-    void _esdl__config_timePrecision(Time time) {
-      this._esdl__config!timePrecision(this, time);
+    void _esdl__config_timePrecision(timePrecision prec) {
+      this._esdl__config!timePrecision(this, prec);
     }
 
-    void _esdl__config_timeUnit(Time time) {
-      this._esdl__config!timeUnit(this, time);
+    void _esdl__config_timeUnit(timeUnit unit) {
+      this._esdl__config!timeUnit(this, unit);
     }
 
     void _esdl__elab_virtual() {
@@ -2169,7 +2299,7 @@ class NotificationObj(T): EventObj
   final void initialize(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
-	assert(false, "Must provide parent for NotificationObj being "
+	assert(false, "Must provide parent for NotificationObj being " ~
 	       "\"initialize\" during elaboration");
       }
       if(_notificationObj is null) {
@@ -2830,6 +2960,11 @@ class EventObj: EventAgent, NamedComp
     this.getTimed().schedule(t, waits);
   }
 
+
+  void schedule() {
+    this.getTimed().schedule();
+  }
+
   // Hierarchy
   mixin NamedMixin;
 
@@ -2847,7 +2982,13 @@ class EventObj: EventAgent, NamedComp
   }
 
   void disableWait() {
-    _simEvent.disableWait();
+    if (_simEvent !is null) {
+      _simEvent.disableWait();
+    }
+    else {
+      import std.stdio;
+      stderr.writeln("disableWait called on uninitialized Event ", getFullName);
+    }
   }
 }
 
@@ -2963,7 +3104,7 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
   final void initialize(string name, NamedComp parent=null) {
     synchronized {
       if(RootThread.self !is null && parent is null) {
-	assert(false, "Must provide parent for EventType object "
+	assert(false, "Must provide parent for EventType object " ~
 	       "\"initialize\" during elaboration");
       }
       if(_eventObj is null) {
@@ -3438,6 +3579,8 @@ abstract private class SimEvent: EventClient
 
   bool schedule(SimTime steps, bool waits=true) {assert(false, "Can notify only a timed event");}
 
+  bool schedule() {assert(false, "Can notify only a timed event");}
+  
   // Called only during the schedule phase
   protected abstract void poke(EsdlSimulator sim, EventObj agent, size_t index);
   // Only during the schedule phase
@@ -3499,15 +3642,19 @@ private class AsyncTimedEvent: TimedEvent
   }
 
   override void trigger(EsdlSimulator sim) {
-    debug(EVENTS) {
+    debug(ASYNCEVENTS) {
       import std.stdio;
       stderr.writeln("Triggered AsyncTimedEvent: ", _eventObj.getFullName);
       stderr.writeln("Async Pending Count decremented to: ",
 		     sim._asyncPendingCount);
     }
     --(sim._asyncPendingCount);
+    debug(ASYNCEVENTS) {
+      import std.stdio;
+      stderr.writeln("_asyncPendingCount decremented to :", sim._asyncPendingCount);
+    }
     if (this._waits) {
-      debug(EVENTS) {
+      debug(ASYNCEVENTS) {
 	stderr.writeln("Triggered AsyncTimedEvent _waits: ",
 		       _eventObj.getFullName);
       }
@@ -3528,7 +3675,7 @@ private class AsyncTimedEvent: TimedEvent
 	if(this._schedule != Schedule.NONE) {
 	  this.cancel();
 	}
-	auto anotice = AsyncEventNotice(stime, this, waits);
+	auto anotice = AsyncEventNotice(stime, this, waits, false);
 	// Create a new timed event
 	// _notice = EventNotice.alloc(stime, this);
 	// // register the timed event with the simulator
@@ -3550,7 +3697,43 @@ private class AsyncTimedEvent: TimedEvent
 	  }
 	}
 	// Create a new timed event
-	auto anotice = AsyncEventNotice(stime, this, waits);
+	auto anotice = AsyncEventNotice(stime, this, waits, false);
+	// register the timed event with the simulator
+	// this._schedule = Schedule.TIMED;
+	// writeln("Before Insert");
+	this.getSimulator._scheduler.insertAsyncNotice(anotice);
+	return true;
+      }
+    }
+  }
+
+  override bool schedule() {
+    synchronized(this) {
+      debug(EVENTS) {
+	import std.stdio: stderr;
+	stderr.writefln("Scheduled notification for %s for time %s waits %s",
+			_eventObj.getFullName(), stime, waits);
+      }
+      if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
+	if(this._schedule != Schedule.NONE) {
+	  this.cancel();
+	}
+	auto anotice = AsyncEventNotice(SimTime(0), this, false, true);
+	// Create a new timed event
+	// _notice = EventNotice.alloc(stime, this);
+	// // register the timed event with the simulator
+	// this._schedule = Schedule.TIMED;
+	this.getSimulator._scheduler.insertAsyncNotice(anotice);
+	return true;
+      }
+      else { // ! if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
+	// Check if the event is already scheduled and at what time
+	if(this._schedule == Schedule.TIMED) {
+	  // Compare if the new schedule is sooner than the old
+	  this.cancel();
+	}
+	// Create a new timed event
+	auto anotice = AsyncEventNotice(SimTime(0), this, false, true);
 	// register the timed event with the simulator
 	// this._schedule = Schedule.TIMED;
 	// writeln("Before Insert");
@@ -3634,7 +3817,7 @@ private class TimedEvent: SimEvent
       break;
     case Schedule.TIMED:
       if(this._notice is null) {
-	assert(false, "TimedEvent is schedules as TIMED, "
+	assert(false, "TimedEvent is schedules as TIMED, " ~
 	       "but associated notice is null");
       }
       this._notice.annul();
@@ -3936,6 +4119,7 @@ struct AsyncEventNotice
   private SimTime    _time;
   private TimedEvent _event;
   private bool       _waits;
+  private bool       _immediate;
 }
 
 final class EventNotice
@@ -4575,7 +4759,7 @@ private void forkHelper(int C=0, F...)
     forkHelper!(C+1)(name, procs, thunks[1..$]);
   }
   else {
-    static assert(false, "join can take only functions, delegates "
+    static assert(false, "join can take only functions, delegates " ~
 		  "or processes as arguments");
   }
 }
@@ -4631,7 +4815,7 @@ ForkMono fork(F)(string name, F thunk) {
     proc = thunk;
   }
   else {
-    static assert(false, "fork can take only functions, delegates "
+    static assert(false, "fork can take only functions, delegates " ~
 		  "or processes as arguments");
   }
 
@@ -4649,7 +4833,7 @@ BaseRoutine cron(E, F)(E event, F thunk) {
     rtn = thunk;
   }
   else {
-    static assert(false, "cron can take only a function, a delegate "
+    static assert(false, "cron can take only a function, a delegate " ~
 		  "or a Routine as arguments");
   }
   rtn.sensitiveTo(e);
@@ -4698,7 +4882,7 @@ private ref Random getRandGen() {
     return proc.getRandGen();
   }
   else {
-    assert(false, "getRandGen can be accessed only from a Process,"
+    assert(false, "getRandGen can be accessed only from a Process," ~
 	   " or RootThread");
   }
 }
@@ -4772,17 +4956,17 @@ void srandom(uint _seed) {
 	l._esdl__objRef._esdl__inst!I(t, l._esdl__objRef);
       }
 
-      static void _esdl__config(FOO, L) (L l) {
-	l._esdl__objRef._esdl__config!(FOO)(l._esdl__objRef);
+      static void _esdl__config(ATTR, L) (L l) {
+	l._esdl__objRef._esdl__config!(ATTR)(l._esdl__objRef);
       }
 
-      static void _esdl__config(FOO, L, ATTR)(ref L l, ATTR attr) {
-	l._esdl__objRef._esdl__config!(FOO)(l._esdl__objRef, attr);
+      static void _esdl__config(ATTR, L, PROP)(ref L l, PROP prop) {
+	l._esdl__objRef._esdl__config!(ATTR)(l._esdl__objRef, prop);
       }
 
-      static void _esdl__config(FOO, size_t I, T, L)
+      static void _esdl__config(ATTR, size_t I, T, L)
 	(ref T t, ref L l, uint[] indices=null) {
-	l._esdl__objRef._esdl__config!(FOO)(t, l._esdl__objRef, indices);
+	l._esdl__objRef._esdl__config!(ATTR)(t, l._esdl__objRef, indices);
       }
 
       static void _esdl__elab(size_t I, T, L)(T t, ref L l, uint[] indices=null)
@@ -4897,8 +5081,8 @@ interface EntityIntf: ElabContext, SimContext
 	return null;
       }
 
-      override void _esdl__config_parallelim(parallelize par) {
-	this._esdl__config!parallelize(this, par);
+      override void _esdl__config_parallelism(_esdl__Multicore par) {
+	this._esdl__config!_esdl__Multicore(this, par);
       }
 
       override void _esdl__config_timePrecision(Time time) {
@@ -5432,7 +5616,7 @@ class BaseTask: Process
     synchronized(this) {
       super(fn, stage);
       if(sz is 0) {
-	_fiber = new Fiber(() {fn_wrap(fn);}, 1024*1024);
+	_fiber = new Fiber(() {fn_wrap(fn);});
       }
       else {
 	_fiber = new Fiber(() {fn_wrap(fn);}, sz);
@@ -5444,7 +5628,7 @@ class BaseTask: Process
     synchronized(this) {
       super(dg, stage);
       if(sz is 0) {
-	_fiber = new Fiber(() {dg_wrap(dg);}, 1024*1024);
+	_fiber = new Fiber(() {dg_wrap(dg);});
       }
       else {
 	_fiber = new Fiber(() {dg_wrap(dg);}, sz);
@@ -5753,7 +5937,7 @@ abstract class Process: Procedure, HierComp, EventClient
   private final void _execute() {
     debug(LOGPROCS) {
       import std.stdio;
-      stderr.writeln("[", _esdl__parConfig._threadPoolIndex,
+      stderr.writeln("[", _esdl__multicoreConfig.getPoolThreadIndex(),
 		     "]Activating Process: ", getFullName());
     }
     this.call();
@@ -5818,7 +6002,7 @@ abstract class Process: Procedure, HierComp, EventClient
   final void dontInitialize() {
     synchronized(this) {
       if(_state !is ProcState.STARTING) {
-	assert(false, "A process can be tagged dontInitialize "
+	assert(false, "A process can be tagged dontInitialize " ~
 	       "only before it has started running");
       }
       _dontInit = true;
@@ -5869,8 +6053,8 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   protected final void addAgent(EventObj agent) {
-    assert(false, "Process not dependent on any event: "
-	   ~ this.getFullName() ~ " -- addAgent");
+    assert(false, "Process not dependent on any event: " ~
+	   this.getFullName() ~ " -- addAgent");
   }
 
   final uint[] taskIndices() {
@@ -5894,7 +6078,9 @@ abstract class Process: Procedure, HierComp, EventClient
 	// }
 	// else {
 	this._esdl__parLock = _parent._esdl__getParLock;
-	this._esdl__parConfig = _parent.getParConfig();
+	auto pconf = _parent._esdl__getMulticoreConfig();
+	assert(pconf !is null);
+	this._esdl__multicoreConfig = pconf;
 	// }
       }
     }
@@ -5968,7 +6154,9 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   final void caughtException() {
+    import std.c.stdlib;
     _nextState = ProcState.EXCEPTION;
+    exit(22);
     // _execLock.notify();
   }
 
@@ -6009,13 +6197,19 @@ abstract class Process: Procedure, HierComp, EventClient
     }
     catch(Throwable e) {
       import std.stdio: stderr;
-      stderr.writeln("Thread threw exception: ", e);
+      import std.c.stdlib;
+      stderr.writefln("Thread threw exception %s:%s - %s",
+		      e.file, e.line, e.msg);
+      debug(PROC) {
+	stderr.writefln("Thread threw exception: %s", e);
+      }
       // stderr.writeln(e);
       debug(PROC) {
 	import std.stdio;
 	stderr.writeln("Process ending with exception   : ", Process.procID);
       }
-      freeLock();
+      // freeLock();
+      exit(22);
       this.caughtException();
       throw(e);
     }
@@ -6058,14 +6252,20 @@ abstract class Process: Procedure, HierComp, EventClient
       }
     }
     catch(Throwable e) {
+      import std.c.stdlib;
       import std.stdio: stderr;
-      stderr.writeln("Thread threw exception: ", e);
+      stderr.writefln("Thread threw exception %s:%s - %s",
+		      e.file, e.line, e.msg);
+      debug(PROC) {
+	stderr.writefln("Thread threw exception %s", e);
+      }
+      exit(22);
       // stderr.writeln(e);
       debug(PROC) {
 	import std.stdio;
 	stderr.writeln("Process ending with exception   : ", Process.procID);
       }
-      freeLock();
+      // freeLock();
       this.caughtException();
       throw(e);
     }
@@ -6461,7 +6661,7 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
 
-  static void _esdl__config(FOO, L, ATTR)(L l, ATTR attr) {
+  static void _esdl__config(ATTR, L, PROP)(L l, PROP prop) {
     // In future we may want to make it possible to look at the
     // attributes if any at the thread functions
 
@@ -6475,14 +6675,14 @@ abstract class Process: Procedure, HierComp, EventClient
       //   static assert(is(L unused: ElabContext),
       //		    "Only ElabContext components are allowed to instantiate "
       //		    "other ElabContext components");
-      static if(is(FOO == parallelize)) {
-	l._esdl__setParConfig(attr);
+      static if(is(ATTR == _esdl__Multicore)) {
+	l._esdl__setMulticoreConfig(prop);
       }
-      static if(is(FOO == timePrecision)) {
-	l._esdl__setTimePrecision(attr);
+      static if(is(ATTR == timePrecision)) {
+	l._esdl__setTimePrecision(prop._precision);
       }
-      static if(is(FOO == timeUnit)) {
-	l._esdl__setTimeUnit(attr);
+      static if(is(ATTR == timeUnit)) {
+	l._esdl__setTimeUnit(prop._unit);
       }
     }
   }
@@ -6667,7 +6867,9 @@ class Fork
   final void setAffinity(ParContext context) {
     foreach(proc; _procs) {
       assert(proc.state() == ProcState.STARTING);
-      proc._esdl__parConfig = context.getParConfig();
+      auto pconf = context._esdl__getHierMulticoreConfig();
+      assert(pconf !is null);
+      proc._esdl__multicoreConfig = pconf;
     }
   }
 }
@@ -6739,13 +6941,13 @@ class RootThread: Procedure
   }
 
   private final void fn_wrap(void function() fn, size_t fcore=0) {
-    stickToCpuCore(fcore);
+    stickToCpuCore(fcore % CPU_COUNT());
     _self = this;
     fn();
   }
 
   private final void dg_wrap(void delegate() dg, size_t fcore=0) {
-    stickToCpuCore(fcore);
+    stickToCpuCore(fcore % CPU_COUNT());
     _self = this;
     dg();
   }
@@ -6848,32 +7050,33 @@ private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tas
 class PoolThread: SimThread
 {
 
-  private immutable size_t _poolIndex;
+  private immutable size_t _threadIndex;
 
   private static PoolThread _self;
 
   public size_t getPoolIndex() {
-    return _poolIndex;
+    return _threadIndex;
   }
 
   static PoolThread self() {
     return _self;
   }
 
-  this(RootEntity root, size_t index, size_t fcore, size_t sz=0 ) {
+  this(RootEntity root, size_t index, size_t sz=0 ) {
     synchronized(this) {
       super(root, {
 	  _self = this;
-	  execTaskProcesses(fcore);
+	  execTaskProcesses();
 	}, sz);
-      _poolIndex = index;
+      _threadIndex = index;
     }
   }
 
-  private final void execTaskProcesses(size_t fcore=0) {
+  private final void execTaskProcesses() {
     // First set affinity
     _esdl__root.simulator()._executor._poolThreadInitBarrier.wait();
-    stickToCpuCore(_poolIndex + fcore % getRoot().getNumMultiCore());
+    stickToCpuCore((getRoot().getCoreList()[_threadIndex]) % CPU_COUNT());
+
     while(true) {
       // wait for next cycle
       _esdl__root.simulator()._executor._poolThreadExecBarrier.wait();
@@ -6884,22 +7087,22 @@ class PoolThread: SimThread
 	break;
       }
 
-      foreach(proc; this._esdl__root.simulator._executor._terminalTasksGroups[_poolIndex]) {
+      foreach(proc; this._esdl__root.simulator._executor._terminalTasksGroups[_threadIndex]) {
 	if(proc._state >= _KILLED) {
 	  proc._execute();
 	}
       }
-      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_threadIndex]) {
 	if(proc._state == ProcState.RUNNING) {
 	  proc._execute();
 	}
       }
       _esdl__root.simulator()._executor._poolThreadPostBarrier.wait();
-      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_threadIndex]) {
 	proc.postExecute();
       }
-      this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex].length = 0;
-      this._esdl__root.simulator._executor._terminalTasksGroups[_poolIndex].length = 0;
+      this._esdl__root.simulator._executor._runnableTasksGroups[_threadIndex].length = 0;
+      this._esdl__root.simulator._executor._terminalTasksGroups[_threadIndex].length = 0;
       _esdl__root.simulator()._executor._poolThreadDoneBarrier.wait();
     }
   }
@@ -7018,7 +7221,7 @@ void execElab(T)(T t)
 	// reflected at the EsdlSimulator level.
 	t.message("Starting Phase: CONFIGURE");
 	t.getSimulator.setPhase = SimPhase.CONFIGURE;
-	t._esdl__config!parallelize(t, parallelize(ParallelPolicy._UNDEFINED_,
+	t._esdl__config!_esdl__Multicore(t, _esdl__Multicore(MulticorePolicy._UNDEFINED_,
 						   ubyte.max));
 	t._esdl__config!timePrecision(t, 0.nsec);
 	t._esdl__config!timeUnit(t, 0.nsec);
@@ -7149,7 +7352,7 @@ class EsdlExecutor: EsdlExecutorIf
     _stageIndex = cast(int) _registeredProcesses.length - 1;
   }
 
-  private final void createPoolThreads(size_t numThreads, size_t firstThread,
+  private final void createPoolThreads(size_t numThreads,
 				       size_t stackSize) {
     _poolThreads.length = numThreads;
     _runnableTasksGroups.length = numThreads;
@@ -7159,8 +7362,7 @@ class EsdlExecutor: EsdlExecutorIf
 	import std.stdio;
 	stderr.writeln("Creating Pool Threads: ", i);
       }
-      _poolThreads[i] = new PoolThread(_simulator.getRoot(), i,
-				       firstThread, stackSize);
+      _poolThreads[i] = new PoolThread(_simulator.getRoot(), i, stackSize);
     }
   }
 
@@ -7202,7 +7404,7 @@ class EsdlExecutor: EsdlExecutorIf
 	  }
 	  if(proc.isRunnableTask) {
 	    this._executableTasks ~= proc;
-	    this._runnableTasksGroups[proc._esdl__parConfig._threadPoolIndex] ~= proc;
+	    this._runnableTasksGroups[proc._esdl__multicoreConfig.getPoolThreadIndex()] ~= proc;
 	  }
 	}
       }
@@ -7217,7 +7419,7 @@ class EsdlExecutor: EsdlExecutorIf
     }
     if(p.isRunnableTask) {
       this._executableTasks ~= p;
-      this._runnableTasksGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
+      this._runnableTasksGroups[p._esdl__multicoreConfig.getPoolThreadIndex()] ~= p;
     }
   }
 
@@ -7227,7 +7429,7 @@ class EsdlExecutor: EsdlExecutorIf
     }
     if(p.isTerminalTask) {
       this._executableTasks ~= p;
-      this._terminalTasksGroups[p._esdl__parConfig._threadPoolIndex] ~= p;
+      this._terminalTasksGroups[p._esdl__multicoreConfig.getPoolThreadIndex()] ~= p;
     }
   }
 
@@ -7292,7 +7494,7 @@ class EsdlExecutor: EsdlExecutorIf
       else {
 	if(reqStage - _minStage < _stageIndex) {
 	  import std.conv: to;
-	  assert(false, "Can not add a process to a phase which"
+	  assert(false, "Can not add a process to a phase which" ~
 		 " is already over: " ~ reqStage.to!string());
 	}
       }
@@ -7684,7 +7886,7 @@ abstract class EsdlScheduler
 
   private bool _asyncNoticeFlag = false;
   private SimTime _asyncLastTime;
-  private int     _asyncDelta = int.min;
+  private int     _asyncDelta = 1;
   private AsyncEventNotice[] _asyncNoticeQueue;
   private AsyncEventNotice[] _asyncNoticeQueueAlt;
 
@@ -8086,13 +8288,16 @@ class EsdlHeapScheduler : EsdlScheduler
     }
     foreach (ref anotice; this._asyncNoticeQueueAlt) {
       import std.string: format;
-
+      if (anotice._immediate == true) {
+	assert (anotice._time == SimTime(0));
+	anotice._time = _simulator._simTime;
+      }
       if (_asyncLastTime == anotice._time) {
 	_asyncDelta += 1;
       }
       else {
 	_asyncLastTime = anotice._time;
-	_asyncDelta = int.min;
+	_asyncDelta = 1;
       }
       assert (anotice._event !is null);
       anotice._event.waits = anotice._waits;
@@ -8110,7 +8315,7 @@ class EsdlHeapScheduler : EsdlScheduler
       this.insertNotice(notice);
 
       _simulator._asyncPendingCount++;
-      debug(EVENTS) {
+      debug(ASYNCEVENTS) {
 	import std.stdio;
 	stderr.writeln("Async Pending Count incremented to: ",
 		       _simulator._asyncPendingCount);
@@ -8226,8 +8431,7 @@ interface RootEntityIntf: EntityIntf
 
   uint getNumPoolThreads();
 
-  size_t getNumFirstCore();
-  size_t getNumMultiCore();
+  uint[] getCoreList();
 
   void setTimePrecision(Time precision);
   Time getTimePrecision();
@@ -8524,19 +8728,10 @@ abstract class RootEntity: RootEntityIntf
     return cast(uint) _esdl__root.simulator()._executor._poolThreads.length;
   }
 
-  // The first core -- rootthread rides on this
-  size_t _esdl__numFirstCore = 0;
-  // number of cores to use
-  size_t _esdl__numMultiCore = 1;
-
-  size_t getNumFirstCore() {
-    return _esdl__numFirstCore;
+  uint[] getCoreList() {
+    return _rootMulticoreConfig._threadPool;
   }
-
-  size_t getNumMultiCore() {
-    return _esdl__numMultiCore;
-  }
-
+  
   int cpuCount() {
     // version(COSIM_VERILOG) {
     return CPU_COUNT();
@@ -8546,20 +8741,44 @@ abstract class RootEntity: RootEntityIntf
     // }
   }
 
-  void multiCore(int ncore = 0, size_t fcore = 0) {
-    if(ncore < 1) {
-      ncore = cpuCount() - ncore;
+  void configureMultiCore() {
+    _rootMulticoreConfig = new MulticoreConfig();
+    _rootMulticoreConfig._parallel = MulticorePolicy.CONTEXT;
+
+    if (_esdl__multicore._threadPool.length != 0) {
+      _rootMulticoreConfig._threadPool = _esdl__multicore._threadPool;
+    }
+    else {
+      auto _cpuCount = cpuCount();
+      uint[] _cpus;
+      _cpus.length = cpuCount();
+      for (uint i=0; i!=cpuCount(); ++i) {
+	_cpus[i] = i;
+      }
+      _rootMulticoreConfig._threadPool = _cpus;
     }
 
-    if(cpuCount() < ncore) {
-      import std.conv: to;
-      assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
-	     " threads are avaialbe for execution");
-    }
-    // }
-    _esdl__numMultiCore = ncore;
-    _esdl__numFirstCore = fcore;
+    _esdl__multicoreConfig = _esdl__multicore.makePhyCfg(_rootMulticoreConfig);
   }
+
+  _esdl__Multicore _esdl__multicore;
+  MulticoreConfig _rootMulticoreConfig;
+  
+
+  // void multiCore(int ncore = 0, size_t fcore = 0) {
+  //   if(ncore < 1) {
+  //     ncore = cpuCount() - ncore;
+  //   }
+
+  //   if(cpuCount() < ncore) {
+  //     import std.conv: to;
+  //     assert(false, "Fatal: only " ~ CPU_COUNT().to!string ~
+  // 	     " threads are avaialbe for execution");
+  //   }
+  //   // }
+  //   _esdl__numMultiCore = ncore;
+  //   _esdl__numFirstCore = fcore;
+  // }
 
   void setMode(SchedMode mode) {
     this._simulator.setMode(mode);
@@ -8567,6 +8786,10 @@ abstract class RootEntity: RootEntityIntf
 
   SchedMode getMode() {
     return this._simulator.getMode();
+  }
+
+  void setAsyncMode() {
+    this._simulator.setMode(SchedMode.ASYNC);
   }
 
   void setVpiMode() {
@@ -8577,6 +8800,10 @@ abstract class RootEntity: RootEntityIntf
     this._simulator.setMode(SchedMode.VHPI);
   }
 
+  void setFliMode() {
+    this._simulator.setMode(SchedMode.FLI);
+  }
+
   void setMasterMode() {
     this._simulator.setMode(SchedMode.MASTER);
   }
@@ -8584,10 +8811,11 @@ abstract class RootEntity: RootEntityIntf
 
 enum SchedMode: byte {
   MASTER = 0,
-  VPI = 1,			// wait for external timed event
-  VHPI = 2,			// wait for external timed event
-  FLI = 3,			// wait for external timed event
-  SYSTEMC = 4,			// wait for external timed event
+  ASYNC = 1,
+  VPI = 2,			// wait for external timed event
+  VHPI = 3,			// wait for external timed event
+  FLI = 4,			// wait for external timed event
+  SYSTEMC = 5,			// wait for external timed event
 }
 
 class EsdlSimulator: EntityIntf
@@ -8903,7 +9131,10 @@ class EsdlSimulator: EntityIntf
 	      if (_asyncPendingCount <= 0 //  &&
 		  // nextSimTime() != _simTime
 		  ) {
-		assert (_asyncPendingCount == 0, "Negative _asyncPendingCount!!");
+		import std.string: format;
+		assert (_asyncPendingCount == 0,
+			format("Negative _asyncPendingCount = %s!!",
+			       _asyncPendingCount));
 		// if (_scheduler._masterTime <= _simTime &&
 		// 	  nextSimTime() != _simTime) { // wait for external master
 		// 	import std.string: format;
@@ -9114,13 +9345,14 @@ class EsdlSimulator: EntityIntf
   }
 
   final void elabRootThread(T)(T t) {
-    auto count = getRoot.getNumMultiCore();
-    auto first = getRoot.getNumFirstCore();
+    t.configureMultiCore();
+    
+    auto count = getRoot.getCoreList().length;
 
     this._executor = new EsdlExecutor(this);
 
     _executor.threadCount(count);
-    _executor.createPoolThreads(count, first, 0);
+    _executor.createPoolThreads(count, 0);
     // We do this to make dure that all the routine threads are up
     // and running before we attempt to create other threads. For
     // some reason the simulation sometimes gets into a deadlock
@@ -9133,11 +9365,11 @@ class EsdlSimulator: EntityIntf
 	  }
 	  catch(Throwable e) {
 	    import std.stdio: stderr;
-	    stderr.writeln("Simulation Root Thread threw exception: ", e);
+	    stderr.writefln("Simulation Root Thread threw exception: %s", e);
 	    throw(e);
 	  }
 	},
-	getRoot().getNumFirstCore());
+	getRoot().getCoreList()[0]);
       _rootThread._esdl__setParent(this);
       _rootThread._esdl__setName("root");
     }
@@ -9209,17 +9441,47 @@ SimPhase getSimPhase() {
   return getRootEntity().simulator()._phase;
 }
 
+template _esdl__uda(alias A, T)
+{
+  enum A _esdl__uda =
+    _esdl__udaIndexed!(A, 0, A.init, __traits(getAttributes, T));
+}
+
+template _esdl__uda(alias A, alias t, size_t I)
+{
+  enum A _esdl__uda =
+    _esdl__udaIndexed!(A, 0, A.init, __traits(getAttributes, t.tupleof[I]));
+}
+
+template _esdl__udaIndexed(alias A, size_t C, A P, AA...)
+{
+  static if(AA.length == 0) {
+    enum A _esdl__udaIndexed = P;
+  }
+  else static if (__traits(isSame, AA[0], A)) {
+    enum A _esdl__udaIndexed =
+      _esdl__udaIndexed!(A, C+1, P.merge(A.init), AA[1..$]);
+  }
+  else static if (is(typeof(AA[0]) == A)) {
+    enum A _esdl__udaIndexed =
+      _esdl__udaIndexed!(A, C+1, P.merge(AA[0]), AA[1..$]);
+  }
+  else {
+    enum A _esdl__udaIndexed =
+      _esdl__udaIndexed!(A, C+1, P, AA[1..$]);
+  }
+}
+
 template _esdl__attr(alias A, T)
 {
-  enum int _esdl__attr = _esdl__attrIndexed!(A, 0, -1,
-					     __traits(getAttributes, T));
+  enum int _esdl__attr =
+    _esdl__attrIndexed!(A, 0, -1, __traits(getAttributes, T));
 }
 
 template _esdl__attr(alias A, alias t, size_t I)
 {
-  enum int _esdl__attr = _esdl__attrIndexed!(A, 0, -1,
-					     __traits(getAttributes,
-						      t.tupleof[I]));
+  enum _esdl__attr =
+    _esdl__attrIndexed!(A, 0, -1, __traits(getAttributes, t.tupleof[I]));
 }
 
 template _esdl__attrIndexed(alias A, size_t C, int P, AA...)
@@ -9274,10 +9536,10 @@ interface ConfigContext: TimeContext, ParContext
   final SimTime tu(ulong val) {
     return SimTime(val*getTimeScale());
   }
-  // SimTime Time(ulong val, TimeUnit unit);
+  // SimTime Time(ulong val, timeUnit unit);
   // SimTime Time(string unit="default")(ulong val);
   // SimTime Time(double val);
-  // SimTime Time(double val, TimeUnit unit);
+  // SimTime Time(double val, timeUnit unit);
   void fixTimeParameters(ulong scale = 0);
 
   mixin template ConfigMixin()
@@ -9430,17 +9692,17 @@ struct SimTime
     }
   }
 
-  this(EntityIntf context, ulong val, TimeUnit unit) {
-    synchronized(context) {
-      auto order = getTimePrecisionOrder(context.getRoot());
-      if(order <= unit) {
-	this._value = val * 10L ^^(unit - order);
-      }
-      else {
-	this._value = val / 10L ^^(order - unit);
-      }
-    }
-  }
+  // this(EntityIntf context, ulong val, timeUnit unit) {
+  //   synchronized(context) {
+  //     auto order = getTimePrecisionOrder(context.getRoot());
+  //     if(order <= unit) {
+  // 	this._value = val * 10L ^^(unit - order);
+  //     }
+  //     else {
+  // 	this._value = val / 10L ^^(order - unit);
+  //     }
+  //   }
+  // }
 
   this(EntityIntf context, Time t) {
     synchronized(context) {
