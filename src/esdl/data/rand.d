@@ -181,14 +181,14 @@ class _esdl__SolverStruct(_esdl__T): _esdl__SolverBase!_esdl__T
   void _esdl__setOuter()(ref _esdl__T outer) {
     _esdl__outer = &outer;
   }
-  this(uint seed, string name, ref _esdl__T outer,
+  this(uint seed, bool isSeeded, string name, ref _esdl__T outer,
 	      _esdl__SolverRoot parent=null) {
     _esdl__outer = &outer;
     static if(_esdl__baseHasRandomization!_esdl__T) {
-      super(seed, name, outer, parent);
+      super(seed, isSeeded, name, outer, parent);
     }
     else {
-      super(seed, name, parent);
+      super(seed, isSeeded, name, parent);
     }
     _esdl__initRands();
     _esdl__initCsts();
@@ -444,7 +444,8 @@ template _esdl__RandInits(T, int I=0)
 	  "] !is null);\n    _esdl__" ~ NAME ~
 	  " = this._esdl__outer.tupleof[" ~ II ~
 	  "].new typeof(_esdl__" ~ NAME ~
-	  ")(this._esdl__outer._esdl__randSeed, \"" ~
+	  ")(this._esdl__outer._esdl__randSeed, " ~
+	  "this._esdl__outer._esdl__randSeeded, \"" ~
 	  NAME ~ "\", this._esdl__outer.tupleof[" ~ II ~
 	  "], this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
@@ -452,7 +453,8 @@ template _esdl__RandInits(T, int I=0)
       else static if(is(L == struct)) {
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
-	  NAME ~ ")(this._esdl__outer._esdl__randSeed, \"" ~
+	  NAME ~ ")(this._esdl__outer._esdl__randSeed, " ~
+	  "this._esdl__outer._esdl__randSeeded, \"" ~
 	  NAME ~ "\", this._esdl__outer.tupleof[" ~ II ~
 	  "], this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
@@ -1023,15 +1025,19 @@ abstract class _esdl__SolverRoot {
 
   _esdl__SolverRoot _parent = null;
 
+  bool _esdl__isSeeded = false;
+
   CstBlock _esdl__cstStatements;
 
   CstStage[] savedStages;
   
-  this(uint seed, string name, _esdl__SolverRoot parent=null) {
+  this(uint seed, bool isSeeded, string name,
+       _esdl__SolverRoot parent=null) {
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
     }
     _esdl__rGen = new _esdl__RandGen(seed);
+    _esdl__isSeeded = isSeeded;
     if(parent is null) {
       _esdl__buddy = new Buddy(400, 400);
       _esdl__cstStatements = new CstBlock();
@@ -1379,14 +1385,14 @@ mixin template Randomization()
     void _esdl__setOuter()(_esdl__T outer) {
       _esdl__outer = outer;
     }
-    this(uint seed, string name, _esdl__T outer,
+    this(uint seed, bool isSeeded, string name, _esdl__T outer,
 		_esdl__SolverRoot parent=null) {
       _esdl__outer = outer;
       static if(_esdl__baseHasRandomization!_esdl__T) {
-	super(seed, name, outer, parent);
+	super(seed, isSeeded, name, outer, parent);
       }
       else {
-	super(seed, name, parent);
+	super(seed, isSeeded, name, parent);
       }
       _esdl__initRands();
       _esdl__initCsts();
@@ -1419,7 +1425,8 @@ mixin template Randomization()
     override void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__SolverThis(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
+	  new _esdl__SolverThis(_esdl__randSeed, _esdl__randSeeded,
+				typeid(_esdl__Type).stringof[8..$-1], this);
 	static if(__traits(compiles, _esdl__setupSolver())) {
 	  _esdl__setupSolver();
 	}
@@ -1432,6 +1439,7 @@ mixin template Randomization()
   else {
     _esdl__SolverRoot _esdl__solverInst;
     uint _esdl__randSeed;
+    bool _esdl__randSeeded;
     _esdl__SolverThis _esdl__getSolver() {
       return _esdl__staticCast!_esdl__SolverThis(_esdl__solverInst);
     }
@@ -1449,7 +1457,6 @@ mixin template Randomization()
 	_esdl__solverInst._esdl__rGen.seed(seed);
       }
     }
-    bool _esdl__randSeeded;
     bool _esdl__isRandSeeded() {
       return _esdl__randSeeded;
     }
@@ -1457,7 +1464,8 @@ mixin template Randomization()
     void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__SolverThis(_esdl__randSeed, typeid(_esdl__Type).stringof[8..$-1], this);
+	  new _esdl__SolverThis(_esdl__randSeed, _esdl__randSeeded,
+				typeid(_esdl__Type).stringof[8..$-1], this);
 	static if(__traits(compiles, _esdl__setupSolver())) {
 	  _esdl__setupSolver();
 	}
@@ -3053,7 +3061,7 @@ class VarVecIter(RV): CstVecIterVar, CstVecPrim
 
   override uint maxVal() {
     if(! this.isUnrollable()) {
-      assert(false, "Can not find maxVal since the "
+      assert(false, "Can not find maxVal since the " ~
 	     "Idx Variable is unrollable");
     }
     // import std.stdio;
@@ -4507,7 +4515,7 @@ class RndVecIter(RV): CstVecIterVar, CstVecPrim
 
   override uint maxVal() {
     if(! this.isUnrollable()) {
-      assert(false, "Can not find maxVal since the "
+      assert(false, "Can not find maxVal since the " ~
 	     "Idx Variable is unrollable");
     }
     // import std.stdio;
@@ -5056,7 +5064,7 @@ class CstVec2VecExpr: CstVecExpr
   override BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
-	     "CstVec2VecExpr: Need to unroll the idxVars"
+	     "CstVec2VecExpr: Need to unroll the idxVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -5227,7 +5235,7 @@ class CstVecSliceExpr: CstVecExpr
   override BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
-	     "CstVecSliceExpr: Need to unroll the idxVars"
+	     "CstVecSliceExpr: Need to unroll the idxVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -5511,7 +5519,7 @@ class CstBdd2BddExpr: CstBddExpr
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
-	     "CstBdd2BddExpr: Need to unroll the idxVars"
+	     "CstBdd2BddExpr: Need to unroll the idxVars" ~
 	     " before attempting to solve BDD");
     }
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -5626,7 +5634,7 @@ class CstVec2BddExpr: CstBddExpr
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
-	     "CstVec2BddExpr: Need to unroll the idxVars"
+	     "CstVec2BddExpr: Need to unroll the idxVars" ~
 	     " before attempting to solve BDD");
     }
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -5749,7 +5757,7 @@ class CstNotBddExpr: CstBddExpr
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
       assert(false,
-	     "CstBdd2BddExpr: Need to unroll the idxVars"
+	     "CstBdd2BddExpr: Need to unroll the idxVars" ~
 	     " before attempting to solve BDD");
     }
     auto bdd = _expr.getBDD(stage, buddy);
