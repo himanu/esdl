@@ -213,11 +213,11 @@ struct BddDomain
   //   this._ivar.length = binsize;
   // }
 
-  ~this() {
-    // import std.stdio;
-    // writeln("Calling destructor on BddDomain with BDD: ", _var._index);
-    _var.reset();
-  }
+  // ~this() {
+  //   // import std.stdio;
+  //   // writeln("Calling destructor on BddDomain with BDD: ", _var._index);
+  //   // _var.reset();
+  // }
   
   this(int index, size_t bits)
   {
@@ -1614,13 +1614,13 @@ struct BDD
     _index = 0;
   }
 
-  ~this()
-  {
-    if (_index !is 0 && _delref_enabled &&
-	_buddy !is null) {
-      _buddy.delRef(_index);
-    }
-  }
+  // ~this()
+  // {
+  //   // if (_index !is 0 && _delref_enabled &&
+  //   // 	_buddy !is null) {
+  //   //   _buddy.delRef(_index);
+  //   // }
+  // }
 
   version(BUDDY_ROOT) {
     this(int index, Buddy buddy)
