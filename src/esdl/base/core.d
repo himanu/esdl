@@ -7050,12 +7050,12 @@ private enum _KILLED  = ProcState.ABORTED; // >= _KILLED are forcibly killed tas
 class PoolThread: SimThread
 {
 
-  private immutable size_t _threadIndex;
+  private immutable size_t _poolIndex;
 
   private static PoolThread _self;
 
-  public size_t getPoolIndex() {
-    return _threadIndex;
+  static public size_t getPoolIndex() {
+    return _self._poolIndex;
   }
 
   static PoolThread self() {
@@ -7068,14 +7068,14 @@ class PoolThread: SimThread
 	  _self = this;
 	  execTaskProcesses();
 	}, sz);
-      _threadIndex = index;
+      _poolIndex = index;
     }
   }
 
   private final void execTaskProcesses() {
     // First set affinity
     _esdl__root.simulator()._executor._poolThreadInitBarrier.wait();
-    stickToCpuCore((getRoot().getCoreList()[_threadIndex]) % CPU_COUNT());
+    stickToCpuCore((getRoot().getCoreList()[_poolIndex]) % CPU_COUNT());
 
     while(true) {
       // wait for next cycle
@@ -7087,22 +7087,22 @@ class PoolThread: SimThread
 	break;
       }
 
-      foreach(proc; this._esdl__root.simulator._executor._terminalTasksGroups[_threadIndex]) {
+      foreach(proc; this._esdl__root.simulator._executor._terminalTasksGroups[_poolIndex]) {
 	if(proc._state >= _KILLED) {
 	  proc._execute();
 	}
       }
-      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_threadIndex]) {
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
 	if(proc._state == ProcState.RUNNING) {
 	  proc._execute();
 	}
       }
       _esdl__root.simulator()._executor._poolThreadPostBarrier.wait();
-      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_threadIndex]) {
+      foreach(proc; this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex]) {
 	proc.postExecute();
       }
-      this._esdl__root.simulator._executor._runnableTasksGroups[_threadIndex].length = 0;
-      this._esdl__root.simulator._executor._terminalTasksGroups[_threadIndex].length = 0;
+      this._esdl__root.simulator._executor._runnableTasksGroups[_poolIndex].length = 0;
+      this._esdl__root.simulator._executor._terminalTasksGroups[_poolIndex].length = 0;
       _esdl__root.simulator()._executor._poolThreadDoneBarrier.wait();
     }
   }
@@ -8128,7 +8128,7 @@ abstract class EsdlScheduler
 
     _immediateQueue.length = 0;
 
-    foreach(ref event; this._immediateQueueAlt) {
+    foreach(event; this._immediateQueueAlt) {
       debug(EVENTS) {
 	import std.stdio: stderr;
 	stderr.writefln("Triggering Immediate Event %s", event._eventObj.getFullName());
@@ -9388,12 +9388,6 @@ class EsdlSimulator: EntityIntf
       t.getSimulator.stepSim();
     }
   }
-}
-
-// return the current PoolThread, otherwise null
-PoolThread getPoolThread() {
-  auto _thread = Thread.getThis();
-  return cast(PoolThread) _thread;
 }
 
 RootEntity getRootEntity() {
