@@ -14,10 +14,10 @@ class TrafficLight: Entity
   // mixin(entityMixin());
 
   enum POLES = 4;
-  Event red[POLES];
-  Event yellow[POLES];
-  Event green[POLES];
-  long  foo[10];
+  Event[POLES] red;
+  Event[POLES] yellow;
+  Event[POLES] green;
+  long[10]     foo;
   int count = 0;
 
 
@@ -76,7 +76,7 @@ class TrafficLight: Entity
   }
   public int x;
   // Task!("light()",0)  tLightTT[POLES];
-  Task!(light, 5)  tLightTT[POLES];
+  Task!(light, 5)[POLES]   tLightTT;
   // Task!(testPhase, -1)  test_1;
   // Task!(testPhase, 10)  test2;
   // Task!(testPhase, 11)  test11;
@@ -99,7 +99,7 @@ class Dummy: Entity
   // }
   // Task!(etrigger, 0) trigE;
 
-  private TrafficLightWrapper traffic[10];
+  private TrafficLightWrapper[10] traffic;
 }
 
 @timeUnit(100.psec)
@@ -128,7 +128,7 @@ void main()
 
   // theRoot.doSim(25.nsec);
   // theRoot.waitSim();
-  theRoot.simulateUpto(2500.nsec);
+  theRoot.simulateUpto(25000.nsec);
   // theRoot.simulate(2500.nsec);
   // theRoot.simulate(0.nsec);
   theRoot.finish();
