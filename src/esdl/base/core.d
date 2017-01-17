@@ -1317,17 +1317,17 @@ void _esdl__connect(T)(T t) {
 }
 
 
-// call doStart for each wntity once the simulation is over
+// call doStart for each entity at the start of simulation
 void _esdl__start(T)(T t) {
-  synchronized(t) {
-    // static if(__traits(compiles, t.doStart()))
-    // {
-    t.doStart();
-    // }
-    foreach(child; t.getChildComps()) {
-      _esdl__start(child);
-    }
+  // synchronized(t) {
+  // static if(__traits(compiles, t.doStart()))
+  // {
+  t.doStart();
+  // }
+  foreach(child; t.getChildComps()) {
+    _esdl__start(child);
   }
+  // }
 }
 
 // call doFinish for each entity once the simulation is over
@@ -1346,33 +1346,33 @@ void _esdl__finish(T)(T t) {
 }
 
 
-// Register all the routines are tasks with the simulator during the
+// Register all the routines and tasks with the simulator during the
 // elaboration phase. The Dynamic processes and routines are handled
 // separately(in the process/routine constructor)
 void _esdl__register(T, L)(T t, ref L l)
   if(is(T : NamedComp) && is(T == class)) {
     static if((is(L : BaseWorker)) && (is(L == class))) {
-      synchronized(l) {
-	// Dynamic tasks get registered by the constructor --
-	// static tasks get registered during Elaboration.
-	t.getSimulator.reqRegisterProcess(l, l.stage);
-      }
+      // synchronized(l) {
+      // Dynamic tasks get registered by the constructor --
+      // static tasks get registered during Elaboration.
+      t.getSimulator.reqRegisterProcess(l, l.stage);
+      // }
     }
 
     static if((is(L : BaseTask)) && (is(L == class))) {
-      synchronized(l) {
-	// Dynamic tasks get registered by the constructor --
-	// static tasks get registered during Elaboration.
-	t.getSimulator.reqRegisterProcess(l, l.stage);
-      }
+      // synchronized(l) {
+      // Dynamic tasks get registered by the constructor --
+      // static tasks get registered during Elaboration.
+      t.getSimulator.reqRegisterProcess(l, l.stage);
+      // }
     }
 
     static if((is(L : BaseRoutine)) && (is(L == class))) {
-      synchronized(l) {
-	// Dynamic tasks get registered by the constructor --
-	// static tasks get registered during Elaboration.
-	t.getSimulator.reqRegisterProcess(l, l.stage);
-      }
+      // synchronized(l) {
+      // Dynamic tasks get registered by the constructor --
+      // static tasks get registered during Elaboration.
+      t.getSimulator.reqRegisterProcess(l, l.stage);
+      // }
     }
 
   }
@@ -2040,7 +2040,7 @@ final class IndexedSimEvent
   size_t index = void;
 
   this(SimEvent event, size_t i) {
-    synchronized (this) {
+    synchronized(this) {
       this.index = i;
       version(WEAKREF) {
 	_client = weakReference!SimEvent(event);
@@ -2692,6 +2692,9 @@ class EventObj: EventAgent, NamedComp
   }
 
   // called when a process starts waiting for this event
+  // ToDo -- we need to take out this synchronization guard here. All
+  // the running procs are processed in the scheduler, that can be a
+  // good place to add the clients to the respective events
   protected final void addClientProc(Process client) {
     synchronized(this) {
       this._clientProcesses ~= client;
@@ -2852,6 +2855,9 @@ class EventObj: EventAgent, NamedComp
   // Return the timed SimEvent, and if this is not a TimedEvent,
   // assert error
   final SimEvent getTimed() {
+    // ToDo: This synchronization guard can be optimized away by
+    // making the "_simEvent is null" check outside of the
+    // synchronization block.
     synchronized(this) {
       if(this._simEvent is null) {
 	if (this._async) {
@@ -3841,6 +3847,10 @@ private class TimedEvent: SimEvent
     this._getObj.trigger(sim);
   }
 
+  // Todo: The synchronization guard here can be removed by just
+  // creating an event notice and pushing it to a pool thread specific
+  // queue. The queue then gets processed by the kernel during
+  // schedule phase
   override bool notify() {
     // Cancel the already scheduled notifications
     synchronized(this) {
@@ -3879,6 +3889,10 @@ private class TimedEvent: SimEvent
     // }
   }
 
+  // Todo: The synchronization guard here can be removed by just
+  // creating an event notice and pushing it to a pool thread specific
+  // queue. The queue then gets processed by the kernel during
+  // schedule phase
   override bool notify(SimTime steps) {
     synchronized(this) {
       debug(EVENTS) {
