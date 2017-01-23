@@ -2140,6 +2140,7 @@ abstract class VarVecBase(L, int N=0)
     
   abstract E getVal();
 
+  // returns true if refresh was required
   override bool refresh(CstStage s, Buddy buddy) {
     auto val = getVal();
     if ((! _valvec.isNull) && _val == val) {
@@ -2152,7 +2153,6 @@ abstract class VarVecBase(L, int N=0)
     }
   }
 
-  // returns true if refresh was required
   override BddVec getBDD(CstStage s, Buddy buddy) {
     return _valvec;
   }
