@@ -206,7 +206,8 @@ struct _esdl__Multicore
   }
 
   this(MulticorePolicy parallel, uint index) {
-    assert (parallel != MulticorePolicy.MULTI);
+    // since a specific thread is being passed, policy can not be MULTI
+    assert (parallel != MulticorePolicy.MULTI || index == uint.max);
     _parallel = parallel;
     _threadIndex = index;
   }
@@ -3717,8 +3718,8 @@ private class AsyncTimedEvent: TimedEvent
     synchronized(this) {
       debug(EVENTS) {
 	import std.stdio: stderr;
-	stderr.writefln("Scheduled notification for %s for time %s waits %s",
-			_eventObj.getFullName(), stime, waits);
+	stderr.writefln("Scheduled notification %s",
+			_eventObj.getFullName());
       }
       if(_notifyPolicy is NotifyPolicy.OVERRIDE) {
 	if(this._schedule != Schedule.NONE) {
@@ -8271,10 +8272,10 @@ class EsdlHeapScheduler : EsdlScheduler
 
     _simulator._simTime = firstEvent.atTime;
 
+    debug(EVENTS) { size_t numTriggered = 0; }
+
     EventNotice nextEvent = firstEvent;
-    
-    debug(EVENTS) {size_t numTriggered = 0;}
-    while(firstEvent == nextEvent) {
+    while(nextEvent.time == _simulator._simTime) {
       nextEvent.trigger(_simulator);
       debug(EVENTS) {++numTriggered;}
       this._noticeHeap.removeFront();
