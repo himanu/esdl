@@ -462,9 +462,10 @@ template _esdl__RandInits(T, int I=0)
       else static if(is(L == U*, U) && is(U == struct)) {
 	enum _esdl__RandInits =
 	  "    assert(this._esdl__outer.tupleof[" ~ II ~
-	  "] !is null);\n    _esdl__" ~ NAME ~
-	  " = new typeof(_esdl__" ~ NAME ~
-	  ")(this._esdl__outer._esdl__randSeed, \"" ~
+	  "] !is null);\n" ~
+	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
+	  NAME ~ ")(this._esdl__outer._esdl__randSeed, " ~
+	  "this._esdl__outer._esdl__randSeeded, \"" ~
 	  NAME ~ "\", *(this._esdl__outer.tupleof[" ~ II ~
 	  "]), this);\n    _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
