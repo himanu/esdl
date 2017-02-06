@@ -23,7 +23,7 @@ class Bar {
     foo = new Foo();
   }
   void preRandomize() {
-    foo = new Foo();
+    // foo = new Foo();
     frop++;
   }
   int frop = 64;
