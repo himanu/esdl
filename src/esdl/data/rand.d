@@ -89,8 +89,8 @@ mixin template _esdl__SolverMixin()
   {
     long[N] _withArgs;
 
-    void withArgs(V...)(V values) if(allIntengral!V) {
-      static assert(V.length == N);
+    void withArgs(ARG...)(ARG values) if(allIntengral!ARG) {
+      static assert(ARG.length == N);
       foreach(i, v; values) {
 	_withArgs[i] = v;
       }
@@ -115,8 +115,8 @@ mixin template _esdl__SolverMixin()
     }
   }
 
-  void _esdl__with(string _esdl__CstString, V...)(V values) {
-    auto cstWith = new _esdl__Constraint!(_esdl__CstString, V.length)("randWith");
+  void _esdl__with(string _esdl__CstString, ARG...)(ARG values) {
+    auto cstWith = new _esdl__Constraint!(_esdl__CstString, ARG.length)("randWith");
     cstWith.withArgs(values);
     _esdl__cstWith = cstWith;
   }
@@ -178,8 +178,11 @@ mixin template _esdl__SolverMixin()
 class _esdl__SolverStruct(_esdl__T): _esdl__SolverBase!_esdl__T
 {
   _esdl__T* _esdl__outer;
-  void _esdl__setOuter()(ref _esdl__T outer) {
-    _esdl__outer = &outer;
+  void _esdl__setValRef(ref _esdl__T outer) {
+    if (_esdl__outer !is &outer) {
+      _esdl__outer = &outer;
+      _esdl__setObjOuter(true);
+    }
   }
   this(uint seed, bool isSeeded, string name, ref _esdl__T outer,
 	      _esdl__SolverRoot parent=null) {
@@ -442,8 +445,10 @@ template _esdl__RandInits(T, int I=0)
 	enum _esdl__RandInits =
 	  "    assert(this._esdl__outer.tupleof[" ~ II ~
 	  "] !is null);\n    _esdl__" ~ NAME ~
-	  " = this._esdl__outer.tupleof[" ~ II ~
-	  "].new typeof(_esdl__" ~ NAME ~
+	  // using static classes now -- normal new therefor
+	  // " = this._esdl__outer.tupleof[" ~ II ~
+	  // "].new typeof(_esdl__" ~ NAME ~
+	  " = new typeof(_esdl__" ~ NAME ~
 	  ")(this._esdl__outer._esdl__randSeed, " ~
 	  "this._esdl__outer._esdl__randSeeded, \"" ~
 	  NAME ~ "\", this._esdl__outer.tupleof[" ~ II ~
@@ -499,29 +504,35 @@ template _esdl__RandSetOuter(T, int I=0)
       enum NAME = __traits(identifier, T.tupleof[I]);
       alias L = typeof(T.tupleof[I]);
       static if(isBitVector!L || isIntegral!L) {
-	enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+	enum _esdl__RandSetOuter =
+ 	  "    _esdl__" ~ NAME ~
+	  "._esdl__setValRef(this._esdl__outer.tupleof[" ~ I.stringof ~
+	  "]);\n" ~ _esdl__RandSetOuter!(T, I+1);
       }
       else static if(is(L == class)) {
 	enum _esdl__RandSetOuter =
 	  "    assert(this._esdl__outer." ~ NAME ~
 	  " !is null);\n    _esdl__" ~ NAME ~
-	  "._esdl__setOuter(this._esdl__outer." ~ NAME ~
+	  "._esdl__setValRef(this._esdl__outer." ~ NAME ~
 	  ");\n" ~ _esdl__RandSetOuter!(T, I+1);
       }
       else static if(is(L == struct)) {
 	enum _esdl__RandSetOuter =
 	  "    _esdl__" ~ NAME ~
-	  "._esdl__setOuter(this._esdl__outer." ~ NAME ~
+	  "._esdl__setValRef(this._esdl__outer." ~ NAME ~
 	  ");\n" ~ _esdl__RandSetOuter!(T, I+1);
       }
       else static if(is(L == U*, U) && is(U == struct)) {
 	enum _esdl__RandSetOuter =
 	  "    _esdl__" ~ NAME ~
-	  "._esdl__setOuter(*(this._esdl__outer." ~ NAME ~
+	  "._esdl__setValRef(*(this._esdl__outer." ~ NAME ~
 	  "));\n" ~ _esdl__RandSetOuter!(T, I+1);
       }
       else {			/* arrays */
-	enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+	enum _esdl__RandSetOuter =
+ 	  "    _esdl__" ~ NAME ~
+	  "._esdl__setValRef(this._esdl__outer.tupleof[" ~ I.stringof ~
+	  "]);\n" ~ _esdl__RandSetOuter!(T, I+1);
 	// static assert(false, "Unhandled type: " ~ L.stringof);
       }
     }
@@ -1362,7 +1373,7 @@ string _esdl__randsMixin(T)() {
     "  void _esdl__initCsts()() {\n" ~
     _esdl__CstInits!T ~ "  }\n";
   string rand_decls = _esdl__RandDeclFuncs!T ~ _esdl__RandDeclVars!T;
-  string rand_set_outer = "  void _esdl__setObjOuter()() {\n" ~
+  string rand_set_outer = "  void _esdl__setObjOuter()(bool changed) {\n" ~
     _esdl__RandSetOuter!T ~ "  }\n";
   string cst_decls = _esdl__ConstraintsDefDecl!T ~ _esdl__ConstraintsDecl!T;
 
@@ -1380,11 +1391,18 @@ mixin template Randomization()
 {
   alias _esdl__T = typeof(this);
   
-  class _esdl__Solver: _esdl__SolverBase!_esdl__T
+  // While making _esdl__Solver class non-static nested class also
+  // works as far as dlang compilers are concerned, do not do that
+  // since in that case _esdl__outer object would have an implicit
+  // pointer to the outer object which can not be changed
+  static class _esdl__Solver: _esdl__SolverBase!_esdl__T
   {
     _esdl__T _esdl__outer;
-    void _esdl__setOuter()(_esdl__T outer) {
-      _esdl__outer = outer;
+    void _esdl__setValRef(ref _esdl__T outer) {
+      if (_esdl__outer !is outer) {
+	_esdl__outer = outer;
+	_esdl__setObjOuter(true);
+      }
     }
     this(uint seed, bool isSeeded, string name, _esdl__T outer,
 		_esdl__SolverRoot parent=null) {
@@ -1433,7 +1451,7 @@ mixin template Randomization()
 	}
       }
       else {
-	_esdl__getSolver()._esdl__setObjOuter();
+	_esdl__getSolver()._esdl__setObjOuter(false);
       }
     }
   }
@@ -1472,7 +1490,7 @@ mixin template Randomization()
 	}
       }
       else {
-	_esdl__getSolver()._esdl__setObjOuter();
+	_esdl__getSolver()._esdl__setObjOuter(false);
       }
     }
   }
@@ -1480,8 +1498,8 @@ mixin template Randomization()
   // }
 }
 
-void randomizeWith(string C, T, V...)(ref T t, V values)
-  if(is(T == class) && allIntengral!V) {
+void randomizeWith(string C, T, ARG...)(ref T t, ARG values)
+  if(is(T == class) && allIntengral!ARG) {
     t._esdl__initSolver();
     // The idea is that if the end-user has used the randomization
     // mixin then _esdl__RandType would be already available as an
@@ -1494,12 +1512,12 @@ void randomizeWith(string C, T, V...)(ref T t, V values)
       t._esdl__solverInst._esdl__cstWithChanged = true;
       // auto withCst =
       //	new Constraint!(C, "_esdl__withCst",
-      //			T, V.length)(t, "_esdl__withCst");
+      //			T, ARG.length)(t, "_esdl__withCst");
       // withCst.withArgs(values);
       // t._esdl__solverInst._esdl__cstWith = withCst;
     }
     else {
-      alias CST = _esdl__SolverResolve!T.Type._esdl__Constraint!(C, V.length);
+      alias CST = _esdl__SolverResolve!T.Type._esdl__Constraint!(C, ARG.length);
       auto cstWith = _esdl__staticCast!CST(t._esdl__solverInst._esdl__cstWith);
       cstWith.withArgs(values);
       t._esdl__solverInst._esdl__cstWithChanged = false;
@@ -1515,12 +1533,12 @@ void randomize(T)(T t) {
 }
 
 // FIXME add bitvectors to this template filter
-template allIntengral(V...) {
-  static if(V.length == 0) {
+template allIntengral(ARG...) {
+  static if(ARG.length == 0) {
     enum bool allIntengral = true;
   }
-  else static if(isIntegral!(V[0])) {
-      enum bool allIntengral = allIntengral!(V[1..$]);
+  else static if(isIntegral!(ARG[0])) {
+      enum bool allIntengral = allIntengral!(ARG[1..$]);
     }
     else enum bool allIntengral = false;
 }
@@ -2019,10 +2037,10 @@ template VarVecBase(T, int I, int N=0) {
 				 getRandAttr!(T, I), N);
 }
 
-abstract class VarVecBase(L, int N=0)
-  if(_esdl__ArrOrder!(L, N) == 0): CstVecExpr, CstVecPrim
+abstract class VarVecBase(V, int N=0)
+  if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
 {
-  alias E = ElementTypeN!(L, N);
+  alias E = ElementTypeN!(V, N);
   alias RV = typeof(this);
   // enum int ORDER = _esdl__ArrOrder!(T, I, N);
 
@@ -2168,20 +2186,24 @@ template VarVec(T, int I, int N)
 			 getRandAttr!(T, I), N);
 }
 
-class VarVec(L, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
-  VarVecBase!(L, N)
+class VarVec(V, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  VarVecBase!(V, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      const L* _var;
+      V* _var;
     
-      this(string name, ref L var) {
+      this(string name, ref V var) {
 	_name = name;
 	_var = &var;
       }
 
+      void _esdl__setValRef(ref V var) {
+	_var = &var;
+      }
+      
       override CstVecPrim[] preReqs() {
 	return [];
 	// return _preReqs;
@@ -2223,14 +2245,14 @@ class VarVec(L, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
 
       void value(ulong v, int word = 0) {
 	assert(false);
-	// static if(isIntegral!L) {
+	// static if(isIntegral!V) {
 	//   if(word == 0) {
-	//     *_var = cast(L) v; // = cast(L) toBitVec(v      }
+	//     *_var = cast(V) v; // = cast(V) toBitVec(v      }
 	//   }
 	//   else {
-	//     static if(size_t.sizeof == 4 && (is(L == long) || is(L == ulong))) {
+	//     static if(size_t.sizeof == 4 && (is(V == long) || is(V == ulong))) {
 	//       assert(word == 1);	// 32 bit machine with long integral
-	//       L val = v;
+	//       V val = v;
 	//       val = val << (8 * size_t.sizeof);
 	//       *_var += val;
 	//     }
@@ -2240,20 +2262,20 @@ class VarVec(L, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
 	//   }
 	// }
 	// else {
-	//   _var._setNthWord(v, word); // = cast(L) toBitVec(v);
+	//   _var._setNthWord(v, word); // = cast(V) toBitVec(v);
 	// }
       }
 
     }
 
-class VarVec(L, int N=0) if(N != 0 && _esdl__ArrOrder!(L, N) == 0):
-  VarVecBase!(L, N)
+class VarVec(V, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  VarVecBase!(V, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = VarVecArr!(L, N-1);
+      alias P = VarVecArr!(V, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -2395,18 +2417,18 @@ template VarVecArrBase(T, int I, int N)
 				       getRandAttr!(T, I), N);
 }
 
-abstract class VarVecArrBase(M, int N=0)
-  if(_esdl__ArrOrder!(M, N) != 0): CstVecPrim
+abstract class VarVecArrBase(V, int N=0)
+  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
-  alias L = ElementTypeN!(M, N);
-  alias E = ElementTypeN!(M, N+1);
-  enum int ORDER = _esdl__ArrOrder!(M, N);
+  alias L = ElementTypeN!(V, N);
+  alias E = ElementTypeN!(V, N+1);
+  enum int ORDER = _esdl__ArrOrder!(V, N);
 
   static if(ORDER > 1) {
-    alias EV = VarVecArr!(M, N+1);
+    alias EV = VarVecArr!(V, N+1);
   }
   else {
-    alias EV = VarVec!(M, N+1);
+    alias EV = VarVec!(V, N+1);
   }
 
   EV[] _elems;
@@ -2497,29 +2519,33 @@ template VarVecArr(T, int I, int N)
 }
 
 // Arrays (Multidimensional arrays as well)
-class VarVecArr(M, int N=0) if(N == 0 && _esdl__ArrOrder!(M, N) != 0):
-  VarVecArrBase!(M, N)
+class VarVecArr(V, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
+  VarVecArrBase!(V, N)
     {
       alias RV = typeof(this);
       VarVecLen!RV _arrLen;
 
-      const L* _var;
+      V* _var;
 
-      // static if(isStaticArray!L) {
+      // static if(isStaticArray!V) {
       // 	static assert(__traits(isSame, R, rand));
-      // enum int maxLen = L.length;
+      // enum int maxLen = V.length;
 
-      this(string name, ref L var) {
+      this(string name, ref V var) {
 	_name = name;
 	_var = &var;
 	_arrLen = new VarVecLen!RV(name ~ ".len", this);
       }
 
+      void _esdl__setValRef(ref V var) {
+	_var = &var;
+      }
+      
       // }
 
-      // static if(isDynamicArray!L) {
+      // static if(isDynamicArray!V) {
       // 	enum int maxLen = getRandAttrN!(R, N);
-      // 	this(string name, ref L var) {
+      // 	this(string name, ref V var) {
       // 	  _name = name;
       // 	  _var = &var;
       // 	  _arrLen = new VarVecLen!RV(name ~ ".len", this);
@@ -2773,13 +2799,13 @@ class VarVecArr(M, int N=0) if(N == 0 && _esdl__ArrOrder!(M, N) != 0):
 
     }
 
-class VarVecArr(M, int N=0) if(N != 0 && _esdl__ArrOrder!(M, N) != 0):
-  VarVecArrBase!(M, N)
+class VarVecArr(V, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  VarVecArrBase!(V, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = VarVecArr!(M, N-1);
+      alias P = VarVecArr!(V, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
       int _index = 0;
@@ -3403,10 +3429,10 @@ template RndVecBase(T, int I, int N=0) {
 				 getRandAttr!(T, I), N);
 }
 
-abstract class RndVecBase(L, alias R=_esdl__norand, int N=0)
-  if(_esdl__ArrOrder!(L, N) == 0): CstVecExpr, CstVecPrim
+abstract class RndVecBase(V, alias R=_esdl__norand, int N=0)
+  if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
 {
-  alias E = ElementTypeN!(L, N);
+  alias E = ElementTypeN!(V, N);
   alias RV = typeof(this);
   // enum int ORDER = _esdl__ArrOrder!(T, I, N);
 
@@ -3571,21 +3597,25 @@ template RndVec(T, int I, int N=0)
 			 getRandAttr!(T, I), N);
 }
 
-class RndVec(L, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(L, N) == 0):
-  RndVecBase!(L, R, N)
+class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  RndVecBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      L* _var;
+      V* _var;
 
     
-      this(string name, ref L var) {
+      this(string name, ref V var) {
 	_name = name;
 	_var = &var;
       }
 
+      void _esdl__setValRef(ref V var) {
+	_var = &var;
+      }
+      
       override CstVecPrim[] preReqs() {
 	return _preReqs;
       }
@@ -3623,14 +3653,14 @@ class RndVec(L, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(L,
       }
 
       void value(ulong v, int word = 0) {
-	static if(isIntegral!L) {
+	static if(isIntegral!V) {
 	  if(word == 0) {
-	    *_var = cast(L) v; // = cast(L) toBitVec(v      }
+	    *_var = cast(V) v; // = cast(V) toBitVec(v      }
 	  }
 	  else {
-	    static if(size_t.sizeof == 4 && (is(L == long) || is(L == ulong))) {
+	    static if(size_t.sizeof == 4 && (is(V == long) || is(V == ulong))) {
 	      assert(word == 1);	// 32 bit machine with long integral
-	      L val = v;
+	      V val = v;
 	      val = val << (8 * size_t.sizeof);
 	      *_var += val;
 	    }
@@ -3640,21 +3670,21 @@ class RndVec(L, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(L,
 	  }
 	}
 	else {
-	  _var._setNthWord(v, word); // = cast(L) toBitVec(v);
+	  _var._setNthWord(v, word); // = cast(V) toBitVec(v);
 	}
       }
 
 
     }
 
-class RndVec(L, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(L, N) == 0):
-  RndVecBase!(L, R, N)
+class RndVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  RndVecBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = RndVecArr!(L, R, N-1);
+      alias P = RndVecArr!(V, R, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -3795,18 +3825,18 @@ template RndVecArrBase(T, int I, int N=0)
 				       getRandAttr!(T, I), N);
 }
 
-abstract class RndVecArrBase(M, alias R, int N=0)
-  if(_esdl__ArrOrder!(M, N) != 0): CstVecPrim
+abstract class RndVecArrBase(V, alias R, int N=0)
+  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
-  alias L = ElementTypeN!(M, N);
-  alias E = ElementTypeN!(M, N+1);
-  enum int ORDER = _esdl__ArrOrder!(M, N);
+  alias L = ElementTypeN!(V, N);
+  alias E = ElementTypeN!(V, N+1);
+  enum int ORDER = _esdl__ArrOrder!(V, N);
 
   static if(ORDER > 1) {
-    alias EV = RndVecArr!(M, R, N+1);
+    alias EV = RndVecArr!(V, R, N+1);
   }
   else {
-    alias EV = RndVec!(M, R, N+1);
+    alias EV = RndVec!(V, R, N+1);
   }
 
   EV[] _elems;
@@ -3900,27 +3930,31 @@ template RndVecArr(T, int I, int N=0)
 }
 
 // Arrays (Multidimensional arrays as well)
-class RndVecArr(M, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(M, N) != 0):
-  RndVecArrBase!(M, R, N)
+class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
+  RndVecArrBase!(V, R, N)
     {
       alias RV = typeof(this);
       RndVecLen!RV _arrLen;
 
-      L* _var;
+      V* _var;
 
-      static if(isStaticArray!L) {
+      void _esdl__setValRef(ref V var) {
+	_var = &var;
+      }
+      
+      static if(isStaticArray!V) {
 	static assert(__traits(isSame, R, rand));
-	enum int maxLen = L.length;
-	this(string name, ref L var) {
+	enum int maxLen = V.length;
+	this(string name, ref V var) {
 	  _name = name;
 	  _var = &var;
 	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
 	}
       }
 
-      static if(isDynamicArray!L) {
+      static if(isDynamicArray!V) {
 	enum int maxLen = getRandAttrN!(R, N);
-	this(string name, ref L var) {
+	this(string name, ref V var) {
 	  _name = name;
 	  _var = &var;
 	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
@@ -4157,13 +4191,13 @@ class RndVecArr(M, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(M, N) != 0):
 
     }
 
-class RndVecArr(M, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(M, N) != 0):
-  RndVecArrBase!(M, R, N)
+class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  RndVecArrBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = RndVecArr!(M, R, N-1);
+      alias P = RndVecArr!(V, R, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
       int _index = 0;
