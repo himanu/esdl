@@ -1398,7 +1398,7 @@ mixin template Randomization()
   static class _esdl__Solver: _esdl__SolverBase!_esdl__T
   {
     _esdl__T _esdl__outer;
-    void _esdl__setValRef(ref _esdl__T outer) {
+    void _esdl__setValRef()(_esdl__T outer) {
       if (_esdl__outer !is outer) {
 	_esdl__outer = outer;
 	_esdl__setObjOuter(true);
