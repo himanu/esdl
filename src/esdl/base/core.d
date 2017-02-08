@@ -9803,7 +9803,7 @@ struct SimTime
   T to(T)()
     if(is(T == string)) {
       import std.conv;
-      return "#" ~ _value.to!string();
+      return _value.to!string();
     }
 
   T to(T)()
