@@ -55,8 +55,11 @@ struct CstParser {
   bool dryRun = true;
 
   char[] outBuffer;
+  
   string dummy;			// sometimes required in dryRun
   size_t outCursor = 0;
+  size_t dclCursor = 0;
+
   size_t srcCursor = 0;
   size_t srcLine   = 0;
 
@@ -71,9 +74,11 @@ struct CstParser {
   Condition[] ifConds = [];
 
   void setupBuffer() {
-    outBuffer.length = outCursor;
-    outCursor = 0;
+    outBuffer.length = outCursor + dclCursor;
+    outCursor = dclCursor;
     srcCursor = 0;
+    dclCursor = 0;
+    dcls.length = 0;
     if(varMap.length !is 0) {
       assert(false, "varMap has not been unrolled completely");
     }
@@ -82,6 +87,54 @@ struct CstParser {
 
   this(string CST) {
     this.CST = CST;
+  }
+
+  size_t fill(in string source) {
+    size_t start = outCursor;
+    if(! dryRun) {
+      foreach(i, c; source) {
+	outBuffer[outCursor+i] = c;
+      }
+    }
+    outCursor += source.length;
+    return start;
+  }
+
+  void place(in char c, size_t cursor = 0) {
+    if(! dryRun) outBuffer[cursor] = c;
+  }
+
+  string[] dcls;
+  
+  bool needDcl(in string source) {
+    // no declaration for numeric literals
+    if (source[0] < '9' && source[0] > '0') {
+      return false;
+    }
+    foreach (dcl; dcls) {
+      if (source == dcl) return false;
+    }
+    return true;
+  }
+  
+  void fillDeclaration(in string source) {
+    if (needDcl(source)) {
+      fillDcl("// _esdl__declProxy!");
+      fillDcl(source);
+      fillDcl(";\n");
+      dcls ~= source;
+    }
+  }
+
+  size_t fillDcl(in string source) {
+    size_t start = dclCursor;
+    if(! dryRun) {
+      foreach(i, c; source) {
+	outBuffer[dclCursor+i] = c;
+      }
+    }
+    dclCursor += source.length;
+    return start;
   }
 
   CstParser exprParser(size_t cursor) {
@@ -272,9 +325,11 @@ struct CstParser {
       int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
       if(idx == -1) {
 	fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	fillDeclaration(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
       }
       else {
 	fill(varMap[idx].xLat);
+	fillDeclaration(varMap[idx].xLatBase);
       }
       if(idChain[2] != -1) {
 	fill(".");
@@ -290,6 +345,7 @@ struct CstParser {
       srcTag = parseLiteral();
       if(srcCursor > srcTag) {
 	fill(CST[srcTag..srcCursor]);
+	fillDeclaration(CST[srcTag..srcCursor]);
       }
       else {
 	srcTag = parseWithArg();
@@ -637,21 +693,6 @@ struct CstParser {
     assert(curs == 11);
   }
 
-  size_t fill(in string source) {
-    size_t start = outCursor;
-    if(! dryRun) {
-      foreach(i, c; source) {
-	outBuffer[outCursor+i] = c;
-      }
-    }
-    outCursor += source.length;
-    return start;
-  }
-
-  void place(in char c, size_t cursor = 0) {
-    if(! dryRun) outBuffer[cursor] = c;
-  }
-
   char[] translate(string name) {
     if (name == "") {
       fill("override CstBlock getCstExpr() {" ~
@@ -676,9 +717,7 @@ struct CstParser {
 	   "\n  auto cstExpr = new CstBlock;\n");
     }
       
-
     procBlock();
-
 
     return outBuffer;
   }
@@ -701,6 +740,7 @@ struct CstParser {
   struct VarPair {
     string varName;
     string xLat;
+    string xLatBase;
   }
 
   struct Condition {
@@ -724,6 +764,7 @@ struct CstParser {
     string index;
     string elem;
     string array;
+    string arrayBase;
     size_t srcTag;
 
     srcTag = parseSpace();
@@ -803,6 +844,7 @@ struct CstParser {
       // FIXME -- check if the variable names do not shadow earlier
       // names in the table
       array = CST[srcTag..srcCursor];
+      arrayBase = CST[srcTag..srcCursor];
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
       if(CST[srcCursor] != ')') {
@@ -819,19 +861,22 @@ struct CstParser {
     int idx = idMatch(array);
     if(idx != -1) {
       array = varMap[idx].xLat;
+      arrayBase = varMap[idx].xLatBase;
     }
 
     // add index
     if(index.length != 0) {
       VarPair x;
-      x.varName = index;
-      x.xLat = array ~ ".iterator()";
+      x.varName  = index;
+      x.xLat     = array ~ ".iterator()";
+      x.xLatBase = arrayBase;
       varMap ~= x;
     }
 
     VarPair x;
-    x.varName = elem;
-    x.xLat = array ~ ".elements()";
+    x.varName  = elem;
+    x.xLat     = array ~ ".elements()";
+    x.xLatBase = arrayBase;
     varMap ~= x;
 
     if(CST[srcCursor] is '{') {
@@ -1062,6 +1107,7 @@ struct CstParser {
       fill(CST[srcTag..srcCursor]);
       fill("\"");
       fill(")");
+      // fillDeclaration(CST[srcTag..srcCursor]);
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
       srcTag = moveToRightParens();

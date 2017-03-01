@@ -124,14 +124,14 @@ mixin template _esdl__SolverMixin()
   auto ref _esdl__vec(L)(ref L l, string name="unnamed") {
     import std.traits: isIntegral, isArray;
     static if (isIntegral!L || isBitVector!L) {
-      // import std.stdio;
-      // writeln("Creating VarVec");
-      return new VarVec!L(name, l);
+      import std.stdio;
+      writeln("Creating VarVec, ", name);
+      return new RndProxy!(L, _esdl__norand, 0)(name, l);
     }
     else static if(isArray!L) {
-      // import std.stdio;
-      // writeln("Creating VarVecArr");
-      return new VarVecArr!L(name, l);
+      import std.stdio;
+      writeln("Creating VarVecArr, ", name);
+      return new RndProxyArr!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -141,14 +141,14 @@ mixin template _esdl__SolverMixin()
   auto const ref _esdl__vec(L)(const ref L l, string name="unnamed") {
     import std.traits: isIntegral, isArray;
     static if (isIntegral!L || isBitVector!L) {
-      // import std.stdio;
-      // writeln("Creating VarVec");
-      return new VarVec!L(name, l);
+      import std.stdio;
+      writeln("Creating VarVec, ", name);
+      return new RndProxy!(L, _esdl__norand, 0)(name, l);
     }
     else static if(isArray!L) {
-      // import std.stdio;
-      // writeln("Creating VarVecArr");
-      return new VarVecArr!L(name, l);
+      import std.stdio;
+      writeln("Creating VarVecArr, ", name);
+      return new RndProxyArr!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -548,16 +548,18 @@ template _esdl__RandDeclVars(T, int I=0)
     enum _esdl__RandDeclVars = "";
   }
   else static if(is(getRandAttr!(T, I) == rand!false)) {
-      enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
-    }
+    enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
+  }
   else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
-      enum _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
-    }
-    else {
-      enum _esdl__RandDeclVars =
-	"  _esdl__Rand!(_esdl__T, " ~ I.stringof ~ ") _esdl__" ~
-	__traits(identifier, T.tupleof[I]) ~	";\n" ~ _esdl__RandDeclVars!(T, I+1);
-    }
+    enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
+  }
+  else {
+    // pragma(msg, __traits(identifier, T.tupleof[I]));
+    enum string _esdl__RandDeclVars =
+      "  _esdl__Rand!(_esdl__T, " ~ I.stringof ~ ") _esdl__" ~
+      __traits(identifier, T.tupleof[I]) ~	";\n" ~
+      _esdl__RandDeclVars!(T, I+1);
+  }
 }
 
 template _esdl__RandDeclFuncs(T, int I=0)
@@ -853,12 +855,12 @@ abstract class _esdl__ConstraintBase
     _constraint = constraint;
     _index = index;
   }
-  immutable string _constraint;
-  protected bool _enabled = true;
-  protected _esdl__SolverRoot _cstEng;
-  protected string _name;
+  immutable @rand!false string _constraint;
+  protected @rand!false bool _enabled = true;
+  protected @rand!false _esdl__SolverRoot _cstEng;
+  protected @rand!false string _name;
   // index in the constraint Database
-  protected uint _index;
+  protected @rand!false uint _index;
 
   bool isEnabled() {
     return _enabled;
@@ -971,7 +973,7 @@ class CstStage {
   int _id = -1;
   // List of randomized variables associated with this stage. A
   // variable can be associated with only one stage
-  CstVecPrim[] _rndVecs;
+  CstVecPrim[] _rndVars;
   // The Bdd expressions that apply to this stage
   CstBddExpr[] _bddExprs;
   // These are unresolved idx variables
@@ -1078,8 +1080,8 @@ abstract class _esdl__SolverRoot {
 	CstStage stage = new CstStage();
 	cstStages ~= stage;
 	prim.stage = stage;
-	stage._rndVecs ~= prim;
-	// cstStages[stage]._rndVecs ~= prim;
+	stage._rndVars ~= prim;
+	// cstStages[stage]._rndVars ~= prim;
       }
     }
     else {
@@ -1102,8 +1104,8 @@ abstract class _esdl__SolverRoot {
 	    cstStages ~= stage;
 	  }
 	  vec.stage = stage;
-	  stage._rndVecs ~= vec;
-	  // cstStages[stage]._rndVecs ~= vec;
+	  stage._rndVars ~= vec;
+	  // cstStages[stage]._rndVars ~= vec;
 	}
 	if(stage !is vec.stage()) { // need to merge stages
 	  mergeCstStages(stage, vec.stage(), cstStages);
@@ -1127,16 +1129,16 @@ abstract class _esdl__SolverRoot {
       // fromStage has not been created yet
       return;
     }
-    foreach(ref vec; fromStage._rndVecs) {
+    foreach(ref vec; fromStage._rndVars) {
       vec.stage = toStage;
     }
-    toStage._rndVecs ~= fromStage._rndVecs;
+    toStage._rndVars ~= fromStage._rndVars;
     toStage._bddExprs ~= fromStage._bddExprs;
     if(cstStages[$-1] is fromStage) {
       cstStages.length -= 1;
     }
     else {
-      fromStage._rndVecs.length = 0;
+      fromStage._rndVars.length = 0;
       fromStage._bddExprs.length = 0;
     }
   }
@@ -1249,12 +1251,12 @@ abstract class _esdl__SolverRoot {
 
       foreach(stage; cstStages) {
 	if(stage !is null &&
-	   // stage._rndVecs.length !is 0 &&
+	   // stage._rndVars.length !is 0 &&
 	   stage.allReqsResolved()) {
 	  solveStage(stage, stageIdx);
 	}
 	else {
-	  // assert(stage._rndVecs.length !is 0);
+	  // assert(stage._rndVars.length !is 0);
 	  unsolvedStages ~= stage;
 	}
       }
@@ -1266,7 +1268,7 @@ abstract class _esdl__SolverRoot {
     import std.conv;
     // initialize the bdd vectors
     BDD solveBDD = _esdl__buddy.one();
-    foreach(vec; stage._rndVecs) {
+    foreach(vec; stage._rndVars) {
       if(vec.stage is stage) {
 	if(vec.bddvec.isNull()) {
 	  vec.bddvec = _esdl__buddy.buildVec(_domains[vec.domIndex], vec.signed);
@@ -1312,7 +1314,7 @@ abstract class _esdl__SolverRoot {
       bits = solVecs[0];
     }
 
-    foreach(vec; stage._rndVecs) {
+    foreach(vec; stage._rndVars) {
       ulong value;
       enum WORDSIZE = 8 * value.sizeof;
       auto bitvals = solveBDD.getIndices(vec.domIndex);
@@ -1405,7 +1407,7 @@ mixin template Randomization()
       }
     }
     this(uint seed, bool isSeeded, string name, _esdl__T outer,
-		_esdl__SolverRoot parent=null) {
+	 _esdl__SolverRoot parent=null) {
       _esdl__outer = outer;
       static if(_esdl__baseHasRandomization!_esdl__T) {
 	super(seed, isSeeded, name, outer, parent);
@@ -1456,9 +1458,9 @@ mixin template Randomization()
     }
   }
   else {
-    _esdl__SolverRoot _esdl__solverInst;
-    uint _esdl__randSeed;
-    bool _esdl__randSeeded;
+    @rand!false _esdl__SolverRoot _esdl__solverInst;
+    @rand!false uint _esdl__randSeed;
+    @rand!false bool _esdl__randSeeded;
     _esdl__SolverThis _esdl__getSolver() {
       return _esdl__staticCast!_esdl__SolverThis(_esdl__solverInst);
     }
@@ -1723,42 +1725,6 @@ abstract class CstVecExpr
   	}
       }
 
-  // CstVec2VecExpr opBinary(string op, Q)(ref Q q)
-  //   if(isBitVector!Q || isIntegral!Q)
-  //     {
-  // 	auto qq = new RndVecVar!Q(q);
-  // 	static if(op == "&") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
-  // 	}
-  // 	static if(op == "|") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.OR);
-  // 	}
-  // 	static if(op == "^") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.XOR);
-  // 	}
-  // 	static if(op == "+") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.ADD);
-  // 	}
-  // 	static if(op == "-") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.SUB);
-  // 	}
-  // 	static if(op == "*") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.MUL);
-  // 	}
-  // 	static if(op == "/") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.DIV);
-  // 	}
-  // 	static if(op == "%") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.REM);
-  // 	}
-  // 	static if(op == "<<") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.LSH);
-  // 	}
-  // 	static if(op == ">>") {
-  // 	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RSH);
-  // 	}
-  //     }
-
   CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
@@ -1794,42 +1760,6 @@ abstract class CstVecExpr
 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
 	}
       }
-
-  // CstVec2VecExpr opBinaryRight(string op, Q)(ref Q q)
-  //   if(isBitVector!Q || isIntegral!Q)
-  //     {
-  // 	auto qq = new RndVecVar!Q(q);
-  // 	static if(op == "&") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
-  // 	}
-  // 	static if(op == "|") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.OR);
-  // 	}
-  // 	static if(op == "^") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.XOR);
-  // 	}
-  // 	static if(op == "+") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.ADD);
-  // 	}
-  // 	static if(op == "-") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.SUB);
-  // 	}
-  // 	static if(op == "*") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.MUL);
-  // 	}
-  // 	static if(op == "/") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.DIV);
-  // 	}
-  // 	static if(op == "%") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.REM);
-  // 	}
-  // 	static if(op == "<<") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.LSH);
-  // 	}
-  // 	static if(op == ">>") {
-  // 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
-  // 	}
-  //     }
 
   CstVecExpr opIndex(CstVecExpr index)
   {
@@ -1977,10 +1907,10 @@ template _esdl__Rand(T, int I)
   alias RAND = getRandAttr!(T, I);
   static if(__traits(isSame, RAND, _esdl__norand)) {
     static if(isArray!L) {
-      alias _esdl__Rand = VarVecArr!L;
+      alias _esdl__Rand = RndProxyArr!(L, _esdl__norand, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = VarVec!L;
+      alias _esdl__Rand = RndProxy!(L, _esdl__norand, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
       alias _esdl__Rand = _esdl__SolverResolve!L.Type;
@@ -1991,10 +1921,10 @@ template _esdl__Rand(T, int I)
   }
   else {
     static if(isArray!L) {
-      alias _esdl__Rand = RndVecArr!(L, RAND);
+      alias _esdl__Rand = RndProxyArr!(L, RAND, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = RndVec!(L, RAND);
+      alias _esdl__Rand = RndProxy!(L, RAND, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
       alias _esdl__Rand = _esdl__SolverResolve!L.Type;
@@ -2032,1163 +1962,6 @@ template _esdl__ArrOrder(T, int I, int N=0) {
 }
 
 
-template VarVecBase(T, int I, int N=0) {
-  alias VarVecBase = VarVecBase!(typeof(T.tupleof[I]),
-				 getRandAttr!(T, I), N);
-}
-
-abstract class VarVecBase(V, int N=0)
-  if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
-{
-  alias E = ElementTypeN!(V, N);
-  alias RV = typeof(this);
-  // enum int ORDER = _esdl__ArrOrder!(T, I, N);
-
-  string _name;
-
-  BddVec _valvec;
-  Unconst!E _val;
-
-  // CstVecPrim[] _preReqs;
-
-  ~this() {
-    _valvec.reset();
-  }
-
-  override string name() {
-    return _name;
-  }
-
-  // mixin EnumConstraints!E;
-
-  // uint _domIndex = uint.max;
-  // CstStage _stage = null;
-
-  void _esdl__reset() {
-    // stage = null;
-  }
-
-  bool isVecArr() {
-    return false;
-  }
-
-  BDD getPrimBdd(Buddy buddy) {
-    return buddy.one();
-  }
-
-  override long evaluate() {
-    // if(stage().solved()) {
-    return value();
-    // }
-    // else {
-    //   import std.conv;
-    //   assert(false, "Rand variable " ~ _name ~
-    // 	     " evaluation in wrong stage: " ~ stage()._id.to!string);
-    // }
-  }
-
-  bool isRand() {
-    return false;
-  }
-
-  CstStage stage() {
-    assert(false);
-    // return _stage;
-  }
-
-  void stage(CstStage s) {
-    assert(false);
-    // _stage = s;
-  }
-
-  uint domIndex() {
-    assert(false);
-    // return _domIndex;
-  }
-
-  void domIndex(uint s) {
-    assert(false);
-    // _domIndex = s;
-  }
-
-  BddVec bddvec() {
-    return _valvec;
-  }
-
-  void bddvec(BddVec b) {
-    assert(false);
-    // _valvec = b;
-  }
-
-  uint bitcount() {
-    static if(isIntegral!E)        return E.sizeof * 8;
-    else static if(isBitVector!E)  return E.SIZE;
-    else static assert(false, "bitcount can not operate on: " ~ E.stringof);
-  }
-
-  bool signed() {
-    static if(isVarSigned!E) {
-      return true;
-    }
-    else  {
-      return false;
-    }
-  }
-
-  S to(S)()
-    if(is(S == string)) {
-      import std.conv;
-      return "VAR#" ~ _name ~ ":" ~ value().to!string();
-    }
-
-  override string toString() {
-    return this.to!string();
-  }
-
-  void solveBefore(CstVecPrim other) {
-    assert(false);
-    // other.addPreRequisite(this);
-  }
-
-  void addPreRequisite(CstVecPrim prim) {
-    assert(false);
-    // _preReqs ~= prim;
-  }
-
-  void build() {}
-    
-  abstract E getVal();
-
-  // returns true if refresh was required
-  override bool refresh(CstStage s, Buddy buddy) {
-    auto val = getVal();
-    if ((! _valvec.isNull) && _val == val) {
-      return false;
-    }
-    else {
-      _val = val;
-      _valvec = buddy.buildVec(val);
-      return true;
-    }
-  }
-
-  override BddVec getBDD(CstStage s, Buddy buddy) {
-    return _valvec;
-  }
-}
-
-// T represents the type of the declared array/non-array member
-// N represents the level of the array-elements we have to traverse
-// for the elements this VarVec represents
-template VarVec(T, int I, int N)
-  if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias VarVec = VarVec!(typeof(T.tupleof[I]),
-			 getRandAttr!(T, I), N);
-}
-
-class VarVec(V, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  VarVecBase!(V, N)
-    {
-      import std.traits;
-      import std.range;
-      import esdl.data.bvec;
-
-      V* _var;
-    
-      this(string name, ref V var) {
-	_name = name;
-	_var = &var;
-      }
-
-      void _esdl__setValRef(ref V var) {
-	_var = &var;
-      }
-      
-      override CstVecPrim[] preReqs() {
-	return [];
-	// return _preReqs;
-      }
-
-      override CstVecIterVar[] idxVars() {
-	return [];
-      }
-
-      override CstVecPrim[] getRndPrims() {
-	// if(isRand) return [this];
-	// else
-	return [];
-      }
-
-      CstVecPrim[] getPrimLens() {
-	assert(false);
-      }
-
-      override RV unroll(CstVecIterVar l, uint n) {
-	// idxVars is always empty
-	return this;
-      }
-
-      void doRandomize(_esdl__SolverRoot solver) {
-	assert(false);
-	// if(stage is null) {
-	//   solver._esdl__getRandGen().gen(*_var);
-	// }
-      }
-
-      override E getVal() {
-	return *_var;
-      }
-
-      ulong value() {
-	return cast(long) (*_var);
-      }
-
-      void value(ulong v, int word = 0) {
-	assert(false);
-	// static if(isIntegral!V) {
-	//   if(word == 0) {
-	//     *_var = cast(V) v; // = cast(V) toBitVec(v      }
-	//   }
-	//   else {
-	//     static if(size_t.sizeof == 4 && (is(V == long) || is(V == ulong))) {
-	//       assert(word == 1);	// 32 bit machine with long integral
-	//       V val = v;
-	//       val = val << (8 * size_t.sizeof);
-	//       *_var += val;
-	//     }
-	//     else {
-	//       assert(false, "word has to be 0 for integrals");
-	//     }
-	//   }
-	// }
-	// else {
-	//   _var._setNthWord(v, word); // = cast(V) toBitVec(v);
-	// }
-      }
-
-    }
-
-class VarVec(V, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  VarVecBase!(V, N)
-    {
-      import std.traits;
-      import std.range;
-      import esdl.data.bvec;
-
-      alias P = VarVecArr!(V, N-1);
-      P _parent;
-
-      CstVecExpr _indexExpr = null;
-      int _index = 0;
-
-      this(string name, P parent, CstVecExpr indexExpr) {
-	_name = name;
-	_parent = parent;
-	_indexExpr = indexExpr;
-      }
-
-      this(string name, P parent, uint index) {
-	_name = name;
-	_parent = parent;
-	_index = index;
-      }
-
-      override CstVecPrim[] preReqs() {
-	if(_indexExpr) {
-	  return // _preReqs ~ _parent.arrLen() ~
-	    _parent.preReqs() ~ _indexExpr.preReqs();
-	}
-	else {
-	  return // _preReqs ~ _parent.arrLen() ~
-	    _parent.preReqs();
-	}
-      }
-
-      override CstVecIterVar[] idxVars() {
-	if(_indexExpr) {
-	  return _parent.idxVars() ~ _indexExpr.idxVars();
-	}
-	else {
-	  return _parent.idxVars();
-	}
-      }
-
-      CstVecPrim[] getPrimLens() {
-	assert(false);
-      }
-
-      // What is required here
-      // we could be dealing with an _index or an _indexExpr. Further
-      // the indexExpr could be either a solvable constraint expression
-      // or an array length iterator that iterates over the length of
-      // the given array. To add to the complexity here, we could have a
-      // case where the given element has a parent that too a
-      // non-elementary one (involving non-integer indexes). In such
-      // cases we need to list all the elements of the array that could
-      // finally represent the given element that we are currently
-      // dealing with.
-      override CstVecPrim[] getRndPrims() {
-	CstVecPrim[] prims;
-	if(_indexExpr) {
-	  // FIXME -- if the expression has been solved
-	  // return _parent.getRndPrims(_indexExpr.evaluate()) ;
-	  prims = _indexExpr.getRndPrims() ~ _parent.getRndPrims();
-	}
-	else {
-	  // foreach(pp; _parent.getRndPrims(_index)) {
-	  //   prims ~= pp;
-	  // }
-	  prims = _parent.getRndPrims();
-	}
-	return prims;
-      }
-
-      override RV unroll(CstVecIterVar l, uint n) {
-	bool idx = false;
-	foreach(var; idxVars()) {
-	  if(l is var) {
-	    idx = true;
-	    break;
-	  }
-	}
-	if(! idx) return this;
-	else {
-	  if(_indexExpr) {
-	    auto vec = _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
-	    // import std.stdio;
-	    // writeln(_indexExpr.name(), " has been unrolled as: ",
-	    // 	  _indexExpr.unroll(l,n).name());
-	    return vec;
-	    // return _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
-	  }
-	  else {
-	    return _parent.unroll(l,n)[_index];
-	  }
-	}
-      }
-
-      void doRandomize(_esdl__SolverRoot solver) {
-	assert(false);
-	// if(stage is null) {
-	//   E val;
-	//   solver._esdl__getRandGen().gen(val);
-	//   value(val);
-	// }
-      }
-
-      override E getVal() {
-	if(_indexExpr) {
-	  return _parent.getVal(cast(size_t) _indexExpr.evaluate());
-	}
-	else {
-	  return _parent.getVal(this._index);
-	}
-      }
-
-      ulong value() {
-	if(_indexExpr) {
-	  return _parent.getVal(_indexExpr.evaluate());
-	}
-	else {
-	  return _parent.getVal(this._index);
-	}
-      }
-
-      void value(ulong v, int word = 0) {
-	assert(false);
-	// import std.stdio;
-	// writeln("Setting value of ", this.name(), " to: ", v);
-	// writeln("Parent length value of ", this.name(),
-	// 	      " is: ", _parent.getLen());
-	// if(_indexExpr) {
-	//   _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
-	// }
-	// else {
-	//   return _parent.setVal(v, word, _index);
-	// }
-      }
-
-    }
-
-// Arrays (Multidimensional arrays as well)
-template VarVecArrBase(T, int I, int N)
-  if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias VarVecArrBase = VarVecArrBase!(typeof(T.tupleof[I]),
-				       getRandAttr!(T, I), N);
-}
-
-abstract class VarVecArrBase(V, int N=0)
-  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
-{
-  alias L = ElementTypeN!(V, N);
-  alias E = ElementTypeN!(V, N+1);
-  enum int ORDER = _esdl__ArrOrder!(V, N);
-
-  static if(ORDER > 1) {
-    alias EV = VarVecArr!(V, N+1);
-  }
-  else {
-    alias EV = VarVec!(V, N+1);
-  }
-
-  EV[] _elems;
-
-  // CstVecPrim[] _preReqs;
-
-  string _name;
-  override string name() {
-    return _name;
-  }
-
-  size_t maxArrLen() {
-    // static if(isStaticArray!L) {
-    return L.length;
-    // }
-    // else {
-    //   return getRandAttrN!(R, N);
-    // }
-  }
-
-  bool isVecArr() {
-    return true;
-  }
-
-  BDD getPrimBdd(Buddy buddy) {
-    return buddy.one();
-  }
-
-  // override CstVec2VecExpr opIndex(CstVecExpr idx) {
-  //   return new CstVec2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
-  // }
-
-  bool isRand() {
-    assert(false, "isRand not implemented for VarVecArrBase");
-  }
-
-  ulong value() {
-    assert(false, "value not implemented for VarVecArrBase");
-  }
-
-  void value(ulong v, int word = 0) {
-    assert(false, "value not implemented for VarVecArrBase");
-  }
-
-  void stage(CstStage s) {
-    assert(false, "stage not implemented for VarVecArrBase");
-  }
-
-  uint domIndex() {
-    assert(false, "domIndex not implemented for VarVecArrBase");
-  }
-
-  void domIndex(uint s) {
-    assert(false, "domIndex not implemented for VarVecArrBase");
-  }
-
-  uint bitcount() {
-    assert(false, "bitcount not implemented for VarVecArrBase");
-  }
-
-  bool signed() {
-    assert(false, "signed not implemented for VarVecArrBase");
-  }
-
-  BddVec bddvec() {
-    assert(false, "bddvec not implemented for VarVecArrBase");
-  }
-
-  void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for VarVecArrBase");
-  }
-
-  void solveBefore(CstVecPrim other) {
-    assert(false, "solveBefore not implemented for VarVecArrBase");
-    // other.addPreRequisite(this);
-  }
-
-  void addPreRequisite(CstVecPrim prim) {
-    assert(false, "addPreRequisite not implemented for VarVecArrBase");
-  }
-
-}
-
-template VarVecArr(T, int I, int N)
-  if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias VarVecArr = VarVecArr!(typeof(T.tupleof[I]),
-			       getRandAttr!(T, I), N);
-}
-
-// Arrays (Multidimensional arrays as well)
-class VarVecArr(V, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-  VarVecArrBase!(V, N)
-    {
-      alias RV = typeof(this);
-      VarVecLen!RV _arrLen;
-
-      V* _var;
-
-      // static if(isStaticArray!V) {
-      // 	static assert(__traits(isSame, R, rand));
-      // enum int maxLen = V.length;
-
-      this(string name, ref V var) {
-	_name = name;
-	_var = &var;
-	_arrLen = new VarVecLen!RV(name ~ ".len", this);
-      }
-
-      void _esdl__setValRef(ref V var) {
-	_var = &var;
-      }
-      
-      // }
-
-      // static if(isDynamicArray!V) {
-      // 	enum int maxLen = getRandAttrN!(R, N);
-      // 	this(string name, ref V var) {
-      // 	  _name = name;
-      // 	  _var = &var;
-      // 	  _arrLen = new VarVecLen!RV(name ~ ".len", this);
-      // 	}
-      // }
-
-      CstVecPrim[] preReqs() {
-	return [];
-	// return _preReqs;		// N = 0 -- no _parent
-      }
-
-      CstVecIterVar[] idxVars() {
-	return [];		// N == 0
-      }
-
-      // EV[] getRndPrims(int idx) {
-      // 	if(idx < 0) return _elems;
-      // 	else return [_elems[idx]];
-      // }
-
-      CstVecPrim[] getRndPrims() {
-	// CstVecPrim[] prims;
-	// foreach(elem; _elems) {
-	//   prims ~= elem;
-	// }
-	// return prims;
-	return [];		// N == 0 -- no idxVars and no parent
-      }
-
-      CstVecPrim[] getPrimLens() {
-	// CstVecPrim[] prims;
-	// if(_arrLen.isRand) prims ~= _arrLen;
-	// return prims;
-	return [];
-      }
-    
-      RV unroll(CstVecIterVar l, uint n) {
-	return this;
-      }
-
-      static private auto getVal(A, N...)
-	(ref A arr, N idx) if(isArray!A && N.length > 0 &&
-			      isIntegral!(N[0])) {
-	static if(N.length == 1) return arr[idx[0]];
-	else {
-	  return getVal(arr[idx[0]], idx[1..$]);
-	}
-      }
-
-      auto getVal(J...)(J idx) if(isIntegral!(J[0])) {
-	return getVal(*_var, idx);
-      }
-
-      // static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
-      // 	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-      // 	  assert(false, "Can not set value for VarVecArr");
-      // 	  static if(N.length == 1) {
-      // 	    alias AE = ElementType!A;
-      // 	    static if(isIntegral!AE) {
-      // 	      if(word == 0) {
-      // 	  	arr[idx[0]] = cast(AE) v;
-      // 	      }
-      // 	      else {
-      // 	  	// static if(size_t.sizeof == 4) {
-      // 	  	//   assert(word == 1);	// 32 bit machine with long integral
-      // 	  	//   AE val = v;
-      // 	  	//   val = val << (8 * size_t.sizeof);
-      // 	  	//   arr[idx[0]] += val;
-      // 	  	// }
-      // 	  	// else {
-      // 	  	assert(false, "word has to be 0 for integrals");
-      // 	      }
-      // 	    }
-      // 	    else {
-      // 	      arr[idx[0]]._setNthWord(v, word);
-      // 	    }
-      // 	  }
-      // 	  else {
-      // 	    setVal(arr[idx[0]], v, word, idx[1..$]);
-      // 	  }
-      // 	}
-
-      void setVal(J...)(ulong v, int word, J idx) if(isIntegral!(J[0])) {
-	assert(false, "Can not set value for VarVecArr");
-	// setVal(*_var, v, word, idx);
-      }
-
-      static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
-	static if(N.length == 0) return arr.length;
-	else {
-	  return getLen(arr[idx[0]], idx[1..$]);
-	}
-      }
-
-      // static private void setLen(A, N...)(ref A arr, size_t v, N idx) if(isArray!A) {
-      // 	static if(N.length == 0) {
-      // 	  static if(isDynamicArray!A) {
-      // 	    arr.length = v;
-      // 	    // import std.stdio;
-      // 	    // writeln(arr, " idx: ", N.length);
-      // 	  }
-      // 	  else {
-      // 	    assert(false, "Can not set length of a fixed length array");
-      // 	  }
-      // 	}
-      // 	else {
-      // 	  // import std.stdio;
-      // 	  // writeln(arr, " idx: ", N.length);
-      // 	  setLen(arr[idx[0]], v, idx[1..$]);
-      // 	}
-      // }
-
-      size_t getLen(N...)(N idx) {
-	return getLen(*_var, idx);
-      }
-
-      void setLen(N...)(size_t v, N idx) {
-	// setLen(*_var, v, idx);
-	assert(false, "Can not set value for VarVecArr");
-      }
-
-      EV opIndex(CstVecExpr idx) {
-	if(idx.isConst()) {
-	  import std.conv: to;
-	  // assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
-	  // 	 " have not been built");
-	  // if(idx.evaluate() >= _elems.length || idx.evaluate() < 0 || _elems is null) {
-	  // 	import std.stdio;
-	  // 	writeln(this.name(), ":", idx.evaluate());
-	  // }
-	  // import std.stdio;
-	  // writeln(idx.evaluate());
-	  auto i = cast(uint) idx.evaluate();
-	  if (_elems.length <= i) {
-	    _elems.length = i + 1;
-	  }
-	  if (_elems[i] is null) {
-	    _elems[i] = new EV(name ~ "[" ~ i.to!string ~ "]", this, i);
-	  }
-	  return _elems[i];
-	}
-	else {
-	  static if(isStaticArray!E) {
-	    // static array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	  else static if(isDynamicArray!E) {
-	    // dynamic array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	  else {
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	}
-      }
-
-      EV opIndex(size_t idx) {
-	import std.conv: to;
-	if (_elems.length <= idx) {
-	  _elems.length = idx + 1;
-	}
-	if (_elems[idx] is null) {
-	  _elems[idx] = new EV(name ~ "[" ~ idx.to!string ~ "]",
-			       this, cast(uint) idx);
-	}
-	assert(_elems[idx]._indexExpr is null);
-	return _elems[idx];
-      }
-
-      void doRandomize(_esdl__SolverRoot solver) {
-	assert(false, "Can not set value for VarVecArr");
-      }
-
-      auto elements() {
-	// this.build();
-	auto idx = arrLen.makeIdxVar();
-	return this[idx];
-      }
-
-      // bool built() {
-      // 	return (_elems.length == maxArrLen() &&
-      // 		_elems[0] !is null);
-      // }
-    
-      void build() {
-	// if(built()) return;
-	// _elems.length = maxArrLen();
-	// // static if(isIntegral!E || isBitVector!E) {
-	// // if(! built()) {
-	// for (uint i=0; i!=maxArrLen; ++i) {
-	//   if(_elems[i] is null) {
-	//     import std.conv: to;
-	//     _elems[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]", this, i);
-	//     if(_elems[i].isVecArr()) {
-	//       _elems[i].build();
-	//     }
-	//   }
-	// }
-	// }
-	// }
-	// else static if(isDynamicArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
-	// else static if(isStaticArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
-      }
-	
-      auto iterator() {
-	// this.build();
-	auto idx = arrLen.makeIdxVar();
-	return idx;
-      }
-
-      VarVecLen!RV length() {
-	return _arrLen;
-      }
-
-      VarVecLen!RV arrLen() {
-	return _arrLen;
-      }
-
-      void _esdl__reset() {
-	_arrLen.stage = null;
-	foreach(elem; _elems) {
-	  if(elem !is null) {
-	    elem._esdl__reset();
-	  }
-	}
-      }
-
-      CstStage stage() {
-	return arrLen().stage();
-      }
-
-    }
-
-class VarVecArr(V, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  VarVecArrBase!(V, N)
-    {
-      import std.traits;
-      import std.range;
-      import esdl.data.bvec;
-      alias P = VarVecArr!(V, N-1);
-      P _parent;
-      CstVecExpr _indexExpr = null;
-      int _index = 0;
-
-      alias RV = typeof(this);
-      VarVecLen!RV _arrLen;
-      this(string name, P parent, CstVecExpr indexExpr) {
-	_name = name;
-	_parent = parent;
-	_indexExpr = indexExpr;
-	_arrLen = new VarVecLen!RV(name ~ ".len", this);
-      }
-
-      this(string name, P parent, uint index) {
-	_name = name;
-	_parent = parent;
-	_index = index;
-	_arrLen = new VarVecLen!RV(name ~ ".len", this);
-      }
-
-      CstVecPrim[] preReqs() {
-	if(_indexExpr) {
-	  return _indexExpr.preReqs() ~ _parent.preReqs();
-	}
-	else {
-	  return _parent.preReqs();
-	}
-      }
-
-      CstVecIterVar[] idxVars() {
-	if(_indexExpr) {
-	  return _parent.idxVars() ~ _indexExpr.idxVars();
-	}
-	else {
-	  return _parent.idxVars();
-	}
-      }
-
-      // This is slightly tricky in case we are pointing directly to
-      // just one element of the array, this function should return just
-      // that element. But it could be that the index or an upper
-      // hierarchy index is not a constant, but an iterator or a
-      // randomized epression. In that case, we shall have to return
-      // more primary elements
-      CstVecPrim[] getRndPrims() {
-	if(_indexExpr) {
-	  return _indexExpr.getRndPrims() ~ _parent.getPrimLens();
-	}
-	else {
-	  return _parent.getPrimLens();
-	}
-      }
-
-      CstVecPrim[] getPrimLens() {
-	// if(_index.idxVars.length is 0)
-	if(_indexExpr is null) {
-	  return [_parent[_index].getPrimLens()];
-	}
-	if(_indexExpr.isConst()) {
-	  CstVecPrim[] prims;
-	  prims ~= _parent[cast(size_t) _indexExpr.evaluate()].getPrimLens();
-	  return prims;
-	}
-	else {
-	  CstVecPrim[] prims;
-	  foreach(p; getRndPrims()) {
-	    // import std.stdio;
-	    // writeln(_parent.name(), " ", p.name());
-	    prims ~= p.getPrimLens();
-	  }
-	  return prims;
-	}
-      }
-
-      RV unroll(CstVecIterVar l, uint n) {
-	bool idx = false;
-	foreach(var; idxVars()) {
-	  if(l is var) {
-	    idx = true;
-	    break;
-	  }
-	}
-	if(! idx) return this;
-	else {
-	  // return new RV(name ~ "unrolled_" ~ n.to!string,
-	  // 	      _parent.unroll(), _index.unroll());
-	  if(_indexExpr) {
-	    return _parent.unroll(l,n)[_indexExpr.unroll(l,n)];
-	  }
-	  else {
-	    return _parent.unroll(l,n)[_index];
-	  }
-	}
-      }
-
-      static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
-	static if(N.length == 0) return arr.length;
-	else {
-	  return getLen(arr[idx[0]], idx[1..$]);
-	}
-      }
-
-      size_t getLen(N...)(N idx) {
-	return _parent.getLen(_index, idx);
-      }
-
-      void setLen(N...)(size_t v, N idx) {
-	assert(false, "Can not set length for VarVecArr");
-      }
-
-      static private auto getVal(A, N...)
-	(ref A arr, N idx) if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	static if(N.length == 1) return arr[idx[0]];
-	else {
-	  return getVal(arr[idx[0]], idx[1..$]);
-	}
-      }
-
-      auto getVal(N...)(N idx) if(isIntegral!(N[0])) {
-	if(_indexExpr) {
-	  assert(_indexExpr.isConst());
-	  return _parent.getVal(cast(size_t) _indexExpr.evaluate(), idx);
-	}
-	else {
-	  return _parent.getVal(this._index, idx);
-	}
-      }
-
-      void setVal(N...)(ulong v, int word, N idx) if(isIntegral!(N[0])) {
-	assert(false, "Can not set value for VarVecArr");
-      }
-
-      EV opIndex(CstVecExpr idx) {
-	if(idx.isConst()) {
-	  import std.conv: to;
-	  // assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
-	  // 	 " have not been built");
-	  // if(idx.evaluate() >= _elems.length || idx.evaluate() < 0 || _elems is null) {
-	  // 	import std.stdio;
-	  // 	writeln(this.name(), ":", idx.evaluate());
-	  // }
-	  // import std.stdio;
-	  // writeln(idx.evaluate());
-	  auto i = cast(size_t) idx.evaluate();
-	  if (_elems.length <= i) {
-	    _elems.length = i + 1;
-	  }
-	  if (_elems[i] is null) {
-	    _elems[i] = new EV(name ~ "[" ~ i.to!string ~ "]", this, i);
-	  }
-	  return _elems[i];
-	}
-	else {
-	  static if(isStaticArray!E) {
-	    // static array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	  else static if(isDynamicArray!E) {
-	    // dynamic array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	  else {
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	}
-      }
-
-      EV opIndex(size_t idx) {
-	if (_elems.length <= idx) {
-	  _elems.length = idx + 1;
-	}
-	if (_elems[idx] is null) {
-	  _elems[idx] = new EV(name ~ "[" ~ idx.to!string ~ "]", this, idx);
-	}
-	assert(_elems[idx]._indexExpr is null);
-	return _elems[idx];
-      }
-
-      void doRandomize(_esdl__SolverRoot solver) {
-	assert(false, "Can not set value for VarVecArr");
-      }
-
-      auto elements() {
-	// this.build();
-	auto idx = arrLen.makeIdxVar();
-	return this[idx];
-      }
-
-      // bool built() {
-      // 	return (_elems.length == maxArrLen() &&
-      // 		_elems[0] !is null);
-      // }
-    
-      void build() {
-	// // if(built()) return;
-	// _elems.length = maxArrLen();
-	// // static if(isIntegral!E || isBitVector!E) {
-	// // if(! built()) {
-	// for (uint i=0; i!=maxArrLen; ++i) {
-	//   if(_elems[i] is null) {
-	//     import std.conv: to;
-	//     _elems[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]", this, i);
-	//     if(_elems[i].isVecArr()) {
-	//       _elems[i].build();
-	//     }
-	//   }
-	// }
-	// }
-	// }
-	// else static if(isDynamicArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
-	// else static if(isStaticArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
-      }
-	
-      auto iterator() {
-	// this.build();
-	auto idx = arrLen.makeIdxVar();
-	return idx;
-      }
-
-      VarVecLen!RV length() {
-	return _arrLen;
-      }
-
-      VarVecLen!RV arrLen() {
-	return _arrLen;
-      }
-
-      void _esdl__reset() {
-	_arrLen.stage = null;
-	foreach(elem; _elems) {
-	  if(elem !is null) {
-	    elem._esdl__reset();
-	  }
-	}
-      }
-
-      CstStage stage() {
-	return arrLen().stage();
-      }
-
-    }
-
-class VarVecIter(RV): CstVecIterVar, CstVecPrim
-{
-  RV _arrVar;
-
-  RV arrVar() {
-    return _arrVar;
-  }
-
-  this(RV arrVar) {
-    super("idxVar");
-    _arrVar = arrVar;
-    _arrVar._arrLen.idxVar(this);
-  }
-
-  override CstVecIterVar[] idxVars() {
-    return _arrVar.idxVars() ~ this;
-  }
-
-  override uint maxVal() {
-    if(! this.isUnrollable()) {
-      assert(false, "Can not find maxVal since the " ~
-	     "Idx Variable is unrollable");
-    }
-    // import std.stdio;
-    // writeln("maxVal for arrVar: ", _arrVar.name(), " is ",
-    // 	    _arrVar.arrLen.value);
-    return cast(uint) _arrVar.arrLen.value;
-  }
-
-  override bool isUnrollable() {
-    if(! _arrVar.arrLen.isRand()) return true;
-    if(_arrVar.arrLen.stage !is null &&
-       _arrVar.arrLen.stage.solved()) return true;
-    else return false;
-  }
-
-  // get all the primary bdd vectors that constitute a given bdd expression
-  override CstVecPrim[] getRndPrims() {
-    return []; // _arrVar.arrLen.getRndPrims();
-  }
-
-  CstVecPrim[] getPrimLens() {
-    return [_arrVar.arrLen];
-  }
-
-  bool isRand() {
-    return _arrVar.arrLen.isRand();
-  }
-  ulong value() {
-    return _arrVar.arrLen.value();
-  }
-  void value(ulong v, int word = 0) {
-    // import std.stdio;
-    // writeln("Setting value for arrlen for ", _arrVar.name, " to ", v);
-    assert(word == 0);
-    _arrVar.arrLen.value(v);
-  }
-  void doRandomize(_esdl__SolverRoot solver) {
-    assert(false);
-  }
-  CstStage stage() {
-    return _arrVar.arrLen.stage();
-  }
-  void stage(CstStage s) {
-    _arrVar.arrLen.stage(s);
-  }
-  uint domIndex() {
-    return _arrVar.arrLen.domIndex;
-  }
-  void domIndex(uint s) {
-    _arrVar.arrLen.domIndex(s);
-  }
-  uint bitcount() {
-    return _arrVar.arrLen.bitcount();
-  }
-  bool signed() {
-    // return _arrVar.arrLen.signed();
-    return false;
-  }
-  BddVec bddvec() {
-    return _arrVar.arrLen.bddvec();
-  }
-  void bddvec(BddVec b) {
-    _arrVar.bddvec(b);
-  }
-  override string name() {
-    string n = _arrVar.arrLen.name();
-    return n[0..$-3] ~ "iter";
-  }
-  override CstVecExpr unroll(CstVecIterVar l, uint n) {
-    // import std.stdio;
-    // writeln("unrolling: ", arrVar.name());
-    if(this !is l) {
-      return _arrVar.unroll(l,n).arrLen().makeIdxVar();
-    }
-    else {
-      return new ConstVec!size_t(n);
-    }
-  }
-
-  void _esdl__reset() {
-    stage = null;
-  }
-
-  bool isVecArr() {
-    return false;
-  }
-
-  BDD getPrimBdd(Buddy buddy) {
-    return buddy.one();
-  }
-
-  void solveBefore(CstVecPrim other) {
-    assert(false);
-  }
-
-  void addPreRequisite(CstVecPrim other) {
-    assert(false);
-  }
-
-}
 				    
 // This class represents an unrolled Foreach idx at vec level
 abstract class CstVecIterVar: CstVecExpr
@@ -3424,41 +2197,54 @@ class VarVecLen(RV): CstVecExpr, CstVecPrim
   }
 }
 
-template RndVecBase(T, int I, int N=0) {
-  alias RndVecBase = RndVecBase!(typeof(T.tupleof[I]),
-				 getRandAttr!(T, I), N);
+// Consolidated Proxy Class
+template RndProxyBase(T, int I, int N=0) {
+  alias RndProxyBase = RndProxyBase!(typeof(T.tupleof[I]),
+				     getRandAttr!(T, I), N);
 }
 
-abstract class RndVecBase(V, alias R=_esdl__norand, int N=0)
+abstract class RndProxyBase(V, alias R, int N)
   if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
 {
+  enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
+
   alias E = ElementTypeN!(V, N);
   alias RV = typeof(this);
   // enum int ORDER = _esdl__ArrOrder!(T, I, N);
 
   string _name;
+  BddVec _valvec;
+  
 
-  CstVecPrim[] _preReqs;
+  static if (HAS_RAND_ATTRIB) {
+    mixin EnumConstraints!E;
+
+    CstVecPrim[] _preReqs;
+    BddVec       _domvec;
+    E            _val;
+
+    uint         _domIndex = uint.max;
+    CstStage     _stage = null;
+  }
+  else {
+    Unconst!E _val;
+  }
 
   ~this() {
-    _domvec.reset();
+    static if (HAS_RAND_ATTRIB) {
+      _domvec.reset();
+    }
+    _valvec.reset();
   }
 
   override string name() {
     return _name;
   }
 
-  mixin EnumConstraints!E;
-
-  BddVec _domvec;
-  BddVec _valvec;
-  E      _val;
-  
-  uint _domIndex = uint.max;
-  CstStage _stage = null;
-
   void _esdl__reset() {
-    stage = null;
+    static if (HAS_RAND_ATTRIB) {
+      stage = null;
+    }
   }
 
   bool isVecArr() {
@@ -3470,42 +2256,82 @@ abstract class RndVecBase(V, alias R=_esdl__norand, int N=0)
   }
 
   override long evaluate() {
-    if(! this.isRand || stage().solved()) {
-      return value();
+    static if (HAS_RAND_ATTRIB) {
+      if(! this.isRand || stage().solved()) {
+	return value();
+      }
+      else {
+	import std.conv;
+	assert(false, "Rand variable " ~ _name ~
+	       " evaluation in wrong stage: " ~ stage()._id.to!string);
+      }
     }
     else {
-      import std.conv;
-      assert(false, "Rand variable " ~ _name ~
-	     " evaluation in wrong stage: " ~ stage()._id.to!string);
+      return value();
     }
   }
 
   bool isRand() {
-    return true;
+    static if (HAS_RAND_ATTRIB) {
+      return true;
+    }
+    else {
+      return false;
+    }
   }
 
   CstStage stage() {
-    return _stage;
+    static if (HAS_RAND_ATTRIB) {
+      return _stage;
+    }
+    else {
+      assert(false);
+    }
   }
 
   void stage(CstStage s) {
-    _stage = s;
+    static if (HAS_RAND_ATTRIB) {
+      _stage = s;
+    }
+    else {
+      assert(false);
+    }
   }
 
   uint domIndex() {
-    return _domIndex;
+    static if (HAS_RAND_ATTRIB) {
+      return _domIndex;
+    }
+    else {
+      assert(false);
+    }
   }
 
   void domIndex(uint s) {
-    _domIndex = s;
+    static if (HAS_RAND_ATTRIB) {
+      _domIndex = s;
+    }
+    else {
+      assert(false);
+    }
   }
 
   BddVec bddvec() {
-    return _domvec;
+    static if (HAS_RAND_ATTRIB) {
+      return _domvec;
+    }
+    else {
+      return _valvec;
+    }
   }
 
   void bddvec(BddVec b) {
-    _domvec = b;
+    static if (HAS_RAND_ATTRIB) {
+      _domvec = b;
+    }
+    else {
+      assert(false);
+    }
   }
 
   uint bitcount() {
@@ -3524,13 +2350,18 @@ abstract class RndVecBase(V, alias R=_esdl__norand, int N=0)
   }
 
   S to(S)()
-    if(is(S == string)) {
+    if (is(S == string)) {
       import std.conv;
-      if(isRand) {
-	return "RAND-" ~ "#" ~ _name ~ ":" ~ value().to!string();
+      static if (HAS_RAND_ATTRIB) {
+	if (isRand) {
+	  return "RAND#" ~ _name ~ ":" ~ value().to!string();
+	}
+	else {
+	  return "VAL#" ~ _name ~ ":" ~ value().to!string();
+	}
       }
       else {
-	return "VAL#" ~ _name ~ ":" ~ value().to!string();
+	return "VAR#" ~ _name ~ ":" ~ value().to!string();
       }
     }
 
@@ -3539,66 +2370,89 @@ abstract class RndVecBase(V, alias R=_esdl__norand, int N=0)
   }
 
   void solveBefore(CstVecPrim other) {
-    other.addPreRequisite(this);
+    static if (HAS_RAND_ATTRIB) {
+      other.addPreRequisite(this);
+    }
+    else {
+      assert(false);
+    }
   }
 
   void addPreRequisite(CstVecPrim prim) {
-    _preReqs ~= prim;
+    static if (HAS_RAND_ATTRIB) {
+      _preReqs ~= prim;
+    }
+    else {
+      assert(false);
+    }
   }
 
   void build() {}
 
   abstract E getVal();
-  
-  override bool refresh(CstStage s, Buddy buddy) {
-    assert(stage(), "Stage not set for " ~ this.name());
-    if(this.isRand && s is stage()) {
+
+  private bool refreshVal(Buddy buddy) {
+    auto val = getVal();
+    if ((! _valvec.isNull) && _val == val) {
       return false;
     }
-    else if((! this.isRand) ||
-	    this.isRand && stage().solved()) { // work with the value
-      auto val = getVal();
-      if ((! _valvec.isNull()) && _val == val) {
+    else {
+      _val = val;
+      _valvec = buddy.buildVec(val);
+      return true;
+    }
+  }
+  
+  override bool refresh(CstStage s, Buddy buddy) {
+    static if (HAS_RAND_ATTRIB) {
+      assert(stage(), "Stage not set for " ~ this.name());
+      if(this.isRand && s is stage()) {
 	return false;
       }
+      else if((! this.isRand) ||
+	      this.isRand && stage().solved()) { // work with the value
+	return refreshVal(buddy);
+      }
       else {
-	_val = val;
-	_valvec = buddy.buildVec(val);
-	return true;
+	assert(false, "Constraint evaluation in wrong stage");
       }
     }
     else {
-      assert(false, "Constraint evaluation in wrong stage");
+      return refreshVal(buddy);
     }
   }
   
   override BddVec getBDD(CstStage s, Buddy buddy) {
-    assert(stage(), "Stage not set for " ~ this.name());
-    if(this.isRand && s is stage()) {
-      return _domvec;
-    }
-    else if((! this.isRand) ||
-	    this.isRand && stage().solved()) { // work with the value
-      return _valvec;
+    static if (HAS_RAND_ATTRIB) {
+      assert(stage(), "Stage not set for " ~ this.name());
+      if(this.isRand && s is stage()) {
+	return _domvec;
+      }
+      else if((! this.isRand) ||
+	      this.isRand && stage().solved()) { // work with the value
+	return _valvec;
+      }
+      else {
+	assert(false, "Constraint evaluation in wrong stage");
+      }
     }
     else {
-      assert(false, "Constraint evaluation in wrong stage");
+      return _valvec;
     }
   }
-
 }
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
-// for the elements this RndVec represents
-template RndVec(T, int I, int N=0)
+// for the elements this RndProxy represents
+template RndProxy(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias RndVec = RndVec!(typeof(T.tupleof[I]),
-			 getRandAttr!(T, I), N);
+  alias RndProxy = RndProxy!(typeof(T.tupleof[I]),
+			     getRandAttr!(T, I), N);
 }
 
-class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  RndVecBase!(V, R, N)
+class RndProxy(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  RndProxyBase!(V, R, N)
     {
       import std.traits;
       import std.range;
@@ -3608,6 +2462,8 @@ class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V,
 
     
       this(string name, ref V var) {
+	import std.stdio;
+	writeln("New ", name);
 	_name = name;
 	_var = &var;
       }
@@ -3617,7 +2473,12 @@ class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V,
       }
       
       override CstVecPrim[] preReqs() {
-	return _preReqs;
+	static if (HAS_RAND_ATTRIB) {
+	  return _preReqs;
+	}
+	else {
+	  return [];
+	}
       }
 
       override CstVecIterVar[] idxVars() {
@@ -3625,8 +2486,13 @@ class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V,
       }
 
       override CstVecPrim[] getRndPrims() {
-	if(isRand) return [this];
-	else return [];
+	static if (HAS_RAND_ATTRIB) {
+	  if(isRand) return [this];
+	  else return [];
+	}
+	else {
+	  return [];
+	}
       }
 
       CstVecPrim[] getPrimLens() {
@@ -3639,8 +2505,13 @@ class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V,
       }
 
       void doRandomize(_esdl__SolverRoot solver) {
-	if(stage is null) {
-	  solver._esdl__getRandGen().gen(*_var);
+	static if (HAS_RAND_ATTRIB) {
+	  if(stage is null) {
+	    solver._esdl__getRandGen().gen(*_var);
+	  }
+	}
+	else {
+	  assert(false);
 	}
       }
 
@@ -3653,38 +2524,41 @@ class RndVec(V, alias R=_esdl__norand, int N=0) if(N == 0 && _esdl__ArrOrder!(V,
       }
 
       void value(ulong v, int word = 0) {
-	static if(isIntegral!V) {
-	  if(word == 0) {
-	    *_var = cast(V) v; // = cast(V) toBitVec(v      }
-	  }
-	  else {
-	    static if(size_t.sizeof == 4 && (is(V == long) || is(V == ulong))) {
-	      assert(word == 1);	// 32 bit machine with long integral
-	      V val = v;
-	      val = val << (8 * size_t.sizeof);
-	      *_var += val;
+	static if (HAS_RAND_ATTRIB) {
+	  static if(isIntegral!V) {
+	    if(word == 0) {
+	      *_var = cast(V) v; // = cast(V) toBitVec(v      }
 	    }
 	    else {
-	      assert(false, "word has to be 0 for integrals");
+	      static if(size_t.sizeof == 4 && (is(V == long) || is(V == ulong))) {
+		assert(word == 1);	// 32 bit machine with long integral
+		V val = v;
+		val = val << (8 * size_t.sizeof);
+		*_var += val;
+	      }
+	      else {
+		assert(false, "word has to be 0 for integrals");
+	      }
 	    }
+	  }
+	  else {
+	    _var._setNthWord(v, word); // = cast(V) toBitVec(v);
 	  }
 	}
 	else {
-	  _var._setNthWord(v, word); // = cast(V) toBitVec(v);
+	  assert(false);
 	}
       }
-
-
     }
 
-class RndVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  RndVecBase!(V, R, N)
+class RndProxy(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  RndProxyBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = RndVecArr!(V, R, N-1);
+      alias P = RndProxyArr!(V, R, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -3704,11 +2578,21 @@ class RndVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 
       override CstVecPrim[] preReqs() {
 	if(_indexExpr) {
-	  return _preReqs ~ _parent.arrLen() ~
-	    _parent.preReqs() ~ _indexExpr.preReqs();
+	  static if (HAS_RAND_ATTRIB) {
+	    return _preReqs ~ _parent.arrLen() ~
+	      _parent.preReqs() ~ _indexExpr.preReqs();
+	  }
+	  else {
+	    return _parent.preReqs() ~ _indexExpr.preReqs();
+	  }
 	}
 	else {
-	  return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
+	  static if (HAS_RAND_ATTRIB) {
+	    return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
+	  }
+	  else {
+	    return _parent.preReqs();
+	  }
 	}
       }
 
@@ -3737,20 +2621,36 @@ class RndVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       // dealing with.
       override CstVecPrim[] getRndPrims() {
 	CstVecPrim[] prims;
-	if(_indexExpr) {
-	  // FIXME -- if the expression has been solved
-	  // return _parent.getRndPrims(_indexExpr.evaluate()) ;
-	  prims = _indexExpr.getRndPrims();
-	  foreach(pp; _parent.getRndPrims(-1)) {
-	    prims ~= pp;
+	static if (HAS_RAND_ATTRIB) {
+	  if(_indexExpr) {
+	    // FIXME -- if the expression has been solved
+	    // return _parent.getRndPrims(_indexExpr.evaluate()) ;
+	    prims = _indexExpr.getRndPrims();
+	    foreach(pp; _parent.getRndPrims(-1)) {
+	      prims ~= pp;
+	    }
 	  }
+	  else {
+	    foreach(pp; _parent.getRndPrims(_index)) {
+	      prims ~= pp;
+	    }
+	  }
+	  return prims;
 	}
 	else {
-	  foreach(pp; _parent.getRndPrims(_index)) {
-	    prims ~= pp;
+	  if(_indexExpr) {
+	    // FIXME -- if the expression has been solved
+	    // return _parent.getRndPrims(_indexExpr.evaluate()) ;
+	    prims = _indexExpr.getRndPrims() ~ _parent.getRndPrims();
 	  }
+	  else {
+	    // foreach(pp; _parent.getRndPrims(_index)) {
+	    //   prims ~= pp;
+	    // }
+	    prims = _parent.getRndPrims();
+	  }
+	  return prims;
 	}
-	return prims;
       }
 
       override RV unroll(CstVecIterVar l, uint n) {
@@ -3778,10 +2678,15 @@ class RndVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       void doRandomize(_esdl__SolverRoot solver) {
-	if(stage is null) {
-	  E val;
-	  solver._esdl__getRandGen().gen(val);
-	  value(val);
+	static if (HAS_RAND_ATTRIB) {
+	  if(stage is null) {
+	    E val;
+	    solver._esdl__getRandGen().gen(val);
+	    value(val);
+	  }
+	}
+	else {
+	  assert(false, name());
 	}
       }
 
@@ -3804,44 +2709,48 @@ class RndVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       void value(ulong v, int word = 0) {
-	// import std.stdio;
-	// writeln("Setting value of ", this.name(), " to: ", v);
-	// writeln("Parent length value of ", this.name(),
-	// 	      " is: ", _parent.getLen());
-	if(_indexExpr) {
-	  _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
+	static if (HAS_RAND_ATTRIB) {
+	  // import std.stdio;
+	  // writeln("Setting value of ", this.name(), " to: ", v);
+	  // writeln("Parent length value of ", this.name(),
+	  // 	      " is: ", _parent.getLen());
+	  if(_indexExpr) {
+	    _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
+	  }
+	  else {
+	    return _parent.setVal(v, word, _index);
+	  }
 	}
 	else {
-	  return _parent.setVal(v, word, _index);
+	  assert(false);
 	}
       }
-
     }
 
 // Arrays (Multidimensional arrays as well)
-template RndVecArrBase(T, int I, int N=0)
+template RndProxyArrBase(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias RndVecArrBase = RndVecArrBase!(typeof(T.tupleof[I]),
-				       getRandAttr!(T, I), N);
+  alias RndProxyArrBase = RndProxyArrBase!(typeof(T.tupleof[I]),
+					   getRandAttr!(T, I), N);
 }
 
-abstract class RndVecArrBase(V, alias R, int N=0)
+abstract class RndProxyArrBase(V, alias R, int N=0)
   if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
+  enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
+
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
   enum int ORDER = _esdl__ArrOrder!(V, N);
 
   static if(ORDER > 1) {
-    alias EV = RndVecArr!(V, R, N+1);
+    alias EV = RndProxyArr!(V, R, N+1);
   }
   else {
-    alias EV = RndVec!(V, R, N+1);
+    alias EV = RndProxy!(V, R, N+1);
   }
 
   EV[] _elems;
-
-  CstVecPrim[] _preReqs;
 
   string _name;
   override string name() {
@@ -3849,16 +2758,25 @@ abstract class RndVecArrBase(V, alias R, int N=0)
   }
 
   size_t maxArrLen() {
-    static if(isStaticArray!L) {
-      return L.length;
+    static if (HAS_RAND_ATTRIB) {
+      static if(isStaticArray!L) {
+	return L.length;
+      }
+      else {
+	return getRandAttrN!(R, N);
+      }
     }
     else {
-      return getRandAttrN!(R, N);
+      return L.length;
     }
   }
 
-  void opIndexAssign(EV c, size_t idx) {
-    _elems[idx] = c;
+  static if (HAS_RAND_ATTRIB) {
+    CstVecPrim[] _preReqs;
+
+    void opIndexAssign(EV c, size_t idx) {
+      _elems[idx] = c;
+    }
   }
 
   bool isVecArr() {
@@ -3874,67 +2792,79 @@ abstract class RndVecArrBase(V, alias R, int N=0)
   // }
 
   bool isRand() {
-    assert(false, "isRand not implemented for RndVecArrBase");
+    assert(false, "isRand not implemented for RndProxyArrBase");
   }
 
   ulong value() {
-    assert(false, "value not implemented for RndVecArrBase");
+    assert(false, "value not implemented for RndProxyArrBase");
   }
 
   void value(ulong v, int word = 0) {
-    assert(false, "value not implemented for RndVecArrBase");
+    assert(false, "value not implemented for RndProxyArrBase");
   }
 
   void stage(CstStage s) {
-    assert(false, "stage not implemented for RndVecArrBase");
+    assert(false, "stage not implemented for RndProxyArrBase");
   }
 
   uint domIndex() {
-    assert(false, "domIndex not implemented for RndVecArrBase");
+    assert(false, "domIndex not implemented for RndProxyArrBase");
   }
 
   void domIndex(uint s) {
-    assert(false, "domIndex not implemented for RndVecArrBase");
+    assert(false, "domIndex not implemented for RndProxyArrBase");
   }
 
   uint bitcount() {
-    assert(false, "bitcount not implemented for RndVecArrBase");
+    assert(false, "bitcount not implemented for RndProxyArrBase");
   }
 
   bool signed() {
-    assert(false, "signed not implemented for RndVecArrBase");
+    assert(false, "signed not implemented for RndProxyArrBase");
   }
 
   BddVec bddvec() {
-    assert(false, "bddvec not implemented for RndVecArrBase");
+    assert(false, "bddvec not implemented for RndProxyArrBase");
   }
 
   void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for RndVecArrBase");
+    assert(false, "bddvec not implemented for RndProxyArrBase");
   }
 
   void solveBefore(CstVecPrim other) {
-    other.addPreRequisite(this);
+    static if (HAS_RAND_ATTRIB) {
+      other.addPreRequisite(this);
+    }
+    else {
+      assert(false);
+    }
   }
 
   void addPreRequisite(CstVecPrim prim) {
-    _preReqs ~= prim;
+    static if (HAS_RAND_ATTRIB) {
+      _preReqs ~= prim;
+    }
+    else {
+      assert(false);
+    }
   }
 
 }
 
-template RndVecArr(T, int I, int N=0)
+template RndProxyArr(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias RndVecArr = RndVecArr!(typeof(T.tupleof[I]),
-			       getRandAttr!(T, I), N);
+  alias RndProxyArr = RndProxyArr!(typeof(T.tupleof[I]),
+				   getRandAttr!(T, I), N);
 }
 
 // Arrays (Multidimensional arrays as well)
-class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-  RndVecArrBase!(V, R, N)
+class RndProxyArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
+  RndProxyArrBase!(V, R, N)
     {
       alias RV = typeof(this);
-      RndVecLen!RV _arrLen;
+      RndProxyLen!RV _arrLen;
+
+      alias RAND=R;
 
       V* _var;
 
@@ -3942,59 +2872,84 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	_var = &var;
       }
       
-      static if(isStaticArray!V) {
-	static assert(__traits(isSame, R, rand));
-	enum int maxLen = V.length;
-	this(string name, ref V var) {
-	  _name = name;
-	  _var = &var;
-	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
+      static if (HAS_RAND_ATTRIB) {
+	static if(isStaticArray!V) {
+	  static assert(__traits(isSame, R, rand));
+	  enum int maxLen = V.length;
+	  this(string name, ref V var) {
+	    _name = name;
+	    _var = &var;
+	    _arrLen = new RndProxyLen!RV(name ~ ".len", this);
+	  }
+	}
+
+	static if(isDynamicArray!V) {
+	  enum int maxLen = getRandAttrN!(R, N);
+	  this(string name, ref V var) {
+	    _name = name;
+	    _var = &var;
+	    _arrLen = new RndProxyLen!RV(name ~ ".len", this);
+	  }
 	}
       }
-
-      static if(isDynamicArray!V) {
-	enum int maxLen = getRandAttrN!(R, N);
+      else {
 	this(string name, ref V var) {
 	  _name = name;
 	  _var = &var;
-	  _arrLen = new RndVecLen!RV(name ~ ".len", this);
+	  _arrLen = new VarVecLen!RV(name ~ ".len", this);
 	}
       }
 
       CstVecPrim[] preReqs() {
-	return _preReqs;		// N = 0 -- no _parent
+	static if (HAS_RAND_ATTRIB) {
+	  return _preReqs;		// N = 0 -- no _parent
+	}
+	else {
+	  return [];
+	}
       }
 
       CstVecIterVar[] idxVars() {
 	return [];
       }
 
-      EV[] getRndPrims(int idx) {
-	if(idx < 0) return _elems;
-	else return [_elems[idx]];
+      static if (HAS_RAND_ATTRIB) {
+	EV[] getRndPrims(int idx) {
+	  if(idx < 0) return _elems;
+	  else return [_elems[idx]];
+	}
       }
 
       CstVecPrim[] getRndPrims() {
-	CstVecPrim[] prims;
-	foreach(elem; _elems) {
-	  prims ~= elem;
+	static if (HAS_RAND_ATTRIB) {
+	  CstVecPrim[] prims;
+	  foreach(elem; _elems) {
+	    prims ~= elem;
+	  }
+	  return prims;
 	}
-	return prims;
+	else {
+	  return [];
+	}
       }
 
       CstVecPrim[] getPrimLens() {
-	CstVecPrim[] prims;
-	if(_arrLen.isRand) prims ~= _arrLen;
-	return prims;
+	static if (HAS_RAND_ATTRIB) {
+	  CstVecPrim[] prims;
+	  if(_arrLen.isRand) prims ~= _arrLen;
+	  return prims;
+	}
+	else {
+	  return [];
+	}
       }
     
       RV unroll(CstVecIterVar l, uint n) {
 	return this;
       }
 
-      static private auto getVal(A, N...)(ref A arr, N idx) if(isArray!A &&
-							       N.length > 0 &&
-							       isIntegral!(N[0])) {
+      static private auto getVal(A, N...)(ref A arr, N idx)
+	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
 	static if(N.length == 1) return arr[idx[0]];
 	else {
 	  return getVal(arr[idx[0]], idx[1..$]);
@@ -4005,36 +2960,68 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	return getVal(*_var, cast(size_t) idx);
       }
 
-      static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
-	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	  static if(N.length == 1) {
-	    alias AE = ElementType!A;
-	    static if(isIntegral!AE) {
-	      if(word == 0) {
-		arr[idx[0]] = cast(AE) v;
+      static if (HAS_RAND_ATTRIB) {
+	static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
+	  if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	    static if(N.length == 1) {
+	      alias AE = ElementType!A;
+	      static if(isIntegral!AE) {
+		if(word == 0) {
+		  arr[idx[0]] = cast(AE) v;
+		}
+		else {
+		  // static if(size_t.sizeof == 4) {
+		  //   assert(word == 1);	// 32 bit machine with long integral
+		  //   AE val = v;
+		  //   val = val << (8 * size_t.sizeof);
+		  //   arr[idx[0]] += val;
+		  // }
+		  // else {
+		  assert(false, "word has to be 0 for integrals");
+		}
 	      }
 	      else {
-		// static if(size_t.sizeof == 4) {
-		//   assert(word == 1);	// 32 bit machine with long integral
-		//   AE val = v;
-		//   val = val << (8 * size_t.sizeof);
-		//   arr[idx[0]] += val;
-		// }
-		// else {
-		assert(false, "word has to be 0 for integrals");
+		arr[idx[0]]._setNthWord(v, word);
 	      }
 	    }
 	    else {
-	      arr[idx[0]]._setNthWord(v, word);
+	      setVal(arr[idx[0]], v, word, idx[1..$]);
 	    }
 	  }
-	  else {
-	    setVal(arr[idx[0]], v, word, idx[1..$]);
+
+	static private void setLen(A, N...)(ref A arr, size_t v, N idx)
+	  if(isArray!A) {
+	    static if(N.length == 0) {
+	      static if(isDynamicArray!A) {
+		arr.length = v;
+		// import std.stdio;
+		// writeln(arr, " idx: ", N.length);
+	      }
+	      else {
+		assert(false, "Can not set length of a fixed length array");
+	      }
+	    }
+	    else {
+	      // import std.stdio;
+	      // writeln(arr, " idx: ", N.length);
+	      setLen(arr[idx[0]], v, idx[1..$]);
+	    }
 	  }
+      }
+      else {
+	void setLen(N...)(size_t v, N idx) {
+	  // setLen(*_var, v, idx);
+	  assert(false, "Can not set value for VarVecArr");
 	}
+      }
 
       void setVal(J...)(ulong v, int word, J idx) if(isIntegral!(J[0])) {
-	setVal(*_var, v, word, idx);
+	static if (HAS_RAND_ATTRIB) {
+	  setVal(*_var, v, word, idx);
+	}
+	else {
+	  assert(false);
+	}
       }
 
       static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
@@ -4044,30 +3031,17 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      static private void setLen(A, N...)(ref A arr, size_t v, N idx) if(isArray!A) {
-	static if(N.length == 0) {
-	  static if(isDynamicArray!A) {
-	    arr.length = v;
-	    // import std.stdio;
-	    // writeln(arr, " idx: ", N.length);
-	  }
-	  else {
-	    assert(false, "Can not set length of a fixed length array");
-	  }
-	}
-	else {
-	  // import std.stdio;
-	  // writeln(arr, " idx: ", N.length);
-	  setLen(arr[idx[0]], v, idx[1..$]);
-	}
-      }
-
       size_t getLen(N...)(N idx) {
 	return getLen(*_var, idx);
       }
 
       void setLen(N...)(size_t v, N idx) {
-	setLen(*_var, v, idx);
+	static if (HAS_RAND_ATTRIB) {
+	  setLen(*_var, v, idx);
+	}
+	else {
+	  assert(false);
+	}
       }
 
       EV opIndex(CstVecExpr idx) {
@@ -4104,10 +3078,15 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       void doRandomize(_esdl__SolverRoot solver) {
-	if(_elems.length == 0) this.build();
-	assert(arrLen !is null);
-	for(size_t i=0; i != arrLen.evaluate(); ++i) {
-	  this[i].doRandomize(solver);
+	static if (HAS_RAND_ATTRIB) {
+	  if(_elems.length == 0) this.build();
+	  assert(arrLen !is null);
+	  for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	    this[i].doRandomize(solver);
+	  }
+	}
+	else {
+	  assert(false);
 	}
       }
 
@@ -4136,30 +3115,6 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	    }
 	  }
 	}
-	// }
-	// }
-	// else static if(isDynamicArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
-	// else static if(isStaticArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
       }
 	
       auto iterator() {
@@ -4168,11 +3123,11 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	return idx;
       }
 
-      RndVecLen!RV length() {
+      RndProxyLen!RV length() {
 	return _arrLen;
       }
 
-      RndVecLen!RV arrLen() {
+      RndProxyLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -4191,40 +3146,46 @@ class RndVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 
     }
 
-class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  RndVecArrBase!(V, R, N)
+class RndProxyArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  RndProxyArrBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = RndVecArr!(V, R, N-1);
+      alias P = RndProxyArr!(V, R, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
       int _index = 0;
 
       alias RV = typeof(this);
-      RndVecLen!RV _arrLen;
+      RndProxyLen!RV _arrLen;
+
+      alias RAND=R;
+      
       this(string name, P parent, CstVecExpr indexExpr) {
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new RndVecLen!RV(name ~ ".len", this);
+	_arrLen = new RndProxyLen!RV(name ~ ".len", this);
       }
 
       this(string name, P parent, uint index) {
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new RndVecLen!RV(name ~ ".len", this);
+	_arrLen = new RndProxyLen!RV(name ~ ".len", this);
       }
 
       CstVecPrim[] preReqs() {
+	CstVecPrim[] req;
+	static if (HAS_RAND_ATTRIB) {
+	  req = _preReqs ~ _parent.arrLen();
+	}
 	if(_indexExpr) {
-	  return  _preReqs ~ _parent.arrLen() ~
-	    _indexExpr.preReqs() ~ _parent.preReqs();
+	  return req ~ _indexExpr.preReqs() ~ _parent.preReqs();
 	}
 	else {
-	  return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
+	  return req ~ _parent.preReqs();
 	}
       }
 
@@ -4239,16 +3200,18 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
       EV[] getRndPrims(int idx) {
 	EV[] prims;
-	if(_indexExpr) {
-	  foreach(pp; _parent.getRndPrims(-1)) {
-	    if(idx < 0) prims ~= pp._elems;
-	    else prims ~= pp._elems[idx];
+	static if (HAS_RAND_ATTRIB) {
+	  if(_indexExpr) {
+	    foreach(pp; _parent.getRndPrims(-1)) {
+	      if(idx < 0) prims ~= pp._elems;
+	      else prims ~= pp._elems[idx];
+	    }
 	  }
-	}
-	else {
-	  foreach(pp; _parent.getRndPrims(_index)) {
-	    if(idx < 0) prims ~= pp._elems;
-	    else prims ~= pp._elems[idx];
+	  else {
+	    foreach(pp; _parent.getRndPrims(_index)) {
+	      if(idx < 0) prims ~= pp._elems;
+	      else prims ~= pp._elems[idx];
+	    }
 	  }
 	}
 	return prims;
@@ -4262,15 +3225,23 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       // more primary elements
       CstVecPrim[] getRndPrims() {
 	CstVecPrim[] prims;
-	if(_indexExpr) {
-	  prims = _indexExpr.getRndPrims();
-	  foreach(pp; _parent.getRndPrims(-1)) {
-	    prims ~= pp;
+	static if (HAS_RAND_ATTRIB) {
+	  if(_indexExpr) {
+	    prims = _indexExpr.getRndPrims();
+	    foreach(pp; _parent.getRndPrims(-1)) {
+	      prims ~= pp;
+	    }
+	  }
+	  else {
+	    foreach(pp; _parent.getRndPrims(_index)) {
+	      prims ~= pp;
+	    }
 	  }
 	}
 	else {
-	  foreach(pp; _parent.getRndPrims(_index)) {
-	    prims ~= pp;
+	  prims ~= _parent.getPrimLens();
+	  if(_indexExpr) {
+	    prims ~= _indexExpr.getRndPrims() ~ _parent.getPrimLens();
 	  }
 	}
 	return prims;
@@ -4326,21 +3297,28 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      static private void setLen(A, N...)(ref A arr, size_t v, N idx) if(isArray!A) {
-	static if(N.length == 0) {
-	  static if(isDynamicArray!A) {
-	    arr.length = v;
-	    // import std.stdio;
-	    // writeln(arr, " idx: ", N.length);
+      static if (HAS_RAND_ATTRIB) {
+	static private void setLen(A, N...)(ref A arr, size_t v, N idx)
+	  if(isArray!A) {
+	    static if(N.length == 0) {
+	      static if(isDynamicArray!A) {
+		arr.length = v;
+		// import std.stdio;
+		// writeln(arr, " idx: ", N.length);
+	      }
+	      else {
+		assert(false, "Can not set length of a fixed length array");
+	      }
+	    }
+	    else {
+	      // import std.stdio;
+	      // writeln(arr, " idx: ", N.length);
+	      setLen(arr[idx[0]], v, idx[1..$]);
+	    }
 	  }
-	  else {
-	    assert(false, "Can not set length of a fixed length array");
-	  }
-	}
-	else {
-	  // import std.stdio;
-	  // writeln(arr, " idx: ", N.length);
-	  setLen(arr[idx[0]], v, idx[1..$]);
+
+	void setLen(N...)(size_t v, N idx) {
+	  _parent.setLen(v, _index, idx);
 	}
       }
 
@@ -4348,13 +3326,8 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return _parent.getLen(_index, idx);
       }
 
-      void setLen(N...)(size_t v, N idx) {
-	_parent.setLen(v, _index, idx);
-      }
-
-      static private auto getVal(A, N...)(ref A arr, N idx) if(isArray!A &&
-							       N.length > 0 &&
-							       isIntegral!(N[0])) {
+      static private auto getVal(A, N...)(ref A arr, N idx)
+	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
 	static if(N.length == 1) return arr[idx[0]];
 	else {
 	  return getVal(arr[idx[0]], idx[1..$]);
@@ -4400,12 +3373,17 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
 
       void setVal(N...)(ulong v, int word, N idx) if(isIntegral!(N[0])) {
-	if(_indexExpr) {
-	  assert(_indexExpr.isConst());
-	  _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
+	static if (HAS_RAND_ATTRIB) {
+	  if(_indexExpr) {
+	    assert(_indexExpr.isConst());
+	    _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
+	  }
+	  else {
+	    _parent.setVal(v, word, _index, idx);
+	  }
 	}
 	else {
-	  _parent.setVal(v, word, _index, idx);
+	  assert(false);
 	}
       }
 
@@ -4443,10 +3421,15 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       void doRandomize(_esdl__SolverRoot solver) {
-	if(_elems.length == 0) this.build();
-	assert(arrLen !is null);
-	for(size_t i=0; i != arrLen.evaluate(); ++i) {
-	  this[i].doRandomize(solver);
+	static if (HAS_RAND_ATTRIB) {
+	  if(_elems.length == 0) this.build();
+	  assert(arrLen !is null);
+	  for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	    this[i].doRandomize(solver);
+	  }
+	}
+	else {
+	  assert(false);
 	}
       }
 
@@ -4475,30 +3458,6 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	    }
 	  }
 	}
-	// }
-	// }
-	// else static if(isDynamicArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
-	// else static if(isStaticArray!E) {
-	// 	// if(! built()) {
-	// 	for (size_t i=0; i!=maxArrLen; ++i) {
-	// 	  if(this[i] is null) {
-	// 	    import std.conv: to;
-	// 	    this[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]",
-	// 			     this, new ConstVec!size_t(i));
-	// 	  }
-	// 	}
-	// 	// }
-	//   }
       }
 	
       auto iterator() {
@@ -4507,11 +3466,11 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return idx;
       }
 
-      RndVecLen!RV length() {
+      RndProxyLen!RV length() {
 	return _arrLen;
       }
 
-      RndVecLen!RV arrLen() {
+      RndProxyLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -4530,7 +3489,7 @@ class RndVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
     }
 
-class RndVecIter(RV): CstVecIterVar, CstVecPrim
+class RndProxyIter(RV): CstVecIterVar, CstVecPrim
 {
   RV _arrVar;
 
@@ -4652,13 +3611,15 @@ class RndVecIter(RV): CstVecIterVar, CstVecPrim
 
 }
 
-class RndVecLen(RV): CstVecExpr, CstVecPrim
+class RndProxyLen(RV): CstVecExpr, CstVecPrim
 {
+
+  enum HAS_RAND_ATTRIB = (! __traits(isSame, RV.RAND, _esdl__norand));
 
   // This bdd has the constraint on the max length of the array
   BDD _primBdd;
   
-  RndVecIter!RV _idxVar;
+  RndProxyIter!RV _idxVar;
 
   RV _parent;
 
@@ -4684,6 +3645,7 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
 
   ~this() {
     _domvec.reset();
+    _valvec.reset();
   }
 
   override CstVecPrim[] preReqs() {
@@ -4702,55 +3664,74 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
     assert(false);
   }
   
+  private bool refreshNoRand(Buddy buddy) {
+    auto val = _parent.getLen();
+    if ((! _valvec.isNull()) && _val == val) {
+      return false;
+    }
+    else {
+      _val = val;
+      _valvec = buddy.buildVec(val);
+      return true;
+    }
+  }
+
   // override CstStage[] getStages() {
   //   CstStage[] stages;
   //   if(isRand) stages = [this.stage()];
   //   return stages;
   // }
   override bool refresh(CstStage s, Buddy buddy) {
-    assert(stage() !is null, "stage null for: " ~ name());
-    if(this.isRand && stage() is s) {
-      return false;
-    }
-    else if((! this.isRand) ||
-	    this.isRand && stage().solved()) { // work with the value
-      auto val = _parent.getLen();
-      if ((! _valvec.isNull()) && _val == val) {
+    static if (HAS_RAND_ATTRIB) {
+      assert(stage() !is null, "stage null for: " ~ name());
+      if(this.isRand && stage() is s) {
 	return false;
       }
+      else if((! this.isRand) ||
+	      this.isRand && stage().solved()) { // work with the value
+	return refreshNoRand(buddy);
+      }
       else {
-	_val = val;
-	_valvec = buddy.buildVec(val);
-	return true;
+	assert(false, "Constraint evaluation in wrong stage");
       }
     }
     else {
-      assert(false, "Constraint evaluation in wrong stage");
+      return refreshNoRand(buddy);
     }
   }
 
   override BddVec getBDD(CstStage s, Buddy buddy) {
-    assert(stage() !is null, "stage null for: " ~ name());
-    if(this.isRand && stage() is s) {
-      return _domvec;
-    }
-    else if((! this.isRand) ||
-	    this.isRand && stage().solved()) { // work with the value
-      return _valvec;
+    static if (HAS_RAND_ATTRIB) {
+      assert(stage() !is null, "stage null for: " ~ name());
+      if(this.isRand && stage() is s) {
+	return _domvec;
+      }
+      else if((! this.isRand) ||
+	      this.isRand && stage().solved()) { // work with the value
+	return _valvec;
+      }
+      else {
+	assert(false, "Constraint evaluation in wrong stage");
+      }
     }
     else {
-      assert(false, "Constraint evaluation in wrong stage");
+      return _valvec;
     }
   }
 
   override long evaluate() {
-    if(! this.isRand || stage().solved()) {
-      return value();
+    static if (HAS_RAND_ATTRIB) {
+      if(! this.isRand || stage().solved()) {
+	return value();
+      }
+      else {
+	import std.conv;
+	assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
+	       stage()._id.to!string);
+      }
     }
     else {
-      import std.conv;
-      assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
-	     stage()._id.to!string);
+      return value();
     }
   }
 
@@ -4759,29 +3740,59 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
   }
   
   bool isRand() {
-    import std.traits;
-    if(isStaticArray!(RV.L)) return false;
-    else return true;
+    static if (HAS_RAND_ATTRIB) {
+      import std.traits;
+      if (isStaticArray!(RV.L)) return false;
+      else return true;
+    }
+    else {
+      return false;
+    }
   }
 
   CstStage stage() {
-    return _stage;
+    static if (HAS_RAND_ATTRIB) {
+      return _stage;
+    }
+    else {
+      assert(false);
+    }
   }
 
   void stage(CstStage s) {
-    _stage = s;
+    static if (HAS_RAND_ATTRIB) {
+      _stage = s;
+    }
+    else {
+      assert(false);
+    }
   }
 
   uint domIndex() {
-    return _domIndex;
+    static if (HAS_RAND_ATTRIB) {
+      return _domIndex;
+    }
+    else {
+      assert(false);
+    }
   }
 
   void domIndex(uint s) {
-    _domIndex = s;
+    static if (HAS_RAND_ATTRIB) {
+      _domIndex = s;
+    }
+    else {
+      assert(false);
+    }
   }
 
   BddVec bddvec() {
-    return _domvec;
+    static if (HAS_RAND_ATTRIB) {
+      return _domvec;
+    }
+    else {
+      return _valvec;
+    }
   }
 
   void bddvec(BddVec b) {
@@ -4810,17 +3821,17 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
     return _primBdd;
   }
   
-  void idxVar(RndVecIter!RV var) {
+  void idxVar(RndProxyIter!RV var) {
     _idxVar = var;
   }
 
-  RndVecIter!RV idxVar() {
+  RndProxyIter!RV idxVar() {
     return _idxVar;
   }
 
-  RndVecIter!RV makeIdxVar() {
+  RndProxyIter!RV makeIdxVar() {
     if(_idxVar is null) {
-      _idxVar = new RndVecIter!RV(_parent);
+      _idxVar = new RndProxyIter!RV(_parent);
     }
     return _idxVar;
   }
@@ -4852,7 +3863,7 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
     
   }
 
-  override RndVecLen!RV unroll(CstVecIterVar l, uint n) {
+  override RndProxyLen!RV unroll(CstVecIterVar l, uint n) {
     return _parent.unroll(l,n).arrLen();
   }
 
@@ -4872,6 +3883,7 @@ class RndVecLen(RV): CstVecExpr, CstVecPrim
     _preReqs ~= prim;
   }
 }
+
 
 
 class ConstVec(T = int): ValVec!T
@@ -4912,36 +3924,6 @@ class ConstVec(T = int): ValVec!T
   }
 
 }
-
-// class RndVecVar(T = int): ValVec!T
-// {
-//   // Declared in ValVec
-//   // T _value;			// the value of the constant
-//   import std.conv: to;
-
-//   T* _var;
-  
-//   override string name() {
-//     return (*_var).to!string();
-//   }
-
-//   this(ref T var) {
-//     _var = &var;
-//   }
-
-//   override BddVec getBDD(CstStage stage, Buddy buddy) {
-//     return buddy.buildVec(*_var);
-//   }
-
-//   T getVal() {
-//     return *_var;
-//   }
-
-//   override long evaluate() {
-//     return *_var;
-//   }
-
-// }
 
 abstract class ValVec(T = int): CstVecExpr, CstVecPrim
 {
@@ -5242,25 +4224,6 @@ class CstVecSliceExpr: CstVecExpr
     return _vec.getSolvables();
   }
 
-  // override CstStage[] getStages() {
-  //   import std.exception;
-
-  //   return _vec.getStages();
-  //   // enforce(_vec.getStages.length <= 1 &&
-  //   //	    _lhs.getStages.length <= 1 &&
-  //   //	    _rhs.getStages.length <= 1);
-
-  //   // if(_lhs.getStages.length is 0) return _rhs.getStages;
-  //   // else if(_rhs.getStages.length is 0) return _lhs.getStages;
-  //   // else {
-  //   //   // import std.algorithm: max;
-  //   //   // Stages need to be merged
-  //   //   // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
-  //   //   // return [stage];
-  //   //   return _lhs.getStages;
-  //   // }
-  // }
-
   override bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
@@ -5330,18 +4293,6 @@ class CstVecSliceExpr: CstVecExpr
       }
       if(add) _idxVars ~= var;
     }
-    // _preReqs = vec.preReqs ~ lhs.preReqs;
-    // if(rhs !is null) {
-    //   _preReqs ~= rhs.preReqs;
-    // }
-    // foreach(arrVar; preReqs) {
-    //   bool add = true;
-    //   foreach(l; _preReqs) {
-    // 	if(l is arrVar) add = false;
-    // 	break;
-    //   }
-    //   if(add) _preReqs ~= arrVar;
-    // }
   }
 }
 
@@ -5526,30 +4477,6 @@ class CstBdd2BddExpr: CstBddExpr
     return _lhs.getRndPrims() ~ _rhs.getRndPrims();
   }
 
-  // override CstStage[] getStages() {
-  //   CstStage[] stages;
-
-  //   foreach(lstage; _lhs.getStages) {
-  //     bool already = false;
-  //     foreach(stage; stages) {
-  //	if(stage is lstage) {
-  //	  already = true;
-  //	}
-  //     }
-  //     if(! already) stages ~= lstage;
-  //   }
-  //   foreach(rstage; _rhs.getStages) {
-  //     bool already = false;
-  //     foreach(stage; stages) {
-  //	if(stage is rstage) {
-  //	  already = true;
-  //	}
-  //     }
-  //     if(! already) stages ~= rstage;
-  //   }
-
-  //   return stages;
-  // }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
@@ -5595,16 +4522,6 @@ class CstBdd2BddExpr: CstBddExpr
       }
       if(add) _idxVars ~= var;
     }
-
-    // _preReqs = lhs.preReqs ~ rhs.preReqs;
-    // foreach(arrVar; lhs.preReqs ~ rhs.preReqs) {
-    //   bool add = true;
-    //   foreach(l; _preReqs) {
-    // 	if(l is arrVar) add = false;
-    // 	break;
-    //   }
-    //   if(add) _preReqs ~= arrVar;
-    // }
   }
 }
 
@@ -5647,21 +4564,6 @@ class CstVec2BddExpr: CstBddExpr
     return reqs;
   }
     
-  // override CstStage[] getStages() {
-  //   import std.exception;
-  //   enforce(_lhs.getStages.length <= 1 &&
-  //	    _rhs.getStages.length <= 1);
-
-  //   if(_lhs.getStages.length is 0) return _rhs.getStages;
-  //   else if(_rhs.getStages.length is 0) return _lhs.getStages;
-  //   else {
-  //     // import std.algorithm: max;
-  //     // uint stage = max(_lhs.getStages[0], _rhs.getStages[0]);
-  //     // return [stage];
-  //     return _lhs.getStages;
-  //   }
-  // }
-
   override CstVecPrim[] getRndPrims() {
     return _lhs.getRndPrims() ~ _rhs.getRndPrims();
   }
@@ -5717,15 +4619,6 @@ class CstVec2BddExpr: CstBddExpr
       }
       if(add) _idxVars ~= var;
     }
-    // _preReqs = lhs.preReqs ~ rhs.preReqs;
-    // foreach(arrVar; lhs.preReqs ~ rhs.preReqs) {
-    //   bool add = true;
-    //   foreach(l; _preReqs) {
-    // 	if(l is arrVar) add = false;
-    // 	break;
-    //   }
-    //   if(add) _preReqs ~= arrVar;
-    // }
   }
 }
 
@@ -5784,10 +4677,6 @@ class CstNotBddExpr: CstBddExpr
   override CstVecPrim[] getRndPrims() {
     return _expr.getRndPrims();
   }
-
-  // override CstStage[] getStages() {
-  //   return _expr.getStages();
-  // }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.idxVars.length !is 0) {
@@ -5861,24 +4750,6 @@ class CstBlock: CstBddExpr
   override CstBlock unroll(CstVecIterVar l, uint n) {
     assert(false, "Can not unroll a CstBlock");
   }
-
-  // override CstStage[] getStages() {
-  //   CstStage[] stages;
-
-  //   foreach(expr; _exprs) {
-  //     foreach(lstage; expr.getStages) {
-  //	bool already = false;
-  //	foreach(stage; stages) {
-  //	  if(stage is lstage) {
-  //	    already = true;
-  //	  }
-  //	}
-  //	if(! already) stages ~= lstage;
-  //     }
-  //   }
-
-  //   return stages;
-  // }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
     assert(false, "getBDD not implemented for CstBlock");
