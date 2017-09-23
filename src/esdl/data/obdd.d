@@ -16,7 +16,8 @@ import std.math;
 import std.bigint;
 import std.container: Array;
 import std.algorithm;
-import std.conv;
+import std.string: format;
+// import std.conv;
 // import core.memory: GC;
 import core.stdc.string: memset;
 
@@ -117,7 +118,7 @@ class BddPair
 	    if(any) sb ~= ", ";
 	    any = true;
 	    BDD b = BDD(result[i], getBuddy());
-	    sb ~= text(getBuddy._level2Var[i], " = ", b);
+	    sb ~= format("%s = %s", getBuddy._level2Var[i], b);
 	  }
       }
     sb ~= '}';
@@ -221,12 +222,11 @@ struct BddDomain
   
   this(int index, size_t bits)
   {
-    import std.conv;
     if(bits <= 0)
       {
 	throw new BddException();
       }
-    this._name = text(index);
+    this._name = format("%s", index);
     this._index = index;
     this._realsize = (cast(ulong) 2) ^^bits;
     this._ivar.length = bits;
@@ -285,10 +285,8 @@ struct BddDomain
   {
     if(bits > this.varNum() ||
        bits > that.varNum())
-      throw new BddException(text("Number of bits requested(",
-				  bits, ") is larger than domain sizes ",
-				  this.varNum(), ",",
-				  that.varNum()));
+      throw new BddException(format("Number of bits requested(%s) is larger than domain sizes %s, %s",
+				    bits, this.varNum(), that.varNum()));
 
     if(value == 0L)
       {
@@ -338,9 +336,8 @@ struct BddDomain
   {
     if(this.size() != that.size())
       {
-	throw new BddException(text("Size of ", this, " != size of that ",
-				    that, "( ", this.size(), " vs ",
-				    that.size(), ")"));
+	throw new BddException(format("Size of %s != size of that %s ( %s vs %s",
+				      this, that, this.size(), that.size()));
       }
 
     BDD e = getBuddy.one();
@@ -368,7 +365,7 @@ struct BddDomain
   {
     if(val < 0 || val > size())
       {
-	throw new BddException(text(val, " is out of range"));
+	throw new BddException(format("%s is out of range", val));
       }
 
     BDD v = getBuddy.one();
@@ -389,8 +386,7 @@ struct BddDomain
   {
     if(lo < 0 || hi >= size() || lo > hi)
       {
-	throw new BddException(text("range <", lo, ", ",
-				    hi, "> is invalid"));
+	throw new BddException(format("range < %s, %s > is invalid", lo, hi));
       }
 
     BDD result = getBuddy.zero();
@@ -2375,7 +2371,8 @@ struct BDD
 	      {
 		if(!first) sb ~= ", ";
 		first = false;
-		sb ~= text(buddy.level2Var(n), ':', set[n] == 2 ? '1' : '0');
+		sb ~= format("%s: %s", buddy.level2Var(n),
+			     set[n] == 2 ? 1 : 0);
 	      }
 	  }
 	sb ~= '>';
@@ -2514,7 +2511,7 @@ struct BDD
 		    if (ok)
 		      {
 			if (!firstval) sb ~= "/";
-			sb ~= text(m);
+			sb ~= format("%s", m);
 			firstval = false;
 		      }
 		  }
@@ -8810,7 +8807,7 @@ class Buddy
 
   static string right(int x, int w)
   {
-    return right(text(x), w);
+    return right(format("%s", x), w);
   }
   static string right(string s, int w)
   {
@@ -9072,7 +9069,7 @@ class Buddy
     int lev = LEVEL(k);
     //writeln("Level("+k+") = "+lev);
     if(lev <= lastLevel)
-      throw new BddException(text(lev, " <= ", lastLevel));
+      throw new BddException(format("%s <= %s", lev, lastLevel));
     //writeln("Low:");
     validate(LOW(k), lev);
     //writeln("High:");
@@ -9400,8 +9397,8 @@ class Buddy
       {
 	if(!done[i])
 	  {
-	    throw new BddException(text("missing domain #", i,
-					": ", getDomain(i)));
+	    throw new BddException(format("missing domain # %s: %s",
+					  i, getDomain(i)));
 	  }
 	doms[i] = getDomain(i);
       }
@@ -9411,7 +9408,7 @@ class Buddy
     for(int i=0; i<test.length; ++i)
       {
 	if(test[i] != i)
-	  throw new BddException(text(test[i], " != ", i));
+	  throw new BddException(format("%s != %s", test[i], i));
       }
     return varorder;
   }
@@ -9622,11 +9619,10 @@ class Buddy
 
     override string toString()
     {
-      return text("Garbage collection #", num, ": ", nodes,
-		  " nodes / ", freenodes, " free / ",
-		  cast(double) time / 1000.0, "s / ",
-		  cast(double) sumtime / 1000.0,
-		  "s total");
+      return format("Garbage collection #%s: %s nodes / free / %s sec / %s sec total",
+		    num, nodes, freenodes,
+		    cast(double) time / 1000.0,
+		    cast(double) sumtime / 1000.0);
     }
   }
 
@@ -9832,9 +9828,9 @@ class Buddy
 
     override string toString()
     {
-      return text("Went from ", usednum_before, " to ", usednum_after,
-		  " nodes, gain = ", gain(), "%(",
-		  cast(double) time / 1000.0, " sec)");
+      return format("Went from %s to %s nodes, gain = %s %(%s sec)",
+		    usednum_before, usednum_after,
+		    gain(), cast(double) time / 1000.0);
     }
   }
 
@@ -9881,26 +9877,26 @@ class Buddy
     {
       string sb;
       string newLine = "\n";
-      sb ~= text("\nCache statistics\n----------------\n",
-		 "Unique Access:  ", uniqueAccess, '\n',
-		 "Unique Chain:   ", uniqueChain, '\n',
-		 "Unique Hit:     ", uniqueHit, '\n',
-		 "Unique Miss:    ", uniqueMiss, '\n',
-		 "=> Hit rate =   ");
+      sb ~= format("\nCache statistics\n----------------\n" ~
+		   "Unique Access:  %s\nUnique Chain:   %s\n" ~
+		   "Unique Hit:     %s\n" ~
+		   "Unique Miss:    %s\n" ~
+		   "=> Hit rate =   ",
+		   uniqueAccess, uniqueChain, uniqueHit, uniqueMiss);
       if(uniqueHit + uniqueMiss > 0)
-	sb ~= text((cast(double) uniqueHit) /
-		   (cast(double) uniqueHit + uniqueMiss));
+	sb ~= format("%s", (cast(double) uniqueHit) /
+		     (cast(double) uniqueHit + uniqueMiss));
       else
 	sb ~= "0.0";
-      sb ~= text("\nOperator Hits:  ", opHit, '\n',
-		 "Operator Miss:  ", opMiss, '\n',
-		 "=> Hit rate =   ");
+      sb ~= format("\nOperator Hits:  %s\n" ~
+		 "Operator Miss:  %s\n" ~
+		   "=> Hit rate =   ", opHit, opMiss);
       if(opHit + opMiss > 0)
-	sb ~= text((cast(double) opHit) /
-		   (cast(double) opHit + opMiss));
+	sb ~= format("%s", (cast(double) opHit) /
+		     (cast(double) opHit + opMiss));
       else
 	sb ~= "0.0";
-      sb ~= text("\nSwap count =    ", swapCount, '\n');
+      sb ~= format("\nSwap count =    %s\n", swapCount);
       return sb;
     }
   }
