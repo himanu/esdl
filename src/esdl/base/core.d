@@ -9871,21 +9871,21 @@ void withdrawCaveat() {
 
 void simulate(T)(string name, string[] argv = []) {
   auto root = new Root!T();
-  root.multiCore();
+  root.multicore();
   root.elaborate(name, argv);
   root.simulate();
 }
 
 auto elaborate(T)(string name, string[] argv = []) {
   auto root = new Root!T();
-  root.multiCore();
+  root.multicore();
   root.elaborate(name, argv);
   return root;
 }
 
 auto forkSim(T)(string name, string[] argv = []) {
   auto root = new Root!T();
-  root.multiCore();
+  root.multicore();
   root.elaborate(name, argv);
   root.forkSim();
   return root;
