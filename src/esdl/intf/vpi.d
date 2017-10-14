@@ -919,6 +919,12 @@ vpiHandle vpiGetHandleByName (string name, vpiHandle scope_handle) {
   assert(false, "Kindly link to a Verilog compiler that supports VPI");
 }
 
+string vpiGetStr(vpiPropertyT prop, vpiHandle obj) {
+  import std.conv;
+  auto cstr = vpi_get_str(prop, obj);
+  return cstr.to!string;
+}
+
 /* delay processing */
 @weak extern(C) void vpi_get_delays (vpiHandle object, p_vpi_delay delay_p) {
   assert(false, "Kindly link to a Verilog compiler that supports VPI");
