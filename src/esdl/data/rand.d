@@ -37,7 +37,7 @@ template _esdl__SolverBase(T) {
     // static if(__traits(compiles, _esdl__SolverResolve!U)) {
     static if(__traits(compiles, U._esdl__thisHasRandomization()) &&
 	      is(U == typeof(U._esdl__thisHasRandomization()))) {
-      alias _esdl__SolverBase = _esdl__SolverResolve!U.Type;
+      alias _esdl__SolverBase = _esdl__SolverResolve!U;
     }
     else {
       alias _esdl__SolverBase = _esdl__SolverBase!U;
@@ -203,12 +203,10 @@ class _esdl__SolverStruct(_esdl__T): _esdl__SolverBase!_esdl__T
 template _esdl__SolverResolve(T) {
   // static if(__traits(compiles, T._esdl__hasRandomization)) {
   static if(is(T == class)) {
-    // alias _esdl__SolverResolve = T._esdl__Solver;
-    alias Type          = T._esdl__Solver;
+    alias _esdl__SolverResolve = T._esdl__Solver;
   }
   else {
-    // alias _esdl__SolverResolve = _esdl__SolverStruct!T;
-    alias Type          = _esdl__SolverStruct!T;
+    alias _esdl__SolverResolve = _esdl__SolverStruct!T;
   }
 }
 
@@ -320,7 +318,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
   else {
     _q = q;
   }
-  return p.logicAnd(q);
+  return _p.logicAnd(_q);
 }
 
 
@@ -1433,7 +1431,7 @@ mixin template Randomization()
     return null;
   }
 
-  alias _esdl__SolverThis = _esdl__SolverResolve!_esdl__Type.Type;
+  alias _esdl__SolverType = _esdl__SolverResolve!_esdl__Type;
 
   // final auto _esdl__randEval(string NAME)() {
   //   return mixin(NAME);
@@ -1444,13 +1442,13 @@ mixin template Randomization()
     override void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
     }
-    override _esdl__SolverThis _esdl__getSolver() {
-      return _esdl__staticCast!_esdl__SolverThis(_esdl__solverInst);
+    override _esdl__SolverType _esdl__getSolver() {
+      return _esdl__staticCast!_esdl__SolverType(_esdl__solverInst);
     }
     override void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__SolverThis(_esdl__randSeed, _esdl__randSeeded,
+	  new _esdl__SolverType(_esdl__randSeed, _esdl__randSeeded,
 				typeid(_esdl__Type).stringof[8..$-1], this);
 	static if(__traits(compiles, _esdl__setupSolver())) {
 	  _esdl__setupSolver();
@@ -1465,8 +1463,8 @@ mixin template Randomization()
     @rand!false _esdl__SolverRoot _esdl__solverInst;
     @rand!false uint _esdl__randSeed;
     @rand!false bool _esdl__randSeeded;
-    _esdl__SolverThis _esdl__getSolver() {
-      return _esdl__staticCast!_esdl__SolverThis(_esdl__solverInst);
+    _esdl__SolverType _esdl__getSolver() {
+      return _esdl__staticCast!_esdl__SolverType(_esdl__solverInst);
     }
     void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
@@ -1489,7 +1487,7 @@ mixin template Randomization()
     void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__SolverThis(_esdl__randSeed, _esdl__randSeeded,
+	  new _esdl__SolverType(_esdl__randSeed, _esdl__randSeeded,
 				typeid(_esdl__Type).stringof[8..$-1], this);
 	static if(__traits(compiles, _esdl__setupSolver())) {
 	  _esdl__setupSolver();
@@ -1523,7 +1521,7 @@ void randomizeWith(string C, T, ARG...)(ref T t, ARG values)
       // t._esdl__solverInst._esdl__cstWith = withCst;
     }
     else {
-      alias CST = _esdl__SolverResolve!T.Type._esdl__Constraint!(C, ARG.length);
+      alias CST = _esdl__SolverResolve!T._esdl__Constraint!(C, ARG.length);
       auto cstWith = _esdl__staticCast!CST(t._esdl__solverInst._esdl__cstWith);
       cstWith.withArgs(values);
       t._esdl__solverInst._esdl__cstWithChanged = false;
@@ -1922,10 +1920,10 @@ template _esdl__Rand(T, int I)
       alias _esdl__Rand = RndVec!(L, _esdl__norand, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
-      alias _esdl__Rand = _esdl__SolverResolve!L.Type;
+      alias _esdl__Rand = _esdl__SolverResolve!L;
     }
     else static if(is(L == U*, U) && is(U == struct)) {
-      alias _esdl__Rand = _esdl__SolverResolve!U.Type;
+      alias _esdl__Rand = _esdl__SolverResolve!U;
     }
   }
   else {
@@ -1936,10 +1934,10 @@ template _esdl__Rand(T, int I)
       alias _esdl__Rand = RndVec!(L, RAND, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
-      alias _esdl__Rand = _esdl__SolverResolve!L.Type;
+      alias _esdl__Rand = _esdl__SolverResolve!L;
     }
     else static if(is(L == U*, U) && is(U == struct)) {
-      alias _esdl__Rand = _esdl__SolverResolve!U.Type;
+      alias _esdl__Rand = _esdl__SolverResolve!U;
     }
   }
 }
