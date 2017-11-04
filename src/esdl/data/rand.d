@@ -573,12 +573,12 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
+      return new CstInt!(L, _esdl__norand, 0)(name, l);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVarArr!(L, _esdl__norand, 0)(name, l);
+      return new CstInt!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -590,12 +590,12 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
+      return new CstInt!(L, _esdl__norand, 0)(name, l);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVarArr!(L, _esdl__norand, 0)(name, l);
+      return new CstInt!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -1314,7 +1314,7 @@ class CstStage {
   // The Bdd expressions that apply to this stage
   CstBddExpr[] _bddExprs;
   // These are unresolved idx variables
-  CstVarArrIterBase[] _idxVars;
+  CstIntIterBase[] _idxVars;
   // These are the length variables that this stage will solve
   // CstVecPrim[] _preReqs;
   CstBddExpr[] _bddExprsWithUnmetReqs;
@@ -1574,7 +1574,7 @@ enum CstBinBddOp: byte
       NEQ,
       }
 
-interface CstVarPrim
+interface CstIntPrim
 {
   abstract string name();
   // abstract void doRandomize(_esdl__SolverRoot solver);
@@ -1664,7 +1664,7 @@ abstract class CstVecExpr
 
   // Array of indexes this expression has to resolve before it can be
   // convertted into an BDD
-  abstract CstVarArrIterBase[] idxVars();
+  abstract CstIntIterBase[] idxVars();
 
   // List of Array Variables
   abstract CstVecPrim[] preReqs();
@@ -1695,7 +1695,7 @@ abstract class CstVecExpr
 
   abstract long evaluate();
 
-  abstract CstVecExpr unroll(CstVarArrIterBase l, uint n);
+  abstract CstVecExpr unroll(CstIntIterBase l, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecExpr other)
   {
@@ -1952,10 +1952,10 @@ template _esdl__Rand(T, int I)
   alias RAND = getRandAttr!(T, I);
   static if(__traits(isSame, RAND, _esdl__norand)) {
     static if(isArray!L) {
-      alias _esdl__Rand = CstVarArr!(L, _esdl__norand, 0);
+      alias _esdl__Rand = CstInt!(L, _esdl__norand, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = CstVar!(L, _esdl__norand, 0);
+      alias _esdl__Rand = CstInt!(L, _esdl__norand, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
       alias _esdl__Rand = _esdl__SolverResolve!L;
@@ -1966,10 +1966,10 @@ template _esdl__Rand(T, int I)
   }
   else {
     static if(isArray!L) {
-      alias _esdl__Rand = CstVarArr!(L, RAND, 0);
+      alias _esdl__Rand = CstInt!(L, RAND, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = CstVar!(L, RAND, 0);
+      alias _esdl__Rand = CstInt!(L, RAND, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
       alias _esdl__Rand = _esdl__SolverResolve!L;
@@ -2007,7 +2007,7 @@ template _esdl__ArrOrder(T, int I, int N=0) {
 }
 
 // This class represents an unrolled Foreach idx at vec level
-abstract class CstVarArrIterBase: CstVecExpr
+abstract class CstIntIterBase: CstVecExpr
 {
   string _name;
 
@@ -2019,7 +2019,7 @@ abstract class CstVarArrIterBase: CstVecExpr
     _name = name;
   }
 
-  // _idxVar will point to the array this CstVarArrIterBase is tied to
+  // _idxVar will point to the array this CstIntIterBase is tied to
 
   uint maxVal();
 
@@ -2054,19 +2054,18 @@ abstract class CstVarArrIterBase: CstVecExpr
 }
 
 // Consolidated Proxy Class
-// template CstVarBase(T, int I, int N=0) {
-//   alias CstVarBase = CstVarBase!(typeof(T.tupleof[I]),
+// template CstIntBase(T, int I, int N=0) {
+//   alias CstIntBase = CstIntBase!(typeof(T.tupleof[I]),
 // 				     getRandAttr!(T, I), N);
 // }
 
-abstract class CstVarBase(V, alias R, int N)
+abstract class CstIntBase(V, alias R, int N)
   if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
   alias E = ElementTypeN!(V, N);
   alias RV = typeof(this);
-  // enum int ORDER = _esdl__ArrOrder!(T, I, N);
 
   string _name;
   BddVec _valvec;
@@ -2077,13 +2076,9 @@ abstract class CstVarBase(V, alias R, int N)
 
     CstVecPrim[] _preReqs;
     BddVec       _domvec;
-    E            _val;
 
     uint         _domIndex = uint.max;
     CstStage     _stage = null;
-  }
-  else {
-    Unconst!E _val;
   }
 
   ~this() {
@@ -2254,11 +2249,10 @@ abstract class CstVarBase(V, alias R, int N)
 
   private bool refreshVal(Buddy buddy) {
     auto val = getVal();
-    if ((! _valvec.isNull) && _val == val) {
+    if (! _valvec.isNull) {
       return false;
     }
     else {
-      _val = val;
       _valvec = buddy.buildVec(val);
       return true;
     }
@@ -2305,15 +2299,15 @@ abstract class CstVarBase(V, alias R, int N)
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
-// for the elements this CstVar represents
-template CstVar(T, int I, int N=0)
+// for the elements this CstInt represents
+template CstInt(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias CstVar = CstVar!(typeof(T.tupleof[I]),
+  alias CstInt = CstInt!(typeof(T.tupleof[I]),
 			     getRandAttr!(T, I), N);
 }
 
-class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVarBase!(V, R, N)
+class CstInt(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstIntBase!(V, R, N)
     {
       import std.traits;
       import std.range;
@@ -2342,7 +2336,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstVarArrIterBase[] idxVars() {
+      override CstIntIterBase[] idxVars() {
 	return [];
       }
 
@@ -2360,7 +2354,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstVarArrIterBase l, uint n) {
+      override RV unroll(CstIntIterBase l, uint n) {
 	// idxVars is always empty
 	return this;
       }
@@ -2412,14 +2406,14 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
     }
 
-class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVarBase!(V, R, N)
+class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstIntBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = CstVarArr!(V, R, N-1);
+      alias P = CstInt!(V, R, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -2457,7 +2451,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstVarArrIterBase[] idxVars() {
+      override CstIntIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -2514,7 +2508,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unroll(CstVarArrIterBase l, uint n) {
+      override RV unroll(CstIntIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -2589,27 +2583,21 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
     }
 
 // Arrays (Multidimensional arrays as well)
-// template CstVarArrBase(T, int I, int N=0)
+// template CstIntBase(T, int I, int N=0)
 //   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstVarArrBase = CstVarArrBase!(typeof(T.tupleof[I]),
+//   alias CstIntBase = CstIntBase!(typeof(T.tupleof[I]),
 // 					   getRandAttr!(T, I), N);
 // }
 
-abstract class CstVarArrBase(V, alias R, int N=0)
+abstract class CstIntBase(V, alias R, int N=0)
   if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
-  enum int ORDER = _esdl__ArrOrder!(V, N);
 
-  static if(ORDER > 1) {
-    alias EV = CstVarArr!(V, R, N+1);
-  }
-  else {
-    alias EV = CstVar!(V, R, N+1);
-  }
+  alias EV = CstInt!(V, R, N+1);
 
   EV[] _elems;
 
@@ -2655,43 +2643,43 @@ abstract class CstVarArrBase(V, alias R, int N=0)
   // }
 
   bool isRand() {
-    assert(false, "isRand not implemented for CstVarArrBase");
+    assert(false, "isRand not implemented for CstIntBase");
   }
 
   ulong value() {
-    assert(false, "value not implemented for CstVarArrBase");
+    assert(false, "value not implemented for CstIntBase");
   }
 
   void value(ulong v, int word = 0) {
-    assert(false, "value not implemented for CstVarArrBase");
+    assert(false, "value not implemented for CstIntBase");
   }
 
   void stage(CstStage s) {
-    assert(false, "stage not implemented for CstVarArrBase");
+    assert(false, "stage not implemented for CstIntBase");
   }
 
   uint domIndex() {
-    assert(false, "domIndex not implemented for CstVarArrBase");
+    assert(false, "domIndex not implemented for CstIntBase");
   }
 
   void domIndex(uint s) {
-    assert(false, "domIndex not implemented for CstVarArrBase");
+    assert(false, "domIndex not implemented for CstIntBase");
   }
 
   uint bitcount() {
-    assert(false, "bitcount not implemented for CstVarArrBase");
+    assert(false, "bitcount not implemented for CstIntBase");
   }
 
   bool signed() {
-    assert(false, "signed not implemented for CstVarArrBase");
+    assert(false, "signed not implemented for CstIntBase");
   }
 
   BddVec bddvec() {
-    assert(false, "bddvec not implemented for CstVarArrBase");
+    assert(false, "bddvec not implemented for CstIntBase");
   }
 
   void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for CstVarArrBase");
+    assert(false, "bddvec not implemented for CstIntBase");
   }
 
   void solveBefore(CstVecPrim other) {
@@ -2714,19 +2702,19 @@ abstract class CstVarArrBase(V, alias R, int N=0)
 
 }
 
-template CstVarArr(T, int I, int N=0)
+template CstInt(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias CstVarArr = CstVarArr!(typeof(T.tupleof[I]),
+  alias CstInt = CstInt!(typeof(T.tupleof[I]),
 				   getRandAttr!(T, I), N);
 }
 
 // Arrays (Multidimensional arrays as well)
-class CstVarArr(V, alias R, int N=0)
+class CstInt(V, alias R, int N=0)
   if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-    CstVarArrBase!(V, R, N)
+    CstIntBase!(V, R, N)
       {
 	alias RV = typeof(this);
-	CstVarArrLen!RV _arrLen;
+	CstIntLen!RV _arrLen;
 
 	alias RAND=R;
 
@@ -2743,7 +2731,7 @@ class CstVarArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
 	    }
 	  }
 
@@ -2752,7 +2740,7 @@ class CstVarArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
 	    }
 	  }
 	}
@@ -2760,7 +2748,7 @@ class CstVarArr(V, alias R, int N=0)
 	  this(string name, ref V var) {
 	    _name = name;
 	    _var = &var;
-	    _arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	    _arrLen = new CstIntLen!RV(name ~ ".len", this);
 	  }
 	}
 
@@ -2773,7 +2761,7 @@ class CstVarArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVarArrIterBase[] idxVars() {
+	CstIntIterBase[] idxVars() {
 	  return [];
 	}
 
@@ -2808,7 +2796,7 @@ class CstVarArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstVarArrIterBase l, uint n) {
+	RV unroll(CstIntIterBase l, uint n) {
 	  return this;
 	}
 
@@ -2987,11 +2975,11 @@ class CstVarArr(V, alias R, int N=0)
 	  return idx;
 	}
 
-	CstVarArrLen!RV length() {
+	CstIntLen!RV length() {
 	  return _arrLen;
 	}
 
-	CstVarArrLen!RV arrLen() {
+	CstIntLen!RV arrLen() {
 	  return _arrLen;
 	}
 
@@ -3010,19 +2998,19 @@ class CstVarArr(V, alias R, int N=0)
 
       }
 
-class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstVarArrBase!(V, R, N)
+class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstIntBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = CstVarArr!(V, R, N-1);
+      alias P = CstInt!(V, R, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
       int _index = 0;
 
       alias RV = typeof(this);
-      CstVarArrLen!RV _arrLen;
+      CstIntLen!RV _arrLen;
 
       alias RAND=R;
       
@@ -3030,14 +3018,14 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	_arrLen = new CstIntLen!RV(name ~ ".len", this);
       }
 
       this(string name, P parent, uint index) {
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	_arrLen = new CstIntLen!RV(name ~ ".len", this);
       }
 
       CstVecPrim[] preReqs() {
@@ -3053,7 +3041,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstVarArrIterBase[] idxVars() {
+      CstIntIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -3133,7 +3121,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RV unroll(CstVarArrIterBase l, uint n) {
+      RV unroll(CstIntIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -3330,11 +3318,11 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return idx;
       }
 
-      CstVarArrLen!RV length() {
+      CstIntLen!RV length() {
 	return _arrLen;
       }
 
-      CstVarArrLen!RV arrLen() {
+      CstIntLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -3361,11 +3349,8 @@ abstract class RndObjBase(V, alias R, int N)
 
   alias E = ElementTypeN!(V, N);
   alias RV = typeof(this);
-  // enum int ORDER = _esdl__ArrOrder!(T, I, N);
 
   string _name;
-
-  E            _val;
 
   ~this() {}
 
@@ -3426,7 +3411,7 @@ class RndObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
       
-      override CstVarArrIterBase[] idxVars() {
+      override CstIntIterBase[] idxVars() {
 	return [];
       }
 
@@ -3444,7 +3429,7 @@ class RndObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstVarArrIterBase l, uint n) {
+      override RV unroll(CstIntIterBase l, uint n) {
 	// idxVars is always empty
 	return this;
       }
@@ -3490,7 +3475,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstVarArrIterBase[] idxVars() {
+      override CstIntIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -3547,7 +3532,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unroll(CstVarArrIterBase l, uint n) {
+      override RV unroll(CstIntIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -3635,14 +3620,8 @@ abstract class RndObjArrBase(V, alias R, int N=0)
 
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
-  enum int ORDER = _esdl__ArrOrder!(V, N);
 
-  static if(ORDER > 1) {
-    alias EV = RndObjArr!(V, R, N+1);
-  }
-  else {
-    alias EV = RndObj!(V, R, N+1);
-  }
+  alias EV = RndObjArr!(V, R, N+1);
 
   EV[] _elems;
 
@@ -3759,7 +3738,7 @@ class RndObjArr(V, alias R, int N=0)
     RndObjArrBase!(V, R, N)
       {
 	alias RV = typeof(this);
-	CstVarArrLen!RV _arrLen;
+	CstIntLen!RV _arrLen;
 
 	alias RAND=R;
 
@@ -3776,7 +3755,7 @@ class RndObjArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
 	    }
 	  }
 
@@ -3785,7 +3764,7 @@ class RndObjArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
 	    }
 	  }
 	}
@@ -3793,7 +3772,7 @@ class RndObjArr(V, alias R, int N=0)
 	  this(string name, ref V var) {
 	    _name = name;
 	    _var = &var;
-	    _arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	    _arrLen = new CstIntLen!RV(name ~ ".len", this);
 	  }
 	}
 
@@ -3806,7 +3785,7 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVarArrIterBase[] idxVars() {
+	CstIntIterBase[] idxVars() {
 	  return [];
 	}
 
@@ -3841,7 +3820,7 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstVarArrIterBase l, uint n) {
+	RV unroll(CstIntIterBase l, uint n) {
 	  return this;
 	}
 
@@ -4020,11 +3999,11 @@ class RndObjArr(V, alias R, int N=0)
 	  return idx;
 	}
 
-	CstVarArrLen!RV length() {
+	CstIntLen!RV length() {
 	  return _arrLen;
 	}
 
-	CstVarArrLen!RV arrLen() {
+	CstIntLen!RV arrLen() {
 	  return _arrLen;
 	}
 
@@ -4055,7 +4034,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       int _index = 0;
 
       alias RV = typeof(this);
-      CstVarArrLen!RV _arrLen;
+      CstIntLen!RV _arrLen;
 
       alias RAND=R;
       
@@ -4063,14 +4042,14 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	_arrLen = new CstIntLen!RV(name ~ ".len", this);
       }
 
       this(string name, P parent, uint index) {
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new CstVarArrLen!RV(name ~ ".len", this);
+	_arrLen = new CstIntLen!RV(name ~ ".len", this);
       }
 
       CstVecPrim[] preReqs() {
@@ -4086,7 +4065,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstVarArrIterBase[] idxVars() {
+      CstIntIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -4166,7 +4145,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RV unroll(CstVarArrIterBase l, uint n) {
+      RV unroll(CstIntIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -4363,11 +4342,11 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return idx;
       }
 
-      CstVarArrLen!RV length() {
+      CstIntLen!RV length() {
 	return _arrLen;
       }
 
-      CstVarArrLen!RV arrLen() {
+      CstIntLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -4386,7 +4365,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
     }
 
-class CstVarArrIter(RV): CstVarArrIterBase, CstVecPrim
+class CstIntIter(RV): CstIntIterBase, CstVecPrim
 {
   RV _arrVar;
 
@@ -4400,7 +4379,7 @@ class CstVarArrIter(RV): CstVarArrIterBase, CstVecPrim
     _arrVar._arrLen.idxVar(this);
   }
 
-  override CstVarArrIterBase[] idxVars() {
+  override CstIntIterBase[] idxVars() {
     return _arrVar.idxVars() ~ this;
   }
 
@@ -4475,7 +4454,7 @@ class CstVarArrIter(RV): CstVarArrIterBase, CstVecPrim
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVecExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstVecExpr unroll(CstIntIterBase l, uint n) {
     // import std.stdio;
     // writeln("unrolling: ", arrVar.name());
     if(this !is l) {
@@ -4510,7 +4489,7 @@ class CstVarArrIter(RV): CstVarArrIterBase, CstVecPrim
 
 }
 
-class CstVarArrLen(RV): CstVecExpr, CstVecPrim
+class CstIntLen(RV): CstVecExpr, CstVecPrim
 {
 
   enum HAS_RAND_ATTRIB = (! __traits(isSame, RV.RAND, _esdl__norand));
@@ -4518,13 +4497,12 @@ class CstVarArrLen(RV): CstVecExpr, CstVecPrim
   // This bdd has the constraint on the max length of the array
   BDD _primBdd;
   
-  CstVarArrIter!RV _idxVar;
+  CstIntIter!RV _idxVar;
 
   RV _parent;
 
   BddVec _domvec;
   BddVec _valvec;
-  size_t _val;
   
   uint _domIndex = uint.max;
   CstStage _stage = null;
@@ -4552,7 +4530,7 @@ class CstVarArrLen(RV): CstVecExpr, CstVecPrim
     return _preReqs ~ _parent.preReqs();
   }
 
-  override CstVarArrIterBase[] idxVars() {
+  override CstIntIterBase[] idxVars() {
     return _parent.idxVars();
   }
 
@@ -4566,11 +4544,10 @@ class CstVarArrLen(RV): CstVecExpr, CstVecPrim
   
   private bool refreshNoRand(Buddy buddy) {
     auto val = _parent.getLen();
-    if ((! _valvec.isNull()) && _val == val) {
+    if (! _valvec.isNull()) {
       return false;
     }
     else {
-      _val = val;
       _valvec = buddy.buildVec(val);
       return true;
     }
@@ -4725,17 +4702,17 @@ class CstVarArrLen(RV): CstVecExpr, CstVecPrim
     _primBdd.reset();
   }
 
-  void idxVar(CstVarArrIter!RV var) {
+  void idxVar(CstIntIter!RV var) {
     _idxVar = var;
   }
 
-  CstVarArrIter!RV idxVar() {
+  CstIntIter!RV idxVar() {
     return _idxVar;
   }
 
-  CstVarArrIter!RV makeIdxVar() {
+  CstIntIter!RV makeIdxVar() {
     if(_idxVar is null) {
-      _idxVar = new CstVarArrIter!RV(_parent);
+      _idxVar = new CstIntIter!RV(_parent);
     }
     return _idxVar;
   }
@@ -4767,7 +4744,7 @@ class CstVarArrLen(RV): CstVecExpr, CstVecPrim
     
   }
 
-  override CstVarArrLen!RV unroll(CstVarArrIterBase l, uint n) {
+  override CstIntLen!RV unroll(CstIntIterBase l, uint n) {
     return _parent.unroll(l,n).arrLen();
   }
 
@@ -4835,7 +4812,7 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
     return [];
   }
 
-  override CstVarArrIterBase[] idxVars() {
+  override CstIntIterBase[] idxVars() {
     return [];
   }
 
@@ -4913,7 +4890,7 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
 
   void resetPrimeBdd() { }
 
-  override CstVecExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstVecExpr unroll(CstIntIterBase l, uint n) {
     return this;
   }
   
@@ -4947,8 +4924,8 @@ class CstVec2VecExpr: CstVecExpr
     }
     return reqs;
   }
-  CstVarArrIterBase[] _idxVars;
-  override CstVarArrIterBase[] idxVars() {
+  CstIntIterBase[] _idxVars;
+  override CstIntIterBase[] idxVars() {
     return _idxVars;
   }
 
@@ -5052,7 +5029,7 @@ class CstVec2VecExpr: CstVecExpr
     }
   }
 
-  override CstVec2VecExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstVec2VecExpr unroll(CstIntIterBase l, uint n) {
     bool idx = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5108,8 +5085,8 @@ class CstVecSliceExpr: CstVecExpr
     return reqs;
   }
   
-  CstVarArrIterBase[] _idxVars;
-  override CstVarArrIterBase[] idxVars() {
+  CstIntIterBase[] _idxVars;
+  override CstIntIterBase[] idxVars() {
     return _idxVars;
   }
 
@@ -5163,7 +5140,7 @@ class CstVecSliceExpr: CstVecExpr
     assert(false, "Can not evaluate a CstVecSliceExpr!");
   }
 
-  override CstVecSliceExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstVecSliceExpr unroll(CstIntIterBase l, uint n) {
     bool idx = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5220,11 +5197,11 @@ abstract class CstBddExpr
   string name();
 
   // In case this expr is unRolled, the _idxVars here would be empty
-  CstVarArrIterBase[] _idxVars;
+  CstIntIterBase[] _idxVars;
 
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  CstVarArrIterBase[] idxVars() {
+  CstIntIterBase[] idxVars() {
     return _idxVars;
   }
 
@@ -5251,10 +5228,10 @@ abstract class CstBddExpr
     return retval;
   }
 
-  CstBddExpr[] unroll(CstVarArrIterBase l) {
+  CstBddExpr[] unroll(CstIntIterBase l) {
     CstBddExpr[] retval;
     if(! l.isUnrollable()) {
-      assert(false, "CstVarArrIterBase is not unrollabe yet");
+      assert(false, "CstIntIterBase is not unrollabe yet");
     }
     auto max = l.maxVal();
     // import std.stdio;
@@ -5265,14 +5242,14 @@ abstract class CstBddExpr
     return retval;
   }
 
-  CstVarArrIterBase unrollableIdx() {
+  CstIntIterBase unrollableIdx() {
     foreach(idx; _idxVars) {
       if(idx.isUnrollable()) return idx;
     }
     return null;
   }
 
-  abstract CstBddExpr unroll(CstVarArrIterBase l, uint n);
+  abstract CstBddExpr unroll(CstIntIterBase l, uint n);
 
   abstract CstVecPrim[] getRndPrims();
 
@@ -5402,7 +5379,7 @@ class CstBdd2BddExpr: CstBddExpr
     return retval;
   }
 
-  override CstBdd2BddExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstBdd2BddExpr unroll(CstIntIterBase l, uint n) {
     bool idx = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5495,7 +5472,7 @@ class CstVec2BddExpr: CstBddExpr
     return retval;
   }
 
-  override CstVec2BddExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstVec2BddExpr unroll(CstIntIterBase l, uint n) {
     // import std.stdio;
     // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unrolled!");
     bool idx = false;
@@ -5558,7 +5535,7 @@ class CstBddConst: CstBddExpr
     return [];
   }
 
-  override CstBddConst unroll(CstVarArrIterBase l, uint n) {
+  override CstBddConst unroll(CstIntIterBase l, uint n) {
     return this;
   }
 
@@ -5594,7 +5571,7 @@ class CstNotBddExpr: CstBddExpr
     return (~ bdd);
   }
 
-  override CstNotBddExpr unroll(CstVarArrIterBase l, uint n) {
+  override CstNotBddExpr unroll(CstIntIterBase l, uint n) {
     bool shouldUnroll = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5653,7 +5630,7 @@ class CstBlock: CstBddExpr
     assert(false);
   }
 
-  override CstBlock unroll(CstVarArrIterBase l, uint n) {
+  override CstBlock unroll(CstIntIterBase l, uint n) {
     assert(false, "Can not unroll a CstBlock");
   }
 
