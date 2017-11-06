@@ -429,22 +429,22 @@ abstract class _esdl__SolverRoot {
       bits = solVecs[0];
     }
 
-    foreach(vec; stage._rndVars) {
-      ulong value;
-      enum WORDSIZE = 8 * value.sizeof;
+    foreach (vec; stage._rndVars) {
+      ulong v;
+      enum WORDSIZE = 8 * v.sizeof;
       auto bitvals = solveBDD.getIndices(vec.domIndex);
-      foreach(uint i, ref j; bitvals) {
+      foreach (uint i, ref j; bitvals) {
 	uint pos = i % WORDSIZE;
 	uint word = i / WORDSIZE;
-	if(bits.length == 0 || bits[j] == -1) {
-	  value = value + ((cast(size_t) _esdl__rGen.flip()) << pos);
+	if (bits.length == 0 || bits[j] == -1) {
+	  v = v + ((cast(size_t) _esdl__rGen.flip()) << pos);
 	}
-	else if(bits[j] == 1) {
-	  value = value + ((cast(ulong) 1) << pos);
+	else if (bits[j] == 1) {
+	  v = v + ((cast(ulong) 1) << pos);
 	}
-	if(pos == WORDSIZE - 1 || i == bitvals.length - 1) {
-	  vec.value(value, word);
-	  value = 0;
+	if (pos == WORDSIZE - 1 || i == bitvals.length - 1) {
+	  vec.value(v, word);
+	  v = 0;
 	}
       }
     }
@@ -1574,41 +1574,6 @@ enum CstBinBddOp: byte
       NEQ,
       }
 
-interface CstIntPrim
-{
-  abstract string name();
-  // abstract void doRandomize(_esdl__SolverRoot solver);
-  abstract bool isRand();
-  // abstract ulong value();
-
-  // abstract void value(ulong v, int word=0);
-  abstract CstStage stage();
-  abstract void stage(CstStage s);
-  abstract void _esdl__reset();
-  abstract bool isVarArr();
-  abstract uint domIndex();
-  abstract void domIndex(uint s);
-  abstract uint bitcount();
-  abstract bool signed();
-  abstract BddVec bddvec();
-  abstract void bddvec(BddVec b);
-  abstract CstVecPrim[] getPrimLens();
-  abstract void solveBefore(CstVecPrim other);
-  abstract void addPreRequisite(CstVecPrim other);
-
-  // this method is used for getting implicit constraints that are required for
-  // dynamic arrays and for enums
-  abstract BDD getPrimBdd(Buddy buddy);
-  abstract void resetPrimeBdd();
-  final bool solved() {
-    if(isRand()) {
-      return stage() !is null && stage().solved();
-    }
-    else {
-      return true;
-    }
-  }
-}
 
 interface CstVecPrim
 {
@@ -2900,12 +2865,6 @@ class CstInt(V, alias R, int N=0)
 	  if(idx.isConst()) {
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		   " have not been built");
-	    // if(idx.evaluate() >= _elems.length || idx.evaluate() < 0 || _elems is null) {
-	    // 	import std.stdio;
-	    // 	writeln(this.name(), ":", idx.evaluate());
-	    // }
-	    // import std.stdio;
-	    // writeln(idx.evaluate());
 	    return _elems[cast(size_t) idx.evaluate()];
 	  }
 	  else {
