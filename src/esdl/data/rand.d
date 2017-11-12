@@ -443,7 +443,7 @@ abstract class _esdl__SolverRoot {
 	  v = v + ((cast(ulong) 1) << pos);
 	}
 	if (pos == WORDSIZE - 1 || i == bitvals.length - 1) {
-	  vec.value(v, word);
+	  vec.collate(v, word);
 	  v = 0;
 	}
       }
@@ -573,12 +573,12 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstInt!(L, _esdl__norand, 0)(name, l);
+      return new CstVar!(L, _esdl__norand, 0)(name, l);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstInt!(L, _esdl__norand, 0)(name, l);
+      return new CstVar!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -590,12 +590,12 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstInt!(L, _esdl__norand, 0)(name, l);
+      return new CstVar!(L, _esdl__norand, 0)(name, l);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstInt!(L, _esdl__norand, 0)(name, l);
+      return new CstVar!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -1314,7 +1314,7 @@ class CstStage {
   // The Bdd expressions that apply to this stage
   CstBddExpr[] _bddExprs;
   // These are unresolved idx variables
-  CstIntIterBase[] _idxVars;
+  CstVarIterBase[] _idxVars;
   // These are the length variables that this stage will solve
   // CstVecPrim[] _preReqs;
   CstBddExpr[] _bddExprsWithUnmetReqs;
@@ -1582,7 +1582,7 @@ interface CstVecPrim
   abstract bool isRand();
   // abstract ulong value();
 
-  abstract void value(ulong v, int word=0);
+  abstract void collate(ulong v, int word=0);
   abstract CstStage stage();
   abstract void stage(CstStage s);
   abstract void _esdl__reset();
@@ -1629,7 +1629,7 @@ abstract class CstVecExpr
 
   // Array of indexes this expression has to resolve before it can be
   // convertted into an BDD
-  abstract CstIntIterBase[] idxVars();
+  abstract CstVarIterBase[] idxVars();
 
   // List of Array Variables
   abstract CstVecPrim[] preReqs();
@@ -1660,7 +1660,7 @@ abstract class CstVecExpr
 
   abstract long evaluate();
 
-  abstract CstVecExpr unroll(CstIntIterBase l, uint n);
+  abstract CstVecExpr unroll(CstVarIterBase l, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecExpr other)
   {
@@ -1917,10 +1917,10 @@ template _esdl__Rand(T, int I)
   alias RAND = getRandAttr!(T, I);
   static if(__traits(isSame, RAND, _esdl__norand)) {
     static if(isArray!L) {
-      alias _esdl__Rand = CstInt!(L, _esdl__norand, 0);
+      alias _esdl__Rand = CstVar!(L, _esdl__norand, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = CstInt!(L, _esdl__norand, 0);
+      alias _esdl__Rand = CstVar!(L, _esdl__norand, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
       alias _esdl__Rand = _esdl__SolverResolve!L;
@@ -1931,10 +1931,10 @@ template _esdl__Rand(T, int I)
   }
   else {
     static if(isArray!L) {
-      alias _esdl__Rand = CstInt!(L, RAND, 0);
+      alias _esdl__Rand = CstVar!(L, RAND, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
-      alias _esdl__Rand = CstInt!(L, RAND, 0);
+      alias _esdl__Rand = CstVar!(L, RAND, 0);
     }
     else static if(is(L == class) || is(L == struct)) {
       alias _esdl__Rand = _esdl__SolverResolve!L;
@@ -1972,7 +1972,7 @@ template _esdl__ArrOrder(T, int I, int N=0) {
 }
 
 // This class represents an unrolled Foreach idx at vec level
-abstract class CstIntIterBase: CstVecExpr
+abstract class CstVarIterBase: CstVecExpr
 {
   string _name;
 
@@ -1984,7 +1984,7 @@ abstract class CstIntIterBase: CstVecExpr
     _name = name;
   }
 
-  // _idxVar will point to the array this CstIntIterBase is tied to
+  // _idxVar will point to the array this CstVarIterBase is tied to
 
   uint maxVal();
 
@@ -2019,12 +2019,12 @@ abstract class CstIntIterBase: CstVecExpr
 }
 
 // Consolidated Proxy Class
-// template CstIntBase(T, int I, int N=0) {
-//   alias CstIntBase = CstIntBase!(typeof(T.tupleof[I]),
+// template CstVarBase(T, int I, int N=0) {
+//   alias CstVarBase = CstVarBase!(typeof(T.tupleof[I]),
 // 				     getRandAttr!(T, I), N);
 // }
 
-abstract class CstIntBase(V, alias R, int N)
+abstract class CstVarBase(V, alias R, int N)
   if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -2210,10 +2210,10 @@ abstract class CstIntBase(V, alias R, int N)
 
   void build() {}
 
-  abstract E getVal();
-
+  abstract E* getRef();
+  
   private bool refreshVal(Buddy buddy) {
-    auto val = getVal();
+    auto val = *(getRef());
     if (! _valvec.isNull) {
       return false;
     }
@@ -2264,15 +2264,15 @@ abstract class CstIntBase(V, alias R, int N)
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
-// for the elements this CstInt represents
-template CstInt(T, int I, int N=0)
+// for the elements this CstVar represents
+template CstVar(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias CstInt = CstInt!(typeof(T.tupleof[I]),
+  alias CstVar = CstVar!(typeof(T.tupleof[I]),
 			     getRandAttr!(T, I), N);
 }
 
-class CstInt(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstIntBase!(V, R, N)
+class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVarBase!(V, R, N)
     {
       import std.traits;
       import std.range;
@@ -2301,7 +2301,7 @@ class CstInt(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstIntIterBase[] idxVars() {
+      override CstVarIterBase[] idxVars() {
 	return [];
       }
 
@@ -2319,7 +2319,7 @@ class CstInt(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstIntIterBase l, uint n) {
+      override RV unroll(CstVarIterBase l, uint n) {
 	// idxVars is always empty
 	return this;
       }
@@ -2335,15 +2335,15 @@ class CstInt(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override E getVal() {
-	return *_var;
+      override E* getRef() {
+	return _var;
       }
 
       override ulong value() {
 	return cast(long) (*_var);
       }
 
-      void value(ulong v, int word = 0) {
+      void collate(ulong v, int word = 0) {
 	static if (HAS_RAND_ATTRIB) {
 	  static if(isIntegral!V) {
 	    if(word == 0) {
@@ -2371,14 +2371,14 @@ class CstInt(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
     }
 
-class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstIntBase!(V, R, N)
+class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVarBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = CstInt!(V, R, N-1);
+      alias P = CstVar!(V, R, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -2416,7 +2416,7 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstIntIterBase[] idxVars() {
+      override CstVarIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -2473,7 +2473,7 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unroll(CstIntIterBase l, uint n) {
+      override RV unroll(CstVarIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -2502,7 +2502,7 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if(stage is null) {
 	    E val;
 	    solver._esdl__getRandGen().gen(val);
-	    value(val);
+	    collate(val);
 	  }
 	}
 	else {
@@ -2510,35 +2510,37 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override E getVal() {
+      override E* getRef() {
 	if(_indexExpr) {
-	  return _parent.getVal(cast(size_t) _indexExpr.evaluate());
+	  return _parent.getRef(cast(size_t) _indexExpr.evaluate());
 	}
 	else {
-	  return _parent.getVal(this._index);
+	  return _parent.getRef(this._index);
 	}
       }
 
       override ulong value() {
 	if(_indexExpr) {
-	  return _parent.getVal(_indexExpr.evaluate());
+	  return *(_parent.getRef(_indexExpr.evaluate()));
 	}
 	else {
-	  return _parent.getVal(this._index);
+	  return *(_parent.getRef(this._index));
 	}
       }
 
-      void value(ulong v, int word = 0) {
+      void collate(ulong v, int word = 0) {
 	static if (HAS_RAND_ATTRIB) {
-	  // import std.stdio;
-	  // writeln("Setting value of ", this.name(), " to: ", v);
-	  // writeln("Parent length value of ", this.name(),
-	  // 	      " is: ", _parent.getLen());
-	  if(_indexExpr) {
-	    _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
+	  E* var = getRef();
+	  static if(isIntegral!E) {
+	    if(word == 0) {
+	      *var = cast(E) v;
+	    }
+	    else {
+	      assert(false, "word has to be 0 for integrals");
+	    }
 	  }
 	  else {
-	    return _parent.setVal(v, word, _index);
+	    (*var)._setNthWord(v, word);
 	  }
 	}
 	else {
@@ -2548,13 +2550,13 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
     }
 
 // Arrays (Multidimensional arrays as well)
-// template CstIntBase(T, int I, int N=0)
+// template CstVarBase(T, int I, int N=0)
 //   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstIntBase = CstIntBase!(typeof(T.tupleof[I]),
+//   alias CstVarBase = CstVarBase!(typeof(T.tupleof[I]),
 // 					   getRandAttr!(T, I), N);
 // }
 
-abstract class CstIntBase(V, alias R, int N=0)
+abstract class CstVarBase(V, alias R, int N=0)
   if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -2562,7 +2564,7 @@ abstract class CstIntBase(V, alias R, int N=0)
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
 
-  alias EV = CstInt!(V, R, N+1);
+  alias EV = CstVar!(V, R, N+1);
 
   EV[] _elems;
 
@@ -2608,43 +2610,43 @@ abstract class CstIntBase(V, alias R, int N=0)
   // }
 
   bool isRand() {
-    assert(false, "isRand not implemented for CstIntBase");
+    assert(false, "isRand not implemented for CstVarBase");
   }
 
   ulong value() {
-    assert(false, "value not implemented for CstIntBase");
+    assert(false, "value not implemented for CstVarBase");
   }
 
-  void value(ulong v, int word = 0) {
-    assert(false, "value not implemented for CstIntBase");
+  void collate(ulong v, int word = 0) {
+    assert(false, "value not implemented for CstVarBase");
   }
 
   void stage(CstStage s) {
-    assert(false, "stage not implemented for CstIntBase");
+    assert(false, "stage not implemented for CstVarBase");
   }
 
   uint domIndex() {
-    assert(false, "domIndex not implemented for CstIntBase");
+    assert(false, "domIndex not implemented for CstVarBase");
   }
 
   void domIndex(uint s) {
-    assert(false, "domIndex not implemented for CstIntBase");
+    assert(false, "domIndex not implemented for CstVarBase");
   }
 
   uint bitcount() {
-    assert(false, "bitcount not implemented for CstIntBase");
+    assert(false, "bitcount not implemented for CstVarBase");
   }
 
   bool signed() {
-    assert(false, "signed not implemented for CstIntBase");
+    assert(false, "signed not implemented for CstVarBase");
   }
 
   BddVec bddvec() {
-    assert(false, "bddvec not implemented for CstIntBase");
+    assert(false, "bddvec not implemented for CstVarBase");
   }
 
   void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for CstIntBase");
+    assert(false, "bddvec not implemented for CstVarBase");
   }
 
   void solveBefore(CstVecPrim other) {
@@ -2667,19 +2669,19 @@ abstract class CstIntBase(V, alias R, int N=0)
 
 }
 
-template CstInt(T, int I, int N=0)
+template CstVar(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias CstInt = CstInt!(typeof(T.tupleof[I]),
+  alias CstVar = CstVar!(typeof(T.tupleof[I]),
 				   getRandAttr!(T, I), N);
 }
 
 // Arrays (Multidimensional arrays as well)
-class CstInt(V, alias R, int N=0)
+class CstVar(V, alias R, int N=0)
   if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-    CstIntBase!(V, R, N)
+    CstVarBase!(V, R, N)
       {
 	alias RV = typeof(this);
-	CstIntLen!RV _arrLen;
+	CstVarLen!RV _arrLen;
 
 	alias RAND=R;
 
@@ -2696,7 +2698,7 @@ class CstInt(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
+	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	    }
 	  }
 
@@ -2705,7 +2707,7 @@ class CstInt(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
+	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	    }
 	  }
 	}
@@ -2713,7 +2715,7 @@ class CstInt(V, alias R, int N=0)
 	  this(string name, ref V var) {
 	    _name = name;
 	    _var = &var;
-	    _arrLen = new CstIntLen!RV(name ~ ".len", this);
+	    _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	  }
 	}
 
@@ -2726,7 +2728,7 @@ class CstInt(V, alias R, int N=0)
 	  }
 	}
 
-	CstIntIterBase[] idxVars() {
+	CstVarIterBase[] idxVars() {
 	  return [];
 	}
 
@@ -2761,50 +2763,23 @@ class CstInt(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstIntIterBase l, uint n) {
+	RV unroll(CstVarIterBase l, uint n) {
 	  return this;
 	}
 
-	static private auto getVal(A, N...)(ref A arr, N idx)
+	static private auto getRef(A, N...)(ref A arr, N idx)
 	  if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	    static if(N.length == 1) return arr[idx[0]];
+	    static if(N.length == 1) return &(arr[idx[0]]);
 	    else {
-	      return getVal(arr[idx[0]], idx[1..$]);
+	      return getRef(arr[idx[0]], idx[1..$]);
 	    }
 	  }
 
-	auto getVal(J...)(J idx) if(isIntegral!(J[0])) {
-	  return getVal(*_var, cast(size_t) idx);
+	auto getRef(J...)(J idx) if(isIntegral!(J[0])) {
+	  return getRef(*_var, cast(size_t) idx);
 	}
 
 	static if (HAS_RAND_ATTRIB) {
-	  static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
-	    if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	      static if(N.length == 1) {
-		alias AE = ElementType!A;
-		static if(isIntegral!AE) {
-		  if(word == 0) {
-		    arr[idx[0]] = cast(AE) v;
-		  }
-		  else {
-		    // static if(size_t.sizeof == 4) {
-		    //   assert(word == 1);	// 32 bit machine with long integral
-		    //   AE val = v;
-		    //   val = val << (8 * size_t.sizeof);
-		    //   arr[idx[0]] += val;
-		    // }
-		    // else {
-		    assert(false, "word has to be 0 for integrals");
-		  }
-		}
-		else {
-		  arr[idx[0]]._setNthWord(v, word);
-		}
-	      }
-	      else {
-		setVal(arr[idx[0]], v, word, idx[1..$]);
-	      }
-	    }
 
 	  static private void setLen(A, N...)(ref A arr, size_t v, N idx)
 	    if(isArray!A) {
@@ -2829,15 +2804,6 @@ class CstInt(V, alias R, int N=0)
 	  void setLen(N...)(size_t v, N idx) {
 	    // setLen(*_var, v, idx);
 	    assert(false, "Can not set value for VarVecArr");
-	  }
-	}
-
-	void setVal(J...)(ulong v, int word, J idx) if(isIntegral!(J[0])) {
-	  static if (HAS_RAND_ATTRIB) {
-	    setVal(*_var, v, word, idx);
-	  }
-	  else {
-	    assert(false);
 	  }
 	}
 
@@ -2934,11 +2900,11 @@ class CstInt(V, alias R, int N=0)
 	  return idx;
 	}
 
-	CstIntLen!RV length() {
+	CstVarLen!RV length() {
 	  return _arrLen;
 	}
 
-	CstIntLen!RV arrLen() {
+	CstVarLen!RV arrLen() {
 	  return _arrLen;
 	}
 
@@ -2957,19 +2923,19 @@ class CstInt(V, alias R, int N=0)
 
       }
 
-class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstIntBase!(V, R, N)
+class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstVarBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = CstInt!(V, R, N-1);
+      alias P = CstVar!(V, R, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
       int _index = 0;
 
       alias RV = typeof(this);
-      CstIntLen!RV _arrLen;
+      CstVarLen!RV _arrLen;
 
       alias RAND=R;
       
@@ -2977,14 +2943,14 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new CstIntLen!RV(name ~ ".len", this);
+	_arrLen = new CstVarLen!RV(name ~ ".len", this);
       }
 
       this(string name, P parent, uint index) {
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new CstIntLen!RV(name ~ ".len", this);
+	_arrLen = new CstVarLen!RV(name ~ ".len", this);
       }
 
       CstVecPrim[] preReqs() {
@@ -3000,7 +2966,7 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstIntIterBase[] idxVars() {
+      CstVarIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -3080,7 +3046,7 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RV unroll(CstIntIterBase l, uint n) {
+      RV unroll(CstVarIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -3137,64 +3103,21 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return _parent.getLen(_index, idx);
       }
 
-      static private auto getVal(A, N...)(ref A arr, N idx)
+      static private auto getRef(A, N...)(ref A arr, N idx)
 	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	static if(N.length == 1) return arr[idx[0]];
+	  static if(N.length == 1) return &(arr[idx[0]]);
 	else {
-	  return getVal(arr[idx[0]], idx[1..$]);
+	  return getRef(arr[idx[0]], idx[1..$]);
 	}
       }
 
-      auto getVal(N...)(N idx) if(isIntegral!(N[0])) {
+      auto getRef(N...)(N idx) if(isIntegral!(N[0])) {
 	if(_indexExpr) {
 	  assert(_indexExpr.isConst());
-	  return _parent.getVal(cast(size_t) _indexExpr.evaluate(), idx);
+	  return _parent.getRef(cast(size_t) _indexExpr.evaluate(), idx);
 	}
 	else {
-	  return _parent.getVal(this._index, idx);
-	}
-      }
-
-      static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
-	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	  static if(N.length == 1) {
-	    alias AE = ElementType!A;
-	    static if(isIntegral!AE) {
-	      if(word == 0) {
-		arr[idx[0]] = cast(AE) v;
-	      }
-	      else {
-		// static if(size_t.sizeof == 4) {
-		//   assert(word == 1);	// 32 bit machine with long integral
-		//   AE val = v;
-		//   val = val << (8 * size_t.sizeof);
-		//   arr[idx[0]] += val;
-		// }
-		// else {
-		assert(false, "word has to be 0 for integrals");
-	      }
-	    }
-	    else {
-	      arr[idx[0]]._setNthWord(v, word);
-	    }
-	  }
-	  else {
-	    setVal(arr[idx[0]], v, word, idx[1..$]);
-	  }
-	}
-
-      void setVal(N...)(ulong v, int word, N idx) if(isIntegral!(N[0])) {
-	static if (HAS_RAND_ATTRIB) {
-	  if(_indexExpr) {
-	    assert(_indexExpr.isConst());
-	    _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
-	  }
-	  else {
-	    _parent.setVal(v, word, _index, idx);
-	  }
-	}
-	else {
-	  assert(false);
+	  return _parent.getRef(this._index, idx);
 	}
       }
 
@@ -3277,11 +3200,11 @@ class CstInt(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return idx;
       }
 
-      CstIntLen!RV length() {
+      CstVarLen!RV length() {
 	return _arrLen;
       }
 
-      CstIntLen!RV arrLen() {
+      CstVarLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -3370,7 +3293,7 @@ class RndObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
       
-      override CstIntIterBase[] idxVars() {
+      override CstVarIterBase[] idxVars() {
 	return [];
       }
 
@@ -3388,17 +3311,17 @@ class RndObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstIntIterBase l, uint n) {
+      override RV unroll(CstVarIterBase l, uint n) {
 	// idxVars is always empty
 	return this;
       }
 
       void doRandomize(_esdl__SolverRoot solver) { }
 
-      override E getVal() {
-	return *_var;
+      override E* getRef() {
+	return _var;
       }
-    }
+}
 
 class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
   RndObjBase!(V, R, N)
@@ -3434,7 +3357,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstIntIterBase[] idxVars() {
+      override CstVarIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -3491,7 +3414,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unroll(CstIntIterBase l, uint n) {
+      override RV unroll(CstVarIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -3520,7 +3443,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if(stage is null) {
 	    E val;
 	    solver._esdl__getRandGen().gen(val);
-	    value(val);
+	    collate(val);
 	  }
 	}
 	else {
@@ -3528,35 +3451,37 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override E getVal() {
+      override E* getRef() {
 	if(_indexExpr) {
-	  return _parent.getVal(cast(size_t) _indexExpr.evaluate());
+	  return _parent.getRef(cast(size_t) _indexExpr.evaluate());
 	}
 	else {
-	  return _parent.getVal(this._index);
+	  return _parent.getRef(this._index);
 	}
       }
 
       ulong value() {
 	if(_indexExpr) {
-	  return _parent.getVal(_indexExpr.evaluate());
+	  return *(_parent.getRef(_indexExpr.evaluate()));
 	}
 	else {
-	  return _parent.getVal(this._index);
+	  return *(_parent.getRef(this._index));
 	}
       }
 
-      void value(ulong v, int word = 0) {
+      void collate(ulong v, int word = 0) {
 	static if (HAS_RAND_ATTRIB) {
-	  // import std.stdio;
-	  // writeln("Setting value of ", this.name(), " to: ", v);
-	  // writeln("Parent length value of ", this.name(),
-	  // 	      " is: ", _parent.getLen());
-	  if(_indexExpr) {
-	    _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate());
+	  E* var = getRef();
+	  static if(isIntegral!E) {
+	    if(word == 0) {
+	      *var = cast(E) v;
+	    }
+	    else {
+	      assert(false, "word has to be 0 for integrals");
+	    }
 	  }
 	  else {
-	    return _parent.setVal(v, word, _index);
+	    (*var)._setNthWord(v, word);
 	  }
 	}
 	else {
@@ -3633,7 +3558,7 @@ abstract class RndObjArrBase(V, alias R, int N=0)
     assert(false, "value not implemented for RndObjArrBase");
   }
 
-  void value(ulong v, int word = 0) {
+  void collate(ulong v, int word = 0) {
     assert(false, "value not implemented for RndObjArrBase");
   }
 
@@ -3697,7 +3622,7 @@ class RndObjArr(V, alias R, int N=0)
     RndObjArrBase!(V, R, N)
       {
 	alias RV = typeof(this);
-	CstIntLen!RV _arrLen;
+	CstVarLen!RV _arrLen;
 
 	alias RAND=R;
 
@@ -3714,7 +3639,7 @@ class RndObjArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
+	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	    }
 	  }
 
@@ -3723,7 +3648,7 @@ class RndObjArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstIntLen!RV(name ~ ".len", this);
+	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	    }
 	  }
 	}
@@ -3731,7 +3656,7 @@ class RndObjArr(V, alias R, int N=0)
 	  this(string name, ref V var) {
 	    _name = name;
 	    _var = &var;
-	    _arrLen = new CstIntLen!RV(name ~ ".len", this);
+	    _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	  }
 	}
 
@@ -3744,7 +3669,7 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstIntIterBase[] idxVars() {
+	CstVarIterBase[] idxVars() {
 	  return [];
 	}
 
@@ -3779,50 +3704,23 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstIntIterBase l, uint n) {
+	RV unroll(CstVarIterBase l, uint n) {
 	  return this;
 	}
 
-	static private auto getVal(A, N...)(ref A arr, N idx)
+	static private auto getRef(A, N...)(ref A arr, N idx)
 	  if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	    static if(N.length == 1) return arr[idx[0]];
+	    static if(N.length == 1) return &(arr[idx[0]]);
 	    else {
-	      return getVal(arr[idx[0]], idx[1..$]);
+	      return getRef(arr[idx[0]], idx[1..$]);
 	    }
 	  }
 
-	auto getVal(J...)(J idx) if(isIntegral!(J[0])) {
-	  return getVal(*_var, cast(size_t) idx);
+	auto getRef(J...)(J idx) if(isIntegral!(J[0])) {
+	  return getRef(*_var, cast(size_t) idx);
 	}
 
 	static if (HAS_RAND_ATTRIB) {
-	  static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
-	    if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	      static if(N.length == 1) {
-		alias AE = ElementType!A;
-		static if(isIntegral!AE) {
-		  if(word == 0) {
-		    arr[idx[0]] = cast(AE) v;
-		  }
-		  else {
-		    // static if(size_t.sizeof == 4) {
-		    //   assert(word == 1);	// 32 bit machine with long integral
-		    //   AE val = v;
-		    //   val = val << (8 * size_t.sizeof);
-		    //   arr[idx[0]] += val;
-		    // }
-		    // else {
-		    assert(false, "word has to be 0 for integrals");
-		  }
-		}
-		else {
-		  arr[idx[0]]._setNthWord(v, word);
-		}
-	      }
-	      else {
-		setVal(arr[idx[0]], v, word, idx[1..$]);
-	      }
-	    }
 
 	  static private void setLen(A, N...)(ref A arr, size_t v, N idx)
 	    if(isArray!A) {
@@ -3847,15 +3745,6 @@ class RndObjArr(V, alias R, int N=0)
 	  void setLen(N...)(size_t v, N idx) {
 	    // setLen(*_var, v, idx);
 	    assert(false, "Can not set value for VarVecArr");
-	  }
-	}
-
-	void setVal(J...)(ulong v, int word, J idx) if(isIntegral!(J[0])) {
-	  static if (HAS_RAND_ATTRIB) {
-	    setVal(*_var, v, word, idx);
-	  }
-	  else {
-	    assert(false);
 	  }
 	}
 
@@ -3958,11 +3847,11 @@ class RndObjArr(V, alias R, int N=0)
 	  return idx;
 	}
 
-	CstIntLen!RV length() {
+	CstVarLen!RV length() {
 	  return _arrLen;
 	}
 
-	CstIntLen!RV arrLen() {
+	CstVarLen!RV arrLen() {
 	  return _arrLen;
 	}
 
@@ -3993,7 +3882,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       int _index = 0;
 
       alias RV = typeof(this);
-      CstIntLen!RV _arrLen;
+      CstVarLen!RV _arrLen;
 
       alias RAND=R;
       
@@ -4001,14 +3890,14 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new CstIntLen!RV(name ~ ".len", this);
+	_arrLen = new CstVarLen!RV(name ~ ".len", this);
       }
 
       this(string name, P parent, uint index) {
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new CstIntLen!RV(name ~ ".len", this);
+	_arrLen = new CstVarLen!RV(name ~ ".len", this);
       }
 
       CstVecPrim[] preReqs() {
@@ -4024,7 +3913,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstIntIterBase[] idxVars() {
+      CstVarIterBase[] idxVars() {
 	if(_indexExpr) {
 	  return _parent.idxVars() ~ _indexExpr.idxVars();
 	}
@@ -4104,7 +3993,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RV unroll(CstIntIterBase l, uint n) {
+      RV unroll(CstVarIterBase l, uint n) {
 	bool idx = false;
 	foreach(var; idxVars()) {
 	  if(l is var) {
@@ -4161,64 +4050,21 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return _parent.getLen(_index, idx);
       }
 
-      static private auto getVal(A, N...)(ref A arr, N idx)
+      static private auto getRef(A, N...)(ref A arr, N idx)
 	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	static if(N.length == 1) return arr[idx[0]];
+	  static if(N.length == 1) return &(arr[idx[0]]);
 	else {
-	  return getVal(arr[idx[0]], idx[1..$]);
+	  return getRef(arr[idx[0]], idx[1..$]);
 	}
       }
 
-      auto getVal(N...)(N idx) if(isIntegral!(N[0])) {
+      auto getRef(N...)(N idx) if(isIntegral!(N[0])) {
 	if(_indexExpr) {
 	  assert(_indexExpr.isConst());
-	  return _parent.getVal(cast(size_t) _indexExpr.evaluate(), idx);
+	  return _parent.getRef(cast(size_t) _indexExpr.evaluate(), idx);
 	}
 	else {
-	  return _parent.getVal(this._index, idx);
-	}
-      }
-
-      static private void setVal(A, N...)(ref A arr, ulong v, int word, N idx)
-	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	  static if(N.length == 1) {
-	    alias AE = ElementType!A;
-	    static if(isIntegral!AE) {
-	      if(word == 0) {
-		arr[idx[0]] = cast(AE) v;
-	      }
-	      else {
-		// static if(size_t.sizeof == 4) {
-		//   assert(word == 1);	// 32 bit machine with long integral
-		//   AE val = v;
-		//   val = val << (8 * size_t.sizeof);
-		//   arr[idx[0]] += val;
-		// }
-		// else {
-		assert(false, "word has to be 0 for integrals");
-	      }
-	    }
-	    else {
-	      arr[idx[0]]._setNthWord(v, word);
-	    }
-	  }
-	  else {
-	    setVal(arr[idx[0]], v, word, idx[1..$]);
-	  }
-	}
-
-      void setVal(N...)(ulong v, int word, N idx) if(isIntegral!(N[0])) {
-	static if (HAS_RAND_ATTRIB) {
-	  if(_indexExpr) {
-	    assert(_indexExpr.isConst());
-	    _parent.setVal(v, word, cast(size_t) _indexExpr.evaluate(), idx);
-	  }
-	  else {
-	    _parent.setVal(v, word, _index, idx);
-	  }
-	}
-	else {
-	  assert(false);
+	  return _parent.getRef(this._index, idx);
 	}
       }
 
@@ -4301,11 +4147,11 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return idx;
       }
 
-      CstIntLen!RV length() {
+      CstVarLen!RV length() {
 	return _arrLen;
       }
 
-      CstIntLen!RV arrLen() {
+      CstVarLen!RV arrLen() {
 	return _arrLen;
       }
 
@@ -4324,7 +4170,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
     }
 
-class CstIntIter(RV): CstIntIterBase, CstVecPrim
+class CstVarIter(RV): CstVarIterBase, CstVecPrim
 {
   RV _arrVar;
 
@@ -4338,7 +4184,7 @@ class CstIntIter(RV): CstIntIterBase, CstVecPrim
     _arrVar._arrLen.idxVar(this);
   }
 
-  override CstIntIterBase[] idxVars() {
+  override CstVarIterBase[] idxVars() {
     return _arrVar.idxVars() ~ this;
   }
 
@@ -4375,11 +4221,11 @@ class CstIntIter(RV): CstIntIterBase, CstVecPrim
   ulong value() {
     return _arrVar.arrLen.value();
   }
-  void value(ulong v, int word = 0) {
+  void collate(ulong v, int word = 0) {
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _arrVar.name, " to ", v);
     assert(word == 0);
-    _arrVar.arrLen.value(v);
+    _arrVar.arrLen.collate(v);
   }
   void doRandomize(_esdl__SolverRoot solver) {
     assert(false);
@@ -4413,7 +4259,7 @@ class CstIntIter(RV): CstIntIterBase, CstVecPrim
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVecExpr unroll(CstIntIterBase l, uint n) {
+  override CstVecExpr unroll(CstVarIterBase l, uint n) {
     // import std.stdio;
     // writeln("unrolling: ", arrVar.name());
     if(this !is l) {
@@ -4448,7 +4294,7 @@ class CstIntIter(RV): CstIntIterBase, CstVecPrim
 
 }
 
-class CstIntLen(RV): CstVecExpr, CstVecPrim
+class CstVarLen(RV): CstVecExpr, CstVecPrim
 {
 
   enum HAS_RAND_ATTRIB = (! __traits(isSame, RV.RAND, _esdl__norand));
@@ -4456,7 +4302,7 @@ class CstIntLen(RV): CstVecExpr, CstVecPrim
   // This bdd has the constraint on the max length of the array
   BDD _primBdd;
   
-  CstIntIter!RV _idxVar;
+  CstVarIter!RV _idxVar;
 
   RV _parent;
 
@@ -4489,7 +4335,7 @@ class CstIntLen(RV): CstVecExpr, CstVecPrim
     return _preReqs ~ _parent.preReqs();
   }
 
-  override CstIntIterBase[] idxVars() {
+  override CstVarIterBase[] idxVars() {
     return _parent.idxVars();
   }
 
@@ -4661,17 +4507,17 @@ class CstIntLen(RV): CstVecExpr, CstVecPrim
     _primBdd.reset();
   }
 
-  void idxVar(CstIntIter!RV var) {
+  void idxVar(CstVarIter!RV var) {
     _idxVar = var;
   }
 
-  CstIntIter!RV idxVar() {
+  CstVarIter!RV idxVar() {
     return _idxVar;
   }
 
-  CstIntIter!RV makeIdxVar() {
+  CstVarIter!RV makeIdxVar() {
     if(_idxVar is null) {
-      _idxVar = new CstIntIter!RV(_parent);
+      _idxVar = new CstVarIter!RV(_parent);
     }
     return _idxVar;
   }
@@ -4692,7 +4538,7 @@ class CstIntLen(RV): CstVecExpr, CstVecPrim
     return _parent.getLen();
   }
 
-  void value(ulong v, int word = 0) {
+  void collate(ulong v, int word = 0) {
     assert(word == 0);
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
@@ -4703,7 +4549,7 @@ class CstIntLen(RV): CstVecExpr, CstVecPrim
     
   }
 
-  override CstIntLen!RV unroll(CstIntIterBase l, uint n) {
+  override CstVarLen!RV unroll(CstVarIterBase l, uint n) {
     return _parent.unroll(l,n).arrLen();
   }
 
@@ -4755,8 +4601,8 @@ class CstVal(T = int): ValVec!T
     return _valvec;
   }
 
-  const T getVal() {
-    return _val;
+  const(T)* getRef() {
+    return &_val;
   }
 
   override long evaluate() {
@@ -4771,7 +4617,7 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
     return [];
   }
 
-  override CstIntIterBase[] idxVars() {
+  override CstVarIterBase[] idxVars() {
     return [];
   }
 
@@ -4795,7 +4641,7 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
     assert(false);
   }
 
-  void value(ulong v, int word = 0) {
+  void collate(ulong v, int word = 0) {
     assert(false);
   }
 
@@ -4849,7 +4695,7 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
 
   void resetPrimeBdd() { }
 
-  override CstVecExpr unroll(CstIntIterBase l, uint n) {
+  override CstVecExpr unroll(CstVarIterBase l, uint n) {
     return this;
   }
   
@@ -4883,8 +4729,8 @@ class CstVec2VecExpr: CstVecExpr
     }
     return reqs;
   }
-  CstIntIterBase[] _idxVars;
-  override CstIntIterBase[] idxVars() {
+  CstVarIterBase[] _idxVars;
+  override CstVarIterBase[] idxVars() {
     return _idxVars;
   }
 
@@ -4988,7 +4834,7 @@ class CstVec2VecExpr: CstVecExpr
     }
   }
 
-  override CstVec2VecExpr unroll(CstIntIterBase l, uint n) {
+  override CstVec2VecExpr unroll(CstVarIterBase l, uint n) {
     bool idx = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5044,8 +4890,8 @@ class CstVecSliceExpr: CstVecExpr
     return reqs;
   }
   
-  CstIntIterBase[] _idxVars;
-  override CstIntIterBase[] idxVars() {
+  CstVarIterBase[] _idxVars;
+  override CstVarIterBase[] idxVars() {
     return _idxVars;
   }
 
@@ -5099,7 +4945,7 @@ class CstVecSliceExpr: CstVecExpr
     assert(false, "Can not evaluate a CstVecSliceExpr!");
   }
 
-  override CstVecSliceExpr unroll(CstIntIterBase l, uint n) {
+  override CstVecSliceExpr unroll(CstVarIterBase l, uint n) {
     bool idx = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5156,11 +5002,11 @@ abstract class CstBddExpr
   string name();
 
   // In case this expr is unRolled, the _idxVars here would be empty
-  CstIntIterBase[] _idxVars;
+  CstVarIterBase[] _idxVars;
 
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  CstIntIterBase[] idxVars() {
+  CstVarIterBase[] idxVars() {
     return _idxVars;
   }
 
@@ -5187,10 +5033,10 @@ abstract class CstBddExpr
     return retval;
   }
 
-  CstBddExpr[] unroll(CstIntIterBase l) {
+  CstBddExpr[] unroll(CstVarIterBase l) {
     CstBddExpr[] retval;
     if(! l.isUnrollable()) {
-      assert(false, "CstIntIterBase is not unrollabe yet");
+      assert(false, "CstVarIterBase is not unrollabe yet");
     }
     auto max = l.maxVal();
     // import std.stdio;
@@ -5201,14 +5047,14 @@ abstract class CstBddExpr
     return retval;
   }
 
-  CstIntIterBase unrollableIdx() {
+  CstVarIterBase unrollableIdx() {
     foreach(idx; _idxVars) {
       if(idx.isUnrollable()) return idx;
     }
     return null;
   }
 
-  abstract CstBddExpr unroll(CstIntIterBase l, uint n);
+  abstract CstBddExpr unroll(CstVarIterBase l, uint n);
 
   abstract CstVecPrim[] getRndPrims();
 
@@ -5338,7 +5184,7 @@ class CstBdd2BddExpr: CstBddExpr
     return retval;
   }
 
-  override CstBdd2BddExpr unroll(CstIntIterBase l, uint n) {
+  override CstBdd2BddExpr unroll(CstVarIterBase l, uint n) {
     bool idx = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5431,7 +5277,7 @@ class CstVec2BddExpr: CstBddExpr
     return retval;
   }
 
-  override CstVec2BddExpr unroll(CstIntIterBase l, uint n) {
+  override CstVec2BddExpr unroll(CstVarIterBase l, uint n) {
     // import std.stdio;
     // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unrolled!");
     bool idx = false;
@@ -5494,7 +5340,7 @@ class CstBddConst: CstBddExpr
     return [];
   }
 
-  override CstBddConst unroll(CstIntIterBase l, uint n) {
+  override CstBddConst unroll(CstVarIterBase l, uint n) {
     return this;
   }
 
@@ -5530,7 +5376,7 @@ class CstNotBddExpr: CstBddExpr
     return (~ bdd);
   }
 
-  override CstNotBddExpr unroll(CstIntIterBase l, uint n) {
+  override CstNotBddExpr unroll(CstVarIterBase l, uint n) {
     bool shouldUnroll = false;
     foreach(var; idxVars()) {
       if(l is var) {
@@ -5589,7 +5435,7 @@ class CstBlock: CstBddExpr
     assert(false);
   }
 
-  override CstBlock unroll(CstIntIterBase l, uint n) {
+  override CstBlock unroll(CstVarIterBase l, uint n) {
     assert(false, "Can not unroll a CstBlock");
   }
 
