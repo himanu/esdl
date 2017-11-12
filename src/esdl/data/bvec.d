@@ -390,7 +390,7 @@ private template VecParams(size_t SIZE, bool S=true) {
     }
   else {
     private enum StoreT UMASK =((cast(StoreT) 1) << MSWSIZE) - 1;
-    private enum StoreT SMASK = ~UMASK;
+    private enum StoreT SMASK = cast(StoreT) (~UMASK);
   }
 }
 

@@ -140,7 +140,7 @@ abstract class _esdl__SolverRoot {
   bool _esdl__cstWithChanged;
 
   // ParseTree parseList[];
-  CstVecPrim[] _esdl__randsList;
+  CstVarPrim[] _esdl__randsList;
   _esdl__RandGen _esdl__rGen;
 
   _esdl__RandGen _esdl__getRandGen() {
@@ -189,7 +189,7 @@ abstract class _esdl__SolverRoot {
   void doRandomize(_esdl__SolverRoot solver) {}
 
   // list of constraint statements to solve at a given stage
-  void addCstStage(CstVecPrim prim, ref CstStage[] cstStages) {
+  void addCstStage(CstVarPrim prim, ref CstStage[] cstStages) {
     if(prim !is null) {
       if(prim.stage() is null) {
 	CstStage stage = new CstStage();
@@ -660,10 +660,10 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
 
 
 auto _esdl__lth(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstVarExpr)) {
     return p.lth(q);
   }
-  else static if(is(Q: CstVecExpr)) {
+  else static if(is(Q: CstVarExpr)) {
     return q.gte(q);
   }
   else static if((isBitVector!P || isIntegral!P) &&
@@ -673,10 +673,10 @@ auto _esdl__lth(P, Q)(P p, Q q) {
 }
 
 auto _esdl__lte(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstVarExpr)) {
     return p.lte(q);
   }
-  else static if(is(Q: CstVecExpr)) {
+  else static if(is(Q: CstVarExpr)) {
     return q.gth(q);
   }
   else static if((isBitVector!P || isIntegral!P) &&
@@ -686,10 +686,10 @@ auto _esdl__lte(P, Q)(P p, Q q) {
 }
 
 auto _esdl__gth(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstVarExpr)) {
     return p.gth(q);
   }
-  else static if(is(Q: CstVecExpr)) {
+  else static if(is(Q: CstVarExpr)) {
     return q.lte(q);
   }
   else static if((isBitVector!P || isIntegral!P) &&
@@ -699,10 +699,10 @@ auto _esdl__gth(P, Q)(P p, Q q) {
 }
 
 auto _esdl__gte(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstVarExpr)) {
     return p.gte(q);
   }
-  else static if(is(Q: CstVecExpr)) {
+  else static if(is(Q: CstVarExpr)) {
     return q.lth(q);
   }
   else static if((isBitVector!P || isIntegral!P) &&
@@ -712,10 +712,10 @@ auto _esdl__gte(P, Q)(P p, Q q) {
 }
 
 auto _esdl__equ(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstVarExpr)) {
     return p.equ(q);
   }
-  else static if(is(Q: CstVecExpr)) {
+  else static if(is(Q: CstVarExpr)) {
     return q.equ(q);
   }
   else static if((isBitVector!P || isIntegral!P) &&
@@ -725,10 +725,10 @@ auto _esdl__equ(P, Q)(P p, Q q) {
 }
 
 auto _esdl__neq(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstVarExpr)) {
     return p.neq(q);
   }
-  else static if(is(Q: CstVecExpr)) {
+  else static if(is(Q: CstVarExpr)) {
     return q.neq(q);
   }
   else static if((isBitVector!P || isIntegral!P) &&
@@ -1310,13 +1310,13 @@ class CstStage {
   int _id = -1;
   // List of randomized variables associated with this stage. A
   // variable can be associated with only one stage
-  CstVecPrim[] _rndVars;
+  CstVarPrim[] _rndVars;
   // The Bdd expressions that apply to this stage
   CstBddExpr[] _bddExprs;
   // These are unresolved idx variables
   CstVarIterBase[] _idxVars;
   // These are the length variables that this stage will solve
-  // CstVecPrim[] _preReqs;
+  // CstVarPrim[] _preReqs;
   CstBddExpr[] _bddExprsWithUnmetReqs;
   
   BDD _solveBDD;
@@ -1575,7 +1575,7 @@ enum CstBinBddOp: byte
       }
 
 
-interface CstVecPrim
+interface CstVarPrim
 {
   abstract string name();
   // abstract void doRandomize(_esdl__SolverRoot solver);
@@ -1593,9 +1593,9 @@ interface CstVecPrim
   abstract bool signed();
   abstract BddVec bddvec();
   abstract void bddvec(BddVec b);
-  abstract CstVecPrim[] getPrimLens();
-  abstract void solveBefore(CstVecPrim other);
-  abstract void addPreRequisite(CstVecPrim other);
+  abstract CstVarPrim[] getPrimLens();
+  abstract void solveBefore(CstVarPrim other);
+  abstract void addPreRequisite(CstVarPrim other);
 
   // this method is used for getting implicit constraints that are required for
   // dynamic arrays and for enums
@@ -1614,7 +1614,7 @@ interface CstVecPrim
 
 // proxy class for reading in the constraints lazily
 // An abstract class that returns a vector on evaluation
-abstract class CstVecExpr
+abstract class CstVarExpr
 {
   // alias toBdd this;
 
@@ -1632,7 +1632,7 @@ abstract class CstVecExpr
   abstract CstVarIterBase[] idxVars();
 
   // List of Array Variables
-  abstract CstVecPrim[] preReqs();
+  abstract CstVarPrim[] preReqs();
 
   bool isConst() {
     return false;
@@ -1644,10 +1644,10 @@ abstract class CstVecExpr
   // given constraint statement together. And so, given a constraint
   // equation, we want to list out the elements that need to be
   // grouped together.
-  abstract CstVecPrim[] getRndPrims();
+  abstract CstVarPrim[] getRndPrims();
 
   // get all the primary bdd vectors that would be solved together
-  CstVecPrim[] getSolvables() {
+  CstVarPrim[] getSolvables() {
     return getRndPrims();
   }
   
@@ -1660,9 +1660,9 @@ abstract class CstVecExpr
 
   abstract long evaluate();
 
-  abstract CstVecExpr unroll(CstVarIterBase l, uint n);
+  abstract CstVarExpr unroll(CstVarIterBase l, uint n);
 
-  CstVec2VecExpr opBinary(string op)(CstVecExpr other)
+  CstVec2VecExpr opBinary(string op)(CstVarExpr other)
   {
     static if(op == "&") {
       return new CstVec2VecExpr(this, other, CstBinVecOp.AND);
@@ -1768,23 +1768,23 @@ abstract class CstVecExpr
 	}
       }
 
-  CstVecExpr opIndex(CstVecExpr index)
+  CstVarExpr opIndex(CstVarExpr index)
   {
     // assert(false, "Index operation defined only for Arrays");
     return new CstVecSliceExpr(this, index);
   }
 
-  CstVecExpr opSlice(P)(P p)
+  CstVarExpr opSlice(P)(P p)
     if(isIntegral!P || isBitVector!P) {
       return new CstVecSliceExpr(this, new CstVal!P(p));
     }
 
-  CstVecExpr opSlice(CstVecExpr lhs, CstVecExpr rhs)
+  CstVarExpr opSlice(CstVarExpr lhs, CstVarExpr rhs)
   {
     return new CstVecSliceExpr(this, lhs, rhs);
   }
 
-  CstVecExpr opSlice(P, Q)(P p, Q q)
+  CstVarExpr opSlice(P, Q)(P p, Q q)
     if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
       return new CstVecSliceExpr(this, new CstVal!P(p),
 				 new CstVal!Q(q));
@@ -1796,7 +1796,7 @@ abstract class CstVecExpr
       return this.lth(qq);
     }
 
-  CstVec2BddExpr lth(CstVecExpr other) {
+  CstVec2BddExpr lth(CstVarExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.LTH);
   }
 
@@ -1806,7 +1806,7 @@ abstract class CstVecExpr
       return this.lte(qq);
     }
 
-  CstVec2BddExpr lte(CstVecExpr other) {
+  CstVec2BddExpr lte(CstVarExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.LTE);
   }
 
@@ -1816,7 +1816,7 @@ abstract class CstVecExpr
       return this.gth(qq);
     }
 
-  CstVec2BddExpr gth(CstVecExpr other) {
+  CstVec2BddExpr gth(CstVarExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.GTH);
   }
 
@@ -1826,7 +1826,7 @@ abstract class CstVecExpr
       return this.gte(qq);
     }
 
-  CstVec2BddExpr gte(CstVecExpr other) {
+  CstVec2BddExpr gte(CstVarExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.GTE);
   }
 
@@ -1836,7 +1836,7 @@ abstract class CstVecExpr
       return this.equ(qq);
     }
 
-  CstVec2BddExpr equ(CstVecExpr other) {
+  CstVec2BddExpr equ(CstVarExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.EQU);
   }
 
@@ -1846,7 +1846,7 @@ abstract class CstVecExpr
       return this.neq(qq);
     }
 
-  CstVec2BddExpr neq(CstVecExpr other) {
+  CstVec2BddExpr neq(CstVarExpr other) {
     return new CstVec2BddExpr(this, other, CstBinBddOp.NEQ);
   }
 
@@ -1860,7 +1860,7 @@ abstract class CstVecExpr
     return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICIMP);
   }
 
-  // CstBdd2BddExpr implies(CstVecExpr other)
+  // CstBdd2BddExpr implies(CstVarExpr other)
   // {
   //   return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICIMP);
   // }
@@ -1869,7 +1869,7 @@ abstract class CstVecExpr
     return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICOR);
   }
 
-  // CstBdd2BddExpr logicOr(CstVecExpr other)
+  // CstBdd2BddExpr logicOr(CstVarExpr other)
   // {
   //   return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICOR);
   // }
@@ -1878,7 +1878,7 @@ abstract class CstVecExpr
     return new CstBdd2BddExpr(this.toBdd(), other, CstBddOp.LOGICAND);
   }
 
-  // CstBdd2BddExpr logicAnd(CstVecExpr other)
+  // CstBdd2BddExpr logicAnd(CstVarExpr other)
   // {
   //   return new CstBdd2BddExpr(this.toBdd(), other.toBdd(), CstBddOp.LOGICAND);
   // }
@@ -1972,7 +1972,7 @@ template _esdl__ArrOrder(T, int I, int N=0) {
 }
 
 // This class represents an unrolled Foreach idx at vec level
-abstract class CstVarIterBase: CstVecExpr
+abstract class CstVarIterBase: CstVarExpr
 {
   string _name;
 
@@ -1990,14 +1990,14 @@ abstract class CstVarIterBase: CstVecExpr
 
   // this will not return the arrVar since the length variable is
   // not getting constrained here
-  override CstVecPrim[] preReqs() {
+  override CstVarPrim[] preReqs() {
     return [];
   }
 
   bool isUnrollable();
 
   // get all the primary bdd vectors that constitute a given bdd expression
-  override CstVecPrim[] getRndPrims();
+  override CstVarPrim[] getRndPrims();
 
   // get the list of stages this expression should be avaluated in
   // override CstStage[] getStages() {
@@ -2025,7 +2025,7 @@ abstract class CstVarIterBase: CstVecExpr
 // }
 
 abstract class CstVarBase(V, alias R, int N)
-  if(_esdl__ArrOrder!(V, N) == 0): CstVecExpr, CstVecPrim
+  if(_esdl__ArrOrder!(V, N) == 0): CstVarExpr, CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -2039,7 +2039,7 @@ abstract class CstVarBase(V, alias R, int N)
   static if (HAS_RAND_ATTRIB) {
     mixin EnumConstraints!E;
 
-    CstVecPrim[] _preReqs;
+    CstVarPrim[] _preReqs;
     BddVec       _domvec;
 
     uint         _domIndex = uint.max;
@@ -2190,7 +2190,7 @@ abstract class CstVarBase(V, alias R, int N)
     return this.to!string();
   }
 
-  void solveBefore(CstVecPrim other) {
+  void solveBefore(CstVarPrim other) {
     static if (HAS_RAND_ATTRIB) {
       other.addPreRequisite(this);
     }
@@ -2199,7 +2199,7 @@ abstract class CstVarBase(V, alias R, int N)
     }
   }
 
-  void addPreRequisite(CstVecPrim prim) {
+  void addPreRequisite(CstVarPrim prim) {
     static if (HAS_RAND_ATTRIB) {
       _preReqs ~= prim;
     }
@@ -2292,7 +2292,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
       
-      override CstVecPrim[] preReqs() {
+      override CstVarPrim[] preReqs() {
 	static if (HAS_RAND_ATTRIB) {
 	  return _preReqs;
 	}
@@ -2305,7 +2305,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return [];
       }
 
-      override CstVecPrim[] getRndPrims() {
+      override CstVarPrim[] getRndPrims() {
 	static if (HAS_RAND_ATTRIB) {
 	  if(isRand) return [this];
 	  else return [];
@@ -2315,7 +2315,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstVecPrim[] getPrimLens() {
+      CstVarPrim[] getPrimLens() {
 	assert(false);
       }
 
@@ -2381,10 +2381,10 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       alias P = CstVar!(V, R, N-1);
       P _parent;
 
-      CstVecExpr _indexExpr = null;
+      CstVarExpr _indexExpr = null;
       int _index = 0;
 
-      this(string name, P parent, CstVecExpr indexExpr) {
+      this(string name, P parent, CstVarExpr indexExpr) {
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
@@ -2396,7 +2396,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_index = index;
       }
 
-      override CstVecPrim[] preReqs() {
+      override CstVarPrim[] preReqs() {
 	if(_indexExpr) {
 	  static if (HAS_RAND_ATTRIB) {
 	    return _preReqs ~ _parent.arrLen() ~
@@ -2425,7 +2425,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstVecPrim[] getPrimLens() {
+      CstVarPrim[] getPrimLens() {
 	assert(false);
       }
 
@@ -2439,8 +2439,8 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       // cases we need to list all the elements of the array that could
       // finally represent the given element that we are currently
       // dealing with.
-      override CstVecPrim[] getRndPrims() {
-	CstVecPrim[] prims;
+      override CstVarPrim[] getRndPrims() {
+	CstVarPrim[] prims;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
 	    // FIXME -- if the expression has been solved
@@ -2557,7 +2557,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 // }
 
 abstract class CstVarBase(V, alias R, int N=0)
-  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
+  if(_esdl__ArrOrder!(V, N) != 0): CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -2588,7 +2588,7 @@ abstract class CstVarBase(V, alias R, int N=0)
   }
 
   static if (HAS_RAND_ATTRIB) {
-    CstVecPrim[] _preReqs;
+    CstVarPrim[] _preReqs;
 
     void opIndexAssign(EV c, size_t idx) {
       _elems[idx] = c;
@@ -2605,7 +2605,7 @@ abstract class CstVarBase(V, alias R, int N=0)
 
   void resetPrimeBdd() { }
 
-  // override CstVec2VecExpr opIndex(CstVecExpr idx) {
+  // override CstVec2VecExpr opIndex(CstVarExpr idx) {
   //   return new CstVec2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
   // }
 
@@ -2649,7 +2649,7 @@ abstract class CstVarBase(V, alias R, int N=0)
     assert(false, "bddvec not implemented for CstVarBase");
   }
 
-  void solveBefore(CstVecPrim other) {
+  void solveBefore(CstVarPrim other) {
     static if (HAS_RAND_ATTRIB) {
       other.addPreRequisite(this);
     }
@@ -2658,7 +2658,7 @@ abstract class CstVarBase(V, alias R, int N=0)
     }
   }
 
-  void addPreRequisite(CstVecPrim prim) {
+  void addPreRequisite(CstVarPrim prim) {
     static if (HAS_RAND_ATTRIB) {
       _preReqs ~= prim;
     }
@@ -2719,7 +2719,7 @@ class CstVar(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecPrim[] preReqs() {
+	CstVarPrim[] preReqs() {
 	  static if (HAS_RAND_ATTRIB) {
 	    return _preReqs;		// N = 0 -- no _parent
 	  }
@@ -2739,9 +2739,9 @@ class CstVar(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecPrim[] getRndPrims() {
+	CstVarPrim[] getRndPrims() {
 	  static if (HAS_RAND_ATTRIB) {
-	    CstVecPrim[] prims;
+	    CstVarPrim[] prims;
 	    foreach(elem; _elems) {
 	      prims ~= elem;
 	    }
@@ -2752,9 +2752,9 @@ class CstVar(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecPrim[] getPrimLens() {
+	CstVarPrim[] getPrimLens() {
 	  static if (HAS_RAND_ATTRIB) {
-	    CstVecPrim[] prims;
+	    CstVarPrim[] prims;
 	    if(_arrLen.isRand) prims ~= _arrLen;
 	    return prims;
 	  }
@@ -2827,7 +2827,7 @@ class CstVar(V, alias R, int N=0)
 	  }
 	}
 
-	EV opIndex(CstVecExpr idx) {
+	EV opIndex(CstVarExpr idx) {
 	  if(idx.isConst()) {
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		   " have not been built");
@@ -2931,7 +2931,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       import esdl.data.bvec;
       alias P = CstVar!(V, R, N-1);
       P _parent;
-      CstVecExpr _indexExpr = null;
+      CstVarExpr _indexExpr = null;
       int _index = 0;
 
       alias RV = typeof(this);
@@ -2939,7 +2939,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
       alias RAND=R;
       
-      this(string name, P parent, CstVecExpr indexExpr) {
+      this(string name, P parent, CstVarExpr indexExpr) {
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
@@ -2953,8 +2953,8 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_arrLen = new CstVarLen!RV(name ~ ".len", this);
       }
 
-      CstVecPrim[] preReqs() {
-	CstVecPrim[] req;
+      CstVarPrim[] preReqs() {
+	CstVarPrim[] req;
 	static if (HAS_RAND_ATTRIB) {
 	  req = _preReqs ~ _parent.arrLen();
 	}
@@ -3000,8 +3000,8 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       // hierarchy index is not a constant, but an iterator or a
       // randomized epression. In that case, we shall have to return
       // more primary elements
-      CstVecPrim[] getRndPrims() {
-	CstVecPrim[] prims;
+      CstVarPrim[] getRndPrims() {
+	CstVarPrim[] prims;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
 	    prims = _indexExpr.getRndPrims();
@@ -3024,19 +3024,19 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return prims;
       }
 
-      CstVecPrim[] getPrimLens() {
+      CstVarPrim[] getPrimLens() {
 	// if(_index.idxVars.length is 0)
 	if(_indexExpr is null) {
 	  return [_parent[_index].arrLen()];
 	  // return prims ~ _parent[_index].getPrimLens();
 	}
 	if(_indexExpr.isConst()) {
-	  CstVecPrim[] prims;
+	  CstVarPrim[] prims;
 	  prims ~= _parent[cast(size_t) _indexExpr.evaluate()].getPrimLens();
 	  return prims;
 	}
 	else {
-	  CstVecPrim[] prims;
+	  CstVarPrim[] prims;
 	  foreach(p; getRndPrims()) {
 	    // import std.stdio;
 	    // writeln(_parent.name(), " ", p.name());
@@ -3121,7 +3121,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      EV opIndex(CstVecExpr idx) {
+      EV opIndex(CstVarExpr idx) {
 	if(idx.isConst()) {
 	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		 " have not been built");
@@ -3225,7 +3225,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
 
 abstract class RndObjBase(V, alias R, int N)
-  if(_esdl__ArrOrder!(V, N) == 0): CstVecPrim
+  if(_esdl__ArrOrder!(V, N) == 0): CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -3297,7 +3297,7 @@ class RndObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return [];
       }
 
-      override CstVecPrim[] getRndPrims() {
+      override CstVarPrim[] getRndPrims() {
 	static if (HAS_RAND_ATTRIB) {
 	  if(isRand) return [this];
 	  else return [];
@@ -3307,7 +3307,7 @@ class RndObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstVecPrim[] getPrimLens() {
+      CstVarPrim[] getPrimLens() {
 	assert(false);
       }
 
@@ -3333,10 +3333,10 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       alias P = RndObjArr!(V, R, N-1);
       P _parent;
 
-      CstVecExpr _indexExpr = null;
+      CstVarExpr _indexExpr = null;
       int _index = 0;
 
-      this(string name, P parent, CstVecExpr indexExpr) {
+      this(string name, P parent, CstVarExpr indexExpr) {
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
@@ -3348,7 +3348,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_index = index;
       }
 
-      override CstVecPrim[] preReqs() {
+      override CstVarPrim[] preReqs() {
 	if(_indexExpr) {
 	  return _parent.preReqs() ~ _indexExpr.preReqs();
 	}
@@ -3366,7 +3366,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstVecPrim[] getPrimLens() {
+      CstVarPrim[] getPrimLens() {
 	assert(false);
       }
 
@@ -3380,8 +3380,8 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       // cases we need to list all the elements of the array that could
       // finally represent the given element that we are currently
       // dealing with.
-      override CstVecPrim[] getRndPrims() {
-	CstVecPrim[] prims;
+      override CstVarPrim[] getRndPrims() {
+	CstVarPrim[] prims;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
 	    // FIXME -- if the expression has been solved
@@ -3498,7 +3498,7 @@ class RndObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 // }
 
 abstract class RndObjArrBase(V, alias R, int N=0)
-  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
+  if(_esdl__ArrOrder!(V, N) != 0): CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -3529,7 +3529,7 @@ abstract class RndObjArrBase(V, alias R, int N=0)
   }
 
   static if (HAS_RAND_ATTRIB) {
-    CstVecPrim[] _preReqs;
+    CstVarPrim[] _preReqs;
 
     void opIndexAssign(EV c, size_t idx) {
       _elems[idx] = c;
@@ -3546,7 +3546,7 @@ abstract class RndObjArrBase(V, alias R, int N=0)
 
   void resetPrimeBdd() { }
 
-  // override CstVec2VecExpr opIndex(CstVecExpr idx) {
+  // override CstVec2VecExpr opIndex(CstVarExpr idx) {
   //   return new CstVec2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
   // }
 
@@ -3590,7 +3590,7 @@ abstract class RndObjArrBase(V, alias R, int N=0)
     assert(false, "bddvec not implemented for RndObjArrBase");
   }
 
-  void solveBefore(CstVecPrim other) {
+  void solveBefore(CstVarPrim other) {
     static if (HAS_RAND_ATTRIB) {
       other.addPreRequisite(this);
     }
@@ -3599,7 +3599,7 @@ abstract class RndObjArrBase(V, alias R, int N=0)
     }
   }
 
-  void addPreRequisite(CstVecPrim prim) {
+  void addPreRequisite(CstVarPrim prim) {
     static if (HAS_RAND_ATTRIB) {
       _preReqs ~= prim;
     }
@@ -3660,7 +3660,7 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecPrim[] preReqs() {
+	CstVarPrim[] preReqs() {
 	  static if (HAS_RAND_ATTRIB) {
 	    return _preReqs;		// N = 0 -- no _parent
 	  }
@@ -3680,9 +3680,9 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecPrim[] getRndPrims() {
+	CstVarPrim[] getRndPrims() {
 	  static if (HAS_RAND_ATTRIB) {
-	    CstVecPrim[] prims;
+	    CstVarPrim[] prims;
 	    foreach(elem; _elems) {
 	      prims ~= elem;
 	    }
@@ -3693,9 +3693,9 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecPrim[] getPrimLens() {
+	CstVarPrim[] getPrimLens() {
 	  static if (HAS_RAND_ATTRIB) {
-	    CstVecPrim[] prims;
+	    CstVarPrim[] prims;
 	    if(_arrLen.isRand) prims ~= _arrLen;
 	    return prims;
 	  }
@@ -3768,7 +3768,7 @@ class RndObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	EV opIndex(CstVecExpr idx) {
+	EV opIndex(CstVarExpr idx) {
 	  if(idx.isConst()) {
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		   " have not been built");
@@ -3878,7 +3878,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       import esdl.data.bvec;
       alias P = RndObjArr!(V, R, N-1);
       P _parent;
-      CstVecExpr _indexExpr = null;
+      CstVarExpr _indexExpr = null;
       int _index = 0;
 
       alias RV = typeof(this);
@@ -3886,7 +3886,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
       alias RAND=R;
       
-      this(string name, P parent, CstVecExpr indexExpr) {
+      this(string name, P parent, CstVarExpr indexExpr) {
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
@@ -3900,8 +3900,8 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_arrLen = new CstVarLen!RV(name ~ ".len", this);
       }
 
-      CstVecPrim[] preReqs() {
-	CstVecPrim[] req;
+      CstVarPrim[] preReqs() {
+	CstVarPrim[] req;
 	static if (HAS_RAND_ATTRIB) {
 	  req = _preReqs ~ _parent.arrLen();
 	}
@@ -3947,8 +3947,8 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       // hierarchy index is not a constant, but an iterator or a
       // randomized epression. In that case, we shall have to return
       // more primary elements
-      CstVecPrim[] getRndPrims() {
-	CstVecPrim[] prims;
+      CstVarPrim[] getRndPrims() {
+	CstVarPrim[] prims;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
 	    prims = _indexExpr.getRndPrims();
@@ -3971,19 +3971,19 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return prims;
       }
 
-      CstVecPrim[] getPrimLens() {
+      CstVarPrim[] getPrimLens() {
 	// if(_index.idxVars.length is 0)
 	if(_indexExpr is null) {
 	  return [_parent[_index].arrLen()];
 	  // return prims ~ _parent[_index].getPrimLens();
 	}
 	if(_indexExpr.isConst()) {
-	  CstVecPrim[] prims;
+	  CstVarPrim[] prims;
 	  prims ~= _parent[cast(size_t) _indexExpr.evaluate()].getPrimLens();
 	  return prims;
 	}
 	else {
-	  CstVecPrim[] prims;
+	  CstVarPrim[] prims;
 	  foreach(p; getRndPrims()) {
 	    // import std.stdio;
 	    // writeln(_parent.name(), " ", p.name());
@@ -4068,7 +4068,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      EV opIndex(CstVecExpr idx) {
+      EV opIndex(CstVarExpr idx) {
 	if(idx.isConst()) {
 	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		 " have not been built");
@@ -4170,7 +4170,7 @@ class RndObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
     }
 
-class CstVarIter(RV): CstVarIterBase, CstVecPrim
+class CstVarIter(RV): CstVarIterBase, CstVarPrim
 {
   RV _arrVar;
 
@@ -4207,11 +4207,11 @@ class CstVarIter(RV): CstVarIterBase, CstVecPrim
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return []; // _arrVar.arrLen.getRndPrims();
   }
 
-  CstVecPrim[] getPrimLens() {
+  CstVarPrim[] getPrimLens() {
     return [_arrVar.arrLen];
   }
 
@@ -4259,7 +4259,7 @@ class CstVarIter(RV): CstVarIterBase, CstVecPrim
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVecExpr unroll(CstVarIterBase l, uint n) {
+  override CstVarExpr unroll(CstVarIterBase l, uint n) {
     // import std.stdio;
     // writeln("unrolling: ", arrVar.name());
     if(this !is l) {
@@ -4284,17 +4284,17 @@ class CstVarIter(RV): CstVarIterBase, CstVecPrim
 
   void resetPrimeBdd() { }
 
-  void solveBefore(CstVecPrim other) {
+  void solveBefore(CstVarPrim other) {
     assert(false);
   }
 
-  void addPreRequisite(CstVecPrim other) {
+  void addPreRequisite(CstVarPrim other) {
     assert(false);
   }
 
 }
 
-class CstVarLen(RV): CstVecExpr, CstVecPrim
+class CstVarLen(RV): CstVarExpr, CstVarPrim
 {
 
   enum HAS_RAND_ATTRIB = (! __traits(isSame, RV.RAND, _esdl__norand));
@@ -4314,7 +4314,7 @@ class CstVarLen(RV): CstVecExpr, CstVecPrim
 
   string _name;
 
-  CstVecPrim[] _preReqs;
+  CstVarPrim[] _preReqs;
 
   override string name() {
     return _name;
@@ -4331,7 +4331,7 @@ class CstVarLen(RV): CstVecExpr, CstVecPrim
     _primBdd.reset();
   }
 
-  override CstVecPrim[] preReqs() {
+  override CstVarPrim[] preReqs() {
     return _preReqs ~ _parent.preReqs();
   }
 
@@ -4339,11 +4339,11 @@ class CstVarLen(RV): CstVecExpr, CstVecPrim
     return _parent.idxVars();
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return _parent.getPrimLens();
   }
 
-  CstVecPrim[] getPrimLens() {
+  CstVarPrim[] getPrimLens() {
     assert(false);
   }
   
@@ -4561,11 +4561,11 @@ class CstVarLen(RV): CstVecExpr, CstVecPrim
     return false;
   }
 
-  void solveBefore(CstVecPrim other) {
+  void solveBefore(CstVarPrim other) {
     other.addPreRequisite(this);
   }
 
-  void addPreRequisite(CstVecPrim prim) {
+  void addPreRequisite(CstVarPrim prim) {
     _preReqs ~= prim;
   }
 }
@@ -4611,9 +4611,9 @@ class CstVal(T = int): ValVec!T
 
 }
 
-abstract class ValVec(T = int): CstVecExpr, CstVecPrim
+abstract class ValVec(T = int): CstVarExpr, CstVarPrim
 {
-  override CstVecPrim[] preReqs() {
+  override CstVarPrim[] preReqs() {
     return [];
   }
 
@@ -4625,11 +4625,11 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
     return true;
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return [];
   }
 
-  CstVecPrim[] getPrimLens() {
+  CstVarPrim[] getPrimLens() {
     assert(false);
   }
 
@@ -4695,15 +4695,15 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
 
   void resetPrimeBdd() { }
 
-  override CstVecExpr unroll(CstVarIterBase l, uint n) {
+  override CstVarExpr unroll(CstVarIterBase l, uint n) {
     return this;
   }
   
-  void solveBefore(CstVecPrim other) {
+  void solveBefore(CstVarPrim other) {
     assert(false);
   }
 
-  void addPreRequisite(CstVecPrim other) {
+  void addPreRequisite(CstVarPrim other) {
     assert(false);
   }
 
@@ -4711,17 +4711,17 @@ abstract class ValVec(T = int): CstVecExpr, CstVecPrim
 
 // This class would hold two(bin) vector nodes and produces a vector
 // only after processing those two nodes
-class CstVec2VecExpr: CstVecExpr
+class CstVec2VecExpr: CstVarExpr
 {
   import std.conv;
 
-  CstVecExpr _lhs;
-  CstVecExpr _rhs;
+  CstVarExpr _lhs;
+  CstVarExpr _rhs;
   CstBinVecOp _op;
 
-  // CstVecPrim[] _preReqs;
-  override CstVecPrim[] preReqs() {
-    CstVecPrim[] reqs;
+  // CstVarPrim[] _preReqs;
+  override CstVarPrim[] preReqs() {
+    CstVarPrim[] reqs;
     foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
       if(! req.solved()) {
 	reqs ~= req;
@@ -4738,12 +4738,12 @@ class CstVec2VecExpr: CstVecExpr
     return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return _lhs.getRndPrims() ~ _rhs.getRndPrims();
   }
 
-  override CstVecPrim[] getSolvables() {
-    CstVecPrim[] solvables;
+  override CstVarPrim[] getSolvables() {
+    CstVarPrim[] solvables;
     foreach(solvable; _lhs.getSolvables() ~ _rhs.getSolvables()) {
       if(! solvable.solved()) {
 	bool add = true;
@@ -4848,7 +4848,7 @@ class CstVec2VecExpr: CstVecExpr
     }
   }
 
-  this(CstVecExpr lhs, CstVecExpr rhs, CstBinVecOp op) {
+  this(CstVarExpr lhs, CstVarExpr rhs, CstBinVecOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
@@ -4864,15 +4864,15 @@ class CstVec2VecExpr: CstVecExpr
   }
 }
 
-class CstVecSliceExpr: CstVecExpr
+class CstVecSliceExpr: CstVarExpr
 {
-  CstVecExpr _vec;
-  CstVecExpr _lhs;
-  CstVecExpr _rhs;
+  CstVarExpr _vec;
+  CstVarExpr _lhs;
+  CstVarExpr _rhs;
 
-  // CstVecPrim[] _preReqs;
-  override CstVecPrim[] preReqs() {
-    CstVecPrim[] reqs;
+  // CstVarPrim[] _preReqs;
+  override CstVarPrim[] preReqs() {
+    CstVarPrim[] reqs;
     if(_rhs is null) {
       foreach(req; _vec.preReqs() ~ _lhs.preReqs()) {
 	if(! req.solved()) {
@@ -4899,7 +4899,7 @@ class CstVecSliceExpr: CstVecExpr
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     if(_rhs is null) {
       return _vec.getRndPrims() ~ _lhs.getRndPrims();
     }
@@ -4908,7 +4908,7 @@ class CstVecSliceExpr: CstVecExpr
     }
   }
 
-   override CstVecPrim[] getSolvables() {
+   override CstVarPrim[] getSolvables() {
     return _vec.getSolvables();
   }
 
@@ -4965,7 +4965,7 @@ class CstVecSliceExpr: CstVecExpr
     }
   }
 
-  this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs=null) {
+  this(CstVarExpr vec, CstVarExpr lhs, CstVarExpr rhs=null) {
     _vec = vec;
     _lhs = lhs;
     _rhs = rhs;
@@ -4984,7 +4984,7 @@ class CstVecSliceExpr: CstVecExpr
   }
 }
 
-class CstNotVecExpr: CstVecExpr
+class CstNotVecExpr: CstVarExpr
 {
   override string name() {
     return "CstNotVecExpr";
@@ -5010,9 +5010,9 @@ abstract class CstBddExpr
     return _idxVars;
   }
 
-  // CstVecPrim[] _preReqs;
+  // CstVarPrim[] _preReqs;
 
-  abstract CstVecPrim[] preReqs();
+  abstract CstVarPrim[] preReqs();
 
   // unroll recursively untill no unrolling is possible
   CstBddExpr[] unroll() {
@@ -5056,10 +5056,10 @@ abstract class CstBddExpr
 
   abstract CstBddExpr unroll(CstVarIterBase l, uint n);
 
-  abstract CstVecPrim[] getRndPrims();
+  abstract CstVarPrim[] getRndPrims();
 
-  final CstVecPrim[] getSolvables() {
-    CstVecPrim[] solvables;
+  final CstVarPrim[] getSolvables() {
+    CstVarPrim[] solvables;
     foreach(prim; getRndPrims()) {
       if(! prim.solved()) {
 	bool add = true;
@@ -5105,7 +5105,7 @@ abstract class CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
   }
 
-  CstBdd2BddExpr implies(CstVecExpr other)
+  CstBdd2BddExpr implies(CstVarExpr other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
   }
@@ -5115,7 +5115,7 @@ abstract class CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
   }
 
-  CstBdd2BddExpr logicOr(CstVecExpr other)
+  CstBdd2BddExpr logicOr(CstVarExpr other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
   }
@@ -5125,7 +5125,7 @@ abstract class CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
-  CstBdd2BddExpr logicAnd(CstVecExpr other)
+  CstBdd2BddExpr logicAnd(CstVarExpr other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
@@ -5151,8 +5151,8 @@ class CstBdd2BddExpr: CstBddExpr
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
 
-  override CstVecPrim[] preReqs() {
-    CstVecPrim[] reqs;
+  override CstVarPrim[] preReqs() {
+    CstVarPrim[] reqs;
     foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
       if(! req.solved()) {
 	reqs ~= req;
@@ -5161,7 +5161,7 @@ class CstBdd2BddExpr: CstBddExpr
     return reqs;
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return _lhs.getRndPrims() ~ _rhs.getRndPrims();
   }
 
@@ -5228,8 +5228,8 @@ class CstVec2BddExpr: CstBddExpr
 {
   import std.conv;
 
-  CstVecExpr _lhs;
-  CstVecExpr _rhs;
+  CstVarExpr _lhs;
+  CstVarExpr _rhs;
   CstBinBddOp _op;
 
   override string name() {
@@ -5242,8 +5242,8 @@ class CstVec2BddExpr: CstBddExpr
     return r || l;
   }
   
-  override CstVecPrim[] preReqs() {
-    CstVecPrim[] reqs;
+  override CstVarPrim[] preReqs() {
+    CstVarPrim[] reqs;
     foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
       if(! req.solved()) {
 	reqs ~= req;
@@ -5252,7 +5252,7 @@ class CstVec2BddExpr: CstBddExpr
     return reqs;
   }
     
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return _lhs.getRndPrims() ~ _rhs.getRndPrims();
   }
 
@@ -5295,7 +5295,7 @@ class CstVec2BddExpr: CstBddExpr
     }
   }
 
-  this(CstVecExpr lhs, CstVecExpr rhs, CstBinBddOp op) {
+  this(CstVarExpr lhs, CstVarExpr rhs, CstBinBddOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
@@ -5332,11 +5332,11 @@ class CstBddConst: CstBddExpr
     else return "FALSE";
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return [];
   }
 
-  override CstVecPrim[] preReqs() {
+  override CstVarPrim[] preReqs() {
     return [];
   }
 
@@ -5358,11 +5358,11 @@ class CstNotBddExpr: CstBddExpr
     return _expr.refresh(stage, buddy);
   }
   
-  override CstVecPrim[] preReqs() {
+  override CstVarPrim[] preReqs() {
     return _expr.preReqs();
   }
 
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     return _expr.getRndPrims();
   }
 
@@ -5419,7 +5419,7 @@ class CstBlock: CstBddExpr
     return name_;
   }
 
-  override CstVecPrim[] preReqs() {
+  override CstVarPrim[] preReqs() {
     assert(false);
   }
     
@@ -5431,7 +5431,7 @@ class CstBlock: CstBddExpr
     return _exprs.length == 0;
   }
   
-  override CstVecPrim[] getRndPrims() {
+  override CstVarPrim[] getRndPrims() {
     assert(false);
   }
 
@@ -5453,7 +5453,7 @@ class CstBlock: CstBddExpr
       _exprs ~= other;
     }
 
-  void opOpAssign(string op)(CstVecExpr other)
+  void opOpAssign(string op)(CstVarExpr other)
     if(op == "~") {
       _exprs ~= other.toBdd();
     }
