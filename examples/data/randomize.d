@@ -117,7 +117,7 @@ class Bar: Foo
 void main()
 {
   auto foo = new Bar;
-  for (size_t i=0; i!=4; ++i)
+  for (size_t i=0; i!=40; ++i)
     {
       foo.randomize();
       foo.display();
