@@ -4397,7 +4397,7 @@ interface Procedure: NamedComp
     }
   }
 
-  final void setRandState(Random state) {
+  final void setRandState(ref Random state) {
     synchronized(this) {
       getRandGen = state;
     }
