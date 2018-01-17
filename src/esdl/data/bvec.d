@@ -1612,9 +1612,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
     char [] toDecimalString() const {
       static if(STORESIZE == 1) {
-	import std.conv;
 	auto val = this._aval[0];
-	string str = val.to!string();
+	string str = format("%d", val);
 	char[] buff;
 	foreach(c; str) buff ~= c;
 	return buff;
