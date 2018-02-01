@@ -27,7 +27,9 @@ import std.traits: isArray, isIntegral;
 import std.random: Random, uniform;
 
 import esdl.sys.sched: stickToCpuCore, CPU_COUNT, CPU_COUNT_AFFINITY, CPU_LIST;
-import unstd.memory.weakref;
+version(WEAKREF) {
+  import unstd.memory.weakref;
+}
 
 alias void delegate() DelegateThunk;
 alias void function() FunctionThunk;
