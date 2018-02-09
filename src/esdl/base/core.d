@@ -4393,9 +4393,9 @@ interface Procedure: NamedComp
     }
   }
 
-  final Random getRandState() {
+  final void getRandState(ref Random rstate) {
     synchronized(this) {
-      return getRandGen.save();
+      rstate = getRandGen.save();
     }
   }
 
@@ -5632,11 +5632,15 @@ class BaseTask: Process
   this(void function() fn, int stage = 0, size_t sz = 0 ) {
     synchronized(this) {
       super(fn, stage);
-      if(sz is 0) {
+      size_t stackSize = sz;
+      if (stackSize is 0) {
+	stackSize = getRootEntity()._esdl__getProcStackSize();
+      }
+      if (stackSize is 0) {
 	_fiber = new Fiber(() {fn_wrap(fn);});
       }
       else {
-	_fiber = new Fiber(() {fn_wrap(fn);}, sz);
+	_fiber = new Fiber(() {fn_wrap(fn);}, stackSize);
       }
     }
   }
@@ -5644,11 +5648,15 @@ class BaseTask: Process
   this(void delegate() dg, int stage = 0, size_t sz = 0 ) {
     synchronized(this) {
       super(dg, stage);
-      if(sz is 0) {
+      size_t stackSize = sz;
+      if (stackSize is 0) {
+	stackSize = getRootEntity()._esdl__getProcStackSize();
+      }
+      if (stackSize is 0) {
 	_fiber = new Fiber(() {dg_wrap(dg);});
       }
       else {
-	_fiber = new Fiber(() {dg_wrap(dg);}, sz);
+	_fiber = new Fiber(() {dg_wrap(dg);}, stackSize);
       }
     }
   }
@@ -8654,6 +8662,29 @@ abstract class RootEntity: RootEntityIntf
       return count;
     }
   }
+
+  private size_t _procStackSize=0;
+  size_t _esdl__defProcStackSize() {
+    return 64*1024;		// SystemC defaults to 64KB
+  }
+  size_t _esdl__getProcStackSize() {
+    synchronized(this) {
+      if (_procStackSize !is 0) {
+	return _procStackSize;
+      }
+      else {
+	return _esdl__defProcStackSize();
+      }
+    }
+  }
+
+  void _esdl__configStack(size_t size) {
+    synchronized(this) {
+      _procStackSize = size;
+    }
+  }
+
+  alias configStack = _esdl__configStack;
 
   private uint _esdl__compCount;
   uint _esdl__genCompId() {
