@@ -12,18 +12,17 @@ import esdl.data.obdd;
 
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 import esdl.data.bvec: isBitVector;
-import std.algorithm : min, max;
 import esdl.data.bstr;
 
 import std.exception: enforce;
 import std.range: ElementType;
 
 /// C++ type static_cast for down-casting when you are sure
-private import std.typetuple: staticIndexOf;
-private import std.traits: BaseClassesTuple, ParameterTypeTuple; // required for staticIndexOf
+private import std.typetuple: staticIndexOf, TypeTuple;
+private import std.traits: BaseClassesTuple; // required for staticIndexOf
 
-static alias Unconst(T) = T;
-static alias Unconst(T: const U, U) = U;
+// static alias Unconst(T) = T;
+// static alias Unconst(T: const U, U) = U;
 
 enum _esdl__norand;
 
@@ -41,15 +40,8 @@ body {
  }
 
 template rand(N...) {
-  import std.typetuple;
   static if(CheckRandParams!N) {
-    struct rand
-    {
-      static if(N.length > 0 && N[0] != false) {
-	enum maxBounds = TypeTuple!N;
-	alias ElementRand = rand!(N[0..$-1]);
-      }
-    }
+    struct rand { }
   }
 }
 
@@ -66,7 +58,6 @@ template CheckRandParams(N...) {
 // Make sure that all the parameters are of type size_t
 template CheckRandParamsLoop(N...) {
   static if(N.length > 0) {
-    import std.traits;
     static if(!is(typeof(N[0]) == bool) && // do not confuse bool as size_t
 	      is(typeof(N[0]) : size_t)) {
       static assert(N[0] != 0, "Can not have arrays with size 0");
@@ -95,9 +86,9 @@ template _esdl__baseHasRandomization(T) {
       enum bool _esdl__baseHasRandomization = _esdl__baseHasRandomization!U;
     }
   }
-    else {
-      enum bool _esdl__baseHasRandomization = false;
-    }
+  else {
+    enum bool _esdl__baseHasRandomization = false;
+  }
 }
 
 template _esdl__SolverResolve(T) {
@@ -150,13 +141,13 @@ abstract class _esdl__SolverRoot {
   Buddy _esdl__buddy;
 
   BddDomain[] _domains;
-  // BddDomain* _domains;
 
+  // compositional parent -- not inheritance based
   _esdl__SolverRoot _parent = null;
 
   bool _esdl__isSeeded = false;
 
-  CstBlock _esdl__cstStatements;
+  CstBlock _esdl__cstEqns;
 
   CstStage[] savedStages;
   
@@ -169,7 +160,7 @@ abstract class _esdl__SolverRoot {
     _esdl__isSeeded = isSeeded;
     if(parent is null) {
       _esdl__buddy = new Buddy(400, 400);
-      _esdl__cstStatements = new CstBlock();
+      _esdl__cstEqns = new CstBlock();
     }
     else {
       _parent = parent;
@@ -183,150 +174,36 @@ abstract class _esdl__SolverRoot {
     _esdl__randsList.length  = 0;
   }
 
+  // These get overridden at compile time
   void _esdl__initRands() {}
   void _esdl__initCsts() {}
 
   void doRandomize(_esdl__SolverRoot solver) {}
 
-  // list of constraint statements to solve at a given stage
-  void addCstStage(CstVarPrim prim, ref CstStage[] cstStages) {
-    if(prim !is null) {
-      if(prim.stage() is null) {
-	CstStage stage = new CstStage();
-	cstStages ~= stage;
-	prim.stage = stage;
-	stage._rndVars ~= prim;
-	// cstStages[stage]._rndVars ~= prim;
-      }
-    }
-    else {
-      // FIXME -- just to check is Prim can ever be null
-      // If this assert statement is not hit, take out the
-      // if condition
-      assert(false, "Prim can be null -- kill this assert");
-    }
-  }
-
-  void addCstStage(CstBddExpr expr, ref CstStage[] cstStages) {
-    // uint stage = cast(uint) _cstStages.length;
-    auto vecs = expr.getSolvables();
-    CstStage stage;
-    foreach(ref vec; vecs) {
-      if(vec !is null) {
-	if(vec.stage() is null) {
-	  if(stage is null) {
-	    stage = new CstStage();
-	    cstStages ~= stage;
-	  }
-	  vec.stage = stage;
-	  stage._rndVars ~= vec;
-	  // cstStages[stage]._rndVars ~= vec;
-	}
-	if(stage !is vec.stage()) { // need to merge stages
-	  mergeCstStages(stage, vec.stage(), cstStages);
-	  stage = vec.stage();
-	}
-      }
-      else {
-	// FIXME -- just to check is vec can ever be null
-	// If this assert statement is not hit, take out the
-	// if condition
-	assert(false, "Vec can be null -- kill this assert");
-      }
-    }
-    stage._bddExprs ~= expr;
-    stage._bddExprsWithUnmetReqs = stage._bddExprs;
-  }
-
-  void mergeCstStages(CstStage fromStage, CstStage toStage,
-			     ref CstStage[] cstStages) {
-    if(fromStage is null) {
-      // fromStage has not been created yet
-      return;
-    }
-    foreach(ref vec; fromStage._rndVars) {
-      vec.stage = toStage;
-    }
-    toStage._rndVars ~= fromStage._rndVars;
-    toStage._bddExprs ~= fromStage._bddExprs;
-    if(cstStages[$-1] is fromStage) {
-      cstStages.length -= 1;
-    }
-    else {
-      fromStage._rndVars.length = 0;
-      fromStage._bddExprs.length = 0;
-    }
-  }
-
-  void initDomains(T)(T t) {
-    if(_domains.length is 0 || _esdl__cstWithChanged is true) {
-      uint domIndex = 0;
-      int[] domList;
-
-      _esdl__cstStatements._esdl__reset(); // start empty
-
-      // take all the constraints -- even if disabled
-      foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
-	_esdl__cstStatements ~= cst.getCstExpr();
-      }
-
-      if(_esdl__cstWith !is null) {
-	_esdl__cstStatements ~= _esdl__cstWith.getCstExpr();
-      }
-
-      foreach(stmt; _esdl__cstStatements._exprs) {
-        foreach(vec; stmt.getRndPrims()) {
-	  if(vec.domIndex != uint.max) {
-	    vec.domIndex = uint.max;
-	  }
-        }
-      }
-
-      foreach(stmt; _esdl__cstStatements._exprs) {
-	foreach(vec; stmt.getRndPrims()) {
-	  if(vec.domIndex == uint.max) {
-	    vec.domIndex = domIndex++;
-	    domList ~= vec.bitcount;
-	  }
-	}
-      }
-
-      _esdl__buddy.clearAllDomains();
-      _domains = _esdl__buddy.extDomain(domList);
-
-    }
-  }
-  
-  void solve(T)(T t) {
+  void solve() { // (T)(T t) {
     // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
 
-    initDomains(t);
+    if (_domains.length is 0 || _esdl__cstWithChanged is true) {
+      initDomains();
 
-    // _esdl__cstStatements._esdl__reset(); // start empty
+      // _esdl__cstEqns._esdl__reset(); // start empty
     
-    // take all the constraints -- even if disabled
-    if (_esdl__cstStatements.isEmpty()) {
+      // take all the constraints -- even if disabled
+      // if (_esdl__cstEqns.isEmpty()) {
       foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
-	_esdl__cstStatements ~= cst.getCstExpr();
+	_esdl__cstEqns ~= cst.getCstExpr();
       }
       if(_esdl__cstWith !is null) {
-	_esdl__cstStatements ~= _esdl__cstWith.getCstExpr();
+	_esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
       }
+      //}
+
     }
-
-    // First we solve the constraint groups that are responsible for
-    // setting the length of the rand!n dynamic arrays. After each
-    // such constraint group is resolved, we go back and expand the
-    // constraint expressions that depend on the IDX Variables.
-
-    // Once we have unrolled all the IDXS, we go ahead and resolve
-    // everything that remains.
-
 
     CstStage[] unsolvedStages;	// unresolved stages -- all
 
     int stageIdx=0;
-    CstBddExpr[] unsolvedExprs = _esdl__cstStatements._exprs;	// unstaged Expressions -- all
+    CstBddExpr[] unsolvedExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
     while(unsolvedExprs.length > 0 || unsolvedStages.length > 0) {
       CstBddExpr[] cstExprs = unsolvedExprs;
       unsolvedExprs.length = 0;
@@ -458,6 +335,99 @@ abstract class _esdl__SolverRoot {
     auto swapping = stage;
     stage = savedStages[stageIdx];
     savedStages[stageIdx++] = swapping;
+  }
+
+  // list of constraint eqns to solve at a given stage
+  // void addCstStage(CstVarPrim prim, ref CstStage[] cstStages) {
+  //   assert (prim !is null);
+  //   if(prim.stage() is null) {
+  //     CstStage stage = new CstStage();
+  //     cstStages ~= stage;
+  //     prim.stage = stage;
+  //     stage._rndVars ~= prim;
+  //     // cstStages[stage]._rndVars ~= prim;
+  //   }
+  // }
+
+  void addCstStage(CstBddExpr expr, ref CstStage[] cstStages) {
+    // uint stage = cast(uint) _cstStages.length;
+    auto vecs = expr.getSolvables();
+    CstStage stage;
+    foreach (ref vec; vecs) {
+      assert(vec !is null);
+      if (vec.stage() is null) {
+	if (stage is null) {
+	  stage = new CstStage();
+	  cstStages ~= stage;
+	}
+	vec.stage = stage;
+	stage._rndVars ~= vec;
+	// cstStages[stage]._rndVars ~= vec;
+      }
+      if (stage !is vec.stage()) { // need to merge stages
+	mergeCstStages(stage, vec.stage(), cstStages);
+	stage = vec.stage();
+      }
+    }
+    stage._bddExprs ~= expr;
+    stage._bddExprsWithUnmetReqs = stage._bddExprs;
+  }
+
+  void mergeCstStages(CstStage fromStage, CstStage toStage,
+		      ref CstStage[] cstStages) {
+    if(fromStage is null) {
+      // fromStage has not been created yet
+      return;
+    }
+    foreach(ref vec; fromStage._rndVars) {
+      vec.stage = toStage;
+    }
+    toStage._rndVars ~= fromStage._rndVars;
+    toStage._bddExprs ~= fromStage._bddExprs;
+    if(cstStages[$-1] is fromStage) {
+      cstStages.length -= 1;
+    }
+    else {
+      fromStage._rndVars.length = 0;
+      fromStage._bddExprs.length = 0;
+    }
+  }
+
+  void initDomains() { // (T)(T t) {
+    uint domIndex = 0;
+    int[] domList;
+
+    _esdl__cstEqns._esdl__reset(); // start empty
+
+    // take all the constraints -- even if disabled
+    foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
+      _esdl__cstEqns ~= cst.getCstExpr();
+    }
+
+    if(_esdl__cstWith !is null) {
+      _esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
+    }
+
+    foreach(stmt; _esdl__cstEqns._exprs) {
+      foreach(vec; stmt.getRndPrims()) {
+	if(vec.domIndex != uint.max) {
+	  vec.domIndex = uint.max;
+	}
+      }
+    }
+
+    foreach(stmt; _esdl__cstEqns._exprs) {
+      foreach(vec; stmt.getRndPrims()) {
+	if(vec.domIndex == uint.max) {
+	  vec.domIndex = domIndex++;
+	  domList ~= vec.bitcount;
+	}
+      }
+    }
+
+    _esdl__buddy.clearAllDomains();
+    _domains = _esdl__buddy.extDomain(domList);
+
   }
 
   void printSolution() {
@@ -1064,7 +1034,7 @@ template _esdl__CstInits(T, int I=0)
 // generates the code for rand structure inside the class object getting
 // randomized
 template _esdl__ListRands(T, int I=0) {
-  import std.typetuple;
+  // import std.typetuple;
   static if(I == T.tupleof.length) {
     alias _esdl__ListRands = TypeTuple!();
   }
@@ -1172,7 +1142,7 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
     rnd._esdl__reset();
   }
 
-  t._esdl__solverInst.solve(t);
+  t._esdl__solverInst.solve();
 
   t._esdl__solverInst.doRandomize(t._esdl__solverInst);
 
@@ -1305,7 +1275,7 @@ class _esdl__RandGen
     }
 }
 
-// Todo -- Make it a struct
+// ToDo -- create a freelist of CstStage's
 class CstStage {
   int _id = -1;
   // List of randomized variables associated with this stage. A
@@ -1641,7 +1611,7 @@ abstract class CstVarExpr
   // get all the primary bdd vectors that constitute a given bdd
   // expression
   // The idea here is that we need to solve all the bdd vectors of a
-  // given constraint statement together. And so, given a constraint
+  // given constraint equation together. And so, given a constraint
   // equation, we want to list out the elements that need to be
   // grouped together.
   abstract CstVarPrim[] getRndPrims();

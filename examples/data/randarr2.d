@@ -33,7 +33,7 @@ class Foo
 
 void main() {
   Foo foo = new Foo;
-  for (size_t i=0; i!=40; ++i) {
+  for (size_t i=0; i!=2; ++i) {
     foo.randomize();
     foo.display();
   }
