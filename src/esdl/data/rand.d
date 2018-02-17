@@ -200,6 +200,8 @@ abstract class _esdl__SolverRoot {
 
     }
 
+    CstValAllocator.mark();
+
     CstStage[] unsolvedStages;	// unresolved stages -- all
 
     int stageIdx=0;
@@ -254,6 +256,9 @@ abstract class _esdl__SolverRoot {
       }
       
     }
+
+    CstValAllocator.reset();
+    
   }
 
   void solveStage(CstStage stage, ref int stageIdx) {
@@ -263,7 +268,7 @@ abstract class _esdl__SolverRoot {
     foreach(vec; stage._rndVars) {
       if(vec.stage is stage) {
 	if(vec.bddvec.isNull()) {
-	  vec.bddvec = _esdl__buddy.buildVec(_domains[vec.domIndex], vec.signed);
+	  vec.bddvec.buildVec(_domains[vec.domIndex], vec.signed);
 	}
 	// BDD primBdd = vec.getPrimBdd(_esdl__buddy);
 	// if(! primBdd.isOne()) {
@@ -577,7 +582,7 @@ mixin template _esdl__SolverMixin()
     import std.traits: isIntegral;
     import esdl.data.bvec: isBitVector;
     static if (isIntegral!L || isBitVector!L) {
-      return new CstVal!L(l);
+      return CstVal!L.allocate(l);
     }
     else {
       return l;
@@ -1561,7 +1566,7 @@ interface CstVarPrim
   abstract void domIndex(uint s);
   abstract uint bitcount();
   abstract bool signed();
-  abstract BddVec bddvec();
+  abstract ref BddVec bddvec();
   abstract void bddvec(BddVec b);
   abstract CstVarPrim[] getPrimLens();
   abstract void solveBefore(CstVarPrim other);
@@ -1593,7 +1598,7 @@ abstract class CstVarExpr
   abstract string name();
   
   CstBddExpr toBdd() {
-    auto zero = new CstVal!int(0);
+    auto zero = CstVal!int.allocate(0);
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
@@ -1669,7 +1674,7 @@ abstract class CstVarExpr
   CstVec2VecExpr opBinary(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-  	auto qq = new CstVal!Q(q);
+  	auto qq = CstVal!Q.allocate(q);
   	static if(op == "&") {
   	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
   	}
@@ -1705,7 +1710,7 @@ abstract class CstVarExpr
   CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-	auto qq = new CstVal!Q(q);
+	auto qq = CstVal!Q.allocate(q);
 	static if(op == "&") {
 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
 	}
@@ -1746,7 +1751,7 @@ abstract class CstVarExpr
 
   CstVarExpr opSlice(P)(P p)
     if(isIntegral!P || isBitVector!P) {
-      return new CstVecSliceExpr(this, new CstVal!P(p));
+      return new CstVecSliceExpr(this, CstVal!P.allocate(p));
     }
 
   CstVarExpr opSlice(CstVarExpr lhs, CstVarExpr rhs)
@@ -1756,13 +1761,13 @@ abstract class CstVarExpr
 
   CstVarExpr opSlice(P, Q)(P p, Q q)
     if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
-      return new CstVecSliceExpr(this, new CstVal!P(p),
-				 new CstVal!Q(q));
+      return new CstVecSliceExpr(this, CstVal!P.allocate(p),
+				 CstVal!Q.allocate(q));
     }
 
   CstVec2BddExpr lth(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new CstVal!Q(q);
+      auto qq = CstVal!Q.allocate(q);
       return this.lth(qq);
     }
 
@@ -1772,7 +1777,7 @@ abstract class CstVarExpr
 
   CstVec2BddExpr lte(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new CstVal!Q(q);
+      auto qq = CstVal!Q.allocate(q);
       return this.lte(qq);
     }
 
@@ -1782,7 +1787,7 @@ abstract class CstVarExpr
 
   CstVec2BddExpr gth(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new CstVal!Q(q);
+      auto qq = CstVal!Q.allocate(q);
       return this.gth(qq);
     }
 
@@ -1792,7 +1797,7 @@ abstract class CstVarExpr
 
   CstVec2BddExpr gte(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new CstVal!Q(q);
+      auto qq = CstVal!Q.allocate(q);
       return this.gte(qq);
     }
 
@@ -1802,7 +1807,7 @@ abstract class CstVarExpr
 
   CstVec2BddExpr equ(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new CstVal!Q(q);
+      auto qq = CstVal!Q.allocate(q);
       return this.equ(qq);
     }
 
@@ -1812,7 +1817,7 @@ abstract class CstVarExpr
 
   CstVec2BddExpr neq(Q)(Q q)
     if(isBitVector!Q || isIntegral!Q) {
-      auto qq = new CstVal!Q(q);
+      auto qq = CstVal!Q.allocate(q);
       return this.neq(qq);
     }
 
@@ -2107,7 +2112,7 @@ abstract class CstVarBase(V, alias R, int N)
     }
   }
 
-  BddVec bddvec() {
+  ref BddVec bddvec() {
     static if (HAS_RAND_ATTRIB) {
       return _domvec;
     }
@@ -2188,7 +2193,7 @@ abstract class CstVarBase(V, alias R, int N)
       return false;
     }
     else {
-      _valvec = buddy.buildVec(val);
+      _valvec.buildVec(buddy, val);
       return true;
     }
   }
@@ -2611,7 +2616,7 @@ abstract class CstVarBase(V, alias R, int N=0)
     assert(false, "signed not implemented for CstVarBase");
   }
 
-  BddVec bddvec() {
+  ref BddVec bddvec() {
     assert(false, "bddvec not implemented for CstVarBase");
   }
 
@@ -3552,7 +3557,7 @@ abstract class RndObjArrBase(V, alias R, int N=0)
     assert(false, "signed not implemented for RndObjArrBase");
   }
 
-  BddVec bddvec() {
+  ref BddVec bddvec() {
     assert(false, "bddvec not implemented for RndObjArrBase");
   }
 
@@ -4219,7 +4224,7 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     // return _arrVar.arrLen.signed();
     return false;
   }
-  BddVec bddvec() {
+  ref BddVec bddvec() {
     return _arrVar.arrLen.bddvec();
   }
   void bddvec(BddVec b) {
@@ -4236,7 +4241,7 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
       return _arrVar.unroll(l,n).arrLen().makeIdxVar();
     }
     else {
-      return new CstVal!size_t(n);
+      return CstVal!size_t.allocate(n);
     }
   }
 
@@ -4323,7 +4328,7 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
       return false;
     }
     else {
-      _valvec = buddy.buildVec(val);
+      _valvec.buildVec(buddy, val);
       return true;
     }
   }
@@ -4438,7 +4443,7 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
     }
   }
 
-  BddVec bddvec() {
+  ref BddVec bddvec() {
     static if (HAS_RAND_ATTRIB) {
       return _domvec;
     }
@@ -4541,16 +4546,88 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
 }
 
 
+abstract class CstValAllocator {
+  static CstValAllocator[] allocators;
 
-class CstVal(T = int): ValVec!T
+  static void mark() {
+    foreach (allocator; allocators) {
+      allocator.markIndex();
+    }
+  }
+  
+  static void reset() {
+    foreach (allocator; allocators) {
+      allocator.resetIndex();
+    }
+  }
+  
+  abstract void resetIndex();
+
+  abstract void markIndex();
+}
+
+
+class CstVal(T = int): ValVec
 {
+  static class Allocator: CstValAllocator {
+    CstVal!T[] container;
+    uint _index = 0;
+
+    uint _mark;
+
+    override void markIndex() {
+      _mark = _index;
+    }
+
+    override void resetIndex() {
+      for (uint i = _mark; i != _index; ++i) {
+	container[i]._valvec.reset();
+      }
+      _index = _mark;
+      
+    }
+
+
+    CstVal!T allocate(T val) {
+      // return new CstVal!T(val);
+      if (_index >= container.length) {
+    	container.length += 1;
+    	container[$-1] = new CstVal!T(val);
+      }
+      
+      auto cstVal = container[_index];
+      cstVal._val = val;
+      _index++;
+      return cstVal;
+    }
+  }
+
   import std.conv;
 
-  immutable T _val;			// the value of the constant
+  static Allocator _allocator;
+
+  // static this() {
+  //   CstVal!T._allocator = new Allocator;
+  //   CstValAllocator.allocators ~= CstVal!T._allocator;
+  // }
+
+  T _val;			// the value of the constant
   BddVec _valvec;
 
   override string name() {
     return _val.to!string();
+  }
+
+  static CstVal!T allocate(T value) {
+    Allocator allocator = _allocator;
+    if (allocator is null) {
+      allocator = new Allocator;
+      _allocator = allocator;
+      CstValAllocator.allocators ~= allocator;
+    }
+
+    // return new CstVal!T(value);
+    return allocator.allocate(value);
   }
 
   this(T value) {
@@ -4559,7 +4636,7 @@ class CstVal(T = int): ValVec!T
 
   override bool refresh(CstStage stage, Buddy buddy) {
     if (_valvec.isNull()) {
-      _valvec = buddy.buildVec(_val);
+      _valvec.buildVec(buddy, _val);
       return true;
     }
     else {
@@ -4579,9 +4656,13 @@ class CstVal(T = int): ValVec!T
     return _val;
   }
 
+  bool signed() {
+    return isVarSigned!T;
+  }
+
 }
 
-abstract class ValVec(T = int): CstVarExpr, CstVarPrim
+abstract class ValVec: CstVarExpr, CstVarPrim
 {
   override CstVarPrim[] preReqs() {
     return [];
@@ -4639,11 +4720,7 @@ abstract class ValVec(T = int): CstVarExpr, CstVarPrim
     assert(false, "no bitcount for CstVal");
   }
 
-  bool signed() {
-    return isVarSigned!T;
-  }
-
-  BddVec bddvec() {
+  ref BddVec bddvec() {
     assert(false, "no bddvec for CstVal");
   }
 

@@ -501,6 +501,8 @@ struct BddDomain
 struct BddVec
 {
 
+  import esdl.data.bvec: isBitVector;
+  
   version(BDDVEC_DYNARR) {
     private BDD[] _bitvec;	// FIXBDD
   }
@@ -562,6 +564,158 @@ struct BddVec
 	bdd.reset();
       }
     }
+  }
+
+
+  void buildVec(T)(T val)
+  {
+    buildVec(getBuddy(), val);
+  }
+
+  void buildVec(T)(Buddy buddy, T val)
+  {
+    import std.traits;
+    
+    static if(isBitVector!T) {
+      _bitvec.length = T.SIZE;
+      _signed = T.ISSIGNED;
+    }
+    else static if(isIntegral!T) {
+      _bitvec.length = T.sizeof * 8;
+      _signed = isSigned!T;
+    }
+    else static if(is(T == bool)) {
+      _bitvec.length = 1;
+      _signed = false;
+    }
+    initialize(buddy, val);
+  }
+
+  void buildVec(BddDomain d, bool signed = false)
+  {
+    _signed = signed;
+    _bitvec.length = d.varNum();
+    initialize(getBuddy(), d);
+  }
+
+  void initialize(bool isTrue)
+  {
+    initialize(getBuddy(), isTrue);
+  }
+
+  void initialize(T)(T val) if (isBitVector!T) {
+    initialize(getBuddy(), val);
+  }
+
+  void initialize(T)(Buddy buddy, T val) if (isBitVector!T) {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if(val[i]) {
+	  _bitvec[i] = one(buddy);
+	}
+	else {
+	  _bitvec[i] = zero(buddy);
+	}
+      }
+  }
+  
+  void initialize(Buddy buddy, bool isTrue)
+  {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if(isTrue)
+	  _bitvec[i] = one(buddy);
+	else
+	  _bitvec[i] = zero(buddy);
+      }
+  }
+
+
+  void initialize(int val)
+  {
+    initialize(getBuddy(), val);
+  }
+
+  void initialize(Buddy buddy, int val)
+  {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if((val & 0x1) != 0)
+	  _bitvec[i] = one(buddy);
+	else
+	  _bitvec[i] = zero(buddy);
+	val >>= 1;
+      }
+  }
+  
+  void initialize(long val)
+  {
+    initialize(getBuddy(), val);
+  }
+
+  void initialize(Buddy buddy, long val)
+  {
+    for (size_t i=0; i!=length; ++i)
+      {
+	if((val & 0x1) != 0)
+	  _bitvec[i] = one(buddy);
+	else
+	  _bitvec[i] = zero(buddy);
+	val >>= 1;
+      }
+  }
+
+
+  void initialize(uint offset, uint step)
+  {
+    initialize(getBuddy(), offset, step);
+  }
+
+  void initialize(Buddy buddy, uint offset, uint step)
+  {
+    for(int n=0 ; n < size ; n++) {
+      this.bitvec[n] = buddy.ithVar(offset+n*step);
+    }
+  }
+
+  void initialize(BddDomain d)
+  {
+    initialize(d.get_ivars());
+  }
+
+  void initialize(Buddy buddy, BddDomain d)
+  {
+    initialize(buddy, d.get_ivars());
+  }
+
+  void initialize(int[] var)
+  {
+    for(int n = 0 ; n < size ; n++)
+      this.bitvec[n] = getBuddy.ithVar(var[n]);
+  }
+
+  void initialize(Buddy buddy, int[] var)
+  {
+    for(int n = 0 ; n < size ; n++)
+      this.bitvec[n] = buddy.ithVar(var[n]);
+  }
+
+  BddVec dup()
+  {
+    return this.copy();
+  }
+
+  BddVec copy()
+  {
+    BddVec dst = BddVec(size, false);
+    dst._signed = this._signed;
+
+    // dst.bitvec[0..$] = this.bitvec[0..$];
+
+    for(int n = 0; n < size; n++)
+      dst.bitvec[n] = this.bitvec[n].dup();
+
+    return dst;
   }
 
   final BddVec opBinary(string op)(long rhs)
@@ -679,78 +833,6 @@ struct BddVec
     return length;
   }
   
-  void initialize(bool isTrue)
-  {
-    for (size_t i=0; i!=length; ++i)
-      {
-	if(isTrue)
-	  _bitvec[i] = one();
-	else
-	  _bitvec[i] = zero();
-      }
-  }
-
-
-  void initialize(int val)
-  {
-    for (size_t i=0; i!=length; ++i)
-      {
-	if((val & 0x1) != 0)
-	  _bitvec[i] = one();
-	else
-	  _bitvec[i] = zero();
-	val >>= 1;
-      }
-  }
-
-  void initialize(long val)
-  {
-    for (size_t i=0; i!=length; ++i)
-      {
-	if((val & 0x1) != 0)
-	  _bitvec[i] = one();
-	else
-	  _bitvec[i] = zero();
-	val >>= 1;
-      }
-  }
-
-
-  void initialize(uint offset, uint step)
-  {
-    for(int n=0 ; n < size ; n++)
-      this.bitvec[n] = getBuddy.ithVar(offset+n*step);
-  }
-
-  void initialize(BddDomain d)
-  {
-    initialize(d.get_ivars());
-  }
-
-  void initialize(int[] var)
-  {
-    for(int n = 0 ; n < size ; n++)
-      this.bitvec[n] = getBuddy.ithVar(var[n]);
-  }
-
-  BddVec dup()
-  {
-    return this.copy();
-  }
-
-  BddVec copy()
-  {
-    BddVec dst = BddVec(size, false);
-    dst._signed = this._signed;
-
-    // dst.bitvec[0..$] = this.bitvec[0..$];
-
-    for(int n = 0; n < size; n++)
-      dst.bitvec[n] = this.bitvec[n].dup();
-
-    return dst;
-  }
-
   BddVec coerceSign()
   {
     if(signed) return copy();
@@ -1219,8 +1301,16 @@ struct BddVec
     return 0;
   }
 
+  BDD zero(Buddy buddy) {
+    return buddy.zero();
+  }
+
   BDD zero() {
     return getBuddy.zero();
+  }
+
+  BDD one(Buddy buddy) {
+    return buddy.one();
   }
 
   BDD one() {
