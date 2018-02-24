@@ -7,7 +7,7 @@
 // Authors:   Puneet Goel <puneet@coverify.com>
 // Credits:   Ported from the Buddy C++ library by Jorn Lind-Nielsen
 
-module esdl.data.obdd;
+module esdl.data.rand.obdd;
 
 import std.stdio;
 import std.datetime;

@@ -6,7 +6,6 @@
 
 import std.stdio;
 import esdl.data.rand;
-import esdl.data.obdd;
 import esdl.data.bvec;
 
 int FFFF = 20;

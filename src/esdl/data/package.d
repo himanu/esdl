@@ -10,6 +10,4 @@ public import esdl.data.time;
 version(ESDL_NORAND) {}
  else {
    public import esdl.data.rand;
-   public import esdl.data.obdd;
-   public import esdl.data.cstx;
  }
