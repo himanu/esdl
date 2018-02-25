@@ -1,11 +1,11 @@
-module esdl.data.rand.expr;
+module esdl.rand.expr;
 
 import esdl.data.bvec: isBitVector;
 import esdl.data.bstr;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-import esdl.data.rand.obdd;
-import esdl.data.rand.base: _esdl__RandGen, _esdl__norand,
+import esdl.rand.obdd;
+import esdl.rand.base: _esdl__RandGen, _esdl__norand,
   getRandAttr, getRandAttrN;
 
 

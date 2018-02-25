@@ -46,7 +46,7 @@
 // replace the identifiers as required. We shall use two dynamic
 // arrays to help achieve that. TBD
 
-module esdl.data.rand.cstx;
+module esdl.rand.cstx;
 import std.conv;
 
 struct CstParser {

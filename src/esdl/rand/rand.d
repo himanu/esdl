@@ -6,9 +6,9 @@
 //            http://www.boost.org/LICENSE_1_0.txt)
 // Authors:   Puneet Goel <puneet@coverify.com>
 
-module esdl.data.rand.rand;
+module esdl.rand.rand;
 
-import esdl.data.rand.obdd;
+import esdl.rand.obdd;
 
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 import esdl.data.bvec: isBitVector;
@@ -17,9 +17,9 @@ import esdl.data.bstr;
 import std.exception: enforce;
 import std.range: ElementType;
 
-import esdl.data.rand.base;
-import esdl.data.rand.expr: CstVarExpr;
-import esdl.data.rand.solver;
+import esdl.rand.base;
+import esdl.rand.expr: CstVarExpr;
+import esdl.rand.solver;
 
 /// C++ type static_cast for down-casting when you are sure
 private import std.typetuple: staticIndexOf, TypeTuple;
@@ -628,7 +628,7 @@ mixin template Randomization()
       _esdl__randomize(this, withCst);
     }
     void useThisBuddy() {
-      import esdl.data.rand.obdd;
+      import esdl.rand.obdd;
       useBuddy(_esdl__solverInst._esdl__buddy);
     }
     void seedRandom(int seed) {

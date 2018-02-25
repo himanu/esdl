@@ -5,7 +5,8 @@
 // Authors:   Puneet Goel <puneet@coverify.com>
 
 import std.stdio;
-import esdl.data.rand;
+import esdl.rand;
+import esdl.data.obdd;
 import esdl.data.bvec;
 
 int FFFF = 20;
@@ -13,31 +14,20 @@ int FFFF = 20;
 class Foo
 {
   mixin Randomization;
-  @rand!(4,4,4,4,4,4) byte[][][][][][] foo;
+  @rand!(4,4,4) byte[][][] foo;
   void display() {
     import std.stdio;
     writeln(foo);
   }
-
-  Constraint! q{
-    foo.length >= 1;
+  Constraint!q{
+    foo.length > 1;
     foreach(ff; foo) {
-      // the 1st dimension
-      ff.length >= 1;
-      foreach(f; ff) {
-	f.length >= 1;
-	foreach(a; f) {
-	  a.length == 2;
-	  foreach(b; a) {
-	    b.length >= 2;
-	    foreach(j, c; b) {
-	      c.length >= 2;
-	      foreach(i, d; c) // {
-		d == (j + 4) * i;
-		// d < 8;
-	      // }
-	    }
-	  }
+      ff.length > 1;
+      foreach(j, f; ff) {
+	f.length > 2;
+	foreach(i, a; f) {
+	  a == j + i;
+	  // a < 10;
 	}
       }
     }
@@ -46,7 +36,7 @@ class Foo
 
 void main() {
   Foo foo = new Foo;
-  for (size_t i=0; i!=400; ++i) {
+  for (size_t i=0; i!=40; ++i) {
     foo.randomize();
     foo.display();
   }

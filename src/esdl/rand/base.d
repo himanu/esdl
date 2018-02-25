@@ -1,4 +1,4 @@
-module esdl.data.rand.base;
+module esdl.rand.base;
 
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;

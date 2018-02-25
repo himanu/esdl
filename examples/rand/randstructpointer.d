@@ -1,4 +1,4 @@
-import esdl.data.rand;
+import esdl.rand;
 
 import randstructfoo;
 

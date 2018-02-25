@@ -1,9 +1,9 @@
-module esdl.data.rand.solver;
-import esdl.data.rand.obdd;
+module esdl.rand.solver;
+import esdl.rand.obdd;
 
-import esdl.data.rand.expr: CstBlock, CstVarPrim, CstStage,
+import esdl.rand.expr: CstBlock, CstVarPrim, CstStage,
   CstBddExpr, CstValAllocator;
-import esdl.data.rand.base;
+import esdl.rand.base;
 
 
 abstract class _esdl__ConstraintBase
@@ -46,7 +46,7 @@ abstract class _esdl__ConstraintBase
 }
 
 static char[] constraintXlate(string CST, string NAME="") {
-  import esdl.data.rand.cstx;
+  import esdl.rand.cstx;
   CstParser parser = CstParser(CST);
   return parser.translate(NAME);
 }
