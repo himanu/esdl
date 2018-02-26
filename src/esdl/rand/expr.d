@@ -177,7 +177,7 @@ abstract class CstVarExpr
 
   abstract long evaluate();
 
-  abstract CstVarExpr unroll(CstVarIterBase l, uint n);
+  abstract CstVarExpr unroll(CstVarIterBase itr, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVarExpr other)
   {
@@ -836,7 +836,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstVarIterBase l, uint n) {
+      override RV unroll(CstVarIterBase itr, uint n) {
 	// itrVars is always empty
 	return this;
       }
@@ -999,19 +999,10 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  }
 	}
 	if(! found) return this;
-	else {
-	  if(_indexExpr) {
-	    auto vec = _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
-	    // import std.stdio;
-	    // writeln(_indexExpr.name(), " has been unrolled as: ",
-	    // 	  _indexExpr.unroll(itr,n).name());
-	    return vec;
-	    // return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
-	  }
-	  else {
-	    return _parent.unroll(itr,n)[_index];
-	  }
+	if(_indexExpr) {
+	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
 	}
+	return _parent.unroll(itr,n)[_index];
       }
 
       void doRandomize(_esdl__RandGen randGen) {
@@ -1216,6 +1207,7 @@ class CstVar(V, alias R, int N=0)
 	      _name = name;
 	      _var = &var;
 	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	      _relatedIdxs ~= _arrLen;
 	    }
 	  }
 
@@ -1225,6 +1217,7 @@ class CstVar(V, alias R, int N=0)
 	      _name = name;
 	      _var = &var;
 	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	      _relatedIdxs ~= _arrLen;
 	    }
 	  }
 	}
@@ -1233,6 +1226,7 @@ class CstVar(V, alias R, int N=0)
 	    _name = name;
 	    _var = &var;
 	    _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	    _relatedIdxs ~= _arrLen;
 	  }
 	}
 
@@ -1280,7 +1274,7 @@ class CstVar(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstVarIterBase l, uint n) {
+	RV unroll(CstVarIterBase itr, uint n) {
 	  return this;
 	}
 
@@ -1344,24 +1338,44 @@ class CstVar(V, alias R, int N=0)
 	  }
 	}
 
+	bool isUnrollable() {
+	  foreach (var; _relatedIdxs) {
+	    if (! var.solved()) return false;
+	  }
+	  return true;
+	}
+
+	CstVarPrim[] _relatedIdxs;
+	void addRelatedIdx(CstVarPrim prim) {
+	  foreach (var; _relatedIdxs) {
+	    if (prim is var) {
+	      return;
+	    }
+	  }
+	  _relatedIdxs ~= prim;
+	}
+      
 	EV opIndex(CstVarExpr idx) {
+	  foreach (prim; idx.getRndPrims()) {
+	    addRelatedIdx(prim);
+	  }
 	  if(idx.isConst()) {
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		   " have not been built");
 	    return _elems[cast(size_t) idx.evaluate()];
 	  }
 	  else {
-	    static if(isStaticArray!E) {
-	      // static array
-	      return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	    }
-	    else static if(isDynamicArray!E) {
-	      // dynamic array
-	      return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	    }
-	    else {
-	      return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	    }
+	    // static if(isStaticArray!E) {
+	    //   // static array
+	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	    // }
+	    // else static if(isDynamicArray!E) {
+	    //   // dynamic array
+	    //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	    // }
+	    // else {
+	    //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	    // }
 	  }
 	}
 
@@ -1461,6 +1475,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_parent = parent;
 	_indexExpr = indexExpr;
 	_arrLen = new CstVarLen!RV(name ~ ".len", this);
+	_relatedIdxs ~= _arrLen;
       }
 
       this(string name, P parent, uint index) {
@@ -1468,6 +1483,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_parent = parent;
 	_index = index;
 	_arrLen = new CstVarLen!RV(name ~ ".len", this);
+	_relatedIdxs ~= _arrLen;
       }
 
       CstVarPrim[] preReqs() {
@@ -1572,16 +1588,10 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  }
 	}
 	if(! found) return this;
-	else {
-	  // return new RV(name ~ "unrolled_" ~ n.to!string,
-	  // 	      _parent.unroll(), _index.unroll());
-	  if(_indexExpr) {
-	    return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
-	  }
-	  else {
-	    return _parent.unroll(itr,n)[_index];
-	  }
+	if(_indexExpr) {
+	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
 	}
+	return _parent.unroll(itr,n)[_index];
       }
 
       static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
@@ -1638,7 +1648,27 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
+      bool isUnrollable() {
+	foreach (var; _relatedIdxs) {
+	  if (! var.solved()) return false;
+	}
+	return true;
+      }
+
+      CstVarPrim[] _relatedIdxs;
+      void addRelatedIdx(CstVarPrim prim) {
+	foreach (var; _relatedIdxs) {
+	  if (prim is var) {
+	    return;
+	  }
+	}
+	_relatedIdxs ~= prim;
+      }
+      
       EV opIndex(CstVarExpr idx) {
+	foreach (prim; idx.getRndPrims()) {
+	  addRelatedIdx(prim);
+	}
 	if(idx.isConst()) {
 	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		 " have not been built");
@@ -1651,17 +1681,17 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  return _elems[cast(size_t) idx.evaluate()];
 	}
 	else {
-	  static if(isStaticArray!E) {
-	    // static array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	  else static if(isDynamicArray!E) {
-	    // dynamic array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
-	  else {
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	  }
+	  // static if(isStaticArray!E) {
+	  //   // static array
+	  return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  // }
+	  // else static if(isDynamicArray!E) {
+	  //   // dynamic array
+	  //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  // }
+	  // else {
+	  //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  // }
 	}
       }
 
@@ -1771,10 +1801,7 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
   }
 
   override bool isUnrollable() {
-    if(! _arrVar.arrLen.isRand()) return true;
-    if(_arrVar.arrLen.stage !is null &&
-       _arrVar.arrLen.stage.solved()) return true;
-    else return false;
+    return _arrVar.isUnrollable();
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
@@ -1830,11 +1857,11 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVarExpr unroll(CstVarIterBase l, uint n) {
+  override CstVarExpr unroll(CstVarIterBase itr, uint n) {
     // import std.stdio;
     // writeln("unrolling: ", arrVar.name());
-    if(this !is l) {
-      return _arrVar.unroll(l,n).arrLen().makeItrVar();
+    if(this !is itr) {
+      return _arrVar.unroll(itr,n).arrLen().makeItrVar();
     }
     else {
       return CstVal!size_t.allocate(n);
@@ -2120,8 +2147,8 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
     
   }
 
-  override CstVarLen!RV unroll(CstVarIterBase l, uint n) {
-    return _parent.unroll(l,n).arrLen();
+  override CstVarLen!RV unroll(CstVarIterBase itr, uint n) {
+    return _parent.unroll(itr,n).arrLen();
   }
 
   void _esdl__reset() {
@@ -2697,7 +2724,7 @@ abstract class CstBddExpr
     return null;
   }
 
-  abstract CstBddExpr unroll(CstVarIterBase l, uint n);
+  abstract CstBddExpr unroll(CstVarIterBase itr, uint n);
 
   abstract CstVarPrim[] getRndPrims();
 
@@ -2983,7 +3010,7 @@ class CstBddConst: CstBddExpr
     return [];
   }
 
-  override CstBddConst unroll(CstVarIterBase l, uint n) {
+  override CstBddConst unroll(CstVarIterBase itr, uint n) {
     return this;
   }
 
@@ -3019,17 +3046,17 @@ class CstNotBddExpr: CstBddExpr
     return (~ bdd);
   }
 
-  override CstNotBddExpr unroll(CstVarIterBase l, uint n) {
+  override CstNotBddExpr unroll(CstVarIterBase itr, uint n) {
     bool shouldUnroll = false;
     foreach(var; itrVars()) {
-      if(l is var) {
+      if(itr is var) {
 	shouldUnroll = true;
 	break;
       }
     }
     if(! shouldUnroll) return this;
     else {
-      return new CstNotBddExpr(_expr.unroll(l, n));
+      return new CstNotBddExpr(_expr.unroll(itr, n));
     }
   }
 
@@ -3078,7 +3105,7 @@ class CstBlock: CstBddExpr
     assert(false);
   }
 
-  override CstBlock unroll(CstVarIterBase l, uint n) {
+  override CstBlock unroll(CstVarIterBase itr, uint n) {
     assert(false, "Can not unroll a CstBlock");
   }
 
