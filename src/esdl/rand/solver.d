@@ -333,7 +333,7 @@ abstract class _esdl__SolverRoot {
 
   void addCstStage(CstBddExpr expr, ref CstStage[] cstStages) {
     // uint stage = cast(uint) _cstStages.length;
-    auto vecs = expr.getSolvables();
+    auto vecs = expr.listPrimsToSolve();
     CstStage stage;
     foreach (ref vec; vecs) {
       assert(vec !is null);

@@ -164,7 +164,7 @@ abstract class CstVarExpr
   abstract CstVarPrim[] getRndPrims();
 
   // get all the primary bdd vectors that would be solved together
-  CstVarPrim[] getSolvables() {
+  CstVarPrim[] listPrimsToSolve() {
     return getRndPrims();
   }
   
@@ -2163,7 +2163,7 @@ abstract class CstValAllocator {
 }
 
 
-class CstVal(T = int): ValVec
+class CstVal(T = int): CstValBase
 {
   static class Allocator: CstValAllocator {
     CstVal!T[] container;
@@ -2258,7 +2258,7 @@ class CstVal(T = int): ValVec
 
 }
 
-abstract class ValVec: CstVarExpr, CstVarPrim
+abstract class CstValBase: CstVarExpr, CstVarPrim
 {
   override CstVarPrim[] preReqs() {
     return [];
@@ -2385,9 +2385,9 @@ class CstVec2VecExpr: CstVarExpr
     return _lhs.getRndPrims() ~ _rhs.getRndPrims();
   }
 
-  override CstVarPrim[] getSolvables() {
+  override CstVarPrim[] listPrimsToSolve() {
     CstVarPrim[] solvables;
-    foreach(solvable; _lhs.getSolvables() ~ _rhs.getSolvables()) {
+    foreach(solvable; _lhs.listPrimsToSolve() ~ _rhs.listPrimsToSolve()) {
       if(! solvable.solved()) {
 	bool add = true;
 	foreach(req; this.preReqs()) {
@@ -2551,8 +2551,8 @@ class CstVecSliceExpr: CstVarExpr
     }
   }
 
-   override CstVarPrim[] getSolvables() {
-    return _vec.getSolvables();
+  override CstVarPrim[] listPrimsToSolve() {
+    return _vec.listPrimsToSolve();
   }
 
   override bool refresh(CstStage stage, Buddy buddy) {
@@ -2701,7 +2701,7 @@ abstract class CstBddExpr
 
   abstract CstVarPrim[] getRndPrims();
 
-  final CstVarPrim[] getSolvables() {
+  final CstVarPrim[] listPrimsToSolve() {
     CstVarPrim[] solvables;
     foreach(prim; getRndPrims()) {
       if(! prim.solved()) {
