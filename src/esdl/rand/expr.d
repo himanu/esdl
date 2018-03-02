@@ -2684,16 +2684,9 @@ abstract class CstBddExpr
 {
   string name();
 
-  // In case this expr is unRolled, the _itrVars here would be empty
-  CstVarIterBase[] _itrVars;
-
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  CstVarIterBase[] itrVars() {
-    return _itrVars;
-  }
-
-  // CstVarPrim[] _preReqs;
+  abstract CstVarIterBase[] itrVars(); //  {
 
   abstract CstVarPrim[] preReqs();
 
@@ -2735,7 +2728,7 @@ abstract class CstBddExpr
   }
 
   CstVarIterBase unrollableItr() {
-    foreach(itr; _itrVars) {
+    foreach(itr; itrVars()) {
       if(itr.isUnrollable()) return itr;
     }
     return null;
@@ -2827,6 +2820,25 @@ class CstBdd2BddExpr: CstBddExpr
   CstBddExpr _rhs;
   CstBddOp _op;
 
+  CstVarIterBase[] _itrVars;
+
+  override CstVarIterBase[] itrVars() {
+       return _itrVars;
+  }
+
+  this(CstBddExpr lhs, CstBddExpr rhs, CstBddOp op) {
+    _lhs = lhs;
+    _rhs = rhs;
+    _op = op;
+    foreach(var; lhs.itrVars ~ rhs.itrVars) {
+      bool add = true;
+      foreach(l; _itrVars) {
+	if(l is var) add = false;
+	break;
+      }
+      if(add) _itrVars ~= var;
+    }
+  }
   override bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
@@ -2885,23 +2897,17 @@ class CstBdd2BddExpr: CstBddExpr
     }
   }
 
-  this(CstBddExpr lhs, CstBddExpr rhs, CstBddOp op) {
-    _lhs = lhs;
-    _rhs = rhs;
-    _op = op;
-    foreach(var; lhs.itrVars ~ rhs.itrVars) {
-      bool add = true;
-      foreach(l; _itrVars) {
-	if(l is var) add = false;
-	break;
-      }
-      if(add) _itrVars ~= var;
-    }
-  }
 }
 
+// TBD
 class CstIteBddExpr: CstBddExpr
 {
+  CstVarIterBase[] _itrVars;
+
+  override CstVarIterBase[] itrVars() {
+    return _itrVars;
+  }
+
   override string name() {
     return "CstIteBddExpr";
   }
@@ -2918,6 +2924,26 @@ class CstVec2BddExpr: CstBddExpr
   CstVarExpr _lhs;
   CstVarExpr _rhs;
   CstBinBddOp _op;
+
+  CstVarIterBase[] _itrVars;
+
+  override CstVarIterBase[] itrVars() {
+       return _itrVars;
+  }
+
+  this(CstVarExpr lhs, CstVarExpr rhs, CstBinBddOp op) {
+    _lhs = lhs;
+    _rhs = rhs;
+    _op = op;
+    foreach(var; lhs.itrVars ~ rhs.itrVars) {
+      bool add = true;
+      foreach(l; _itrVars) {
+	if(l is var) add = false;
+	break;
+      }
+      if(add) _itrVars ~= var;
+    }
+  }
 
   override string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
@@ -2982,24 +3008,15 @@ class CstVec2BddExpr: CstBddExpr
     }
   }
 
-  this(CstVarExpr lhs, CstVarExpr rhs, CstBinBddOp op) {
-    _lhs = lhs;
-    _rhs = rhs;
-    _op = op;
-    foreach(var; lhs.itrVars ~ rhs.itrVars) {
-      bool add = true;
-      foreach(l; _itrVars) {
-	if(l is var) add = false;
-	break;
-      }
-      if(add) _itrVars ~= var;
-    }
-  }
 }
 
 class CstBddConst: CstBddExpr
 {
   immutable bool _expr;
+
+  override CstVarIterBase[] itrVars() {
+       return [];
+  }
 
   this(bool expr) {
     _expr = expr;
@@ -3036,6 +3053,14 @@ class CstBddConst: CstBddExpr
 class CstNotBddExpr: CstBddExpr
 {
   CstBddExpr _expr;
+
+  this(CstBddExpr expr) {
+    _expr = expr;
+  }
+
+  override CstVarIterBase[] itrVars() {
+    return _expr.itrVars();
+  }
 
   override string name() {
     return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
@@ -3077,17 +3102,19 @@ class CstNotBddExpr: CstBddExpr
     }
   }
 
-  this(CstBddExpr expr) {
-    _expr = expr;
-    _itrVars = expr.itrVars;
-    // _preReqs = expr.preReqs;
-  }
 }
 
 class CstBlock: CstBddExpr
 {
   CstBddExpr[] _exprs;
   bool[] _booleans;
+
+  // CstVarIterBase[] _itrVars;
+
+  override CstVarIterBase[] itrVars() {
+    assert(false, "itrVars() is not implemented for CstBlock");
+    // return _itrVars;
+  }
 
   override bool refresh(CstStage stage, Buddy buddy) {
     bool result = false;
