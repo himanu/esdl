@@ -221,9 +221,7 @@ abstract class _esdl__SolverRoot {
       }
 
       foreach(stage; cstStages) {
-	if(stage !is null &&
-	   // stage._rndVars.length !is 0 &&
-	   stage.allReqsMet()) {
+	if(stage !is null) {
 	  solveStage(stage, stageIdx);
 	}
 	else {
@@ -352,7 +350,6 @@ abstract class _esdl__SolverRoot {
       }
     }
     stage._bddExprs ~= expr;
-    stage._bddExprsWithUnmetReqs = stage._bddExprs;
   }
 
   void mergeCstStages(CstStage fromStage, CstStage toStage,

@@ -28,11 +28,8 @@ class CstStage {
   CstVarPrim[] _rndVars;
   // The Bdd expressions that apply to this stage
   CstBddExpr[] _bddExprs;
-  // These are unresolved itr variables
-  CstVarIterBase[] _itrVars;
   // These are the length variables that this stage will solve
   // CstVarPrim[] _preReqs;
-  CstBddExpr[] _bddExprsWithUnmetReqs;
   
   BDD _solveBDD;
   ~this() {
@@ -50,19 +47,6 @@ class CstStage {
   bool solved() {
     if(_id != -1) return true;
     else return false;
-  }
-
-  bool allReqsMet() {
-    CstBddExpr[] bddExprsWithUnmetReqs;
-    foreach(expr; _bddExprsWithUnmetReqs) {
-      if(expr.preReqs().length !=0) {
-	// import std.stdio;
-	// writeln(expr.name ~ " needs preReqs resolution, ", expr.preReqs());
-	bddExprsWithUnmetReqs ~= expr;
-      }
-    }
-    _bddExprsWithUnmetReqs = bddExprsWithUnmetReqs;
-    return _bddExprsWithUnmetReqs.length == 0;
   }
 }
 
@@ -147,6 +131,7 @@ abstract class CstVarExpr
   // Array of indexes this expression has to resolve before it can be
   // convertted into an BDD
   abstract CstVarIterBase[] itrVars();
+  abstract bool hasUnresolvedIdx();
 
   // List of Array Variables
   abstract CstVarPrim[] preReqs();
@@ -178,6 +163,8 @@ abstract class CstVarExpr
   abstract long evaluate();
 
   abstract CstVarExpr unroll(CstVarIterBase itr, uint n);
+
+  CstVarExpr flatten() { return this; }
 
   CstVec2VecExpr opBinary(string op)(CstVarExpr other)
   {
@@ -501,8 +488,6 @@ abstract class CstVarIterBase: CstVarExpr
     _name = name;
   }
 
-  // _itrVar will point to the array this CstVarIterBase is tied to
-
   uint maxVal();
 
   // this will not return the arrVar since the length variable is
@@ -822,6 +807,10 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return [];
       }
 
+      override bool hasUnresolvedIdx() {
+	return false;
+      }
+      
       override CstVarPrim[] getRndPrims() {
 	static if (HAS_RAND_ATTRIB) {
 	  if(isRand) return [this];
@@ -942,6 +931,10 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
+      override bool hasUnresolvedIdx() {
+	return true;
+      }
+      
       CstVarPrim[] getPrimLens() {
 	assert(false);
       }
@@ -1240,7 +1233,7 @@ class CstVar(V, alias R, int N=0)
 	}
 
 	CstVarIterBase[] itrVars() {
-	  return [];
+	  return [];		// N = 0 -- no _parent
 	}
 
 	static if (HAS_RAND_ATTRIB) {
@@ -1789,6 +1782,10 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     return _arrVar.itrVars() ~ this;
   }
 
+  override bool hasUnresolvedIdx() {
+    return true;
+  }
+      
   override uint maxVal() {
     if(! this.isUnrollable()) {
       assert(false, "Can not find maxVal since the " ~
@@ -1937,6 +1934,10 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
     return _parent.itrVars();
   }
 
+  override bool hasUnresolvedIdx() {
+    return true;
+  }
+      
   override CstVarPrim[] getRndPrims() {
     return _parent.getPrimLens();
   }
@@ -2295,6 +2296,10 @@ abstract class CstValBase: CstVarExpr, CstVarPrim
     return [];
   }
 
+  override bool hasUnresolvedIdx() {
+    return false;
+  }
+      
   override bool isConst() {
     return true;
   }
@@ -2404,6 +2409,10 @@ class CstVec2VecExpr: CstVarExpr
     return _itrVars;
   }
 
+  override bool hasUnresolvedIdx() {
+    return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
+  }
+      
   override string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
   }
@@ -2565,6 +2574,10 @@ class CstVecSliceExpr: CstVarExpr
     return _itrVars;
   }
 
+  override bool hasUnresolvedIdx() {
+    return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx() || _vec.hasUnresolvedIdx();
+  }
+
   override string name() {
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
   }
@@ -2696,7 +2709,7 @@ abstract class CstBddExpr
 	// import std.stdio;
 	// writeln(this.name(), " unrolled expr: ", expr.name());
 	// writeln(expr.name());
-	if(expr.unrollableItr() is null) retval ~= expr;
+	if(expr.unrollableItr() is null) retval ~= expr.flatten();
 	else retval ~= expr.unroll();
       }
     }
@@ -2715,6 +2728,10 @@ abstract class CstBddExpr
       retval ~= this.unroll(itr, i);
     }
     return retval;
+  }
+
+  CstBddExpr flatten() {
+    return this;
   }
 
   CstVarIterBase unrollableItr() {
