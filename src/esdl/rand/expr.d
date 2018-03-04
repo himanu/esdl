@@ -889,12 +889,14 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       int _index = 0;
 
       this(string name, P parent, CstVarExpr indexExpr) {
+	assert(parent !is null);
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
       }
 
       this(string name, P parent, uint index) {
+	assert(parent !is null);
 	_name = name;
 	_parent = parent;
 	_index = index;
@@ -930,15 +932,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       override bool hasUnresolvedIdx() {
-	if (_indexExpr) {
-	  auto prims = _indexExpr.getRndPrims();
-	  foreach (prim; prims) {
-	    if (! prim.solved()) {
-	      return true;
-	    }
-	  }
-	}
-	return _parent.hasUnresolvedIdx();
+	return _parent.hasUnresolvedIdx(); // no _relatedIdxs for this instance
       }
       
       CstVarPrim[] getPrimLens() {
@@ -1282,8 +1276,17 @@ class CstVarArr(V, alias R, int N=0)
 	  return this;
 	}
 
+	bool parentLenIsUnresolved() {
+	  return false;		// no parent
+	}
+
 	bool hasUnresolvedIdx() {
-	  return false;
+	  foreach (prim; _relatedIdxs) {
+	    if (! prim.solved()) {
+	      return true;
+	    }
+	  }
+	  return false;		// N=0 -- no _parent
 	}
       
 	static private auto getRef(A, N...)(ref A arr, N idx)
@@ -1479,6 +1482,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       alias RAND=R;
       
       this(string name, P parent, CstVarExpr indexExpr) {
+	assert(parent !is null);
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
@@ -1487,6 +1491,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       this(string name, P parent, uint index) {
+	assert(parent !is null);
 	_name = name;
 	_parent = parent;
 	_index = index;
@@ -1516,13 +1521,14 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
+      bool parentLenIsUnresolved() {
+	return (! _parent._arrLen.solved());
+      }
+
       bool hasUnresolvedIdx() {
-	if (_indexExpr) {
-	  auto prims = _indexExpr.getRndPrims();
-	  foreach (prim; prims) {
-	    if (! prim.solved()) {
-	      return true;
-	    }
+	foreach (prim; _relatedIdxs) {
+	  if (! prim.solved()) {
+	    return true;
 	  }
 	}
 	return _parent.hasUnresolvedIdx();
@@ -1943,6 +1949,7 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
   }
 
   this(string name, RV parent) {
+    assert(parent !is null);
     _name = name;
     _parent = parent;
   }
@@ -1962,7 +1969,8 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
   }
 
   override bool hasUnresolvedIdx() {
-    return _parent.hasUnresolvedIdx();
+    // just must make sure that the parents length has been resolved
+    return _parent.parentLenIsUnresolved();
   }
       
   override CstVarPrim[] getRndPrims() {
