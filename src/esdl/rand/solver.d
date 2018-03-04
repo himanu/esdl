@@ -210,7 +210,8 @@ abstract class _esdl__SolverRoot {
       }
 
       foreach(expr; urExprs) {
-	if(expr.itrVars().length is 0) {
+	// if(expr.itrVars().length is 0) {
+	if(!expr.hasUnresolvedIdx()) {
 	  // import std.stdio;
 	  // writeln("Adding expression ", expr.name(), " to staged");
 	  addCstStage(expr, cstStages);
