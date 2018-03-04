@@ -419,7 +419,7 @@ template _esdl__Rand(T, int I)
   alias RAND = getRandAttr!(T, I);
   static if(__traits(isSame, RAND, _esdl__norand)) {
     static if(isArray!L) {
-      alias _esdl__Rand = CstVar!(L, _esdl__norand, 0);
+      alias _esdl__Rand = CstVarArr!(L, _esdl__norand, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
       alias _esdl__Rand = CstVar!(L, _esdl__norand, 0);
@@ -433,7 +433,7 @@ template _esdl__Rand(T, int I)
   }
   else {
     static if(isArray!L) {
-      alias _esdl__Rand = CstVar!(L, RAND, 0);
+      alias _esdl__Rand = CstVarArr!(L, RAND, 0);
     }
     else static if(isBitVector!L || isIntegral!L) {
       alias _esdl__Rand = CstVar!(L, RAND, 0);
@@ -768,7 +768,7 @@ abstract class CstVarBase(V, alias R, int N)
 template CstVar(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) == 0) {
   alias CstVar = CstVar!(typeof(T.tupleof[I]),
-			     getRandAttr!(T, I), N);
+			 getRandAttr!(T, I), N);
 }
 
 class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
@@ -882,7 +882,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       import std.range;
       import esdl.data.bvec;
 
-      alias P = CstVar!(V, R, N-1);
+      alias P = CstVarArr!(V, R, N-1);
       P _parent;
 
       CstVarExpr _indexExpr = null;
@@ -1057,13 +1057,13 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
     }
 
 // Arrays (Multidimensional arrays as well)
-// template CstVarBase(T, int I, int N=0)
+// template CstVarArrBase(T, int I, int N=0)
 //   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstVarBase = CstVarBase!(typeof(T.tupleof[I]),
+//   alias CstVarArrBase = CstVarArrBase!(typeof(T.tupleof[I]),
 // 					   getRandAttr!(T, I), N);
 // }
 
-abstract class CstVarBase(V, alias R, int N=0)
+abstract class CstVarArrBase(V, alias R, int N=0)
   if(_esdl__ArrOrder!(V, N) != 0): CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -1071,7 +1071,12 @@ abstract class CstVarBase(V, alias R, int N=0)
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
 
-  alias EV = CstVar!(V, R, N+1);
+  static if (_esdl__ArrOrder!(V, N+1) == 0) {
+    alias EV = CstVar!(V, R, N+1);
+  }
+  else {
+    alias EV = CstVarArr!(V, R, N+1);
+  }
 
   EV[] _elems;
 
@@ -1117,43 +1122,43 @@ abstract class CstVarBase(V, alias R, int N=0)
   // }
 
   bool isRand() {
-    assert(false, "isRand not implemented for CstVarBase");
+    assert(false, "isRand not implemented for CstVarArrBase");
   }
 
   ulong value() {
-    assert(false, "value not implemented for CstVarBase");
+    assert(false, "value not implemented for CstVarArrBase");
   }
 
   void collate(ulong v, int word = 0) {
-    assert(false, "value not implemented for CstVarBase");
+    assert(false, "value not implemented for CstVarArrBase");
   }
 
   void stage(CstStage s) {
-    assert(false, "stage not implemented for CstVarBase");
+    assert(false, "stage not implemented for CstVarArrBase");
   }
 
   uint domIndex() {
-    assert(false, "domIndex not implemented for CstVarBase");
+    assert(false, "domIndex not implemented for CstVarArrBase");
   }
 
   void domIndex(uint s) {
-    assert(false, "domIndex not implemented for CstVarBase");
+    assert(false, "domIndex not implemented for CstVarArrBase");
   }
 
   uint bitcount() {
-    assert(false, "bitcount not implemented for CstVarBase");
+    assert(false, "bitcount not implemented for CstVarArrBase");
   }
 
   bool signed() {
-    assert(false, "signed not implemented for CstVarBase");
+    assert(false, "signed not implemented for CstVarArrBase");
   }
 
   ref BddVec bddvec() {
-    assert(false, "bddvec not implemented for CstVarBase");
+    assert(false, "bddvec not implemented for CstVarArrBase");
   }
 
   void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for CstVarBase");
+    assert(false, "bddvec not implemented for CstVarArrBase");
   }
 
   void solveBefore(CstVarPrim other) {
@@ -1176,16 +1181,16 @@ abstract class CstVarBase(V, alias R, int N=0)
 
 }
 
-template CstVar(T, int I, int N=0)
+template CstVarArr(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias CstVar = CstVar!(typeof(T.tupleof[I]),
+  alias CstVarArr = CstVarArr!(typeof(T.tupleof[I]),
 				   getRandAttr!(T, I), N);
 }
 
 // Arrays (Multidimensional arrays as well)
-class CstVar(V, alias R, int N=0)
+class CstVarArr(V, alias R, int N=0)
   if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-    CstVarBase!(V, R, N)
+    CstVarArrBase!(V, R, N)
       {
 	alias RV = typeof(this);
 	CstVarLen!RV _arrLen;
@@ -1457,13 +1462,13 @@ class CstVar(V, alias R, int N=0)
 
       }
 
-class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstVarBase!(V, R, N)
+class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstVarArrBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = CstVar!(V, R, N-1);
+      alias P = CstVarArr!(V, R, N-1);
       P _parent;
       CstVarExpr _indexExpr = null;
       int _index = 0;
