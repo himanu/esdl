@@ -133,6 +133,9 @@ abstract class CstVarExpr
   abstract CstVarIterBase[] itrVars();
   abstract bool hasUnresolvedIdx();
 
+  abstract uint unwindLap();
+  abstract void unwindLap(uint lap);
+  
   // List of Array Variables
   abstract CstVarPrim[] preReqs();
 
@@ -162,7 +165,7 @@ abstract class CstVarExpr
 
   abstract long evaluate();
 
-  abstract CstVarExpr unroll(CstVarIterBase itr, uint n);
+  abstract CstVarExpr unwind(CstVarIterBase itr, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVarExpr other)
   {
@@ -473,7 +476,7 @@ template _esdl__ArrOrder(T, int I, int N=0) {
   enum int _esdl__ArrOrder = _esdl__ArrOrder!(typeof(T.tupleof[I])) - N;
 }
 
-// This class represents an unrolled Foreach itr at vec level
+// This class represents an unwound Foreach itr at vec level
 abstract class CstVarIterBase: CstVarExpr
 {
   string _name;
@@ -494,7 +497,7 @@ abstract class CstVarIterBase: CstVarExpr
     return [];
   }
 
-  bool isUnrollable();
+  bool isUnwindable();
 
   // get all the primary bdd vectors that constitute a given bdd expression
   override CstVarPrim[] getRndPrims();
@@ -505,15 +508,15 @@ abstract class CstVarIterBase: CstVarExpr
   // }
 
   override bool refresh(CstStage s, Buddy buddy) {
-    assert(false, "Can not refresh for a Itr Variable without unrolling");
+    assert(false, "Can not refresh for a Itr Variable without unwinding");
   }
   
   override BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "Can not getBDD for a Itr Variable without unrolling");
+    assert(false, "Can not getBDD for a Itr Variable without unwinding");
   }
 
   override long evaluate() {
-    assert(false, "Can not evaluate a Itr Variable without unrolling");
+    assert(false, "Can not evaluate a Itr Variable without unwinding");
   }
 
 }
@@ -544,6 +547,7 @@ abstract class CstVarBase(V, alias R, int N)
 
     uint         _domIndex = uint.max;
     CstStage     _stage = null;
+    uint         _unwindLap = 0;
   }
 
   ~this() {
@@ -560,7 +564,8 @@ abstract class CstVarBase(V, alias R, int N)
 
   void _esdl__reset() {
     static if (HAS_RAND_ATTRIB) {
-      stage = null;
+      _stage = null;
+      _unwindLap = 0;
     }
   }
 
@@ -616,6 +621,36 @@ abstract class CstVarBase(V, alias R, int N)
     }
     else {
       assert(false);
+    }
+  }
+
+  override uint unwindLap() {
+    static if (HAS_RAND_ATTRIB) {
+      if (_stage !is null && _stage.solved()) {
+	return 0;
+      }
+      else {
+	static if (HAS_RAND_ATTRIB) {
+	  return _unwindLap;
+	}
+	else {
+	  return 0;
+	}
+      }
+    }
+    else return 0;
+  }
+
+  override void unwindLap(uint lap) {
+    static if (HAS_RAND_ATTRIB) {
+      if (_stage !is null && _stage.solved()) {
+	_unwindLap = 0;
+      }
+      else {
+	static if (HAS_RAND_ATTRIB) {
+	  _unwindLap = lap;
+	}
+      }
     }
   }
 
@@ -823,7 +858,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstVarIterBase itr, uint n) {
+      override RV unwind(CstVarIterBase itr, uint n) {
 	// itrVars is always empty
 	return this;
       }
@@ -983,7 +1018,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unroll(CstVarIterBase itr, uint n) {
+      override RV unwind(CstVarIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -993,9 +1028,9 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
 	if(! found) return this;
 	if(_indexExpr) {
-	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
+	  return _parent.unwind(itr,n)[_indexExpr.unwind(itr,n)];
 	}
-	return _parent.unroll(itr,n)[_index];
+	return _parent.unwind(itr,n)[_index];
       }
 
       void doRandomize(_esdl__RandGen randGen) {
@@ -1272,7 +1307,7 @@ class CstVarArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstVarIterBase itr, uint n) {
+	RV unwind(CstVarIterBase itr, uint n) {
 	  return this;
 	}
 
@@ -1349,7 +1384,7 @@ class CstVarArr(V, alias R, int N=0)
 	  }
 	}
 
-	bool isUnrollable() {
+	bool isUnwindable() {
 	  foreach (var; _relatedIdxs) {
 	    if (! var.solved()) return false;
 	  }
@@ -1451,7 +1486,7 @@ class CstVarArr(V, alias R, int N=0)
 	}
 
 	void _esdl__reset() {
-	  _arrLen.stage = null;
+	  _arrLen._esdl__reset();
 	  foreach(elem; _elems) {
 	    if(elem !is null) {
 	      elem._esdl__reset();
@@ -1605,7 +1640,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RV unroll(CstVarIterBase itr, uint n) {
+      RV unwind(CstVarIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -1615,9 +1650,9 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
 	if(! found) return this;
 	if(_indexExpr) {
-	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
+	  return _parent.unwind(itr,n)[_indexExpr.unwind(itr,n)];
 	}
-	return _parent.unroll(itr,n)[_index];
+	return _parent.unwind(itr,n)[_index];
       }
 
       static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
@@ -1674,7 +1709,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      bool isUnrollable() {
+      bool isUnwindable() {
 	foreach (var; _relatedIdxs) {
 	  if (! var.solved()) return false;
 	}
@@ -1782,7 +1817,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       void _esdl__reset() {
-	_arrLen.stage = null;
+	_arrLen._esdl__reset();
 	foreach(elem; _elems) {
 	  if(elem !is null) {
 	    elem._esdl__reset();
@@ -1820,9 +1855,9 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
   }
       
   override uint maxVal() {
-    if(! this.isUnrollable()) {
+    if(! this.isUnwindable()) {
       assert(false, "Can not find maxVal since the " ~
-	     "Itr Variable is unrollable");
+	     "Itr Variable is unwindable");
     }
     // import std.stdio;
     // writeln("maxVal for arrVar: ", _arrVar.name(), " is ",
@@ -1830,8 +1865,8 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     return cast(uint) _arrVar.arrLen.value;
   }
 
-  override bool isUnrollable() {
-    return _arrVar.isUnrollable();
+  override bool isUnwindable() {
+    return _arrVar.isUnwindable();
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
@@ -1887,11 +1922,11 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVarExpr unroll(CstVarIterBase itr, uint n) {
+  override CstVarExpr unwind(CstVarIterBase itr, uint n) {
     // import std.stdio;
-    // writeln("unrolling: ", arrVar.name());
+    // writeln("unwinding: ", arrVar.name());
     if(this !is itr) {
-      return _arrVar.unroll(itr,n).arrLen().makeItrVar();
+      return _arrVar.unwind(itr,n).arrLen().makeItrVar();
     }
     else {
       return CstVal!size_t.allocate(n);
@@ -1920,6 +1955,12 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     assert(false);
   }
 
+  override uint unwindLap() {
+    assert (false, "unwindLap should never be called on CstVarIter");
+  }
+
+  override void unwindLap(uint lap) {}
+
 }
 
 class CstVarLen(RV): CstVarExpr, CstVarPrim
@@ -1939,6 +1980,7 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
   
   uint _domIndex = uint.max;
   CstStage _stage = null;
+  uint _unwindLap = 0;
 
   string _name;
 
@@ -2084,6 +2126,31 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
     }
   }
 
+  override uint unwindLap() {
+    if (_stage !is null && _stage.solved()) {
+      return 0;
+    }
+    else {
+      static if (HAS_RAND_ATTRIB) {
+	return _unwindLap;
+      }
+      else {
+	return 0;
+      }
+    }
+  }
+
+  override void unwindLap(uint lap) {
+    if (_stage !is null && _stage.solved()) {
+      _unwindLap = 0;
+    }
+    else {
+      static if (HAS_RAND_ATTRIB) {
+	_unwindLap = lap;
+      }
+    }
+  }
+
   uint domIndex() {
     static if (HAS_RAND_ATTRIB) {
       return _domIndex;
@@ -2183,12 +2250,13 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
     
   }
 
-  override CstVarLen!RV unroll(CstVarIterBase itr, uint n) {
-    return _parent.unroll(itr,n).arrLen();
+  override CstVarLen!RV unwind(CstVarIterBase itr, uint n) {
+    return _parent.unwind(itr,n).arrLen();
   }
 
   void _esdl__reset() {
-    stage = null;
+    _stage = null;
+    _unwindLap = 0;
   }
 
   bool isVarArr() {
@@ -2322,6 +2390,12 @@ class CstVal(T = int): CstValBase
   override bool hasUnresolvedIdx() {
     return false;
   }
+
+  override uint unwindLap() {
+    return 0;			// const
+  }
+
+  override void unwindLap(uint lap) {}
 }
 
 abstract class CstValBase: CstVarExpr, CstVarPrim
@@ -2394,9 +2468,7 @@ abstract class CstValBase: CstVarExpr, CstVarPrim
     assert(false, "no bddvec for CstVal");
   }
 
-  void _esdl__reset() {
-    stage = null;
-  }
+  void _esdl__reset() {}
 
   bool isVarArr() {
     return false;
@@ -2408,7 +2480,7 @@ abstract class CstValBase: CstVarExpr, CstVarPrim
 
   void resetPrimeBdd() { }
 
-  override CstVarExpr unroll(CstVarIterBase l, uint n) {
+  override CstVarExpr unwind(CstVarIterBase l, uint n) {
     return this;
   }
   
@@ -2486,7 +2558,7 @@ class CstVec2VecExpr: CstVarExpr
   override BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
-	     "CstVec2VecExpr: Need to unroll the itrVars" ~
+	     "CstVec2VecExpr: Need to unwind the itrVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -2551,7 +2623,7 @@ class CstVec2VecExpr: CstVarExpr
     }
   }
 
-  override CstVec2VecExpr unroll(CstVarIterBase itr, uint n) {
+  override CstVec2VecExpr unwind(CstVarIterBase itr, uint n) {
     bool found = false;
     foreach(var; itrVars()) {
       if(itr is var) {
@@ -2561,7 +2633,7 @@ class CstVec2VecExpr: CstVarExpr
     }
     if(! found) return this;
     else {
-      return new CstVec2VecExpr(_lhs.unroll(itr, n), _rhs.unroll(itr, n), _op);
+      return new CstVec2VecExpr(_lhs.unwind(itr, n), _rhs.unwind(itr, n), _op);
     }
   }
 
@@ -2579,6 +2651,19 @@ class CstVec2VecExpr: CstVarExpr
     //   if(add) _itrVars ~= var;
     // }
   }
+
+  override uint unwindLap() {
+    auto lhs = _lhs.unwindLap();
+    auto rhs = _rhs.unwindLap();
+    if (rhs > lhs) return rhs;
+    else return lhs;
+  }
+
+  override void unwindLap(uint lap) {
+    _lhs.unwindLap(lap);
+    _rhs.unwindLap(lap);
+  }
+  
 }
 
 class CstVecSliceExpr: CstVarExpr
@@ -2645,7 +2730,7 @@ class CstVecSliceExpr: CstVarExpr
   override BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
-	     "CstVecSliceExpr: Need to unroll the itrVars" ~
+	     "CstVecSliceExpr: Need to unwind the itrVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -2669,7 +2754,7 @@ class CstVecSliceExpr: CstVarExpr
     assert(false, "Can not evaluate a CstVecSliceExpr!");
   }
 
-  override CstVecSliceExpr unroll(CstVarIterBase itr, uint n) {
+  override CstVecSliceExpr unwind(CstVarIterBase itr, uint n) {
     bool found = false;
     foreach(var; itrVars()) {
       if(itr is var) {
@@ -2680,11 +2765,11 @@ class CstVecSliceExpr: CstVarExpr
     if(! found) return this;
     else {
       if(_rhs is null) {
-	return new CstVecSliceExpr(_vec.unroll(itr, n), _lhs.unroll(itr, n));
+	return new CstVecSliceExpr(_vec.unwind(itr, n), _lhs.unwind(itr, n));
       }
       else {
-	return new CstVecSliceExpr(_vec.unroll(itr, n),
-				   _lhs.unroll(itr, n), _rhs.unroll(itr, n));
+	return new CstVecSliceExpr(_vec.unwind(itr, n),
+				   _lhs.unwind(itr, n), _rhs.unwind(itr, n));
       }
     }
   }
@@ -2706,6 +2791,15 @@ class CstVecSliceExpr: CstVarExpr
       if(add) _itrVars ~= var;
     }
   }
+
+  override uint unwindLap() {
+    return _vec.unwindLap();
+  }
+
+  override void unwindLap(uint lap) {
+    _vec.unwindLap(lap);
+  }
+
 }
 
 class CstNotVecExpr: CstVarExpr
@@ -2733,47 +2827,50 @@ abstract class CstBddExpr
 
   abstract bool hasUnresolvedIdx();
 
-  // unroll recursively untill no unrolling is possible
-  CstBddExpr[] unroll() {
-    CstBddExpr[] unrolled;
-    auto itr = this.unrollableItr();
+  abstract uint unwindLap();
+  abstract void unwindLap(uint lap);
+  
+  // unwind recursively untill no unwinding is possible
+  CstBddExpr[] unwind() {
+    CstBddExpr[] unwound;
+    auto itr = this.unwindableItr();
     if(itr is null) {
       return [this];
     }
     else {
-      foreach(expr; this.unroll(itr)) {
+      foreach(expr; this.unwind(itr)) {
 	// import std.stdio;
-	// writeln(this.name(), " unrolled expr: ", expr.name());
+	// writeln(this.name(), " unwound expr: ", expr.name());
 	// writeln(expr.name());
-	if(expr.unrollableItr() is null) unrolled ~= expr;
-	else unrolled ~= expr.unroll();
+	if(expr.unwindableItr() is null) unwound ~= expr;
+	else unwound ~= expr.unwind();
       }
     }
-    return unrolled;
+    return unwound;
   }
 
-  CstBddExpr[] unroll(CstVarIterBase itr) {
+  CstBddExpr[] unwind(CstVarIterBase itr) {
     CstBddExpr[] retval;
-    if(! itr.isUnrollable()) {
-      assert(false, "CstVarIterBase is not unrollabe yet");
+    if(! itr.isUnwindable()) {
+      assert(false, "CstVarIterBase is not unwindabe yet");
     }
     auto max = itr.maxVal();
     // import std.stdio;
     // writeln("maxVal is ", max);
     for (uint i = 0; i != max; ++i) {
-      retval ~= this.unroll(itr, i);
+      retval ~= this.unwind(itr, i);
     }
     return retval;
   }
 
-  CstVarIterBase unrollableItr() {
+  CstVarIterBase unwindableItr() {
     foreach(itr; itrVars()) {
-      if(itr.isUnrollable()) return itr;
+      if(itr.isUnwindable()) return itr;
     }
     return null;
   }
 
-  abstract CstBddExpr unroll(CstVarIterBase itr, uint n);
+  abstract CstBddExpr unwind(CstVarIterBase itr, uint n);
 
   abstract CstVarPrim[] getRndPrims();
 
@@ -2910,7 +3007,7 @@ class CstBdd2BddExpr: CstBddExpr
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
-	     "CstBdd2BddExpr: Need to unroll the itrVars" ~
+	     "CstBdd2BddExpr: Need to unwind the itrVars" ~
 	     " before attempting to solve BDD");
     }
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -2925,7 +3022,7 @@ class CstBdd2BddExpr: CstBddExpr
     return retval;
   }
 
-  override CstBdd2BddExpr unroll(CstVarIterBase itr, uint n) {
+  override CstBdd2BddExpr unwind(CstVarIterBase itr, uint n) {
     bool found = false;
     foreach(var; itrVars()) {
       if(itr is var) {
@@ -2935,10 +3032,20 @@ class CstBdd2BddExpr: CstBddExpr
     }
     if(! found) return this;
     else {
-      return new CstBdd2BddExpr(_lhs.unroll(itr, n), _rhs.unroll(itr, n), _op);
+      return new CstBdd2BddExpr(_lhs.unwind(itr, n), _rhs.unwind(itr, n), _op);
     }
   }
 
+  override uint unwindLap() {
+    uint lhs = _lhs.unwindLap();
+    uint rhs = _rhs.unwindLap();
+    if (lhs > rhs) return lhs;
+    else return rhs;
+  }
+  override void unwindLap(uint lap) {
+    _lhs.unwindLap(lap);
+    _rhs.unwindLap(lap);
+  }
 }
 
 // TBD
@@ -3018,7 +3125,7 @@ class CstVec2BddExpr: CstBddExpr
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
-	     "CstVec2BddExpr: Need to unroll the itrVars" ~
+	     "CstVec2BddExpr: Need to unwind the itrVars" ~
 	     " before attempting to solve BDD");
     }
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -3036,9 +3143,9 @@ class CstVec2BddExpr: CstBddExpr
     return retval;
   }
 
-  override CstVec2BddExpr unroll(CstVarIterBase itr, uint n) {
+  override CstVec2BddExpr unwind(CstVarIterBase itr, uint n) {
     // import std.stdio;
-    // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unrolled!");
+    // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unwound!");
     bool found = false;
     foreach(var; itrVars()) {
       if(itr is var) {
@@ -3048,14 +3155,25 @@ class CstVec2BddExpr: CstBddExpr
     }
     if(! found) return this;
     else {
-      // writeln("RHS: ", _rhs.unroll(itr, n).name());
-      // writeln("LHS: ", _lhs.unroll(itr, n).name());
-      return new CstVec2BddExpr(_lhs.unroll(itr, n), _rhs.unroll(itr, n), _op);
+      // writeln("RHS: ", _rhs.unwind(itr, n).name());
+      // writeln("LHS: ", _lhs.unwind(itr, n).name());
+      return new CstVec2BddExpr(_lhs.unwind(itr, n), _rhs.unwind(itr, n), _op);
     }
   }
 
   override bool hasUnresolvedIdx() {
     return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
+  }
+
+  override uint unwindLap() {
+    uint lhs = _lhs.unwindLap();
+    uint rhs = _rhs.unwindLap();
+    if (lhs > rhs) return lhs;
+    else return rhs;
+  }
+  override void unwindLap(uint lap) {
+    _lhs.unwindLap(lap);
+    _rhs.unwindLap(lap);
   }
 }
 
@@ -3093,13 +3211,18 @@ class CstBddConst: CstBddExpr
     return [];
   }
 
-  override CstBddConst unroll(CstVarIterBase itr, uint n) {
+  override CstBddConst unwind(CstVarIterBase itr, uint n) {
     return this;
   }
 
   override bool hasUnresolvedIdx() {
     return false;
   }
+
+  override uint unwindLap() {
+    return 0;
+  }
+  override void unwindLap(uint lap) {}
 }
 
 class CstNotBddExpr: CstBddExpr
@@ -3133,29 +3256,36 @@ class CstNotBddExpr: CstBddExpr
   override BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
-	     "CstBdd2BddExpr: Need to unroll the itrVars" ~
+	     "CstBdd2BddExpr: Need to unwind the itrVars" ~
 	     " before attempting to solve BDD");
     }
     auto bdd = _expr.getBDD(stage, buddy);
     return (~ bdd);
   }
 
-  override CstNotBddExpr unroll(CstVarIterBase itr, uint n) {
-    bool shouldUnroll = false;
+  override CstNotBddExpr unwind(CstVarIterBase itr, uint n) {
+    bool shouldUnwind = false;
     foreach(var; itrVars()) {
       if(itr is var) {
-	shouldUnroll = true;
+	shouldUnwind = true;
 	break;
       }
     }
-    if(! shouldUnroll) return this;
+    if(! shouldUnwind) return this;
     else {
-      return new CstNotBddExpr(_expr.unroll(itr, n));
+      return new CstNotBddExpr(_expr.unwind(itr, n));
     }
   }
 
   override bool hasUnresolvedIdx() {
     return _expr.hasUnresolvedIdx();
+  }
+
+  override uint unwindLap() {
+    return _expr.unwindLap();
+  }
+  override void unwindLap(uint lap) {
+    _expr.unwindLap(lap);
   }
 }
 
@@ -3208,8 +3338,8 @@ class CstBlock: CstBddExpr
     assert(false);
   }
 
-  override CstBlock unroll(CstVarIterBase itr, uint n) {
-    assert(false, "Can not unroll a CstBlock");
+  override CstBlock unwind(CstVarIterBase itr, uint n) {
+    assert(false, "Can not unwind a CstBlock");
   }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
@@ -3241,4 +3371,11 @@ class CstBlock: CstBddExpr
 	_booleans ~= boolean;
       }
     }
+
+  override uint unwindLap() {
+    assert(false, "unwindLap not callable for CstBlock");
+  }
+  override void unwindLap(uint lap) {
+    assert(false, "unwindLap not callable for CstBlock");
+  }
 }

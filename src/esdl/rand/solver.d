@@ -166,7 +166,7 @@ abstract class _esdl__SolverRoot {
 
   void solve() { // (T)(T t) {
     // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
-
+    uint lap = 0;
     if (_domains.length is 0 || _esdl__cstWithChanged is true) {
       initDomains();
 
@@ -191,33 +191,50 @@ abstract class _esdl__SolverRoot {
     int stageIdx=0;
     CstBddExpr[] unsolvedExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
     while(unsolvedExprs.length > 0 || unsolvedStages.length > 0) {
+      lap += 1;
+      
       CstBddExpr[] cstExprs = unsolvedExprs;
       unsolvedExprs.length = 0;
       CstStage[] cstStages = unsolvedStages;
       unsolvedStages.length = 0;
 
-      CstBddExpr[] urExprs;	// unrolled expressions
-      // unroll all the unrollable expressions
+      CstBddExpr[] urExprs;	// unwound expressions
+      CstBddExpr[] solveExprs;
+
+      // unwind all the unwindable expressions
       foreach(expr; cstExprs) {
 	// import std.stdio;
-	// writeln("Unrolling: ", expr.name());
-	// auto unrolled = expr.unroll();
-	// for (size_t i=0; i!=unrolled.length; ++i)
+	// writeln("Unwinding: ", expr.name());
+	// auto unwound = expr.unwind();
+	// for (size_t i=0; i!=unwound.length; ++i)
 	//   {
-	//     writeln("Unrolled as: ", unrolled[i].name());
+	//     writeln("Unwound as: ", unwound[i].name());
 	//   }
-	urExprs ~= expr.unroll();
+	urExprs ~= expr.unwind();
       }
 
       foreach(expr; urExprs) {
 	// if(expr.itrVars().length is 0) {
-	if(!expr.hasUnresolvedIdx()) {
+	if(expr.hasUnresolvedIdx()) {
 	  // import std.stdio;
 	  // writeln("Adding expression ", expr.name(), " to staged");
-	  addCstStage(expr, cstStages);
+	  expr.unwindLap(lap);
+	  unsolvedExprs ~= expr;
 	}
 	else {
+	  solveExprs ~= expr;
+	}
+      }
+
+      foreach (expr; solveExprs) {
+	// import std.stdio;
+	uint elap = expr.unwindLap();
+	// writefln("Unwind Lap of the expr %s is %s", expr.name() , lap);
+	if (elap == lap) {
 	  unsolvedExprs ~= expr;
+	}
+	else {
+	  addCstStage(expr, cstStages);
 	}
       }
 
