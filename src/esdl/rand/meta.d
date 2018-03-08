@@ -6,7 +6,7 @@
 //            http://www.boost.org/LICENSE_1_0.txt)
 // Authors:   Puneet Goel <puneet@coverify.com>
 
-module esdl.rand.rand;
+module esdl.rand.meta;
 
 import esdl.rand.obdd;
 
