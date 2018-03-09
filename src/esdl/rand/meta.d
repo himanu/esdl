@@ -18,7 +18,7 @@ import std.exception: enforce;
 import std.range: ElementType;
 
 import esdl.rand.base;
-import esdl.rand.expr: CstVarExpr;
+import esdl.rand.expr: CstVarExpr, CstBlock;
 import esdl.rand.solver;
 
 /// C++ type static_cast for down-casting when you are sure
