@@ -880,7 +880,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     // Primarily for the ease of constraint solver to set value
-    package void _setNthWord(T)(T v, int word = 0) if(isIntegral!T) {
+    void _setNthWord(T)(T v, int word = 0) if(isIntegral!T) {
       // make sure that we are not going over the boundary
       assert(word <= (SIZE-1)/(T.sizeof*8));
       static if (T.sizeof * 8 >= WORDSIZE) {
