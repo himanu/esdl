@@ -19,6 +19,7 @@ import std.range: ElementType;
 
 import esdl.rand.base;
 import esdl.rand.expr: CstVarExpr, CstBlock;
+import esdl.rand.vecx: CstVar, CstVarArr;
 import esdl.rand.solver;
 
 /// C++ type static_cast for down-casting when you are sure
@@ -42,6 +43,41 @@ body {
  }
 
 
+
+template _esdl__Rand(T, int I)
+{
+  import std.traits;
+  alias L = typeof(T.tupleof[I]);
+  alias RAND = getRandAttr!(T, I);
+  static if(__traits(isSame, RAND, _esdl__norand)) {
+    static if(isArray!L) {
+      alias _esdl__Rand = CstVarArr!(L, _esdl__norand, 0);
+    }
+    else static if(isBitVector!L || isIntegral!L) {
+      alias _esdl__Rand = CstVar!(L, _esdl__norand, 0);
+    }
+    else static if(is(L == class) || is(L == struct)) {
+      alias _esdl__Rand = _esdl__SolverResolve!L;
+    }
+    else static if(is(L == U*, U) && is(U == struct)) {
+      alias _esdl__Rand = _esdl__SolverResolve!U;
+    }
+  }
+  else {
+    static if(isArray!L) {
+      alias _esdl__Rand = CstVarArr!(L, RAND, 0);
+    }
+    else static if(isBitVector!L || isIntegral!L) {
+      alias _esdl__Rand = CstVar!(L, RAND, 0);
+    }
+    else static if(is(L == class) || is(L == struct)) {
+      alias _esdl__Rand = _esdl__SolverResolve!L;
+    }
+    else static if(is(L == U*, U) && is(U == struct)) {
+      alias _esdl__Rand = _esdl__SolverResolve!U;
+    }
+  }
+}
 
 template _esdl__RandRandomize(T, int I=0)
 {

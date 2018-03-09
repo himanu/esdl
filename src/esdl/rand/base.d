@@ -11,6 +11,43 @@ template rand(N...) {
   }
 }
 
+template isVarSigned(L) {
+  import std.traits: isIntegral, isSigned;
+  static if(isBitVector!L)
+    enum bool isVarSigned = L.ISSIGNED;
+  else static if(isIntegral!L)
+    enum bool isVarSigned = isSigned!L;
+  else
+    static assert(false, "isVarSigned: Can not determine sign of type " ~
+		  typeid(L));
+}
+
+template ElementTypeN(T, int N=0)
+{
+  import std.range;		// ElementType
+  static if(N==0) {
+    alias ElementTypeN = T;
+  }
+  else {
+    alias ElementTypeN = ElementTypeN!(ElementType!T, N-1);
+  }
+}
+
+template _esdl__ArrOrder(T, int N=0) {
+  import std.traits;
+  import std.range;
+  static if(isArray!T) {
+    enum int _esdl__ArrOrder = 1 + _esdl__ArrOrder!(ElementType!T) - N;
+  }
+  else {
+    enum int _esdl__ArrOrder = 0;
+  }
+}
+
+template _esdl__ArrOrder(T, int I, int N=0) {
+  enum int _esdl__ArrOrder = _esdl__ArrOrder!(typeof(T.tupleof[I])) - N;
+}
+
 // Make sure that all the parameters are of type size_t
 template CheckRandParamsLoop(N...) {
   static if(N.length > 0) {
