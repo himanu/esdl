@@ -6,7 +6,6 @@
 
 import std.stdio;
 import esdl.rand;
-import esdl.data.obdd;
 import esdl.data.bvec;
 
 class Foo: Randomizable
@@ -74,7 +73,8 @@ void main()
       else {
 	myMode++;
       }
-      foo.randomizeWith!q{mode == @0;}(myMode);
+      // foo.randomizeWith!q{mode == @0;}(myMode);
+      foo.randomize;
       foo.display();
     }
 }

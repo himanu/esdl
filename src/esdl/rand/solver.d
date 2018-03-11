@@ -158,11 +158,10 @@ abstract class _esdl__SolverRoot {
     _esdl__randsList.length  = 0;
   }
 
-  // These get overridden at compile time
+  // overridden by Randomization mixin -- see meta.d
   void _esdl__initRands() {}
   void _esdl__initCsts() {}
-
-  void doRandomize(_esdl__RandGen randGen) {}
+  void _esdl__doRandomize(_esdl__RandGen randGen) {}
 
   void solve() { // (T)(T t) {
     // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
@@ -263,10 +262,6 @@ abstract class _esdl__SolverRoot {
 	if(vec.bddvec.isNull()) {
 	  vec.bddvec.buildVec(_domains[vec.domIndex], vec.signed);
 	}
-	// BDD primBdd = vec.getPrimBdd(_esdl__buddy);
-	// if(! primBdd.isOne()) {
-	//   solveBDD = solveBDD & primBdd;
-	// }
       }
     }
 
@@ -283,6 +278,12 @@ abstract class _esdl__SolverRoot {
       solveBDD = stage._solveBDD;
     }
     else {
+      foreach(vec; stage._rndVars) {
+	BDD primBdd = vec.getPrimBdd(_esdl__buddy);
+	if(! primBdd.isOne()) {
+	  solveBDD = solveBDD & primBdd;
+	}
+      }
       foreach(expr; exprs) {
 	// import std.stdio;
 	// writeln(expr.name());
@@ -436,155 +437,3 @@ abstract class _esdl__SolverRoot {
     // solution.printSetWith_Domains();
   }
 }
-
-class _esdl__SolverStruct(_esdl__T): _esdl__SolverBase!_esdl__T
-{
-  _esdl__T* _esdl__outer;
-  void _esdl__setValRef(ref _esdl__T outer) {
-    if (_esdl__outer !is &outer) {
-      _esdl__outer = &outer;
-      _esdl__setObjOuter(true);
-    }
-  }
-  this(uint seed, bool isSeeded, string name, ref _esdl__T outer,
-	      _esdl__SolverRoot parent=null) {
-    _esdl__outer = &outer;
-    static if(_esdl__baseHasRandomization!_esdl__T) {
-      super(seed, isSeeded, name, outer, parent);
-    }
-    else {
-      super(seed, isSeeded, name, parent);
-    }
-    _esdl__initRands();
-    _esdl__initCsts();
-  }
-
-  mixin _esdl__SolverMixin;
-}
-
-mixin template _esdl__SolverMixin()
-{
-  class _esdl__Constraint(string _esdl__CstString):
-    Constraint!_esdl__CstString
-  {
-    this(string name) {
-      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-    }
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    mixin(constraintXlate(_esdl__CstString));
-    debug(CONSTRAINTS) {
-      pragma(msg, constraintXlate(_esdl__CstString));
-    }
-  }
-
-  class _esdl__Constraint(string _esdl__CstString, string NAME):
-    Constraint!_esdl__CstString
-  {
-    this() {
-      super(this.outer, NAME,
-	    cast(uint) this.outer._esdl__cstsList.length);
-    }
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    // mixin(constraintXlate(_esdl__CstString));
-    override CstBlock getCstExpr() {
-      mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
-    }
-	
-    debug(CONSTRAINTS) {
-      pragma(msg, constraintXlate(_esdl__CstString));
-    }
-  }
-
-  class _esdl__Constraint(string _esdl__CstString, size_t N):
-    Constraint!_esdl__CstString
-  {
-    long[N] _withArgs;
-
-    void withArgs(ARG...)(ARG values) if(allIntengral!ARG) {
-      static assert(ARG.length == N);
-      foreach(i, v; values) {
-	_withArgs[i] = v;
-      }
-    }
-
-    this(string name) {
-      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
-    }
-
-    long _esdl__arg(size_t VAR)() {
-      static assert(VAR < N, "Can not map specified constraint with argument: @" ~
-		    VAR.stringof);
-      return _withArgs[VAR];
-    }
-
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    mixin(constraintXlate(_esdl__CstString));
-    debug(CONSTRAINTS) {
-      pragma(msg, "// randomizeWith!\n");
-      pragma(msg, constraintXlate(_esdl__CstString));
-    }
-  }
-
-  void _esdl__with(string _esdl__CstString, ARG...)(ARG values) {
-    auto cstWith = new _esdl__Constraint!(_esdl__CstString, ARG.length)("randWith");
-    cstWith.withArgs(values);
-    _esdl__cstWith = cstWith;
-  }
-
-  auto ref _esdl__vec(L)(ref L l, string name="unnamed") {
-    import std.traits: isIntegral, isArray;
-    static if (isIntegral!L || isBitVector!L) {
-      // import std.stdio;
-      // writeln("Creating VarVec, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
-    }
-    else static if (isArray!L) {
-      // import std.stdio;
-      // writeln("Creating VarVecArr, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
-    }
-    else {
-      return l;
-    }
-   }
-
-  auto const ref _esdl__vec(L)(const ref L l, string name="unnamed") {
-    import std.traits: isIntegral, isArray;
-    static if (isIntegral!L || isBitVector!L) {
-      // import std.stdio;
-      // writeln("Creating VarVec, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
-    }
-    else static if (isArray!L) {
-      // import std.stdio;
-      // writeln("Creating VarVecArr, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
-    }
-    else {
-      return l;
-    }
-   }
-
-
-  auto _esdl__vec(L)(L l, string name="unnamed") {
-    import std.traits: isIntegral;
-    import esdl.data.bvec: isBitVector;
-    static if (isIntegral!L || isBitVector!L) {
-      return CstVal!L.allocate(l);
-    }
-    else {
-      return l;
-    }
-  }
-  
-  mixin(_esdl__randsMixin!_esdl__T);
-
-  debug(CONSTRAINTS) {
-    pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
-    pragma(msg, _esdl__randsMixin!_esdl__T);
-  }
-}
-

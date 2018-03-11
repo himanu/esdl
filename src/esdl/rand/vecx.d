@@ -7,15 +7,15 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 import esdl.rand.obdd;
 import esdl.rand.base;
 import esdl.rand.expr: CstVarPrim, CstVarExpr, CstVarIterBase,
-  CstStage, EnumConstraints, CstValAllocator, CstVarLen;
+  CstStage, CstValAllocator, CstVarLen;
 
 // Consolidated Proxy Class
-// template CstVarBase(T, int I, int N=0) {
-//   alias CstVarBase = CstVarBase!(typeof(T.tupleof[I]),
+// template CstVecBase(T, int I, int N=0) {
+//   alias CstVecBase = CstVecBase!(typeof(T.tupleof[I]),
 // 				     getRandAttr!(T, I), N);
 // }
 
-abstract class CstVarBase(V, alias R, int N)
+abstract class CstVecBase(V, alias R, int N)
   if(_esdl__ArrOrder!(V, N) == 0): CstVarExpr, CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -28,14 +28,34 @@ abstract class CstVarBase(V, alias R, int N)
   
 
   static if (HAS_RAND_ATTRIB) {
-    mixin EnumConstraints!E;
-
     CstVarPrim[] _preReqs;
     BddVec       _domvec;
 
     uint         _domIndex = uint.max;
     CstStage     _stage = null;
     uint         _unwindLap = 0;
+  }
+
+  static if(HAS_RAND_ATTRIB && is(E == enum)) {
+    BDD _primBdd;
+    BDD getPrimBdd(Buddy buddy) {
+      import std.traits;
+      if(_primBdd.isZero()) {
+	foreach(e; EnumMembers!E) {
+	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
+	}
+      }
+      return _primBdd;
+    }
+    void resetPrimeBdd() {
+      _primBdd.reset();
+    }
+  }
+  else {
+    BDD getPrimBdd(Buddy buddy) {
+      return buddy.one();
+    }
+    void resetPrimeBdd() { }
   }
 
   ~this() {
@@ -61,12 +81,6 @@ abstract class CstVarBase(V, alias R, int N)
     return false;
   }
 
-  BDD getPrimBdd(Buddy buddy) {
-    return buddy.one();
-  }
-
-  void resetPrimeBdd() { }
-  
   abstract ulong value();
   
   override long evaluate() {
@@ -287,15 +301,15 @@ abstract class CstVarBase(V, alias R, int N)
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
-// for the elements this CstVar represents
-template CstVar(T, int I, int N=0)
+// for the elements this CstVec represents
+template CstVec(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias CstVar = CstVar!(typeof(T.tupleof[I]),
+  alias CstVec = CstVec!(typeof(T.tupleof[I]),
 			 getRandAttr!(T, I), N);
 }
 
-class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVarBase!(V, R, N)
+class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecBase!(V, R, N)
     {
       import std.traits;
       import std.range;
@@ -351,7 +365,7 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return this;
       }
 
-      void doRandomize(_esdl__RandGen randGen) {
+      void _esdl__doRandomize(_esdl__RandGen randGen) {
 	static if (HAS_RAND_ATTRIB) {
 	  if(stage is null) {
 	    randGen.gen(*_var);
@@ -398,14 +412,14 @@ class CstVar(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
     }
 
-class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVarBase!(V, R, N)
+class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      alias P = CstVarArr!(V, R, N-1);
+      alias P = CstVecArr!(V, R, N-1);
       P _parent;
 
       CstVarExpr _indexExpr = null;
@@ -521,7 +535,7 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _parent.unwind(itr,n)[_index];
       }
 
-      void doRandomize(_esdl__RandGen randGen) {
+      void _esdl__doRandomize(_esdl__RandGen randGen) {
 	static if (HAS_RAND_ATTRIB) {
 	  if(stage is null) {
 	    E val;
@@ -574,13 +588,13 @@ class CstVar(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
     }
 
 // Arrays (Multidimensional arrays as well)
-// template CstVarArrBase(T, int I, int N=0)
+// template CstVecArrBase(T, int I, int N=0)
 //   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstVarArrBase = CstVarArrBase!(typeof(T.tupleof[I]),
+//   alias CstVecArrBase = CstVecArrBase!(typeof(T.tupleof[I]),
 // 					   getRandAttr!(T, I), N);
 // }
 
-abstract class CstVarArrBase(V, alias R, int N=0)
+abstract class CstVecArrBase(V, alias R, int N=0)
   if(_esdl__ArrOrder!(V, N) != 0): CstVarPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -589,10 +603,10 @@ abstract class CstVarArrBase(V, alias R, int N=0)
   alias E = ElementTypeN!(V, N+1);
 
   static if (_esdl__ArrOrder!(V, N+1) == 0) {
-    alias EV = CstVar!(V, R, N+1);
+    alias EV = CstVec!(V, R, N+1);
   }
   else {
-    alias EV = CstVarArr!(V, R, N+1);
+    alias EV = CstVecArr!(V, R, N+1);
   }
 
   EV[] _elems;
@@ -618,10 +632,6 @@ abstract class CstVarArrBase(V, alias R, int N=0)
 
   static if (HAS_RAND_ATTRIB) {
     CstVarPrim[] _preReqs;
-
-    void opIndexAssign(EV c, size_t idx) {
-      _elems[idx] = c;
-    }
   }
 
   bool isVarArr() {
@@ -639,43 +649,43 @@ abstract class CstVarArrBase(V, alias R, int N=0)
   // }
 
   bool isRand() {
-    assert(false, "isRand not implemented for CstVarArrBase");
+    assert(false, "isRand not implemented for CstVecArrBase");
   }
 
   ulong value() {
-    assert(false, "value not implemented for CstVarArrBase");
+    assert(false, "value not implemented for CstVecArrBase");
   }
 
   void collate(ulong v, int word = 0) {
-    assert(false, "value not implemented for CstVarArrBase");
+    assert(false, "value not implemented for CstVecArrBase");
   }
 
   void stage(CstStage s) {
-    assert(false, "stage not implemented for CstVarArrBase");
+    assert(false, "stage not implemented for CstVecArrBase");
   }
 
   uint domIndex() {
-    assert(false, "domIndex not implemented for CstVarArrBase");
+    assert(false, "domIndex not implemented for CstVecArrBase");
   }
 
   void domIndex(uint s) {
-    assert(false, "domIndex not implemented for CstVarArrBase");
+    assert(false, "domIndex not implemented for CstVecArrBase");
   }
 
   uint bitcount() {
-    assert(false, "bitcount not implemented for CstVarArrBase");
+    assert(false, "bitcount not implemented for CstVecArrBase");
   }
 
   bool signed() {
-    assert(false, "signed not implemented for CstVarArrBase");
+    assert(false, "signed not implemented for CstVecArrBase");
   }
 
   ref BddVec bddvec() {
-    assert(false, "bddvec not implemented for CstVarArrBase");
+    assert(false, "bddvec not implemented for CstVecArrBase");
   }
 
   void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for CstVarArrBase");
+    assert(false, "bddvec not implemented for CstVecArrBase");
   }
 
   void solveBefore(CstVarPrim other) {
@@ -698,16 +708,16 @@ abstract class CstVarArrBase(V, alias R, int N=0)
 
 }
 
-template CstVarArr(T, int I, int N=0)
+template CstVecArr(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias CstVarArr = CstVarArr!(typeof(T.tupleof[I]),
+  alias CstVecArr = CstVecArr!(typeof(T.tupleof[I]),
 			       getRandAttr!(T, I), N);
 }
 
 // Arrays (Multidimensional arrays as well)
-class CstVarArr(V, alias R, int N=0)
+class CstVecArr(V, alias R, int N=0)
   if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-    CstVarArrBase!(V, R, N)
+    CstVecArrBase!(V, R, N)
       {
 	alias RV = typeof(this);
 	CstVarLen!RV _arrLen;
@@ -919,12 +929,12 @@ class CstVarArr(V, alias R, int N=0)
 	  return _elems[idx];
 	}
 
-	void doRandomize(_esdl__RandGen randGen) {
+	void _esdl__doRandomize(_esdl__RandGen randGen) {
 	  static if (HAS_RAND_ATTRIB) {
 	    if(_elems.length == 0) this.build();
 	    assert(arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
-	      this[i].doRandomize(randGen);
+	      this[i]._esdl__doRandomize(randGen);
 	    }
 	  }
 	  else {
@@ -983,18 +993,18 @@ class CstVarArr(V, alias R, int N=0)
 	}
 
 	CstStage stage() {
-	  return arrLen().stage();
+	  assert(false);
 	}
 
       }
 
-class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstVarArrBase!(V, R, N)
+class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstVecArrBase!(V, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = CstVarArr!(V, R, N-1);
+      alias P = CstVecArr!(V, R, N-1);
       P _parent;
       CstVarExpr _indexExpr = null;
       int _index = 0;
@@ -1250,12 +1260,12 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return _elems[idx];
       }
 
-      void doRandomize(_esdl__RandGen randGen) {
+      void _esdl__doRandomize(_esdl__RandGen randGen) {
 	static if (HAS_RAND_ATTRIB) {
 	  if(_elems.length == 0) this.build();
 	  assert(arrLen !is null);
 	  for(size_t i=0; i != arrLen.evaluate(); ++i) {
-	    this[i].doRandomize(randGen);
+	    this[i]._esdl__doRandomize(randGen);
 	  }
 	}
 	else {
@@ -1314,7 +1324,7 @@ class CstVarArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       CstStage stage() {
-	return arrLen().stage();
+	assert(false);
       }
 
     }

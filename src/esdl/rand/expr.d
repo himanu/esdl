@@ -198,7 +198,7 @@ abstract class CstValBase: CstVarExpr, CstVarPrim
     assert(false);
   }
 
-  void doRandomize(_esdl__RandGen randGen) {
+  void _esdl__doRandomize(_esdl__RandGen randGen) {
     assert(false);
   }
   
@@ -260,7 +260,7 @@ abstract class CstValBase: CstVarExpr, CstVarPrim
 interface CstVarPrim
 {
   abstract string name();
-  abstract void doRandomize(_esdl__RandGen randGen);
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract bool isRand();
   // abstract ulong value();
 
@@ -675,7 +675,7 @@ class CstVarIter(RV): CstVarIterBase, CstVarPrim
     assert(word == 0);
     _arrVar.arrLen.collate(v);
   }
-  void doRandomize(_esdl__RandGen randGen) {
+  void _esdl__doRandomize(_esdl__RandGen randGen) {
     assert(false);
   }
   CstStage stage() {
@@ -878,7 +878,7 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
     }
   }
 
-  void doRandomize(_esdl__RandGen randGen) {
+  void _esdl__doRandomize(_esdl__RandGen randGen) {
     assert(false);
   }
   
@@ -1054,26 +1054,6 @@ class CstVarLen(RV): CstVarExpr, CstVarPrim
 
   void addPreRequisite(CstVarPrim prim) {
     _preReqs ~= prim;
-  }
-}
-
-mixin template EnumConstraints(T) {
-  static if(is(T == enum)) {
-    BDD _primBdd;
-    override BDD getPrimBdd(Buddy buddy) {
-      // return this.bddvec.lte(buddy.buildVec(_maxValue));
-      import std.traits;
-      if(_primBdd.isZero()) {
-	_primBdd = buddy.zero();
-	foreach(e; EnumMembers!T) {
-	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
-	}
-      }
-      return _primBdd;
-    }
-    override void resetPrimeBdd() {
-      _primBdd.reset();
-    }
   }
 }
 
