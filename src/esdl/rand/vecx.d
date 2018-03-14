@@ -25,7 +25,8 @@ abstract class CstVecBase(V, alias R, int N)
 
   string _name;
   BddVec _valvec;
-  
+
+  Unconst!E _refreshedVal;
 
   static if (HAS_RAND_ATTRIB) {
     CstVarPrim[] _preReqs;
@@ -193,13 +194,14 @@ abstract class CstVecBase(V, alias R, int N)
   }
 
   uint bitcount() {
-    static if(isIntegral!E)        return E.sizeof * 8;
+    static if(isBoolean!E)         return 1;
+    else static if(isIntegral!E)   return E.sizeof * 8;
     else static if(isBitVector!E)  return E.SIZE;
     else static assert(false, "bitcount can not operate on: " ~ E.stringof);
   }
 
   bool signed() {
-    static if(isVarSigned!E) {
+    static if(isVecSigned!E) {
       return true;
     }
     else  {
@@ -251,12 +253,14 @@ abstract class CstVecBase(V, alias R, int N)
   
   private bool refreshVal(Buddy buddy) {
     auto val = *(getRef());
-    if (! _valvec.isNull) {
-      return false;
+    if (_valvec.isNull ||
+	val != _refreshedVal) {
+      _valvec.buildVec(buddy, val);
+      _refreshedVal = val;
+      return true;
     }
     else {
-      _valvec.buildVec(buddy, val);
-      return true;
+      return false;
     }
   }
   
@@ -386,7 +390,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 
       void collate(ulong v, int word = 0) {
 	static if (HAS_RAND_ATTRIB) {
-	  static if(isIntegral!V) {
+	  static if(isIntegral!V || isBoolean!V) {
 	    if(word == 0) {
 	      *_var = cast(V) v; // = cast(V) toBitVec(v      }
 	    }

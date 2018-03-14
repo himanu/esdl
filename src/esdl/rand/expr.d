@@ -1,7 +1,7 @@
 module esdl.rand.expr;
 
 import esdl.rand.obdd;
-import esdl.rand.base: _esdl__RandGen, _esdl__norand, isVarSigned;
+import esdl.rand.base: _esdl__RandGen, _esdl__norand, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
@@ -146,7 +146,7 @@ class CstVal(T = int): CstValBase
   }
 
   bool signed() {
-    return isVarSigned!T;
+    return isVecSigned!T;
   }
 
   override bool hasUnresolvedIdx() {

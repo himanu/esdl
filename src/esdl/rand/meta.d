@@ -48,11 +48,14 @@ template _esdl__RandProxyType(T, int I)
 {
   import std.traits;
   alias L = typeof(T.tupleof[I]);
+  static if (isArray!L) alias E = LeafElementType!L;
   alias RAND = getRandAttr!(T, I);
-  static if(isArray!L) {
+  static if(isArray!L && (isBitVector!E ||
+			  isIntegral!E ||
+			  isBoolean!E)) {
     alias _esdl__RandProxyType = CstVecArr!(L, RAND, 0);
   }
-  else static if(isBitVector!L || isIntegral!L) {
+  else static if(isBitVector!L || isIntegral!L || isBoolean!L) {
     alias _esdl__RandProxyType = CstVec!(L, RAND, 0);
   }
   else static if(is(L == class) || is(L == struct)) {
@@ -70,8 +73,9 @@ template _esdl__RandRandomize(T, int I=0)
   }
   else {
     alias RAND = getRandAttr!(T, I);
-    static if(! (__traits(isSame, RAND, _esdl__norand) ||
-		 is(getRandAttr!(T, I) == rand!false))) {
+    static if (! (__traits(isSame, RAND, _esdl__norand) ||
+		  __traits(isSame, RAND, norand) ||
+		  is(getRandAttr!(T, I) == rand!false))) {
       enum NAME = __traits(identifier, T.tupleof[I]);
       enum _esdl__RandRandomize =
 	"    _esdl__" ~ NAME ~ "._esdl__doRandomize(randGen);\n" ~
@@ -90,12 +94,14 @@ template _esdl__RandInits(T, int I=0)
   }
   else {
     alias RAND = getRandAttr!(T, I);
-    static if(! (__traits(isSame, RAND, _esdl__norand) ||
-		 is(getRandAttr!(T, I) == rand!false))) {
+    // alias L = typeof(T.tupleof[I]);
+    static if (! (__traits(isSame, RAND, _esdl__norand) ||
+		  is (getRandAttr!(T, I) == rand!false) ||
+		  is (typeof(T.tupleof[I]): _esdl__Norand))) {
       enum NAME = __traits(identifier, T.tupleof[I]);
       enum II = I.stringof;
       alias L = typeof(T.tupleof[I]);
-      static if(isBitVector!L || isIntegral!L) {
+      static if(isBitVector!L || isIntegral!L || isBoolean!L) {
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
 	  NAME ~ ")(\"" ~ NAME ~ "\", this._esdl__outer.tupleof[" ~
@@ -158,49 +164,48 @@ template _esdl__RandSetOuter(T, int I=0)
   static if(I == T.tupleof.length) {
     enum _esdl__RandSetOuter = "";
   }
-  else static if(is(getRandAttr!(T, I) == rand!false)) {
-      enum string _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+  else static if (__traits(isSame, getRandAttr!(T, I), _esdl__norand) ||
+		  is (getRandAttr!(T, I) == rand!false) ||
+		  is (typeof(T.tupleof[I]): _esdl__Norand)) {
+    enum string _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+  }
+  else {
+    enum NAME = __traits(identifier, T.tupleof[I]);
+    alias L = typeof(T.tupleof[I]);
+    static if (isBitVector!L || isIntegral!L || isBoolean!L) {
+      enum _esdl__RandSetOuter =
+	"    _esdl__" ~ NAME ~
+	"._esdl__setValRef(this._esdl__outer.tupleof[" ~ I.stringof ~
+	"]);\n" ~ _esdl__RandSetOuter!(T, I+1);
     }
-  else static if(! __traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
-      enum NAME = __traits(identifier, T.tupleof[I]);
-      alias L = typeof(T.tupleof[I]);
-      static if(isBitVector!L || isIntegral!L) {
-	enum _esdl__RandSetOuter =
- 	  "    _esdl__" ~ NAME ~
-	  "._esdl__setValRef(this._esdl__outer.tupleof[" ~ I.stringof ~
-	  "]);\n" ~ _esdl__RandSetOuter!(T, I+1);
-      }
-      else static if(is(L == class)) {
-	enum _esdl__RandSetOuter =
-	  "    assert(this._esdl__outer." ~ NAME ~
-	  " !is null);\n    _esdl__" ~ NAME ~
-	  "._esdl__setValRef(this._esdl__outer." ~ NAME ~
-	  ");\n" ~ _esdl__RandSetOuter!(T, I+1);
-      }
-      else static if(is(L == struct)) {
-	enum _esdl__RandSetOuter =
-	  "    _esdl__" ~ NAME ~
-	  "._esdl__setValRef(this._esdl__outer." ~ NAME ~
-	  ");\n" ~ _esdl__RandSetOuter!(T, I+1);
-      }
-      else static if(is(L == U*, U) && is(U == struct)) {
-	enum _esdl__RandSetOuter =
-	  "    assert(this._esdl__outer." ~ NAME ~
-	  " !is null);\n    _esdl__" ~ NAME ~
-	  "._esdl__setValRef(*(this._esdl__outer." ~ NAME ~
-	  "));\n" ~ _esdl__RandSetOuter!(T, I+1);
-      }
-      else {			/* arrays */
-	enum _esdl__RandSetOuter =
- 	  "    _esdl__" ~ NAME ~
-	  "._esdl__setValRef(this._esdl__outer.tupleof[" ~ I.stringof ~
-	  "]);\n" ~ _esdl__RandSetOuter!(T, I+1);
-	// static assert(false, "Unhandled type: " ~ L.stringof);
-      }
+    else static if(is(L == class)) {
+      enum _esdl__RandSetOuter =
+	"    assert(this._esdl__outer." ~ NAME ~
+	" !is null);\n    _esdl__" ~ NAME ~
+	"._esdl__setValRef(this._esdl__outer." ~ NAME ~
+	");\n" ~ _esdl__RandSetOuter!(T, I+1);
     }
-    else {
-      enum _esdl__RandSetOuter = _esdl__RandSetOuter!(T, I+1);
+    else static if(is(L == struct)) {
+      enum _esdl__RandSetOuter =
+	"    _esdl__" ~ NAME ~
+	"._esdl__setValRef(this._esdl__outer." ~ NAME ~
+	");\n" ~ _esdl__RandSetOuter!(T, I+1);
     }
+    else static if(is(L == U*, U) && is(U == struct)) {
+      enum _esdl__RandSetOuter =
+	"    assert(this._esdl__outer." ~ NAME ~
+	" !is null);\n    _esdl__" ~ NAME ~
+	"._esdl__setValRef(*(this._esdl__outer." ~ NAME ~
+	"));\n" ~ _esdl__RandSetOuter!(T, I+1);
+    }
+    else {			/* arrays */
+      enum _esdl__RandSetOuter =
+	"    _esdl__" ~ NAME ~
+	"._esdl__setValRef(this._esdl__outer.tupleof[" ~ I.stringof ~
+	"]);\n" ~ _esdl__RandSetOuter!(T, I+1);
+      // static assert(false, "Unhandled type: " ~ L.stringof);
+    }
+  }
 }
 
 
@@ -209,13 +214,13 @@ template _esdl__RandDeclVars(T, int I=0)
   static if(I == T.tupleof.length) {
     enum _esdl__RandDeclVars = "";
   }
-  else static if(is(getRandAttr!(T, I) == rand!false)) {
-    enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
-  }
-  else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
+  else static if (__traits(isSame, getRandAttr!(T, I), _esdl__norand) ||
+		  is (getRandAttr!(T, I) == rand!false) ||
+		  is (typeof(T.tupleof[I]): _esdl__Norand)) {
     enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
   }
   else {
+    // pragma(msg, I);
     // pragma(msg, __traits(identifier, T.tupleof[I]));
     enum string _esdl__RandDeclVars =
       "  _esdl__RandProxyType!(_esdl__T, " ~ I.stringof ~ ") _esdl__" ~
@@ -244,7 +249,8 @@ template _esdl__RandDeclFuncs(T, int I=0)
 	  enum _esdl__RandDeclFuncs =
 	    _esdl__RandDeclFuncs!(T, I+1);
 	}
-      else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand)) {
+      else static if(__traits(isSame, getRandAttr!(T, I), _esdl__norand) ||
+		      is (L: _esdl__Norand)) {
 	// When NAME is used explicitly, D looks for access
 	// permissions, this works fine if the _esdl__SolverRoot
 	// template is instantiated as a mixin inside the class that
@@ -386,8 +392,6 @@ template _esdl__CstInits(T, int I=0)
     }
 }
 
-
-
 void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
   static if(__traits(compiles, t.preRandomize())) {
     t.preRandomize();
@@ -459,11 +463,11 @@ mixin template Randomization()
 {
   alias _esdl__T = typeof(this);
   
-  // While making _esdl__Solver class non-static nested class also
-  // works as far as dlang compilers are concerned, do not do that
-  // since in that case _esdl__outer object would have an implicit
-  // pointer to the outer object which can not be changed
-  static class _esdl__Solver: _esdl__SolverBase!_esdl__T
+  // While making _esdl__SolverNested class non-static nested class
+  // also works as far as dlang compilers are concerned, do not do
+  // that since in that case _esdl__outer object would have an
+  // implicit pointer to the outer object which can not be changed
+  static class _esdl__SolverNested: _esdl__SolverBase!_esdl__T
   {
     _esdl__T _esdl__outer;
     void _esdl__setValRef()(_esdl__T outer) {
@@ -626,25 +630,31 @@ mixin template _esdl__SolverMixin()
     }
   }
 
-  class _esdl__Constraint(string _esdl__CstString, size_t N):
+  class _esdl__Constraint(string _esdl__CstString, ARGS...): // size_t N):
     Constraint!_esdl__CstString
   {
-    long[N] _withArgs;
+    import std.typecons;
 
-    void withArgs(ARG...)(ARG values) if(allIntengral!ARG) {
-      static assert(ARG.length == N);
-      foreach(i, v; values) {
-	_withArgs[i] = v;
+    Tuple!(ARGS) _withArgs;
+
+    void withArgs(ARGS...)(ARGS values) if(allIntengral!ARGS) {
+      // static assert(ARGS.length == N);
+      foreach(i, ref v; values) {
+    	_withArgs[i] = v;
       }
     }
 
-    this(string name) {
+    this(ARGS...)(string name, ARGS args) {
       super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+      // writeln("pointer: ", &(args[0]));
+      foreach (i, arg; args) {
+	_withArgs[i] = arg;
+      }
     }
 
-    long _esdl__arg(size_t VAR)() {
-      static assert(VAR < N, "Can not map specified constraint with argument: @" ~
-		    VAR.stringof);
+    ref auto _esdl__arg(size_t VAR)() {
+      static assert(VAR < _withArgs.length, "Can not map specified constraint with argument: @" ~
+      		    VAR.stringof);
       return _withArgs[VAR];
     }
 
@@ -657,23 +667,23 @@ mixin template _esdl__SolverMixin()
     }
   }
 
-  void _esdl__with(string _esdl__CstString, ARG...)(ARG values) {
-    auto cstWith = new _esdl__Constraint!(_esdl__CstString, ARG.length)("randWith");
-    cstWith.withArgs(values);
+  void _esdl__with(string _esdl__CstString, ARGS...)(ARGS values) {
+    auto cstWith = new _esdl__Constraint!(_esdl__CstString, ARGS)("randWith", values);
+    // cstWith.withArgs(values);
     _esdl__cstWith = cstWith;
   }
 
   auto ref _esdl__vec(L)(ref L l, string name="unnamed") {
-    import std.traits: isIntegral, isArray;
-    static if (isIntegral!L || isBitVector!L) {
+    import std.traits: isIntegral, isBoolean, isArray;
+    static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
@@ -681,27 +691,27 @@ mixin template _esdl__SolverMixin()
    }
 
   auto const ref _esdl__vec(L)(const ref L l, string name="unnamed") {
-    import std.traits: isIntegral, isArray;
-    static if (isIntegral!L || isBitVector!L) {
+    import std.traits: isIntegral, isBoolean, isArray;
+    static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVar!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l);
     }
     else {
       return l;
     }
-   }
+  }
 
 
   auto _esdl__vec(L)(L l, string name="unnamed") {
     import std.traits: isIntegral;
     import esdl.data.bvec: isBitVector;
-    static if (isIntegral!L || isBitVector!L) {
+    static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       return CstVal!L.allocate(l);
     }
     else {
@@ -717,8 +727,8 @@ mixin template _esdl__SolverMixin()
   }
 }
 
-void randomizeWith(string C, T, ARG...)(ref T t, ARG values)
-  if(is(T == class) && allIntengral!ARG) {
+void randomizeWith(string C, T, ARGS...)(ref T t, ARGS values)
+  if(is(T == class) && allIntengral!ARGS) {
     t._esdl__initSolver();
     // The idea is that if the end-user has used the randomization
     // mixin then _esdl__RandType would be already available as an
@@ -731,12 +741,12 @@ void randomizeWith(string C, T, ARG...)(ref T t, ARG values)
       t._esdl__solverInst._esdl__cstWithChanged = true;
       // auto withCst =
       //	new Constraint!(C, "_esdl__withCst",
-      //			T, ARG.length)(t, "_esdl__withCst");
+      //			T, ARGS.length)(t, "_esdl__withCst");
       // withCst.withArgs(values);
       // t._esdl__solverInst._esdl__cstWith = withCst;
     }
     else {
-      alias CST = _esdl__SolverResolve!T._esdl__Constraint!(C, ARG.length);
+      alias CST = _esdl__SolverResolve!T._esdl__Constraint!(C, ARGS);
       auto cstWith = _esdl__staticCast!CST(t._esdl__solverInst._esdl__cstWith);
       cstWith.withArgs(values);
       t._esdl__solverInst._esdl__cstWithChanged = false;
@@ -752,12 +762,12 @@ void randomize(T)(T t) {
 }
 
 // FIXME add bitvectors to this template filter
-template allIntengral(ARG...) {
-  static if(ARG.length == 0) {
+template allIntengral(ARGS...) {
+  static if(ARGS.length == 0) {
     enum bool allIntengral = true;
   }
-  else static if(isIntegral!(ARG[0]) || isBitVector!(ARG[0])) {
-    enum bool allIntengral = allIntengral!(ARG[1..$]);
+  else static if (isIntegral!(ARGS[0]) || isBitVector!(ARGS[0]) || isBoolean!(ARGS[0])) {
+    enum bool allIntengral = allIntengral!(ARGS[1..$]);
   }
   else enum bool allIntengral = false;
 }

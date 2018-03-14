@@ -6,7 +6,7 @@ import esdl.rand.expr: CstBlock, CstVarPrim, CstStage,
 import esdl.rand.base;
 
 
-abstract class _esdl__ConstraintBase
+abstract class _esdl__ConstraintBase: _esdl__Norand
 {
   this(_esdl__SolverRoot eng, string name, string constraint, uint index) {
     _cstEng = eng;
@@ -77,8 +77,10 @@ template _esdl__baseHasRandomization(T) {
 
 template _esdl__SolverResolve(T) {
   // static if(__traits(compiles, T._esdl__hasRandomization)) {
-  static if(is(T == class)) {
-    alias _esdl__SolverResolve = T._esdl__Solver;
+  static if (is(T == class)) {
+    static if (__traits(compiles, T._esdl__SolverNested)) {
+      alias _esdl__SolverResolve = T._esdl__SolverNested;
+    }
   }
   else {
     alias _esdl__SolverResolve = _esdl__SolverStruct!T;
@@ -166,7 +168,8 @@ abstract class _esdl__SolverRoot {
   void solve() { // (T)(T t) {
     // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
     uint lap = 0;
-    if (_domains.length is 0 || _esdl__cstWithChanged is true) {
+    if (_domains.length is 0 // || _esdl__cstWithChanged is true
+	) {
       initDomains();
 
       // _esdl__cstEqns._esdl__reset(); // start empty
@@ -189,6 +192,9 @@ abstract class _esdl__SolverRoot {
 
     int stageIdx=0;
     CstBddExpr[] unsolvedExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
+    // if(_esdl__cstWith !is null) {
+    //   unsolvedExprs ~= _esdl__cstWith.getCstExpr()._exprs;
+    // }
     while(unsolvedExprs.length > 0 || unsolvedStages.length > 0) {
       lap += 1;
       

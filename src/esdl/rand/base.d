@@ -2,8 +2,30 @@ module esdl.rand.base;
 
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+import std.meta: AliasSeq;
 
+// To be returned when no @rand or @norand is found
 enum _esdl__norand;
+
+
+interface _esdl__Norand {}
+
+// This is part of the user API, but is intended to be seldom used
+// We do not want to create proxy objects for evey element of a
+// Randomizable class. But there could be scenarios where someone uses
+// an array of objects or ints in a loop constraint only for its
+// iterator. In such cases, a user will be required to add @norand
+// with such arrays. For example:
+// class Foo {
+//   @norand int[] a;
+//   @rand int[] b;
+//   Constraint!q{
+//     foreach(i, aa; a) {
+//       b[i] < aa;
+//     }
+//   } cst_b;
+// }
+enum norand;
 
 template rand(N...) {
   static if(CheckRandParams!N) {
@@ -11,15 +33,28 @@ template rand(N...) {
   }
 }
 
-template isVarSigned(L) {
+template isVecSigned(L) {
   import std.traits: isIntegral, isSigned;
-  static if(isBitVector!L)
-    enum bool isVarSigned = L.ISSIGNED;
-  else static if(isIntegral!L)
-    enum bool isVarSigned = isSigned!L;
+  static if (is(L: bool))
+    enum bool isVecSigned = false;
+  else static if (isBitVector!L)
+    enum bool isVecSigned = L.ISSIGNED;
+  else static if (isIntegral!L)
+    enum bool isVecSigned = isSigned!L;
   else
-    static assert(false, "isVarSigned: Can not determine sign of type " ~
+    static assert(false, "isVecSigned: Can not determine sign of type " ~
 		  typeid(L));
+}
+
+template LeafElementType(T)
+{
+  import std.range;		// ElementType
+  static if(isArray!T) {
+    alias LeafElementType = LeafElementType!(ElementType!T);
+  }
+  else {
+    alias LeafElementType = T;
+  }
 }
 
 template ElementTypeN(T, int N=0)
@@ -31,6 +66,19 @@ template ElementTypeN(T, int N=0)
   else {
     alias ElementTypeN = ElementTypeN!(ElementType!T, N-1);
   }
+}
+
+template Unconst(T) {
+  static if (is(T U ==   immutable U)) alias Unconst = U;
+  else static if (is(T U == inout const U)) alias Unconst = U;
+  else static if (is(T U == inout       U)) alias Unconst = U;
+  else static if (is(T U ==       const U)) alias Unconst = U;
+  else                                      alias Unconst = T;
+}
+
+template PointersOf(ARGS...) {
+  static if (ARGS.length == 0) alias PointersOf = AliasSeq!();
+  else alias PointersOf = AliasSeq!(ARGS[0] *, PointersOf!(ARGS[1..$]));
 }
 
 template _esdl__ArrOrder(T, int N=0) {
@@ -145,6 +193,10 @@ template scanRandAttr(A...) {
   static if(A.length == 0) {
     alias scanRandAttr = _esdl__norand;
   }
+  else static if(__traits(isSame, A[0], norand)) {
+      static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
+      alias scanRandAttr = A[0];
+  }
   else static if(__traits(isSame, A[0], rand) ||
 		 is(A[0] unused: rand!M, M...)) {
       static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
@@ -187,7 +239,11 @@ class _esdl__RandGen
   }
 
   @property T gen(T)() {
-    static if(isIntegral!T || isBoolean!T) {
+    static if (isBoolean!T) {
+      T val = flip();
+      return val;
+    }
+    else static if(isIntegral!T) {
       T val = uniform!(T)(_gen);
       return val;
     }
@@ -202,15 +258,18 @@ class _esdl__RandGen
   }
 
   @property void gen(T)(ref T t) {
-    static if(isIntegral!T || isBoolean!T) {
+    static if (isBoolean!T) {
+      t = flip();
+    }
+    else static if(isIntegral!T) {
       t = uniform!(T)(_gen);
     }
     else static if(isBitVector!T) {
-	t.randomize(_gen);
-      }
-      else {
-	static assert(false);
-      }
+      t.randomize(_gen);
+    }
+    else {
+      static assert(false);
+    }
   }
 
   @property auto gen(T1, T2)(T1 a, T2 b)
