@@ -9462,6 +9462,10 @@ RootEntity getRootEntity() {
   return RootEntity._esdl__rootEntity;
 }
 
+SimTime getSimTime() {
+  return getRootEntity().getSimTime();
+}
+
 EsdlSimulator getSimulator() {
   return getRootEntity().getSimulator();
 }
