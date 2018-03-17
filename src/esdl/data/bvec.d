@@ -385,12 +385,18 @@ private template VecParams(size_t SIZE, bool S=true) {
   static if(MSWSIZE == WORDSIZE)	// All ones
     // Shift by WORDSIZE is erroneous -- D gives compile time error
     {
-      private enum StoreT UMASK =(cast(StoreT) -1);
-      private enum StoreT SMASK = ~UMASK;
+      private enum StoreT UMASK = (cast(StoreT) -1);
+      private enum StoreT SMASK = 0;
     }
   else {
-    private enum StoreT UMASK =((cast(StoreT) 1) << MSWSIZE) - 1;
-    private enum StoreT SMASK = cast(StoreT) (~UMASK);
+    static if (StoreT.sizeof >= 4) {
+      private enum StoreT UMASK = ((cast(StoreT) 1) << MSWSIZE) - 1;
+      private enum StoreT SMASK = cast(StoreT) (~UMASK);
+    }
+    else {
+      private enum StoreT UMASK = cast(StoreT) ((1 << MSWSIZE) - 1);
+      private enum StoreT SMASK = cast(StoreT) ~((1 << MSWSIZE) - 1);
+    }
   }
 }
 
@@ -2060,8 +2066,14 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	    }
 	    else {
 	      // X and Z values reduce to 0
-	      static if(L) result._aval[i] &=
-			     ~(cast(V.store_t) this._bval[i]);
+	      static if (V.store_t.sizeof >= 4) {
+		static if(L) result._aval[i] &=
+			       ~(cast(V.store_t) this._bval[i]);
+	      }
+	      else {
+		static if(L) result._aval[i] &=
+			       cast(V.store_t) ~(cast(int) this._bval[i]);
+	      }
 	    }
 	  }
 	  // sign extension
@@ -2420,7 +2432,12 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       // compliment every bit
       _bvec!(S,L,SIZE) result = this;
       for(size_t i; i != STORESIZE; ++i) {
-	result._aval[i] = ~_aval[i];
+	static if (store_t.sizeof >= 4) {
+	  result._aval[i] = ~_aval[i];
+	}
+	else {
+	  result._aval[i] = cast(store_t) ~(cast(int) _aval[i]);
+	}
       }
       // UMASK out the unused bits
       result._aval[$-1] &= UMASK;

@@ -10134,7 +10134,7 @@ int bdd_error(BddError v)
 }
 
 
-enum BddError : byte
+enum BddError
   {   BDD_MEMORY = -1, // Out of memory
       BDD_VAR = -2, // Unknown variable
       BDD_RANGE = -3,
