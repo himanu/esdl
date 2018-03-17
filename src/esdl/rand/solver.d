@@ -75,41 +75,6 @@ template _esdl__baseHasRandomization(T) {
   }
 }
 
-template _esdl__SolverResolve(T) {
-  // static if(__traits(compiles, T._esdl__hasRandomization)) {
-  static if (is(T == class)) {
-    static if (__traits(compiles, T._esdl__SolverNested)) {
-      alias _esdl__SolverResolve = T._esdl__SolverNested;
-    }
-  }
-  else {
-    alias _esdl__SolverResolve = _esdl__SolverStruct!T;
-  }
-}
-
-// For a given class, this template returns the Solver for first
-// class in the ancestory that has Randomization mixin -- if there is
-// none, returns _esdl__SolverRoot
-template _esdl__SolverBase(T) {
-  static if(is(T == class) &&
-	    is(T B == super) &&
-	    is(B[0] == class)) {
-    alias U = B[0];
-    // check if the base class has Randomization
-    // static if(__traits(compiles, _esdl__SolverResolve!U)) {
-    static if(__traits(compiles, U._esdl__thisHasRandomization()) &&
-	      is(U == typeof(U._esdl__thisHasRandomization()))) {
-      alias _esdl__SolverBase = _esdl__SolverResolve!U;
-    }
-    else {
-      alias _esdl__SolverBase = _esdl__SolverBase!U;
-    }
-  }
-  else {
-    alias _esdl__SolverBase = _esdl__SolverRoot;
-  }
-}
-
 abstract class _esdl__SolverRoot {
   // Keep a list of constraints in the class
   _esdl__ConstraintBase[] _esdl__cstsList;
