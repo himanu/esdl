@@ -43,7 +43,7 @@ template isVecSigned(L) {
     enum bool isVecSigned = isSigned!L;
   else
     static assert(false, "isVecSigned: Can not determine sign of type " ~
-		  typeid(L));
+		  L.stringof);
 }
 
 template LeafElementType(T)
@@ -210,13 +210,8 @@ template scanRandAttr(A...) {
 class _esdl__RandGen
 {
   import std.random;
-  import esdl.data.bvec;
 
   private Random _gen;
-
-  private Bit!32 _bv;
-
-  private ubyte _bi = 32;
 
   this(uint _seed) {
     _gen = Random(_seed);
@@ -227,11 +222,9 @@ class _esdl__RandGen
   }
 
   bool flip() {
-    if(_bi > 31) {
-      _bi = 0;
-      _bv = uniform!"[]"(0, uint.max, _gen);
-    }
-    return cast(bool) _bv[_bi++];
+    auto x = dice(_gen, 50, 50);
+    if (x == 0) return false;
+    else return true;
   }
 
   double get() {
