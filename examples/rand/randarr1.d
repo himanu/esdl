@@ -6,7 +6,6 @@
 
 import std.stdio;
 import esdl.rand;
-import esdl.data.obdd;
 import esdl.data.bvec;
 
 class Bar
@@ -28,7 +27,7 @@ class Bar
     foo.length > 1;
     foo[1] == 24;
     // baz < 32;
-  } cstFooLength;
+  } cst_foo;
 
   // Constraint! q{
   //   //    foreach(i, f; bar) f <= i;

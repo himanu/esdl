@@ -607,7 +607,10 @@ mixin template _esdl__SolverMixin()
     // constraint string at compile time
     mixin(constraintXlate(_esdl__CstString));
     debug(CONSTRAINTS) {
+      pragma(msg, "// constraintXlate! STARTS\n");
       pragma(msg, constraintXlate(_esdl__CstString));
+      pragma(msg, "// constraintXlate! ENDS\n");
+      
     }
   }
 
@@ -626,7 +629,9 @@ mixin template _esdl__SolverMixin()
     }
 	
     debug(CONSTRAINTS) {
+      pragma(msg, "// constraintXlate! STARTS\n");
       pragma(msg, constraintXlate(_esdl__CstString));
+      pragma(msg, "// constraintXlate! ENDS\n");
     }
   }
 
@@ -662,8 +667,9 @@ mixin template _esdl__SolverMixin()
     // constraint string at compile time
     mixin(constraintXlate(_esdl__CstString));
     debug(CONSTRAINTS) {
-      pragma(msg, "// randomizeWith!\n");
+      pragma(msg, "// randomizeWith! STARTS\n");
       pragma(msg, constraintXlate(_esdl__CstString));
+      pragma(msg, "// randomizeWith! ENDS\n");
     }
   }
 
@@ -722,8 +728,9 @@ mixin template _esdl__SolverMixin()
   mixin(_esdl__randsMixin!_esdl__T);
 
   debug(CONSTRAINTS) {
-    pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ "\n");
+    pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ " STARTS \n");
     pragma(msg, _esdl__randsMixin!_esdl__T);
+    pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ " ENDS \n");
   }
 }
 

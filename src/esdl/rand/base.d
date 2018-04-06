@@ -11,7 +11,7 @@ enum _esdl__norand;
 interface _esdl__Norand {}
 
 // This is part of the user API, but is intended to be seldom used
-// We do not want to create proxy objects for evey element of a
+// We do not want to create proxy rand objects for evey element of a
 // Randomizable class. But there could be scenarios where someone uses
 // an array of objects or ints in a loop constraint only for its
 // iterator. In such cases, a user will be required to add @norand
@@ -125,22 +125,22 @@ template CheckRandParams(N...) {
   }
 }
 
-// generates the code for rand structure inside the class object getting
-// randomized
-template _esdl__ListRands(T, int I=0) {
-  // import std.typetuple;
-  static if(I == T.tupleof.length) {
-    alias _esdl__ListRands = TypeTuple!();
-  }
-  else {
-    static if(hasRandAttr!(T, I)) {
-      alias _esdl__ListRands = TypeTuple!(T, I, _esdl__ListRands!(T, I+1));
-    }
-    else {
-      alias _esdl__ListRands = _esdl__ListRands!(T, I+1);
-    }
-  }
-}
+// // generates the code for rand structure inside the class object getting
+// // randomized
+// template _esdl__ListRands(T, int I=0) {
+//   // import std.typetuple;
+//   static if(I == T.tupleof.length) {
+//     alias _esdl__ListRands = TypeTuple!();
+//   }
+//   else {
+//     static if(hasRandAttr!(T, I)) {
+//       alias _esdl__ListRands = TypeTuple!(T, I, _esdl__ListRands!(T, I+1));
+//     }
+//     else {
+//       alias _esdl__ListRands = _esdl__ListRands!(T, I+1);
+//     }
+//   }
+// }
 
 template hasRandAttr(T, int I=0) {
   enum hasRandAttr = hasRandInList!(__traits(getAttributes, T.tupleof[I]));
