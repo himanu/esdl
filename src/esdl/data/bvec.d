@@ -1996,7 +1996,12 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
     public V opCast(V)() const if(isIntegral!V || isBoolean!V) {
       static if(L) {
-	V value = cast(V)(this._aval[0] & ~this._bval[0]);
+	static if (store_t.sizeof >= 4) {
+	  V value = cast(V)(this._aval[0] & ~this._bval[0]);
+	}
+	else {
+	  V value = cast(V)(this._aval[0] & ~(cast(int) this._bval[0]));
+	}
       }
       else {
 	V value = cast(V) this._aval[0];
