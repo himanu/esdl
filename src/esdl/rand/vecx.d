@@ -152,57 +152,6 @@ abstract class CstVecBase(V, alias R, int N)
 
   abstract E* getRef();
   
-  private bool refreshVal(Buddy buddy) {
-    auto val = *(getRef());
-    if (_valvec.isNull ||
-	val != _refreshedVal) {
-      _valvec.buildVec(buddy, val);
-      _refreshedVal = val;
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-  
-  override bool refresh(CstStage s, Buddy buddy) {
-    static if (HAS_RAND_ATTRIB) {
-      assert(stage(), "Stage not set for " ~ this.name());
-      if(this.isRand && s is stage()) {
-	return false;
-      }
-      else if((! this.isRand) ||
-	      this.isRand && stage().solved()) { // work with the value
-	return refreshVal(buddy);
-      }
-      else {
-	assert(false, "Constraint evaluation in wrong stage");
-      }
-    }
-    else {
-      return refreshVal(buddy);
-    }
-  }
-  
-  override BddVec getBDD(CstStage s, Buddy buddy) {
-    static if (HAS_RAND_ATTRIB) {
-      assert(stage(), "Stage not set for " ~ this.name());
-      if(this.isRand && s is stage()) {
-	return _domvec;
-      }
-      else if((! this.isRand) ||
-	      this.isRand && stage().solved()) { // work with the value
-	return _valvec;
-      }
-      else {
-	assert(false, "Constraint evaluation in wrong stage");
-      }
-    }
-    else {
-      return _valvec;
-    }
-  }
-
   override bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
@@ -296,6 +245,57 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 
       override ulong value() {
 	return cast(long) (*_var);
+      }
+
+      override bool refresh(CstStage s, Buddy buddy) {
+	static if (HAS_RAND_ATTRIB) {
+	  assert(stage(), "Stage not set for " ~ this.name());
+	  if(this.isRand && s is stage()) {
+	    return false;
+	  }
+	  else if((! this.isRand) ||
+		  this.isRand && stage().solved()) { // work with the value
+	    return refreshVal(buddy);
+	  }
+	  else {
+	    assert(false, "Constraint evaluation in wrong stage");
+	  }
+	}
+	else {
+	  return refreshVal(buddy);
+	}
+      }
+  
+      private bool refreshVal(Buddy buddy) {
+	auto val = *(getRef());
+	if (_valvec.isNull ||
+	    val != _refreshedVal) {
+	  _valvec.buildVec(buddy, val);
+	  _refreshedVal = val;
+	  return true;
+	}
+	else {
+	  return false;
+	}
+      }
+  
+      override BddVec getBDD(CstStage s, Buddy buddy) {
+	static if (HAS_RAND_ATTRIB) {
+	  assert(stage(), "Stage not set for " ~ this.name());
+	  if(this.isRand && s is stage()) {
+	    return _domvec;
+	  }
+	  else if((! this.isRand) ||
+		  this.isRand && stage().solved()) { // work with the value
+	    return _valvec;
+	  }
+	  else {
+	    assert(false, "Constraint evaluation in wrong stage");
+	  }
+	}
+	else {
+	  return _valvec;
+	}
       }
 
       void collate(ulong v, int word = 0) {
@@ -500,6 +500,69 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
 	else {
 	  return *(_parent.getRef(this._pindex));
+	}
+      }
+
+      override bool refresh(CstStage s, Buddy buddy) {
+	static if (HAS_RAND_ATTRIB) {
+	  if (_indexExpr !is null) {
+	    auto dvec = _parent[_indexExpr.evaluate()];
+	    return dvec.refresh(s, buddy);
+	  }
+	  else {
+	    assert(stage(), "Stage not set for " ~ this.name());
+	    if(this.isRand && s is stage()) {
+	      return false;
+	    }
+	    else if((! this.isRand) ||
+		    this.isRand && stage().solved()) { // work with the value
+	      return refreshVal(buddy);
+	    }
+	    else {
+	      assert(false, "Constraint evaluation in wrong stage");
+	    }
+	  }
+	}
+	else {
+	  return refreshVal(buddy);
+	}
+      }
+  
+      private bool refreshVal(Buddy buddy) {
+	auto val = *(getRef());
+	if (_valvec.isNull ||
+	    val != _refreshedVal) {
+	  _valvec.buildVec(buddy, val);
+	  _refreshedVal = val;
+	  return true;
+	}
+	else {
+	  return false;
+	}
+      }
+  
+      override BddVec getBDD(CstStage s, Buddy buddy) {
+	static if (HAS_RAND_ATTRIB) {
+	  if (_indexExpr !is null) {
+	    auto dvec = _parent[_indexExpr.evaluate()];
+	    return dvec.getBDD(s, buddy);
+	  }
+	  else {
+	    assert(stage(), "Stage not set for " ~ this.name());
+	    if(this.isRand && s is stage()) {
+	      return _domvec;
+	    }
+	    else if((! this.isRand) ||
+		    this.isRand && stage().solved()) { // work with the value
+	      return _valvec;
+	    }
+	    else {
+	      assert(false, "Constraint evaluation in wrong stage");
+	    }
+	  }
+	}
+	else {
+	  return _valvec;
 	}
       }
 
