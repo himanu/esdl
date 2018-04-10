@@ -42,11 +42,13 @@ class Bar
   //     }
   //   }
 
-  //   foreach(i, f; foo) {
-  //     f < 64;
-  //     foo[i] > 16;
-  //   }
-  // } cstFoo;
+  Constraint! q{
+    foreach(i, f; foo) {
+      if (i == 1) f == 24;
+      f < 64;
+      foo[i] > 16;
+    }
+  } cstFoo;
 
 }
 
