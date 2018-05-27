@@ -249,12 +249,12 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 
       override bool refresh(CstStage s, Buddy buddy) {
 	static if (HAS_RAND_ATTRIB) {
-	  assert(stage(), "Stage not set for " ~ this.name());
-	  if(this.isRand && s is stage()) {
+	  assert (stage(), "Stage not set for " ~ this.name());
+	  if (this.isRand && s is stage()) {
 	    return false;
 	  }
-	  else if((! this.isRand) ||
-		  this.isRand && stage().solved()) { // work with the value
+	  else if ((! this.isRand) ||
+		   this.isRand && stage().solved()) { // work with the value
 	    return refreshVal(buddy);
 	  }
 	  else {
@@ -341,6 +341,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       import std.range;
       import esdl.data.bvec;
 
+      alias RV = typeof(this);
       alias P = CstVecArr!(V, R, N-1);
       P _parent;
 
@@ -503,11 +504,19 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
+      RV flatten() {
+	if (_indexExpr !is null) {
+	  return _parent.flatten()[_indexExpr.evaluate()];
+	}
+	else {
+	  return this;
+	}
+      }
+
       override bool refresh(CstStage s, Buddy buddy) {
 	static if (HAS_RAND_ATTRIB) {
 	  if (_indexExpr !is null) {
-	    auto dvec = _parent[_indexExpr.evaluate()];
-	    return dvec.refresh(s, buddy);
+	    return flatten().refresh(s, buddy);
 	  }
 	  else {
 	    assert(stage(), "Stage not set for " ~ this.name());
@@ -823,6 +832,10 @@ class CstVecArr(V, alias R, int N=0)
 	  return this;
 	}
 
+	RV flatten() {
+	  return this;
+	}
+
 	bool parentLenIsUnresolved() {
 	  return false;		// no parent
 	}
@@ -979,7 +992,7 @@ class CstVecArr(V, alias R, int N=0)
 	  for (uint i=0; i!=maxArrLen; ++i) {
 	    if(_elems[i] is null) {
 	      import std.conv: to;
-	      _elems[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]", this, i);
+	      _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]", this, i);
 	      if(_elems[i].isVarArr()) {
 		_elems[i].build();
 	      }
@@ -1067,7 +1080,7 @@ class CstVecArr(V, alias R, int N=0)
 
 	CstVarIterBase[] itrVars() {
 	  if(_indexExpr) {
-	    return _parent.itrVars() ~ _indexExpr.itrVars() ~ _arrLen.makeItrVar();
+	    return _parent.itrVars() ~ _indexExpr.itrVars(); // ~ _arrLen.makeItrVar();
 	  }
 	  else {
 	    return _parent.itrVars();
@@ -1156,6 +1169,15 @@ class CstVecArr(V, alias R, int N=0)
 	      domains ~= pp.getDomainLens();
 	    }
 	    return domains;
+	  }
+	}
+
+	RV flatten() {
+	  if (_indexExpr !is null) {
+	    return _parent.flatten()[_indexExpr.evaluate()];
+	  }
+	  else {
+	    return this;
 	  }
 	}
 
@@ -1317,7 +1339,7 @@ class CstVecArr(V, alias R, int N=0)
 	  for (uint i=0; i!=maxArrLen; ++i) {
 	    if(_elems[i] is null) {
 	      import std.conv: to;
-	      _elems[i] = new EV(_name ~ "[" ~ i.to!string() ~ "]", this, i);
+	      _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]", this, i);
 	      if(_elems[i].isVarArr()) {
 		_elems[i].build();
 	      }

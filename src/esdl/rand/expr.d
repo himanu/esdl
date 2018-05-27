@@ -386,10 +386,29 @@ abstract class CstVarExpr
       return new CstVecSliceExpr(this, CstVal!P.allocate(p),
 				 CstVal!Q.allocate(q));
     }
-  CstNotBddExpr opUnary(string op)() {
-    static if(op == "*") {	// "!" in cstx is translated as "*"
-      return new CstNotBddExpr(_esdl__toBdd(this));
-    }
+  CstNotBddExpr opUnary(string op)() if(op == "*") {
+    // static if(op == "*") {	// "!" in cstx is translated as "*"
+    return new CstNotBddExpr(_esdl__toBdd(this));
+    // }
+    // else {
+    //   static assert(false);
+    // }
+  }
+  CstNotVecExpr opUnary(string op)() if(op == "~") {
+    // static if(op == "*") {	// "!" in cstx is translated as "*"
+    return new CstNotVecExpr(this);
+    // }
+    // else {
+    //   static assert(false);
+    // }
+  }
+  CstNegVecExpr opUnary(string op)() if(op == "-") {
+    // static if(op == "*") {	// "!" in cstx is translated as "*"
+    return new CstNegVecExpr(this);
+    // }
+    // else {
+    //   static assert(false);
+    // }
   }
 }
 
@@ -714,16 +733,22 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
   // }
   override bool refresh(CstStage s, Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
-      assert(stage() !is null, "stage null for: " ~ name());
-      if(this.isRand && stage() is s) {
-	return false;
-      }
-      else if((! this.isRand) ||
-	      this.isRand && stage().solved()) { // work with the value
-	return refreshNoRand(buddy);
+      auto fparent = _parent.flatten();
+      if (fparent !is _parent) {
+	return _parent.flatten().arrLen.refresh(s, buddy);
       }
       else {
-	assert(false, "Constraint evaluation in wrong stage");
+	assert(stage() !is null, "stage null for: " ~ name());
+	if(this.isRand && stage() is s) {
+	  return false;
+	}
+	else if((! this.isRand) ||
+		this.isRand && stage().solved()) { // work with the value
+	  return refreshNoRand(buddy);
+	}
+	else {
+	  assert(false, "Constraint evaluation in wrong stage");
+	}
       }
     }
     else {
@@ -733,16 +758,22 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
 
   override BddVec getBDD(CstStage s, Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
-      assert(stage() !is null, "stage null for: " ~ name());
-      if(this.isRand && stage() is s) {
-	return _domvec;
-      }
-      else if((! this.isRand) ||
-	      this.isRand && stage().solved()) { // work with the value
-	return _valvec;
+      auto fparent = _parent.flatten();
+      if (fparent !is _parent) {
+	return _parent.flatten().arrLen.getBDD(s, buddy);
       }
       else {
-	assert(false, "Constraint evaluation in wrong stage");
+	assert(stage() !is null, "stage null for: " ~ name());
+	if(this.isRand && stage() is s) {
+	  return _domvec;
+	}
+	else if((! this.isRand) ||
+		this.isRand && stage().solved()) { // work with the value
+	  return _valvec;
+	}
+	else {
+	  assert(false, "Constraint evaluation in wrong stage");
+	}
       }
     }
     else {
@@ -1203,12 +1234,170 @@ class CstVecSliceExpr: CstVarExpr
   }
 }
 
-// class CstNotVecExpr: CstVarExpr
-// {
-//   string name() {
-//     return "CstNotVecExpr";
-//   }
-// }
+class CstNotVecExpr: CstVarExpr
+{
+  import std.conv;
+
+  CstVarExpr _expr;
+
+  // CstDomain[] _preReqs;
+  override CstVarPrim[] preReqs() {
+    return _expr.preReqs();
+  }
+
+  CstVarIterBase[] _itrVars;
+  override CstVarIterBase[] itrVars() {
+    return _itrVars;
+  }
+
+  override bool hasUnresolvedIdx() {
+    return _expr.hasUnresolvedIdx();
+  }
+      
+  override string name() {
+    return "( ~ " ~ _expr.name ~ " )";
+  }
+
+  override CstDomain[] getRndDomains() {
+    return _expr.getRndDomains();
+  }
+
+  override bool refresh(CstStage stage, Buddy buddy) {
+    return _expr.refresh(stage, buddy);
+  }
+  
+  override BddVec getBDD(CstStage stage, Buddy buddy) {
+    if(this.itrVars.length !is 0) {
+      assert(false,
+	     "CstNotVecExpr: Need to unwind the itrVars" ~
+	     " before attempting to solve BDD");
+    }
+
+    return ~(_expr.getBDD(stage, buddy));
+  }
+
+  override long evaluate() {
+    return ~(_expr.evaluate());
+  }
+
+  override CstNotVecExpr unwind(CstVarIterBase itr, uint n) {
+    bool found = false;
+    foreach(var; itrVars()) {
+      if(itr is var) {
+	found = true;
+	break;
+      }
+    }
+    if(! found) return this;
+    else {
+      return new CstNotVecExpr(_expr.unwind(itr, n));
+    }
+  }
+
+  this(CstVarExpr expr) {
+    _expr = expr;
+    _itrVars = _expr.itrVars;
+  }
+
+  override uint resolveLap() {
+    return _expr.resolveLap();
+  }
+
+  override void resolveLap(uint lap) {
+    _expr.resolveLap(lap);
+  }
+  
+  override bool isConst() {
+    return false;
+  }
+
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+}
+
+class CstNegVecExpr: CstVarExpr
+{
+  import std.conv;
+
+  CstVarExpr _expr;
+
+  // CstDomain[] _preReqs;
+  override CstVarPrim[] preReqs() {
+    return _expr.preReqs();
+  }
+
+  CstVarIterBase[] _itrVars;
+  override CstVarIterBase[] itrVars() {
+    return _itrVars;
+  }
+
+  override bool hasUnresolvedIdx() {
+    return _expr.hasUnresolvedIdx();
+  }
+      
+  override string name() {
+    return "( - " ~ _expr.name ~ " )";
+  }
+
+  override CstDomain[] getRndDomains() {
+    return _expr.getRndDomains();
+  }
+
+  override bool refresh(CstStage stage, Buddy buddy) {
+    return _expr.refresh(stage, buddy);
+  }
+  
+  override BddVec getBDD(CstStage stage, Buddy buddy) {
+    if(this.itrVars.length !is 0) {
+      assert(false,
+	     "CstNegVecExpr: Need to unwind the itrVars" ~
+	     " before attempting to solve BDD");
+    }
+
+    return -(_expr.getBDD(stage, buddy));
+  }
+
+  override long evaluate() {
+    return -(_expr.evaluate());
+  }
+
+  override CstNegVecExpr unwind(CstVarIterBase itr, uint n) {
+    bool found = false;
+    foreach(var; itrVars()) {
+      if(itr is var) {
+	found = true;
+	break;
+      }
+    }
+    if(! found) return this;
+    else {
+      return new CstNegVecExpr(_expr.unwind(itr, n));
+    }
+  }
+
+  this(CstVarExpr expr) {
+    _expr = expr;
+    _itrVars = _expr.itrVars;
+  }
+
+  override uint resolveLap() {
+    return _expr.resolveLap();
+  }
+
+  override void resolveLap(uint lap) {
+    _expr.resolveLap(lap);
+  }
+  
+  override bool isConst() {
+    return false;
+  }
+
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+}
+
 
 enum CstBddOp: byte
   {   LOGICAND,
@@ -1508,7 +1697,11 @@ class CstVec2BddExpr: CstBddExpr
   }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if (this.itrVars.length !is 0) {
+      // foreach (itr; itrVars) {
+      // 	import std.stdio;
+      // 	writeln(name(), " : ", itr.name());
+      // }
       assert(false,
 	     "CstVec2BddExpr: Need to unwind the itrVars" ~
 	     " before attempting to solve BDD");
