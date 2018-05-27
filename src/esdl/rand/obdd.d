@@ -718,6 +718,23 @@ struct BddVec
     return dst;
   }
 
+  final BddVec opUnary(string op)()
+    if(op == "+" || op == "-" || op == "~")
+      {
+	static if(op == "+")
+	  {
+	    return this;
+	  }
+	static if(op == "-")
+	  {
+	    return this.opNeg();
+	  }
+	static if(op == "~")
+	  {
+	    return this.opCom();
+	  }
+      }
+
   final BddVec opBinary(string op)(long rhs)
     if(op == "<<" || op == ">>" || op == "*" || op == "/" || op == "%")
       {
@@ -934,6 +951,12 @@ struct BddVec
     for(int n=0 ; n < size ; n++)
       res.bitvec[n] = this.bitvec[n].not();
     return res;
+  }
+
+  BddVec opNeg()
+  {
+    BddVec lhs = BddVec(size, false);
+    return lhs.sub(this);
   }
 
   BddVec add(BddVec that)
