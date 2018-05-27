@@ -1419,3 +1419,7 @@ void vpiReturnVal(T)(T t) {
     static assert ("vpiReturnVal undefined for non int values");
   }
 }
+
+void vpi_finish() {
+  vpi_control(vpiFinish);
+}
