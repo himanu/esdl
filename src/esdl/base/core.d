@@ -7241,6 +7241,10 @@ enum SimRunPhase: byte
       SIMULATION_DONE,
       }
 
+RootEntityIntf[] getAllRoots() {
+  return RootEntity.allRoots();
+}
+
 void joinAllRoots() {
   RootEntity.joinSimAll();
 }
