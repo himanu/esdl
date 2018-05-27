@@ -1767,6 +1767,10 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
 
   alias read this;
 
+  public final T read() {
+    return super.read();
+  }
+
   vpiHandle vpiNetHandle = null;
 
   override final void updateBindings() {
@@ -1777,6 +1781,18 @@ class HdlSignalObj(T, bool MULTI_DRIVER = false): SignalObj!(T, MULTI_DRIVER)
     }
   }
   
+  public int opCmp(string file = __FILE__,
+		   size_t line = __LINE__, V)(const V other) const
+    if(isIntegral!V || isBitVector!V || isBoolean!V) {
+      return this.read().opCmp(other);
+    }
+
+  public bool opEquals(string file = __FILE__,
+		       size_t line = __LINE__, V)(const V other)
+    if(isIntegral!V || isBitVector!V || isBoolean!V) {
+      return this.read().opEquals(other);
+    }
+
   final private void hdlPut() {
     assert(vpiIsUsable);
     synchronized(this) {
@@ -1961,8 +1977,8 @@ template HdlSignal(uint WIDTH) {
 	  import esdl.data.bvec;
 
 	  static if(is(T == bool) || (isBitVector!T && T.SIZE == 1)) {
-	    _signalObj._posedgeEvent.initialize();
-	    _signalObj._negedgeEvent.initialize();
+	    _signalObj._posedgeEvent.initialize("_posedgeEvent");
+	    _signalObj._negedgeEvent.initialize("_posedgeEvent");
 	  }
 	}
       }
