@@ -280,16 +280,18 @@ struct CstParser {
 
   int[MaxHierDepth * 2] parseIdentifierChain() {
     int[MaxHierDepth * 2] result;
-    size_t wTag;
+    size_t wTag = srcCursor;
     size_t start = srcCursor;
-
+    size_t srcTag = srcCursor;
+    
     result[0] = -1;
 
+    wTag = srcCursor;
+    parseSpace();
+    srcTag = srcCursor;
+    parseIdentifier();
+
     for (size_t i=0; i != MaxHierDepth-1; ++i) {
-      wTag = srcCursor;
-      parseSpace();
-      size_t srcTag = srcCursor;
-      parseIdentifier();
       if(srcCursor > srcTag) {
 	fill(CST[wTag..srcTag]);
 	result[2*i] = cast(int) (srcTag - start);
@@ -305,7 +307,20 @@ struct CstParser {
       if(CST[srcCursor] == '.') {
 	fill(CST[srcTag..srcCursor]);
 	++srcCursor;
+	wTag = srcCursor;
+	parseSpace();
+	srcTag = srcCursor;
+	parseIdentifier();
 	continue;
+      }
+      else if (CST[srcCursor] == '[') {
+      	fill(CST[srcTag..srcCursor]);
+      	// ++srcCursor;
+	wTag = srcCursor;
+	// parseSpace();
+	srcTag = srcCursor;
+	moveToMatchingBracket();
+      	continue;
       }
       else {
 	srcCursor = srcTag;
@@ -316,6 +331,47 @@ struct CstParser {
     return result;
   }
 
+  size_t moveToMatchingBracket() {
+    size_t start = srcCursor;
+    uint bracketCount = 0;
+    while (srcCursor < CST.length) {
+      if (CST[srcCursor] == '/' && CST[srcCursor+1] == '/') {
+	parseLineComment();
+	continue;
+      }
+      if (CST[srcCursor] == '/' && CST[srcCursor+1] == '*') {
+	parseBlockComment();
+	continue;
+      }
+      if (CST[srcCursor] == '/' && CST[srcCursor+1] == '+') {
+	parseNestedComment();
+	continue;
+      }
+      if (CST[srcCursor] == '[') {
+	bracketCount++;
+	srcCursor++;
+	continue;
+      }
+      if (CST[srcCursor] == ']') {
+	bracketCount--;
+	srcCursor++;
+	if (bracketCount == 0) {
+	  break;
+	}
+	continue;
+      }
+      srcCursor++;
+      continue;
+    }
+
+    if (bracketCount != 0) {
+      assert(false, "Unbalanced backet");
+    }
+     
+    return start;
+    
+  }
+  
   size_t procIdentifier() {
     // parse an identifier and the following '.' heirarcy if any
     auto start = srcCursor;
@@ -334,7 +390,17 @@ struct CstParser {
       if(idChain[2] != -1) {
 	fill(".");
 	for (size_t i=1; i != MaxHierDepth-1; ++i) {
-	  fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
+	  if (CST[srcTag+idChain[2*i]] != '[') {
+	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
+	  }
+	  else {
+	    auto savedCursor = srcCursor;
+	    srcCursor = srcTag+idChain[2*i]+1;
+	    fill("opIndex(");
+	    procExpr();
+	    fill(")");
+	    srcCursor = savedCursor;
+	  }
 	  if(idChain[2*i+2] == -1) break;
 	  else fill(".");
 	}
