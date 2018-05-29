@@ -2,7 +2,8 @@ module esdl.rand.solver;
 import esdl.rand.obdd;
 
 import esdl.rand.expr: CstBlock, CstVarPrim, CstStage,
-  CstBddExpr, CstValAllocator;
+  CstBddExpr, // , CstValAllocator
+  CstDomain;
 import esdl.rand.base;
 
 
@@ -93,6 +94,10 @@ abstract class _esdl__SolverRoot {
 
   BddDomain[] _domains;
 
+  CstDomain[] _cstDomains;
+
+  uint _domIndex = 0;
+  
   // compositional parent -- not inheritance based
   _esdl__SolverRoot _parent = null;
 
@@ -151,7 +156,7 @@ abstract class _esdl__SolverRoot {
 
     }
 
-    CstValAllocator.mark();
+    // CstValAllocator.mark();
 
     CstStage[] unsolvedStages;	// unresolved stages -- all
 
@@ -220,7 +225,7 @@ abstract class _esdl__SolverRoot {
       
     }
 
-    CstValAllocator.reset();
+    // CstValAllocator.reset();
     
   }
 
@@ -373,8 +378,16 @@ abstract class _esdl__SolverRoot {
   }
 
   void initDomains() { // (T)(T t) {
-    uint domIndex = 0;
     int[] domList;
+    
+
+    foreach (dom; _cstDomains) dom.reset();
+    
+    this._domIndex = 0;
+    _domains.length = 0;
+    _cstDomains.length = 0;
+    
+    _esdl__buddy.clearAllDomains();
 
     _esdl__cstEqns._esdl__reset(); // start empty
 
@@ -387,26 +400,27 @@ abstract class _esdl__SolverRoot {
       _esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
     }
 
+    
     foreach(stmt; _esdl__cstEqns._exprs) {
-      foreach(vec; stmt.getRndDomains()) {
-	if(vec.domIndex != uint.max) {
-	  vec.domIndex = uint.max;
-	}
+      addDomains(stmt.getRndDomains());
+    }
+  }
+
+  void addDomains(CstDomain[] domains) {
+    int[] domList;
+
+    // foreach (vec; domains) {
+    //   assert(vec.domIndex == uint.max);
+    //   // vec.domIndex = uint.max;
+    // }
+
+    foreach(vec; domains) {
+      if(vec.domIndex == uint.max) {
+	vec.domIndex = this._domIndex++;
+	domList ~= vec.bitcount;
       }
     }
-
-    foreach(stmt; _esdl__cstEqns._exprs) {
-      foreach(vec; stmt.getRndDomains()) {
-	if(vec.domIndex == uint.max) {
-	  vec.domIndex = domIndex++;
-	  domList ~= vec.bitcount;
-	}
-      }
-    }
-
-    _esdl__buddy.clearAllDomains();
-    _domains = _esdl__buddy.extDomain(domList);
-
+    _domains ~= _esdl__buddy.extDomain(domList);
   }
 
   void printSolution() {

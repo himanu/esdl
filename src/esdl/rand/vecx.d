@@ -7,7 +7,8 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 import esdl.rand.obdd;
 import esdl.rand.base;
 import esdl.rand.expr: CstVarPrim, CstVarExpr, CstVarIterBase,
-  CstStage, CstValAllocator, CstVarLen, CstDomain, CstVecDomain, _esdl__cstVal;
+  CstStage, // CstValAllocator,
+  CstVarLen, CstDomain, CstVecDomain, _esdl__cstVal;
 
 // Consolidated Proxy Class
 // template CstVecBase(T, int I, int N=0) {

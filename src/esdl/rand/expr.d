@@ -6,7 +6,6 @@ import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
 
-// ToDo -- create a freelist of CstStage's
 class CstStage {
   int _id = -1;
   // List of randomized variables associated with this stage. A
@@ -37,25 +36,25 @@ class CstStage {
   }
 }
 
-abstract class CstValAllocator {
-  static CstValAllocator[] allocators;
+// abstract class CstValAllocator {
+//   static CstValAllocator[] allocators;
 
-  static void mark() {
-    foreach (allocator; allocators) {
-      allocator.markIndex();
-    }
-  }
+//   static void mark() {
+//     foreach (allocator; allocators) {
+//       allocator.markIndex();
+//     }
+//   }
   
-  static void reset() {
-    foreach (allocator; allocators) {
-      allocator.resetIndex();
-    }
-  }
+//   static void reset() {
+//     foreach (allocator; allocators) {
+//       allocator.resetIndex();
+//     }
+//   }
   
-  abstract void resetIndex();
+//   abstract void resetIndex();
 
-  abstract void markIndex();
-}
+//   abstract void markIndex();
+// }
 
 
 interface CstDomain
@@ -71,6 +70,7 @@ interface CstDomain
   abstract bool signed();
   abstract bool isRand();
   abstract uint bitcount();
+  abstract void reset();
   abstract BDD getPrimBdd(Buddy buddy);
   final bool solved() {
     if(isRand()) {
@@ -138,6 +138,12 @@ abstract class CstVecDomain(alias R): CstVarExpr, CstDomain
     }
   }
 
+  void reset() {
+    static if (HAS_RAND_ATTRIB) {
+      _domIndex = uint.max;
+    }
+  }
+  
   CstStage stage() {
     static if (HAS_RAND_ATTRIB) {
       return _stage;
@@ -216,7 +222,7 @@ abstract class CstVarExpr
   abstract string name();
   
   CstBddExpr toBdd() {
-    auto zero = CstVal!int.allocate(0);
+    auto zero = new CstVal!int(0); // CstVal!int.allocate(0);
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
@@ -296,7 +302,7 @@ abstract class CstVarExpr
   CstVec2VecExpr opBinary(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-  	auto qq = CstVal!Q.allocate(q);
+  	auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
   	static if(op == "&") {
   	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
   	}
@@ -332,7 +338,7 @@ abstract class CstVarExpr
   CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
     if(isBitVector!Q || isIntegral!Q)
       {
-	auto qq = CstVal!Q.allocate(q);
+	auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
 	static if(op == "&") {
 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
 	}
@@ -373,7 +379,7 @@ abstract class CstVarExpr
 
   CstVarExpr opSlice(P)(P p)
     if(isIntegral!P || isBitVector!P) {
-      return new CstVecSliceExpr(this, CstVal!P.allocate(p));
+      return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
     }
 
   CstVarExpr opSlice(CstVarExpr lhs, CstVarExpr rhs)
@@ -383,8 +389,8 @@ abstract class CstVarExpr
 
   CstVarExpr opSlice(P, Q)(P p, Q q)
     if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
-      return new CstVecSliceExpr(this, CstVal!P.allocate(p),
-				 CstVal!Q.allocate(q));
+      return new CstVecSliceExpr(this, new CstVal!P(p), // CstVal!P.allocate(p),
+				 new CstVal!Q(q)); // CstVal!Q.allocate(q));
     }
   CstNotBddExpr opUnary(string op)() if(op == "*") {
     // static if(op == "*") {	// "!" in cstx is translated as "*"
@@ -440,47 +446,47 @@ abstract class CstValBase: CstVarExpr
 }
 
 auto _esdl__cstVal(T)(T val) {
-  return CstVal!(T).allocate(val);
+  return new CstVal!(T)(val); // CstVal!(T).allocate(val);
 }
 
 class CstVal(T = int): CstValBase
 {
-  static class Allocator: CstValAllocator {
-    CstVal!T[] container;
-    uint _index = 0;
+  // static class Allocator: CstValAllocator {
+  //   CstVal!T[] container;
+  //   uint _index = 0;
 
-    uint _mark;
+  //   uint _mark;
 
-    override void markIndex() {
-      _mark = _index;
-    }
+  //   override void markIndex() {
+  //     _mark = _index;
+  //   }
 
-    override void resetIndex() {
-      for (uint i = _mark; i != _index; ++i) {
-	container[i]._valvec.reset();
-      }
-      _index = _mark;
+  //   override void resetIndex() {
+  //     for (uint i = _mark; i != _index; ++i) {
+  // 	container[i]._valvec.reset();
+  //     }
+  //     _index = _mark;
       
-    }
+  //   }
 
 
-    CstVal!T allocate(T val) {
-      // return new CstVal!T(val);
-      if (_index >= container.length) {
-    	container.length += 1;
-    	container[$-1] = new CstVal!T(val);
-      }
+  //   CstVal!T allocate(T val) {
+  //     // return new CstVal!T(val);
+  //     if (_index >= container.length) {
+  //   	container.length += 1;
+  //   	container[$-1] = new CstVal!T(val);
+  //     }
       
-      auto cstVal = container[_index];
-      cstVal._val = val;
-      _index++;
-      return cstVal;
-    }
-  }
+  //     auto cstVal = container[_index];
+  //     cstVal._val = val;
+  //     _index++;
+  //     return cstVal;
+  //   }
+  // }
 
   import std.conv;
 
-  static Allocator _allocator;
+  // static Allocator _allocator;
 
   // static this() {
   //   CstVal!T._allocator = new Allocator;
@@ -494,17 +500,17 @@ class CstVal(T = int): CstValBase
     return _val.to!string();
   }
 
-  static CstVal!T allocate(T value) {
-    Allocator allocator = _allocator;
-    if (allocator is null) {
-      allocator = new Allocator;
-      _allocator = allocator;
-      CstValAllocator.allocators ~= allocator;
-    }
+  // static CstVal!T allocate(T value) {
+  //   Allocator allocator = _allocator;
+  //   if (allocator is null) {
+  //     allocator = new Allocator;
+  //     _allocator = allocator;
+  //     CstValAllocator.allocators ~= allocator;
+  //   }
 
-    // return new CstVal!T(value);
-    return allocator.allocate(value);
-  }
+  //   // return new CstVal!T(value);
+  //   return allocator.allocate(value);
+  // }
 
   this(T value) {
     _val = value;
@@ -641,7 +647,7 @@ class CstVarIter(RV): CstVarIterBase
       return _arrVar.unwind(itr,n).arrLen().makeItrVar();
     }
     else {
-      return CstVal!size_t.allocate(n);
+      return new CstVal!size_t(n); // CstVal!size_t.allocate(n);
     }
   }
 
@@ -2015,7 +2021,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
 
 CstVec2BddExpr _esdl__lth(Q)(CstVarExpr left, Q q)
   if(isBitVector!Q || isIntegral!Q) {
-    auto qq = CstVal!Q.allocate(q);
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
     return _esdl__lth(left, qq);
   }
 
@@ -2038,7 +2044,7 @@ auto _esdl__lth(P, Q)(P p, Q q) {
 
 CstVec2BddExpr _esdl__lte(Q)(CstVarExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
-    auto qq = CstVal!Q.allocate(q);
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
     return _esdl__lte(p, qq);
   }
 
@@ -2061,7 +2067,7 @@ auto _esdl__lte(P, Q)(P p, Q q) {
 
 CstVec2BddExpr _esdl__gth(Q)(CstVarExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
-    auto qq = CstVal!Q.allocate(q);
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
     return _esdl__gth(p, qq);
   }
 
@@ -2084,7 +2090,7 @@ auto _esdl__gth(P, Q)(P p, Q q) {
 
 CstVec2BddExpr _esdl__gte(Q)(CstVarExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
-    auto qq = CstVal!Q.allocate(q);
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
     return _esdl__gte(p, qq);
   }
 
@@ -2107,7 +2113,7 @@ auto _esdl__gte(P, Q)(P p, Q q) {
 
 CstVec2BddExpr _esdl__equ(Q)(CstVarExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
-    auto qq = CstVal!Q.allocate(q);
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
     return _esdl__equ(p, qq);
   }
 
@@ -2130,7 +2136,7 @@ auto _esdl__equ(P, Q)(P p, Q q) {
 
 CstVec2BddExpr _esdl__neq(Q)(CstVarExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
-    auto qq = CstVal!Q.allocate(q);
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
     return _esdl__neq(p, qq);
   }
 

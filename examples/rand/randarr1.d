@@ -44,7 +44,7 @@ class Bar
 
   Constraint! q{
     foreach(i, f; foo) {
-      if (i == 1) f == 24;
+      // if (i == 1) f == 24;
       f < 64;
       foo[i] > 16;
     }

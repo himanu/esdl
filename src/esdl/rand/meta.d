@@ -718,7 +718,7 @@ mixin template _esdl__SolverMixin()
     import std.traits: isIntegral, isBoolean;
     import esdl.data.bvec: isBitVector;
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
-      return CstVal!L.allocate(l);
+      return new CstVal!L(l); // CstVal!L.allocate(l);
     }
     else {
       return l;
