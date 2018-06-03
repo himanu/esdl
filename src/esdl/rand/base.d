@@ -170,7 +170,8 @@ template getRandAttrN(alias R, int N) {
     enum int getRandAttrN = A[N];
   }
   else {
-    static assert(false);
+    // static assert(false);
+    enum int getRandAttrN = -1;
   }
 }
 

@@ -417,7 +417,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if (_indexExpr) {
 	    if (_indexExpr.isConst()) {
 	      // domains = cast (CstDomain[]) _parent.getDomainElems(_indexExpr.evaluate());
-	      foreach(pp; _parent.getDomainElems(_indexExpr.evaluate())) {
+	      foreach(pp; _parent.getDomainElems(cast(size_t) _indexExpr.evaluate())) {
 		domains ~= pp;
 	      }
 	    }
@@ -507,7 +507,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 
       RV flatten() {
 	if (_indexExpr !is null) {
-	  return _parent.flatten()[_indexExpr.evaluate()];
+	  return _parent.flatten()[cast(size_t) _indexExpr.evaluate()];
 	}
 	else {
 	  return this;
@@ -554,7 +554,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       override BddVec getBDD(CstStage s, Buddy buddy) {
 	static if (HAS_RAND_ATTRIB) {
 	  if (_indexExpr !is null) {
-	    auto dvec = _parent[_indexExpr.evaluate()];
+	    auto dvec = _parent[cast(size_t) _indexExpr.evaluate()];
 	    return dvec.getBDD(s, buddy);
 	  }
 	  else {
@@ -632,20 +632,6 @@ abstract class CstVecArrBase(V, alias R, int N=0)
   string _name;
   override string name() {
     return _name;
-  }
-
-  size_t maxArrLen() {
-    static if (HAS_RAND_ATTRIB) {
-      static if(isStaticArray!L) {
-	return L.length;
-      }
-      else {
-	return getRandAttrN!(R, N);
-      }
-    }
-    else {
-      return L.length;
-    }
   }
 
   static if (HAS_RAND_ATTRIB) {
@@ -748,36 +734,36 @@ class CstVecArr(V, alias R, int N=0)
 	  _var = &var;
 	}
       
-	static if (HAS_RAND_ATTRIB) {
-	  static if(isStaticArray!V) {
-	    static assert(__traits(isSame, R, rand));
-	    enum int maxLen = V.length;
-	    this(string name, ref V var) {
-	      _name = name;
-	      _var = &var;
-	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
-	      _relatedIdxs ~= _arrLen;
-	    }
-	  }
+	// static if (HAS_RAND_ATTRIB) {
+	//   static if(isStaticArray!V) {
+	//     static assert(__traits(isSame, R, rand));
+	//     // enum int maxLen = V.length;
+	//     this(string name, ref V var) {
+	//       _name = name;
+	//       _var = &var;
+	//       _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	//       _relatedIdxs ~= _arrLen;
+	//     }
+	//   }
 
-	  static if(isDynamicArray!V) {
-	    enum int maxLen = getRandAttrN!(R, N);
-	    this(string name, ref V var) {
-	      _name = name;
-	      _var = &var;
-	      _arrLen = new CstVarLen!RV(name ~ ".len", this);
-	      _relatedIdxs ~= _arrLen;
-	    }
-	  }
+	//   static if(isDynamicArray!V) {
+	//     // enum int maxLen = getRandAttrN!(R, N);
+	//     this(string name, ref V var) {
+	//       _name = name;
+	//       _var = &var;
+	//       _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	//       _relatedIdxs ~= _arrLen;
+	//     }
+	//   }
+	// }
+	// else {
+	this(string name, ref V var) {
+	  _name = name;
+	  _var = &var;
+	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	  _relatedIdxs ~= _arrLen;
 	}
-	else {
-	  this(string name, ref V var) {
-	    _name = name;
-	    _var = &var;
-	    _arrLen = new CstVarLen!RV(name ~ ".len", this);
-	    _relatedIdxs ~= _arrLen;
-	  }
-	}
+	// }
 
 	CstVarPrim[] preReqs() {
 	  static if (HAS_RAND_ATTRIB) {
@@ -796,7 +782,7 @@ class CstVecArr(V, alias R, int N=0)
 	  EV[] getDomainElems(long idx) {
 	    build();
 	    if(idx < 0) return _elems;
-	    else return [_elems[idx]];
+	    else return [_elems[cast(size_t) idx]];
 	  }
 	}
 
@@ -893,7 +879,8 @@ class CstVecArr(V, alias R, int N=0)
 	static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
 	  static if(N.length == 0) return arr.length;
 	  else {
-	    return getLen(arr[idx[0]], idx[1..$]);
+	    if (arr.length == 0) return 0;
+	    else return getLen(arr[idx[0]], idx[1..$]);
 	  }
 	}
 
@@ -963,7 +950,7 @@ class CstVecArr(V, alias R, int N=0)
 
 	void _esdl__doRandomize(_esdl__RandGen randGen) {
 	  static if (HAS_RAND_ATTRIB) {
-	    if(_elems.length == 0) this.build();
+	    if (! built()) this.build();
 	    assert(arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
 	      this[i]._esdl__doRandomize(randGen);
@@ -987,6 +974,8 @@ class CstVecArr(V, alias R, int N=0)
     
 	void build() {
 	  if(built()) return;
+	  // import std.stdio;
+	  // writeln("Creating array of length ", maxArrLen());
 	  _elems.length = maxArrLen();
 	  // static if(isIntegral!E || isBitVector!E) {
 	  // if(! built()) {
@@ -1026,6 +1015,20 @@ class CstVecArr(V, alias R, int N=0)
 
 	CstStage stage() {
 	  assert(false);
+	}
+
+	size_t maxArrLen() {
+	  static if (HAS_RAND_ATTRIB) {
+	    static if(isStaticArray!L) {
+	      return L.length;
+	    }
+	    else {
+	      return getRandAttrN!(R, N);
+	    }
+	  }
+	  else {
+	    return L.length;
+	  }
 	}
 
       }
@@ -1334,6 +1337,8 @@ class CstVecArr(V, alias R, int N=0)
     
 	void build() {
 	  if(built()) return;
+	  // import std.stdio;
+	  // writeln("Creating array of length ", maxArrLen());
 	  _elems.length = maxArrLen();
 	  // static if(isIntegral!E || isBitVector!E) {
 	  // if(! built()) {
@@ -1373,6 +1378,20 @@ class CstVecArr(V, alias R, int N=0)
 
 	CstStage stage() {
 	  assert(false);
+	}
+
+	size_t maxArrLen() {
+	  static if (HAS_RAND_ATTRIB) {
+	    static if(isStaticArray!L) {
+	      return L.length;
+	    }
+	    else {
+	      return getRandAttrN!(R, N);
+	    }
+	  }
+	  else {
+	    return L.length;
+	  }
 	}
 
       }

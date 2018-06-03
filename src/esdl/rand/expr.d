@@ -1107,7 +1107,7 @@ class CstVecSliceExpr: CstVarExpr
 
   // CstDomain[] _preReqs;
   override CstVarPrim[] preReqs() {
-    CstVarPrim[] reqs;
+    // CstVarPrim[] reqs;
     if(_rhs is null) {
       return _vec.preReqs() ~ _lhs.preReqs();
       // foreach(req; _vec.preReqs() ~ _lhs.preReqs()) {
@@ -1124,7 +1124,7 @@ class CstVecSliceExpr: CstVarExpr
       // 	}
       // }
     }
-    return reqs;
+    // return reqs;
   }
   
   CstVarIterBase[] _itrVars;
