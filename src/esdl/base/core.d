@@ -500,7 +500,7 @@ struct timePrecision
 // wants to create a NamedComp, he needs to implement NamedComp
 // interface and for that purpose, the NamedMixin is provided.
 
-package interface NamedComp: EsdlObj, TimeContext
+interface NamedComp: EsdlObj, TimeContext
 {
   // Elaboration and Hierarchy related interface functions
   void _esdl__setParent(NamedComp parent);
