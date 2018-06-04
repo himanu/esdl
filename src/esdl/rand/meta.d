@@ -17,8 +17,8 @@ import esdl.data.bstr;
 import std.exception: enforce;
 import std.range: ElementType;
 
-import esdl.rand.base;
-import esdl.rand.expr: CstVarExpr, CstBlock;
+import esdl.rand.misc;
+import esdl.rand.base: CstBlock;
 import esdl.rand.vecx: CstVec, CstVecArr;
 import esdl.rand.solver;
 

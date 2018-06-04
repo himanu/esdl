@@ -1,10 +1,9 @@
 module esdl.rand.solver;
 import esdl.rand.obdd;
 
-import esdl.rand.expr: CstBlock, CstVarPrim, CstStage,
-  CstBddExpr, // , CstValAllocator
-  CstDomain;
-import esdl.rand.base;
+import esdl.rand.base: CstVarPrim, CstStage, CstBddExpr,// , CstValAllocator
+  CstDomain, CstBlock;
+import esdl.rand.misc;
 
 
 abstract class _esdl__ConstraintBase: _esdl__Norand

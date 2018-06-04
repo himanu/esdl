@@ -5,10 +5,10 @@ import esdl.data.bstr;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
 import esdl.rand.obdd;
-import esdl.rand.base;
-import esdl.rand.expr: CstVarPrim, CstVarExpr, CstVarIterBase,
-  CstStage, // CstValAllocator,
-  CstVarLen, CstDomain, CstVecDomain, _esdl__cstVal;
+import esdl.rand.misc;
+import esdl.rand.base: CstVarPrim, CstVarExpr, CstVarIterBase,
+  CstStage, CstDomain; // CstValAllocator,
+import esdl.rand.expr: CstVarLen, CstVecDomain, _esdl__cstVal;
 
 // Consolidated Proxy Class
 // template CstVecBase(T, int I, int N=0) {
@@ -968,7 +968,7 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	bool built() {
-	  return (_elems.length == maxArrLen() &&
+	  return (_elems.length >= maxArrLen() &&
 		  _elems[0] !is null);
 	}
     
@@ -991,7 +991,6 @@ class CstVecArr(V, alias R, int N=0)
 	}
 	
 	auto iterator() {
-	  this.build();
 	  auto itr = arrLen.makeItrVar();
 	  return itr;
 	}
@@ -1331,7 +1330,7 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	bool built() {
-	  return (_elems.length == maxArrLen() &&
+	  return (_elems.length >= maxArrLen() &&
 		  _elems[0] !is null);
 	}
     
@@ -1354,7 +1353,6 @@ class CstVecArr(V, alias R, int N=0)
 	}
 	
 	auto iterator() {
-	  this.build();
 	  auto itr = arrLen.makeItrVar();
 	  return itr;
 	}

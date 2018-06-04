@@ -1,88 +1,175 @@
 module esdl.rand.expr;
 
 import esdl.rand.obdd;
-import esdl.rand.base: _esdl__RandGen, _esdl__norand, isVecSigned;
+import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
+import esdl.rand.base;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-
-class CstStage {
-  int _id = -1;
-  // List of randomized variables associated with this stage. A
-  // variable can be associated with only one stage
-  CstDomain[] _domVars;
-  // The Bdd expressions that apply to this stage
-  CstBddExpr[] _bddExprs;
-  // These are the length variables that this stage will solve
-  // CstVarPrim[] _preReqs;
-  
-  BDD _solveBDD;
-
-  ~this() {
-    _solveBDD.reset();
-  }
-  
-  void id(uint i) {
-    _id = i;
-  }
-
-  uint id() {
-    return _id;
-  }
-
-  bool solved() {
-    if(_id != -1) return true;
-    else return false;
-  }
-}
-
-// abstract class CstValAllocator {
-//   static CstValAllocator[] allocators;
-
-//   static void mark() {
-//     foreach (allocator; allocators) {
-//       allocator.markIndex();
-//     }
-//   }
-  
-//   static void reset() {
-//     foreach (allocator; allocators) {
-//       allocator.resetIndex();
-//     }
-//   }
-  
-//   abstract void resetIndex();
-
-//   abstract void markIndex();
-// }
-
-
-interface CstDomain
+abstract class CstVarTerm: CstVarExpr
 {
-  abstract string name();
-  abstract ref BddVec bddvec();
-  abstract void bddvec(BddVec b);
-  abstract void collate(ulong v, int word=0);
-  abstract CstStage stage();
-  abstract void stage(CstStage s);
-  abstract uint domIndex();
-  abstract void domIndex(uint s);
-  abstract bool signed();
-  abstract bool isRand();
-  abstract uint bitcount();
-  abstract void reset();
-  abstract BDD getPrimBdd(Buddy buddy);
-  final bool solved() {
-    if(isRand()) {
-      return stage() !is null && stage().solved();
+
+  CstBddExpr toBdd() {
+    auto zero = new CstVal!int(0); // CstVal!int.allocate(0);
+    return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
+  }
+
+  override abstract CstVarTerm unwind(CstVarIterBase itr, uint n);
+
+  CstVec2VecExpr opBinary(string op)(CstVarTerm other)
+  {
+    static if(op == "&") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.AND);
     }
-    else {
-      return true;
+    static if(op == "|") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.OR);
     }
+    static if(op == "^") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.XOR);
+    }
+    static if(op == "+") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.ADD);
+    }
+    static if(op == "-") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.SUB);
+    }
+    static if(op == "*") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.MUL);
+    }
+    static if(op == "/") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.DIV);
+    }
+    static if(op == "%") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.REM);
+    }
+    static if(op == "<<") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.LSH);
+    }
+    static if(op == ">>") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.RSH);
+    }
+  }
+
+  CstVec2VecExpr opBinary(string op, Q)(Q q)
+    if(isBitVector!Q || isIntegral!Q)
+      {
+  	auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
+  	static if(op == "&") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
+  	}
+  	static if(op == "|") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.OR);
+  	}
+  	static if(op == "^") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.XOR);
+  	}
+  	static if(op == "+") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.ADD);
+  	}
+  	static if(op == "-") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.SUB);
+  	}
+  	static if(op == "*") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.MUL);
+  	}
+  	static if(op == "/") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.DIV);
+  	}
+  	static if(op == "%") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.REM);
+  	}
+  	static if(op == "<<") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.LSH);
+  	}
+  	static if(op == ">>") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RSH);
+  	}
+      }
+
+  CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
+    if(isBitVector!Q || isIntegral!Q)
+      {
+	auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
+	static if(op == "&") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
+	}
+	static if(op == "|") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.OR);
+	}
+	static if(op == "^") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.XOR);
+	}
+	static if(op == "+") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.ADD);
+	}
+	static if(op == "-") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.SUB);
+	}
+	static if(op == "*") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.MUL);
+	}
+	static if(op == "/") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.DIV);
+	}
+	static if(op == "%") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.REM);
+	}
+	static if(op == "<<") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.LSH);
+	}
+	static if(op == ">>") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
+	}
+      }
+
+  CstVarTerm opIndex(CstVarExpr index)
+  {
+    // assert(false, "Index operation defined only for Arrays");
+    return new CstVecSliceExpr(this, index);
+  }
+
+  CstVarTerm opSlice(P)(P p)
+    if(isIntegral!P || isBitVector!P) {
+      return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
+    }
+
+  CstVarTerm opSlice(CstVarExpr lhs, CstVarExpr rhs)
+  {
+    return new CstVecSliceExpr(this, lhs, rhs);
+  }
+
+  CstVarTerm opSlice(P, Q)(P p, Q q)
+    if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
+      return new CstVecSliceExpr(this, new CstVal!P(p), // CstVal!P.allocate(p),
+				 new CstVal!Q(q)); // CstVal!Q.allocate(q));
+    }
+  CstNotBddExpr opUnary(string op)() if(op == "*") {
+    // static if(op == "*") {	// "!" in cstx is translated as "*"
+    return new CstNotBddExpr(_esdl__toBdd(this));
+    // }
+    // else {
+    //   static assert(false);
+    // }
+  }
+  CstNotVecExpr opUnary(string op)() if(op == "~") {
+    // static if(op == "*") {	// "!" in cstx is translated as "*"
+    return new CstNotVecExpr(this);
+    // }
+    // else {
+    //   static assert(false);
+    // }
+  }
+  CstNegVecExpr opUnary(string op)() if(op == "-") {
+    // static if(op == "*") {	// "!" in cstx is translated as "*"
+    return new CstNegVecExpr(this);
+    // }
+    // else {
+    //   static assert(false);
+    // }
   }
 }
 
-abstract class CstVecDomain(alias R): CstVarExpr, CstDomain
+abstract class CstVecDomain(alias R): CstVarTerm, CstDomain
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -194,409 +281,63 @@ abstract class CstVecDomain(alias R): CstVarExpr, CstDomain
 
 }
 
-interface CstVarPrim
+abstract class CstBddTerm: CstBddExpr
 {
-  abstract string name();
-  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
-  abstract bool isRand();
-  // abstract ulong value();
+  abstract override CstBddTerm unwind(CstVarIterBase itr, uint n);
 
-  abstract void _esdl__reset();
-  abstract bool isVarArr();
-  abstract CstDomain[] getDomainLens();
-  abstract void solveBefore(CstVarPrim other);
-  abstract void addPreRequisite(CstVarPrim other);
-
-  // this method is used for getting implicit constraints that are required for
-  // dynamic arrays and for enums
-  abstract BDD getPrimBdd(Buddy buddy);
-  abstract void resetPrimeBdd();
-}
-
-
-abstract class CstVarExpr
-{
-
-  // alias evaluate this;
-
-  abstract string name();
-  
-  CstBddExpr toBdd() {
-    auto zero = new CstVal!int(0); // CstVal!int.allocate(0);
-    return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
-  }
-
-  // Array of indexes this expression has to resolve before it can be
-  // convertted into an BDD
-  abstract CstVarIterBase[] itrVars();
-  abstract bool hasUnresolvedIdx();
-
-  abstract uint resolveLap();
-  abstract void resolveLap(uint lap);
-  
-  // List of Array Variables
-  abstract CstVarPrim[] preReqs();
-
-  bool isConst() {
-    return false;
-  }
-
-  // get all the primary bdd vectors that constitute a given bdd
-  // expression
-  // The idea here is that we need to solve all the bdd vectors of a
-  // given constraint equation together. And so, given a constraint
-  // equation, we want to list out the elements that need to be
-  // grouped together.
-  abstract CstDomain[] getRndDomains();
-
-  // get the list of stages this expression should be avaluated in
-  // abstract CstStage[] getStages();
-  abstract BddVec getBDD(CstStage stage, Buddy buddy);
-
-  // refresh the _valvec if the current value is not the same as previous value
-  abstract bool refresh(CstStage stage, Buddy buddy);
-
-  abstract long evaluate();
-
-  abstract CstVarExpr unwind(CstVarIterBase itr, uint n);
-
-  bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
-
-
-  CstVec2VecExpr opBinary(string op)(CstVarExpr other)
+  CstBdd2BddExpr opBinary(string op)(CstBddTerm other)
   {
     static if(op == "&") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.AND);
+      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
     }
     static if(op == "|") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.OR);
-    }
-    static if(op == "^") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.XOR);
-    }
-    static if(op == "+") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.ADD);
-    }
-    static if(op == "-") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.SUB);
-    }
-    static if(op == "*") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.MUL);
-    }
-    static if(op == "/") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.DIV);
-    }
-    static if(op == "%") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.REM);
-    }
-    static if(op == "<<") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.LSH);
+      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
     }
     static if(op == ">>") {
-      return new CstVec2VecExpr(this, other, CstBinVecOp.RSH);
+      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
     }
   }
 
-  CstVec2VecExpr opBinary(string op, Q)(Q q)
-    if(isBitVector!Q || isIntegral!Q)
-      {
-  	auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-  	static if(op == "&") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.AND);
-  	}
-  	static if(op == "|") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.OR);
-  	}
-  	static if(op == "^") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.XOR);
-  	}
-  	static if(op == "+") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.ADD);
-  	}
-  	static if(op == "-") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.SUB);
-  	}
-  	static if(op == "*") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.MUL);
-  	}
-  	static if(op == "/") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.DIV);
-  	}
-  	static if(op == "%") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.REM);
-  	}
-  	static if(op == "<<") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.LSH);
-  	}
-  	static if(op == ">>") {
-  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RSH);
-  	}
-      }
-
-  CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
-    if(isBitVector!Q || isIntegral!Q)
-      {
-	auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-	static if(op == "&") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.AND);
-	}
-	static if(op == "|") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.OR);
-	}
-	static if(op == "^") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.XOR);
-	}
-	static if(op == "+") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.ADD);
-	}
-	static if(op == "-") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.SUB);
-	}
-	static if(op == "*") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.MUL);
-	}
-	static if(op == "/") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.DIV);
-	}
-	static if(op == "%") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.REM);
-	}
-	static if(op == "<<") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.LSH);
-	}
-	static if(op == ">>") {
-	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
-	}
-      }
-
-  CstVarExpr opIndex(CstVarExpr index)
+  CstNotBddExpr opUnary(string op)()
   {
-    // assert(false, "Index operation defined only for Arrays");
-    return new CstVecSliceExpr(this, index);
+    static if(op == "*") {	// "!" in cstx is translated as "*"
+      return new CstNotBddExpr(this);
+    }
   }
 
-  CstVarExpr opSlice(P)(P p)
-    if(isIntegral!P || isBitVector!P) {
-      return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
-    }
-
-  CstVarExpr opSlice(CstVarExpr lhs, CstVarExpr rhs)
+  CstBdd2BddExpr implies(CstBddTerm other)
   {
-    return new CstVecSliceExpr(this, lhs, rhs);
+    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
   }
 
-  CstVarExpr opSlice(P, Q)(P p, Q q)
-    if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
-      return new CstVecSliceExpr(this, new CstVal!P(p), // CstVal!P.allocate(p),
-				 new CstVal!Q(q)); // CstVal!Q.allocate(q));
-    }
-  CstNotBddExpr opUnary(string op)() if(op == "*") {
-    // static if(op == "*") {	// "!" in cstx is translated as "*"
-    return new CstNotBddExpr(_esdl__toBdd(this));
-    // }
-    // else {
-    //   static assert(false);
-    // }
-  }
-  CstNotVecExpr opUnary(string op)() if(op == "~") {
-    // static if(op == "*") {	// "!" in cstx is translated as "*"
-    return new CstNotVecExpr(this);
-    // }
-    // else {
-    //   static assert(false);
-    // }
-  }
-  CstNegVecExpr opUnary(string op)() if(op == "-") {
-    // static if(op == "*") {	// "!" in cstx is translated as "*"
-    return new CstNegVecExpr(this);
-    // }
-    // else {
-    //   static assert(false);
-    // }
-  }
-}
-
-abstract class CstValBase: CstVarExpr
-{
-  override CstVarPrim[] preReqs() {
-    return [];
+  CstBdd2BddExpr implies(CstVarTerm other)
+  {
+    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
   }
 
-  override CstVarIterBase[] itrVars() {
-    return [];
+  CstBdd2BddExpr logicOr(CstBddTerm other)
+  {
+    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
   }
 
-  override bool hasUnresolvedIdx() {
-    return false;
-  }
-      
-  override bool isConst() {
-    return true;
+  CstBdd2BddExpr logicOr(CstVarTerm other)
+  {
+    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
   }
 
-  override CstDomain[] getRndDomains() {
-    return [];
+  CstBdd2BddExpr logicAnd(CstBddTerm other)
+  {
+    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
-  override CstVarExpr unwind(CstVarIterBase l, uint n) {
-    return this;
-  }
-}
-
-auto _esdl__cstVal(T)(T val) {
-  return new CstVal!(T)(val); // CstVal!(T).allocate(val);
-}
-
-class CstVal(T = int): CstValBase
-{
-  // static class Allocator: CstValAllocator {
-  //   CstVal!T[] container;
-  //   uint _index = 0;
-
-  //   uint _mark;
-
-  //   override void markIndex() {
-  //     _mark = _index;
-  //   }
-
-  //   override void resetIndex() {
-  //     for (uint i = _mark; i != _index; ++i) {
-  // 	container[i]._valvec.reset();
-  //     }
-  //     _index = _mark;
-      
-  //   }
-
-
-  //   CstVal!T allocate(T val) {
-  //     // return new CstVal!T(val);
-  //     if (_index >= container.length) {
-  //   	container.length += 1;
-  //   	container[$-1] = new CstVal!T(val);
-  //     }
-      
-  //     auto cstVal = container[_index];
-  //     cstVal._val = val;
-  //     _index++;
-  //     return cstVal;
-  //   }
-  // }
-
-  import std.conv;
-
-  // static Allocator _allocator;
-
-  // static this() {
-  //   CstVal!T._allocator = new Allocator;
-  //   CstValAllocator.allocators ~= CstVal!T._allocator;
-  // }
-
-  T _val;			// the value of the constant
-  BddVec _valvec;
-
-  override string name() {
-    return _val.to!string();
-  }
-
-  // static CstVal!T allocate(T value) {
-  //   Allocator allocator = _allocator;
-  //   if (allocator is null) {
-  //     allocator = new Allocator;
-  //     _allocator = allocator;
-  //     CstValAllocator.allocators ~= allocator;
-  //   }
-
-  //   // return new CstVal!T(value);
-  //   return allocator.allocate(value);
-  // }
-
-  this(T value) {
-    _val = value;
-  }
-
-  override bool refresh(CstStage stage, Buddy buddy) {
-    if (_valvec.isNull()) {
-      _valvec.buildVec(buddy, _val);
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-  
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
-    return _valvec;
-  }
-
-  const(T)* getRef() {
-    return &_val;
-  }
-
-  override long evaluate() {
-    return _val;
-  }
-
-  override bool hasUnresolvedIdx() {
-    return false;
-  }
-
-  override uint resolveLap() {
-    return 0;			// const
-  }
-
-  override void resolveLap(uint lap) {}
-
-  override bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
-}
-
-
-// This class represents an unwound Foreach itr at vec level
-abstract class CstVarIterBase: CstVarExpr
-{
-  string _name;
-
-  override string name() {
-    return name;
-  }
-
-  this(string name) {
-    _name = name;
-  }
-
-  abstract uint maxVal();
-
-  // this will not return the arrVar since the length variable is
-  // not getting constrained here
-  override CstVarPrim[] preReqs() {
-    return [];
-  }
-
-  abstract bool isUnwindable();
-
-  // get the list of stages this expression should be avaluated in
-  // override CstStage[] getStages() {
-  //   return arrVar.arrLen.getStages();
-  // }
-
-  override bool refresh(CstStage s, Buddy buddy) {
-    assert(false, "Can not refresh for a Itr Variable without unwinding");
-  }
-  
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "Can not getBDD for a Itr Variable without unwinding");
-  }
-
-  override long evaluate() {
-    assert(false, "Can not evaluate a Itr Variable without unwinding");
+  CstBdd2BddExpr logicAnd(CstVarTerm other)
+  {
+    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
 
 }
 
-class CstVarIter(RV): CstVarIterBase
+class CstVarIter(RV): CstVarTerm, CstVarIterBase
 {
   RV _arrVar;
 
@@ -604,8 +345,10 @@ class CstVarIter(RV): CstVarIterBase
     return _arrVar;
   }
 
+  string _name;
+
   this(RV arrVar) {
-    super("itrVar");
+    _name = "itrVar";
     _arrVar = arrVar;
     _arrVar._arrLen.itrVar(this);
   }
@@ -642,7 +385,7 @@ class CstVarIter(RV): CstVarIterBase
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVarExpr unwind(CstVarIterBase itr, uint n) {
+  override CstVarTerm unwind(CstVarIterBase itr, uint n) {
     if(this !is itr) {
       return _arrVar.unwind(itr,n).arrLen().makeItrVar();
     }
@@ -663,6 +406,29 @@ class CstVarIter(RV): CstVarIterBase
 
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
+  }
+
+  // this will not return the arrVar since the length variable is
+  // not getting constrained here
+  override CstVarPrim[] preReqs() {
+    return [];
+  }
+
+  // get the list of stages this expression should be avaluated in
+  // override CstStage[] getStages() {
+  //   return arrVar.arrLen.getStages();
+  // }
+
+  override bool refresh(CstStage s, Buddy buddy) {
+    assert(false, "Can not refresh for a Itr Variable without unwinding");
+  }
+  
+  override BddVec getBDD(CstStage stage, Buddy buddy) {
+    assert(false, "Can not getBDD for a Itr Variable without unwinding");
+  }
+
+  override long evaluate() {
+    assert(false, "Can not evaluate a Itr Variable without unwinding");
   }
 }
 
@@ -918,6 +684,141 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
 
 }
 
+abstract class CstValBase: CstVarTerm
+{
+  override CstVarPrim[] preReqs() {
+    return [];
+  }
+
+  override CstVarIterBase[] itrVars() {
+    return [];
+  }
+
+  override bool hasUnresolvedIdx() {
+    return false;
+  }
+      
+  override bool isConst() {
+    return true;
+  }
+
+  override CstDomain[] getRndDomains() {
+    return [];
+  }
+
+  override CstVarTerm unwind(CstVarIterBase l, uint n) {
+    return this;
+  }
+}
+
+auto _esdl__cstVal(T)(T val) {
+  return new CstVal!(T)(val); // CstVal!(T).allocate(val);
+}
+
+class CstVal(T = int): CstValBase
+{
+  // static class Allocator: CstValAllocator {
+  //   CstVal!T[] container;
+  //   uint _index = 0;
+
+  //   uint _mark;
+
+  //   override void markIndex() {
+  //     _mark = _index;
+  //   }
+
+  //   override void resetIndex() {
+  //     for (uint i = _mark; i != _index; ++i) {
+  // 	container[i]._valvec.reset();
+  //     }
+  //     _index = _mark;
+      
+  //   }
+
+
+  //   CstVal!T allocate(T val) {
+  //     // return new CstVal!T(val);
+  //     if (_index >= container.length) {
+  //   	container.length += 1;
+  //   	container[$-1] = new CstVal!T(val);
+  //     }
+      
+  //     auto cstVal = container[_index];
+  //     cstVal._val = val;
+  //     _index++;
+  //     return cstVal;
+  //   }
+  // }
+
+  import std.conv;
+
+  // static Allocator _allocator;
+
+  // static this() {
+  //   CstVal!T._allocator = new Allocator;
+  //   CstValAllocator.allocators ~= CstVal!T._allocator;
+  // }
+
+  T _val;			// the value of the constant
+  BddVec _valvec;
+
+  override string name() {
+    return _val.to!string();
+  }
+
+  // static CstVal!T allocate(T value) {
+  //   Allocator allocator = _allocator;
+  //   if (allocator is null) {
+  //     allocator = new Allocator;
+  //     _allocator = allocator;
+  //     CstValAllocator.allocators ~= allocator;
+  //   }
+
+  //   // return new CstVal!T(value);
+  //   return allocator.allocate(value);
+  // }
+
+  this(T value) {
+    _val = value;
+  }
+
+  override bool refresh(CstStage stage, Buddy buddy) {
+    if (_valvec.isNull()) {
+      _valvec.buildVec(buddy, _val);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  
+  override BddVec getBDD(CstStage stage, Buddy buddy) {
+    return _valvec;
+  }
+
+  const(T)* getRef() {
+    return &_val;
+  }
+
+  override long evaluate() {
+    return _val;
+  }
+
+  override bool hasUnresolvedIdx() {
+    return false;
+  }
+
+  override uint resolveLap() {
+    return 0;			// const
+  }
+
+  override void resolveLap(uint lap) {}
+
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+}
+
 // All the operations that produce a BddVec
 enum CstBinVecOp: byte
   {   AND,
@@ -943,9 +844,16 @@ enum CstBinBddOp: byte
       NEQ,
       }
 
+
+enum CstBddOp: byte
+  {   LOGICAND,
+      LOGICOR ,
+      LOGICIMP,
+      }
+
 // This class would hold two(bin) vector nodes and produces a vector
 // only after processing those two nodes
-class CstVec2VecExpr: CstVarExpr
+class CstVec2VecExpr: CstVarTerm
 {
   import std.conv;
 
@@ -1099,7 +1007,7 @@ class CstVec2VecExpr: CstVarExpr
   }
 }
 
-class CstVecSliceExpr: CstVarExpr
+class CstVecSliceExpr: CstVarTerm
 {
   CstVarExpr _vec;
   CstVarExpr _lhs;
@@ -1240,7 +1148,7 @@ class CstVecSliceExpr: CstVarExpr
   }
 }
 
-class CstNotVecExpr: CstVarExpr
+class CstNotVecExpr: CstVarTerm
 {
   import std.conv;
 
@@ -1322,7 +1230,7 @@ class CstNotVecExpr: CstVarExpr
   }
 }
 
-class CstNegVecExpr: CstVarExpr
+class CstNegVecExpr: CstVarTerm
 {
   import std.conv;
 
@@ -1405,128 +1313,7 @@ class CstNegVecExpr: CstVarExpr
 }
 
 
-enum CstBddOp: byte
-  {   LOGICAND,
-      LOGICOR ,
-      LOGICIMP,
-      }
-
-abstract class CstBddExpr
-{
-  string name();
-
-  abstract bool refresh(CstStage stage, Buddy buddy);
-  
-  abstract CstVarIterBase[] itrVars(); //  {
-
-  abstract CstVarPrim[] preReqs();
-
-  abstract bool hasUnresolvedIdx();
-
-  abstract uint resolveLap();
-  abstract void resolveLap(uint lap);
-  
-  // unwind recursively untill no unwinding is possible
-  CstBddExpr[] unwind() {
-    CstBddExpr[] unwound;
-    auto itr = this.unwindableItr();
-    if(itr is null) {
-      return [this];
-    }
-    else {
-      foreach(expr; this.unwind(itr)) {
-	// import std.stdio;
-	// writeln(this.name(), " unwound expr: ", expr.name());
-	// writeln(expr.name());
-	if(expr.unwindableItr() is null) unwound ~= expr;
-	else unwound ~= expr.unwind();
-      }
-    }
-    return unwound;
-  }
-
-  CstBddExpr[] unwind(CstVarIterBase itr) {
-    CstBddExpr[] retval;
-    if(! itr.isUnwindable()) {
-      assert(false, "CstVarIterBase is not unwindabe yet");
-    }
-    auto max = itr.maxVal();
-    // import std.stdio;
-    // writeln("maxVal is ", max);
-    for (uint i = 0; i != max; ++i) {
-      retval ~= this.unwind(itr, i);
-    }
-    return retval;
-  }
-
-  CstVarIterBase unwindableItr() {
-    foreach(itr; itrVars()) {
-      if(itr.isUnwindable()) return itr;
-    }
-    return null;
-  }
-
-  abstract CstBddExpr unwind(CstVarIterBase itr, uint n);
-
-  abstract CstDomain[] getRndDomains();
-
-  // abstract CstStage[] getStages();
-
-  abstract BDD getBDD(CstStage stage, Buddy buddy);
-
-  CstBdd2BddExpr opBinary(string op)(CstBddExpr other)
-  {
-    static if(op == "&") {
-      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
-    }
-    static if(op == "|") {
-      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
-    }
-    static if(op == ">>") {
-      return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
-    }
-  }
-
-  CstNotBddExpr opUnary(string op)()
-  {
-    static if(op == "*") {	// "!" in cstx is translated as "*"
-      return new CstNotBddExpr(this);
-    }
-  }
-
-  CstBdd2BddExpr implies(CstBddExpr other)
-  {
-    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
-  }
-
-  CstBdd2BddExpr implies(CstVarExpr other)
-  {
-    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
-  }
-
-  CstBdd2BddExpr logicOr(CstBddExpr other)
-  {
-    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
-  }
-
-  CstBdd2BddExpr logicOr(CstVarExpr other)
-  {
-    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
-  }
-
-  CstBdd2BddExpr logicAnd(CstBddExpr other)
-  {
-    return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
-  }
-
-  CstBdd2BddExpr logicAnd(CstVarExpr other)
-  {
-    return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
-  }
-
-}
-
-class CstBdd2BddExpr: CstBddExpr
+class CstBdd2BddExpr: CstBddTerm
 {
   import std.conv;
 
@@ -1628,7 +1415,7 @@ class CstBdd2BddExpr: CstBddExpr
 }
 
 // TBD
-class CstIteBddExpr: CstBddExpr
+class CstIteBddExpr: CstBddTerm
 {
   CstVarIterBase[] _itrVars;
 
@@ -1649,7 +1436,7 @@ class CstIteBddExpr: CstBddExpr
   }
 }
 
-class CstVec2BddExpr: CstBddExpr
+class CstVec2BddExpr: CstBddTerm
 {
   import std.conv;
 
@@ -1762,7 +1549,7 @@ class CstVec2BddExpr: CstBddExpr
   }
 }
 
-class CstBddConst: CstBddExpr
+class CstBddConst: CstBddTerm
 {
   immutable bool _expr;
 
@@ -1810,7 +1597,7 @@ class CstBddConst: CstBddExpr
   override void resolveLap(uint lap) {}
 }
 
-class CstNotBddExpr: CstBddExpr
+class CstNotBddExpr: CstBddTerm
 {
   CstBddExpr _expr;
 
@@ -1874,105 +1661,14 @@ class CstNotBddExpr: CstBddExpr
   }
 }
 
-class CstBlock: CstBddExpr
-{
-  CstBddExpr[] _exprs;
-  bool[] _booleans;
-
-  // CstVarIterBase[] _itrVars;
-
-  override CstVarIterBase[] itrVars() {
-    assert(false, "itrVars() is not implemented for CstBlock");
-    // return _itrVars;
-  }
-
-  override bool hasUnresolvedIdx() {
-    assert(false, "hasUnresolvedIdx() is not implemented for CstBlock");
-  }
-  
-  override bool refresh(CstStage stage, Buddy buddy) {
-    bool result = false;
-    foreach (expr; _exprs) {
-      result |= expr.refresh(stage, buddy);
-    }
-    return result;
-  }
-  
-  
-  override string name() {
-    string name_ = "";
-    foreach(expr; _exprs) {
-      name_ ~= " & " ~ expr.name() ~ "\n";
-    }
-    return name_;
-  }
-
-  override CstVarPrim[] preReqs() {
-    assert(false);
-  }
-    
-  void _esdl__reset() {
-    _exprs.length = 0;
-  }
-
-  bool isEmpty() {
-    return _exprs.length == 0;
-  }
-  
-  override CstDomain[] getRndDomains() {
-    assert(false);
-  }
-
-  override CstBlock unwind(CstVarIterBase itr, uint n) {
-    assert(false, "Can not unwind a CstBlock");
-  }
-
-  override BDD getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "getBDD not implemented for CstBlock");
-  }
-
-  void opOpAssign(string op)(bool other)
-    if(op == "~") {
-      _booleans ~= other;
-    }
-
-  void opOpAssign(string op)(CstBddExpr other)
-    if(op == "~") {
-      _exprs ~= other;
-    }
-
-  void opOpAssign(string op)(CstVarExpr other)
-    if(op == "~") {
-      _exprs ~= _esdl__toBdd(other);
-    }
-
-  void opOpAssign(string op)(CstBlock other)
-    if(op == "~") {
-      if(other is null) return;
-      foreach(expr; other._exprs) {
-	_exprs ~= expr;
-      }
-      foreach(boolean; other._booleans) {
-	_booleans ~= boolean;
-      }
-    }
-
-  override uint resolveLap() {
-    assert(false, "resolveLap not callable for CstBlock");
-  }
-  override void resolveLap(uint lap) {
-    assert(false, "resolveLap not callable for CstBlock");
-  }
-}
-
 // CstBdd2BddExpr logicOr(CstVarExpr other)
 // {
 //   return new CstBdd2BddExpr(_esdl__toBdd(this), _esdl__toBdd(other), CstBddOp.LOGICOR);
 // }
 
 auto _esdl__logicOr(P, Q)(P p, Q q) {
-  CstBddExpr _p;
-  CstBddExpr _q;
+  CstBddTerm _p;
+  CstBddTerm _q;
   static if (is (P == bool)) {
     _p = new CstBddConst(p);
   }
@@ -1995,8 +1691,8 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
 }
 
 auto _esdl__logicAnd(P, Q)(P p, Q q) {
-  CstBddExpr _p;
-  CstBddExpr _q;
+  CstBddTerm _p;
+  CstBddTerm _q;
   static if(is(P == bool)) {
     _p = new CstBddConst(p);
   }
