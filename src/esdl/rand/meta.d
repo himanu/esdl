@@ -105,7 +105,7 @@ template _esdl__RandInits(T, int I=0)
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~
 	  NAME ~ ")(\"" ~ NAME ~ "\", this._esdl__outer.tupleof[" ~
-	  II ~ "]);\n" ~ "    _esdl__randsList ~= _esdl__" ~
+	  II ~ "], this);\n" ~ "    _esdl__randsList ~= _esdl__" ~
 	  NAME ~ ";\n" ~ _esdl__RandInits!(T, I+1);
       }
       else static if(is(L == class)) {
@@ -146,7 +146,7 @@ template _esdl__RandInits(T, int I=0)
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~ " = new typeof(_esdl__" ~ NAME ~
 	  ")(\"" ~ NAME ~ "\", this._esdl__outer.tupleof[" ~ II ~
-	  "]);\n" ~ "    _esdl__randsList ~= _esdl__" ~ NAME ~
+	  "], this);\n" ~ "    _esdl__randsList ~= _esdl__" ~ NAME ~
 	  ";\n" ~ _esdl__RandInits!(T, I+1);
       }
       /* else { */
@@ -684,12 +684,12 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
     }
     else {
       return l;
@@ -701,12 +701,12 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
     }
     else static if (isArray!L) {
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l);
+      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
     }
     else {
       return l;

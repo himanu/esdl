@@ -100,6 +100,15 @@ abstract class _esdl__SolverRoot {
   // compositional parent -- not inheritance based
   _esdl__SolverRoot _parent = null;
 
+  _esdl__SolverRoot getSolverRoot() {
+    if (_parent is null || _parent is this) {
+      return this;
+    }
+    else {
+      return _parent.getSolverRoot();
+    }
+  }
+	
   bool _esdl__isSeeded = false;
 
   CstBlock _esdl__cstEqns;
@@ -107,7 +116,7 @@ abstract class _esdl__SolverRoot {
   CstStage[] savedStages;
   
   this(uint seed, bool isSeeded, string name,
-       _esdl__SolverRoot parent=null) {
+       _esdl__SolverRoot parent) {
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
     }

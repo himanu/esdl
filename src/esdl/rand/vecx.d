@@ -9,6 +9,7 @@ import esdl.rand.misc;
 import esdl.rand.base: CstVarPrim, CstVarExpr, CstVarIterBase,
   CstStage, CstDomain; // CstValAllocator,
 import esdl.rand.expr: CstVarLen, CstVecDomain, _esdl__cstVal;
+import esdl.rand.solver: _esdl__SolverRoot;
 
 // Consolidated Proxy Class
 // template CstVecBase(T, int I, int N=0) {
@@ -180,19 +181,25 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       import esdl.data.bvec;
 
       V* _var;
-
+      _esdl__SolverRoot _parent;
     
-      this(string name, ref V var) {
+      this(string name, ref V var, _esdl__SolverRoot parent) {
 	// import std.stdio;
 	// writeln("New ", name);
 	super(_name);
 	_var = &var;
+	_parent = parent;
       }
 
       void _esdl__setValRef(ref V var) {
 	_var = &var;
       }
       
+      _esdl__SolverRoot getSolverRoot() {
+	assert(_parent !is null);
+	return _parent.getSolverRoot();
+      }
+	
       override CstVarPrim[] preReqs() {
 	static if (HAS_RAND_ATTRIB) {
 	  return _preReqs;
@@ -364,6 +371,11 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_pindex = index;
       }
 
+      _esdl__SolverRoot getSolverRoot() {
+	assert(_parent !is null);
+	return _parent.getSolverRoot();
+      }
+	
       override CstVarPrim[] preReqs() {
 	if(_indexExpr) {
 	  static if (HAS_RAND_ATTRIB) {
@@ -729,7 +741,8 @@ class CstVecArr(V, alias R, int N=0)
 	alias RAND=R;
 
 	V* _var;
-
+	_esdl__SolverRoot _parent;
+    
 	void _esdl__setValRef(ref V var) {
 	  _var = &var;
 	}
@@ -757,14 +770,20 @@ class CstVecArr(V, alias R, int N=0)
 	//   }
 	// }
 	// else {
-	this(string name, ref V var) {
+	this(string name, ref V var, _esdl__SolverRoot parent) {
 	  _name = name;
 	  _var = &var;
+	  _parent = parent;
 	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
 	}
 	// }
 
+	_esdl__SolverRoot getSolverRoot() {
+	  assert(_parent !is null);
+	  return _parent.getSolverRoot();
+	}
+	
 	CstVarPrim[] preReqs() {
 	  static if (HAS_RAND_ATTRIB) {
 	    return _preReqs;		// N = 0 -- no _parent
@@ -1068,6 +1087,11 @@ class CstVecArr(V, alias R, int N=0)
 	  _relatedIdxs ~= _arrLen;
 	}
 
+	_esdl__SolverRoot getSolverRoot() {
+	  assert(_parent !is null);
+	  return _parent.getSolverRoot();
+	}
+	
 	CstVarPrim[] preReqs() {
 	  CstVarPrim[] req;
 	  static if (HAS_RAND_ATTRIB) {
