@@ -475,7 +475,8 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
   }
 
   override bool hasUnresolvedIdx() {
-    // just must make sure that the parents length has been resolved
+    // just must make sure that the
+    // array -- if it has a parent array -- is not an abstract element of the parent array
     return _parent.parentLenIsUnresolved();
   }
       
@@ -555,6 +556,7 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
 
   override long evaluate() {
     static if (HAS_RAND_ATTRIB) {
+      assert(stage() !is null);
       if(! this.isRand || stage().solved()) {
 	return value();
       }
@@ -626,6 +628,9 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
   }
 
   uint bitcount() {
+    if (_parent.maxArrLen == -1) {
+      return 32;
+    }
     uint i = 1;
     for (size_t c=1; c < _parent.maxArrLen; c *= 2) {
       i++;
@@ -648,7 +653,6 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
     // import std.stdio;
     // writeln("Setting length for array: ", _parent.name(), " to ", v);
     _parent.setLen(cast(size_t) v);
-    _parent.build();
     // writeln("Getting length for array: ", _parent.name(), " as ", _parent.getLen());
     
   }

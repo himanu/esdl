@@ -150,8 +150,6 @@ abstract class CstVecBase(V, alias R, int N)
     }
   }
 
-  void build() {}
-
   abstract E* getRef();
   
   override bool isRand() {
@@ -185,10 +183,11 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
     
       this(string name, ref V var, _esdl__SolverRoot parent) {
 	// import std.stdio;
-	// writeln("New ", name);
-	super(_name);
+	// writeln("New vec ", name);
+	super(name);
 	_var = &var;
 	_parent = parent;
+	getSolverRoot().addDomain(this);
       }
 
       void _esdl__setValRef(ref V var) {
@@ -357,18 +356,25 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       int _pindex = 0;
 
       this(string name, P parent, CstVarExpr indexExpr) {
+	// import std.stdio;
+	// writeln("New ", name);
 	assert(parent !is null);
 	super(name);
 	_parent = parent;
 	_indexExpr = indexExpr;
+	// only concrete elements need be added
+	// getSolverRoot().addDomain(this);
       }
 
       this(string name, P parent, uint index) {
+	// import std.stdio;
+	// writeln("New ", name);
 	assert(parent !is null);
 	super(name);
 	_parent = parent;
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
+	getSolverRoot().addDomain(this);
       }
 
       _esdl__SolverRoot getSolverRoot() {
@@ -747,37 +753,16 @@ class CstVecArr(V, alias R, int N=0)
 	  _var = &var;
 	}
       
-	// static if (HAS_RAND_ATTRIB) {
-	//   static if(isStaticArray!V) {
-	//     static assert(__traits(isSame, R, rand));
-	//     // enum int maxLen = V.length;
-	//     this(string name, ref V var) {
-	//       _name = name;
-	//       _var = &var;
-	//       _arrLen = new CstVarLen!RV(name ~ ".len", this);
-	//       _relatedIdxs ~= _arrLen;
-	//     }
-	//   }
-
-	//   static if(isDynamicArray!V) {
-	//     // enum int maxLen = getRandAttrN!(R, N);
-	//     this(string name, ref V var) {
-	//       _name = name;
-	//       _var = &var;
-	//       _arrLen = new CstVarLen!RV(name ~ ".len", this);
-	//       _relatedIdxs ~= _arrLen;
-	//     }
-	//   }
-	// }
-	// else {
 	this(string name, ref V var, _esdl__SolverRoot parent) {
+	  // import std.stdio;
+	  // writeln("New ", name);
 	  _name = name;
 	  _var = &var;
 	  _parent = parent;
 	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
+	  getSolverRoot().addDomain(_arrLen);
 	}
-	// }
 
 	_esdl__SolverRoot getSolverRoot() {
 	  assert(_parent !is null);
@@ -799,7 +784,6 @@ class CstVecArr(V, alias R, int N=0)
 
 	static if (HAS_RAND_ATTRIB) {
 	  EV[] getDomainElems(long idx) {
-	    build();
 	    if(idx < 0) return _elems;
 	    else return [_elems[cast(size_t) idx]];
 	  }
@@ -868,7 +852,6 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	static if (HAS_RAND_ATTRIB) {
-
 	  static private void setLen(A, N...)(ref A arr, size_t v, N idx)
 	    if(isArray!A) {
 	      static if(N.length == 0) {
@@ -909,6 +892,19 @@ class CstVecArr(V, alias R, int N=0)
 
 	void setLen(N...)(size_t v, N idx) {
 	  static if (HAS_RAND_ATTRIB) {
+	    static if (N.length == 0) {
+	      size_t currLen = _elems.length;
+	      // import std.stdio;
+	      // writeln("Length was ", currLen, " new ", v);
+	      if (currLen < v) {
+		_elems.length = v;
+		for (size_t i=currLen; i!=v; ++i) {
+		  import std.conv: to;
+		  _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+				     this, cast(uint) i);
+		}
+	      }
+	    }
 	    setLen(*_var, v, idx);
 	  }
 	  else {
@@ -947,29 +943,17 @@ class CstVecArr(V, alias R, int N=0)
 	    return _elems[cast(size_t) idx.evaluate()];
 	  }
 	  else {
-	    // static if(isStaticArray!E) {
-	    //   // static array
 	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	    // }
-	    // else static if(isDynamicArray!E) {
-	    //   // dynamic array
-	    //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	    // }
-	    // else {
-	    //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
-	    // }
 	  }
 	}
 
 	EV opIndex(size_t idx) {
-	  build();
 	  assert(_elems[idx]._indexExpr is null);
 	  return _elems[idx];
 	}
 
 	void _esdl__doRandomize(_esdl__RandGen randGen) {
 	  static if (HAS_RAND_ATTRIB) {
-	    if (! built()) this.build();
 	    assert(arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
 	      this[i]._esdl__doRandomize(randGen);
@@ -981,34 +965,10 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	auto elements() {
-	  this.build();
 	  auto itr = arrLen.makeItrVar();
 	  return this[itr];
 	}
 
-	bool built() {
-	  return (_elems.length >= maxArrLen() &&
-		  _elems[0] !is null);
-	}
-    
-	void build() {
-	  if(built()) return;
-	  // import std.stdio;
-	  // writeln("Creating array of length ", maxArrLen());
-	  _elems.length = maxArrLen();
-	  // static if(isIntegral!E || isBitVector!E) {
-	  // if(! built()) {
-	  for (uint i=0; i!=maxArrLen; ++i) {
-	    if(_elems[i] is null) {
-	      import std.conv: to;
-	      _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]", this, i);
-	      if(_elems[i].isVarArr()) {
-		_elems[i].build();
-	      }
-	    }
-	  }
-	}
-	
 	auto iterator() {
 	  auto itr = arrLen.makeItrVar();
 	  return itr;
@@ -1069,15 +1029,21 @@ class CstVecArr(V, alias R, int N=0)
 	alias RAND=R;
       
 	this(string name, P parent, CstVarExpr indexExpr) {
+	  // import std.stdio;
+	  // writeln("New ", name);
 	  assert(parent !is null);
 	  _name = name;
 	  _parent = parent;
 	  _indexExpr = indexExpr;
 	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
+	  // addDomain only for concrete elements
+	  // getSolverRoot().addDomain(_arrLen);
 	}
 
 	this(string name, P parent, uint index) {
+	  // import std.stdio;
+	  // writeln("New ", name);
 	  assert(parent !is null);
 	  _name = name;
 	  _parent = parent;
@@ -1085,6 +1051,7 @@ class CstVecArr(V, alias R, int N=0)
 	  _pindex = index;
 	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
+	  getSolverRoot().addDomain(_arrLen);
 	}
 
 	_esdl__SolverRoot getSolverRoot() {
@@ -1255,6 +1222,19 @@ class CstVecArr(V, alias R, int N=0)
 	    }
 
 	  void setLen(N...)(size_t v, N idx) {
+	    static if (N.length == 0) {
+	      size_t currLen = _elems.length;
+	      // import std.stdio;
+	      // writeln("Length was ", currLen, " new ", v);
+	      if (currLen < v) {
+		_elems.length = v;
+		for (size_t i=currLen; i!=v; ++i) {
+		  import std.conv: to;
+		  _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+				     this, cast(uint) i);
+		}
+	      }
+	    }
 	    _parent.setLen(v, _pindex, idx);
 	  }
 	}
@@ -1329,14 +1309,12 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	EV opIndex(size_t idx) {
-	  build();
 	  assert(_elems[idx]._indexExpr is null);
 	  return _elems[idx];
 	}
 
 	void _esdl__doRandomize(_esdl__RandGen randGen) {
 	  static if (HAS_RAND_ATTRIB) {
-	    if(_elems.length == 0) this.build();
 	    assert(arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
 	      this[i]._esdl__doRandomize(randGen);
@@ -1348,34 +1326,10 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	auto elements() {
-	  this.build();
 	  auto idx = arrLen.makeItrVar();
 	  return this[idx];
 	}
 
-	bool built() {
-	  return (_elems.length >= maxArrLen() &&
-		  _elems[0] !is null);
-	}
-    
-	void build() {
-	  if(built()) return;
-	  // import std.stdio;
-	  // writeln("Creating array of length ", maxArrLen());
-	  _elems.length = maxArrLen();
-	  // static if(isIntegral!E || isBitVector!E) {
-	  // if(! built()) {
-	  for (uint i=0; i!=maxArrLen; ++i) {
-	    if(_elems[i] is null) {
-	      import std.conv: to;
-	      _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]", this, i);
-	      if(_elems[i].isVarArr()) {
-		_elems[i].build();
-	      }
-	    }
-	  }
-	}
-	
 	auto iterator() {
 	  auto itr = arrLen.makeItrVar();
 	  return itr;

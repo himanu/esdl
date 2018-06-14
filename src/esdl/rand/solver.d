@@ -146,23 +146,26 @@ abstract class _esdl__SolverRoot {
   void solve() { // (T)(T t) {
     // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
     uint lap = 0;
-    if (_domains.length is 0 // || _esdl__cstWithChanged is true
-	) {
-      initDomains();
-
-      // _esdl__cstEqns._esdl__reset(); // start empty
-    
-      // take all the constraints -- even if disabled
-      // if (_esdl__cstEqns.isEmpty()) {
-      // foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
-      // 	_esdl__cstEqns ~= cst.getCstExpr();
-      // }
-      // if(_esdl__cstWith !is null) {
-      // 	_esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
-      // }
-      //}
-
+    // if (_domains.length is 0 // || _esdl__cstWithChanged is true
+    // 	) {
+    if (_esdl__cstEqns.isEmpty || _esdl__cstWithChanged is true) {
+      initEqns();
     }
+    //initDomains();
+
+    //   // _esdl__cstEqns._esdl__reset(); // start empty
+    
+    //   // take all the constraints -- even if disabled
+    //   // if (_esdl__cstEqns.isEmpty()) {
+    //   // foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
+    //   // 	_esdl__cstEqns ~= cst.getCstExpr();
+    //   // }
+    //   // if(_esdl__cstWith !is null) {
+    //   // 	_esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
+    //   // }
+    //   //}
+
+    // }
 
     // CstValAllocator.mark();
 
@@ -170,6 +173,9 @@ abstract class _esdl__SolverRoot {
 
     int stageIdx=0;
     CstBddExpr[] unsolvedExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
+    // import std.stdio;
+    // writeln("There are ", unsolvedExprs.length, " number of unsolved expressions");
+    // writeln("There are ", _cstDomains.length, " number of domains");
     // if(_esdl__cstWith !is null) {
     //   unsolvedExprs ~= _esdl__cstWith.getCstExpr()._exprs;
     // }
@@ -385,18 +391,7 @@ abstract class _esdl__SolverRoot {
     }
   }
 
-  void initDomains() { // (T)(T t) {
-    int[] domList;
-    
-
-    foreach (dom; _cstDomains) dom.reset();
-    
-    this._domIndex = 0;
-    _domains.length = 0;
-    _cstDomains.length = 0;
-    
-    _esdl__buddy.clearAllDomains();
-
+  void initEqns() {
     _esdl__cstEqns._esdl__reset(); // start empty
 
     // take all the constraints -- even if disabled
@@ -407,11 +402,33 @@ abstract class _esdl__SolverRoot {
     if(_esdl__cstWith !is null) {
       _esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
     }
+  }
+  
+  void initDomains() { // (T)(T t) {
+    // int[] domList;
+    
+
+    // foreach (dom; _cstDomains) dom.reset();
+    
+    // this._domIndex = 0;
+    // _domains.length = 0;
+    // _cstDomains.length = 0;
+    
+    // _esdl__buddy.clearAllDomains();
 
     
-    foreach(stmt; _esdl__cstEqns._exprs) {
-      addDomains(stmt.getRndDomains());
-    }
+    // foreach(stmt; _esdl__cstEqns._exprs) {
+    //   addDomains(stmt.getRndDomains());
+    // }
+  }
+
+  void addDomain(CstDomain domain) {
+    // import std.stdio;
+    // writeln("Adding domain: ", domain.name());
+    _cstDomains ~= domain;
+    useBuddy(_esdl__buddy);
+    domain.domIndex = this._domIndex++;
+    _domains ~= _esdl__buddy.extDomain(domain.bitcount);
   }
 
   void addDomains(CstDomain[] domains) {
