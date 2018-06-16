@@ -190,6 +190,10 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	getSolverRoot().addDomain(this);
       }
 
+      bool isConcrete() {
+	return true;		// N == 0
+      }
+
       void _esdl__setValRef(ref V var) {
 	_var = &var;
       }
@@ -209,6 +213,10 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       override CstVarIterBase[] itrVars() {
+	return [];
+      }
+
+      override CstDomain[] unresolvedIdxs() {
 	return [];
       }
 
@@ -377,6 +385,10 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	getSolverRoot().addDomain(this);
       }
 
+      bool isConcrete() {
+	return (_indexExpr is null);
+      }
+
       _esdl__SolverRoot getSolverRoot() {
 	assert(_parent !is null);
 	return _parent.getSolverRoot();
@@ -409,6 +421,10 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	else {
 	  return _parent.itrVars();
 	}
+      }
+
+      override CstDomain[] unresolvedIdxs() {
+	return _parent.unresolvedIdxs();
       }
 
       override bool hasUnresolvedIdx() {
@@ -764,6 +780,10 @@ class CstVecArr(V, alias R, int N=0)
 	  getSolverRoot().addDomain(_arrLen);
 	}
 
+	bool isConcrete() {
+	  return true; 		// N == 0
+	}
+
 	_esdl__SolverRoot getSolverRoot() {
 	  assert(_parent !is null);
 	  return _parent.getSolverRoot();
@@ -830,6 +850,21 @@ class CstVecArr(V, alias R, int N=0)
 	  return false;		// no parent
 	}
 
+	CstDomain[] unresolvedIdxs() {
+	  CstDomain[] idxs;
+	  foreach (idx; _relatedIdxs) {
+	    if (! idx.solved()) {
+	      bool add = true;
+	      foreach (l; idxs) {
+		if (l is idx) add = false;
+		break;
+	      }
+	      if (add) idxs ~= idx;
+	    }
+	  }
+	  return idxs;
+	}
+
 	bool hasUnresolvedIdx() {
 	  foreach (domain; _relatedIdxs) {
 	    if (! domain.solved()) {
@@ -839,6 +874,10 @@ class CstVecArr(V, alias R, int N=0)
 	  return false;		// N=0 -- no _parent
 	}
       
+	CstDomain[] parentUnresolvedIdxs() {
+	  return [];		// no parent
+	}
+
 	static private auto getRef(A, N...)(ref A arr, N idx)
 	  if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
 	    static if(N.length == 1) return &(arr[idx[0]]);
@@ -1054,6 +1093,10 @@ class CstVecArr(V, alias R, int N=0)
 	  getSolverRoot().addDomain(_arrLen);
 	}
 
+	bool isConcrete() {
+	  return (_indexExpr is null);
+	}
+
 	_esdl__SolverRoot getSolverRoot() {
 	  assert(_parent !is null);
 	  return _parent.getSolverRoot();
@@ -1085,6 +1128,21 @@ class CstVecArr(V, alias R, int N=0)
 	  return (! _parent._arrLen.solved());
 	}
 
+	CstDomain[] unresolvedIdxs() {
+	  CstDomain[] idxs;
+	  foreach (idx; _relatedIdxs) {
+	    if (! idx.solved()) {
+	      bool add = true;
+	      foreach (l; idxs) {
+		if (l is idx) add = false;
+		break;
+	      }
+	      if (add) idxs ~= idx;
+	    }
+	  }
+	  return idxs;
+	}
+
 	bool hasUnresolvedIdx() {
 	  foreach (domain; _relatedIdxs) {
 	    if (! domain.solved()) {
@@ -1092,6 +1150,10 @@ class CstVecArr(V, alias R, int N=0)
 	    }
 	  }
 	  return _parent.hasUnresolvedIdx();
+	}
+
+	CstDomain[] parentUnresolvedIdxs() {
+	  return [_parent._arrLen];
 	}
 
 	EV[] getDomainElems(long idx) {

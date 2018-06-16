@@ -361,6 +361,10 @@ class CstVarIter(RV): CstVarTerm, CstVarIterBase
     return true;
   }
       
+  override CstDomain[] unresolvedIdxs() {
+    return [_arrVar.arrLen()];
+  }
+  
   override uint maxVal() {
     if(! this.isUnwindable()) {
       assert(false, "Can not find maxVal since the " ~
@@ -472,6 +476,10 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
 
   override CstVarIterBase[] itrVars() {
     return _parent.itrVars();
+  }
+
+  override CstDomain[] unresolvedIdxs() {
+    return _parent.parentUnresolvedIdxs();
   }
 
   override bool hasUnresolvedIdx() {
@@ -698,6 +706,10 @@ abstract class CstValBase: CstVarTerm
     return [];
   }
 
+  override CstDomain[] unresolvedIdxs() {
+    return [];
+  }
+      
   override bool hasUnresolvedIdx() {
     return false;
   }
@@ -808,6 +820,10 @@ class CstVal(T = int): CstValBase
     return _val;
   }
 
+  override CstDomain[] unresolvedIdxs() {
+    return [];
+  }
+
   override bool hasUnresolvedIdx() {
     return false;
   }
@@ -875,6 +891,12 @@ class CstVec2VecExpr: CstVarTerm
     return _itrVars;
   }
 
+  CstDomain[] _unresolvedIdxs;
+  
+  override CstDomain[] unresolvedIdxs() {
+    return _unresolvedIdxs;
+  }
+  
   override bool hasUnresolvedIdx() {
     return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
   }
@@ -979,15 +1001,23 @@ class CstVec2VecExpr: CstVarTerm
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    _itrVars = lhs.itrVars ~ rhs.itrVars;
-    // foreach(var; lhs.itrVars ~ rhs.itrVars) {
-    //   bool add = true;
-    //   foreach(l; _itrVars) {
-    // 	if(l is var) add = false;
-    // 	break;
-    //   }
-    //   if(add) _itrVars ~= var;
-    // }
+    foreach (var; lhs.itrVars ~ rhs.itrVars) {
+      bool add = true;
+      foreach (l; _itrVars) {
+    	if (l is var) add = false;
+    	break;
+      }
+      if (add) _itrVars ~= var;
+    }
+
+    foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
+      bool add = true;
+      foreach (l; _unresolvedIdxs) {
+    	if (l is var) add = false;
+    	break;
+      }
+      if (add) _unresolvedIdxs ~= var;
+    }
   }
 
   override uint resolveLap() {
@@ -1042,6 +1072,11 @@ class CstVecSliceExpr: CstVarTerm
   CstVarIterBase[] _itrVars;
   override CstVarIterBase[] itrVars() {
     return _itrVars;
+  }
+
+  CstDomain[] _unresolvedIdxs;
+  override CstDomain[] unresolvedIdxs() {
+    return _unresolvedIdxs;
   }
 
   override bool hasUnresolvedIdx() {
@@ -1133,6 +1168,21 @@ class CstVecSliceExpr: CstVarTerm
       }
       if(add) _itrVars ~= var;
     }
+
+    auto unresolvedIdxs = vec.unresolvedIdxs() ~ lhs.unresolvedIdxs();
+    if(rhs !is null) {
+      unresolvedIdxs ~= rhs.unresolvedIdxs();
+    }
+
+    foreach(idx; unresolvedIdxs) {
+      bool add = true;
+      foreach(l; _unresolvedIdxs) {
+	if(l is idx) add = false;
+	break;
+      }
+      if(add) _unresolvedIdxs ~= idx;
+    }
+
   }
 
   override uint resolveLap() {
@@ -1166,6 +1216,10 @@ class CstNotVecExpr: CstVarTerm
   CstVarIterBase[] _itrVars;
   override CstVarIterBase[] itrVars() {
     return _itrVars;
+  }
+
+  override CstDomain[] unresolvedIdxs() {
+    return _expr.unresolvedIdxs();
   }
 
   override bool hasUnresolvedIdx() {
@@ -1250,6 +1304,10 @@ class CstNegVecExpr: CstVarTerm
     return _itrVars;
   }
 
+  override CstDomain[] unresolvedIdxs() {
+    return _expr.unresolvedIdxs();
+  }
+
   override bool hasUnresolvedIdx() {
     return _expr.hasUnresolvedIdx();
   }
@@ -1327,6 +1385,8 @@ class CstBdd2BddExpr: CstBddTerm
 
   CstVarIterBase[] _itrVars;
 
+  CstDomain[] _unresolvedIdxs;
+  
   override CstVarIterBase[] itrVars() {
        return _itrVars;
   }
@@ -1335,21 +1395,36 @@ class CstBdd2BddExpr: CstBddTerm
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach(var; lhs.itrVars ~ rhs.itrVars) {
+
+    foreach (var; lhs.itrVars ~ rhs.itrVars) {
       bool add = true;
-      foreach(l; _itrVars) {
-	if(l is var) add = false;
+      foreach (l; _itrVars) {
+	if (l is var) add = false;
 	break;
       }
-      if(add) _itrVars ~= var;
+      if (add) _itrVars ~= var;
+    }
+
+    foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
+      bool add = true;
+      foreach (l; _unresolvedIdxs) {
+	if (l is var) add = false;
+	break;
+      }
+      if (add) _unresolvedIdxs ~= var;
     }
   }
+
   override bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
     return r || l;
   }
   
+  override CstDomain[] unresolvedIdxs() {
+    return _unresolvedIdxs;
+  }
+
   override bool hasUnresolvedIdx() {
     return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
   }
@@ -1427,6 +1502,10 @@ class CstIteBddExpr: CstBddTerm
     return _itrVars;
   }
 
+  override CstDomain[] unresolvedIdxs() {
+    assert(false, "TBD");
+  }
+
   override bool hasUnresolvedIdx() {
     assert(false, "TBD");
   }
@@ -1440,6 +1519,59 @@ class CstIteBddExpr: CstBddTerm
   }
 }
 
+class CstNopBddExpr: CstBddTerm
+{
+  CstVarExpr _vec;
+
+  override CstVarIterBase[] itrVars() {
+    return [];
+  }
+
+  this(CstVarExpr vec) {
+    _vec = vec;
+  }
+
+  override string name() {
+    return "( NOP: " ~ _vec.name ~ " )";
+  }
+
+  override bool refresh(CstStage stage, Buddy buddy) {
+    return false;
+  }
+  
+  override CstVarPrim[] preReqs() {
+    return [];
+  }
+    
+  override CstDomain[] getRndDomains() {
+    return _vec.getRndDomains();
+  }
+
+  override BDD getBDD(CstStage stage, Buddy buddy) {
+    return buddy.one();
+  }
+
+  override CstNopBddExpr unwind(CstVarIterBase itr, uint n) {
+    return this;
+  }
+
+  override CstDomain[] unresolvedIdxs() {
+    return [];
+  }
+
+  override bool hasUnresolvedIdx() {
+    return false;
+  }
+
+  override uint resolveLap() {
+    return _vec.resolveLap();
+  }
+  
+  override void resolveLap(uint lap) {
+    _vec.resolveLap(lap);
+  }
+}
+
 class CstVec2BddExpr: CstBddTerm
 {
   import std.conv;
@@ -1449,22 +1581,37 @@ class CstVec2BddExpr: CstBddTerm
   CstBinBddOp _op;
 
   CstVarIterBase[] _itrVars;
+  CstDomain[] _unresolvedIdxs;
 
   override CstVarIterBase[] itrVars() {
        return _itrVars;
+  }
+
+  override CstDomain[] unresolvedIdxs() {
+       return _unresolvedIdxs;
   }
 
   this(CstVarExpr lhs, CstVarExpr rhs, CstBinBddOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach(var; lhs.itrVars ~ rhs.itrVars) {
+
+    foreach (var; lhs.itrVars ~ rhs.itrVars) {
       bool add = true;
-      foreach(l; _itrVars) {
-	if(l is var) add = false;
+      foreach (l; _itrVars) {
+	if (l is var) add = false;
 	break;
       }
-      if(add) _itrVars ~= var;
+      if (add) _itrVars ~= var;
+    }
+
+    foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
+      bool add = true;
+      foreach (l; _unresolvedIdxs) {
+	if (l is var) add = false;
+	break;
+      }
+      if (add) _unresolvedIdxs ~= var;
     }
   }
 
@@ -1591,6 +1738,10 @@ class CstBddConst: CstBddTerm
     return this;
   }
 
+  override CstDomain[] unresolvedIdxs() {
+    return [];
+  }
+
   override bool hasUnresolvedIdx() {
     return false;
   }
@@ -1651,6 +1802,10 @@ class CstNotBddExpr: CstBddTerm
     else {
       return new CstNotBddExpr(_expr.unwind(itr, n));
     }
+  }
+
+  override CstDomain[] unresolvedIdxs() {
+    return _expr.unresolvedIdxs();
   }
 
   override bool hasUnresolvedIdx() {

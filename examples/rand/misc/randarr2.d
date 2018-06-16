@@ -13,7 +13,7 @@ int FFFF = 20;
 class Foo
 {
   mixin Randomization;
-  @rand!(4,2) byte[][] foo;
+  @rand!(4,4) byte[][] foo;
   @rand int bar;
   void display() {
     import std.stdio;

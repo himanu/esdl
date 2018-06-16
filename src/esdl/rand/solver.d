@@ -195,10 +195,9 @@ abstract class _esdl__SolverRoot {
 	// import std.stdio;
 	// writeln("Unwinding: ", expr.name());
 	// auto unwound = expr.unwind();
-	// for (size_t i=0; i!=unwound.length; ++i)
-	//   {
-	//     writeln("Unwound as: ", unwound[i].name());
-	//   }
+	// for (size_t i=0; i!=unwound.length; ++i) {
+	//   writeln("Unwound as: ", unwound[i].name());
+	// }
 	uwExprs ~= expr.unwind();
       }
 
@@ -206,7 +205,7 @@ abstract class _esdl__SolverRoot {
 	// if(expr.itrVars().length is 0) {
 	if(expr.hasUnresolvedIdx()) {
 	  // import std.stdio;
-	  // writeln("Adding expression ", expr.name(), " to staged");
+	  // writeln("Adding expression ", expr.name(), " to unresolved");
 	  expr.resolveLap(lap);
 	  unsolvedExprs ~= expr;
 	}

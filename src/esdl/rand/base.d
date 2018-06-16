@@ -112,6 +112,7 @@ abstract class CstVarExpr
   // convertted into an BDD
   abstract CstVarIterBase[] itrVars();
   abstract bool hasUnresolvedIdx();
+  abstract CstDomain[] unresolvedIdxs();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
@@ -170,6 +171,7 @@ abstract class CstBddExpr
   abstract CstVarPrim[] preReqs();
 
   abstract bool hasUnresolvedIdx();
+  abstract CstDomain[] unresolvedIdxs();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
@@ -238,6 +240,10 @@ class CstBlock: CstBddExpr
 
   override bool hasUnresolvedIdx() {
     assert(false, "hasUnresolvedIdx() is not implemented for CstBlock");
+  }
+  
+  override CstDomain[] unresolvedIdxs() {
+    assert(false, "unresolvedIdxs() is not implemented for CstBlock");
   }
   
   override bool refresh(CstStage stage, Buddy buddy) {
