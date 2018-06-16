@@ -52,6 +52,9 @@ import std.conv;
 struct CstParser {
 
   immutable string CST;
+  immutable string FILE;
+  immutable size_t LINE;
+  
   bool dryRun = true;
 
   char[] outBuffer;
@@ -85,8 +88,10 @@ struct CstParser {
     dryRun = false;
   }
 
-  this(string CST) {
+  this(string CST, string FILE, size_t LINE) {
     this.CST = CST;
+    this.FILE = FILE;
+    this.LINE = LINE;
   }
 
   size_t fill(in string source) {
@@ -137,10 +142,10 @@ struct CstParser {
     return start;
   }
 
-  CstParser exprParser(size_t cursor) {
-    CstParser dup = CstParser(CST[cursor..$]);
-    return dup;
-  }
+  // CstParser exprParser(size_t cursor) {
+  //   CstParser dup = CstParser(CST[cursor..$]);
+  //   return dup;
+  // }
 
   enum OpToken: byte
     {   NONE = 0,
@@ -394,12 +399,11 @@ struct CstParser {
 	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
 	  }
 	  else {
-	    auto savedCursor = srcCursor;
-	    srcCursor = srcTag+idChain[2*i]+1;
+	    indexTag ~= outCursor-1;
 	    fill("opIndex(");
-	    procExpr();
+	    ++numIndex;
+	    procSubExpr(srcTag+idChain[2*i]+1);
 	    fill(")");
-	    srcCursor = savedCursor;
 	  }
 	  if(idChain[2*i+2] == -1) break;
 	  else fill(".");
@@ -760,6 +764,8 @@ struct CstParser {
   }
 
   char[] translate(string name) {
+    import std.conv: to;
+    fill("// Constraint @ File: " ~ FILE ~ " Line: " ~ LINE.to!string ~ "\n\n");
     if (name == "") {
       fill("override CstBlock getCstExpr() {" ~
 	   "\n  auto cstExpr = new CstBlock;\n");
@@ -774,6 +780,7 @@ struct CstParser {
 
     setupBuffer();
 
+    fill("// Constraint @ File: " ~ FILE ~ " Line: " ~ LINE.to!string ~ "\n\n");
     if (name == "") {
       fill("override CstBlock getCstExpr() {" ~
 	   "\n  auto cstExpr = new CstBlock;\n");
@@ -1132,6 +1139,19 @@ struct CstParser {
     return StmtToken.ERROR;
   }
 
+
+  void procSubExpr(size_t cursor) {
+    auto savedCursor = srcCursor;
+    auto savedNumIndex = numIndex;
+    auto savedNumParen = numParen;
+    srcCursor = cursor;
+    numIndex = 0;
+    numParen = 0;
+    procExpr();
+    numIndex = savedNumIndex;
+    numParen = savedNumParen;
+    srcCursor = savedCursor;
+  }
 
   void procExpr() {
     bool cmpRHS;

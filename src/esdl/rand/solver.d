@@ -45,9 +45,9 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
   abstract CstBlock getCstExpr();
 }
 
-static char[] constraintXlate(string CST, string NAME="") {
+static char[] constraintXlate(string CST, string FILE, size_t LINE, string NAME="") {
   import esdl.rand.cstx;
-  CstParser parser = CstParser(CST);
+  CstParser parser = CstParser(CST, FILE, LINE);
   return parser.translate(NAME);
 }
 
