@@ -51,10 +51,11 @@ static char[] constraintXlate(string CST, string NAME="") {
   return parser.translate(NAME);
 }
 
-abstract class Constraint(string C): _esdl__ConstraintBase
+abstract class Constraint(string CONSTRAINT, string FILE=__FILE__, size_t LINE=__LINE__)
+  : _esdl__ConstraintBase
 {
   this(_esdl__SolverRoot eng, string name, uint index) {
-    super(eng, name, C, index);
+    super(eng, name, CONSTRAINT, index);
   }
 };
 

@@ -187,7 +187,9 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	super(name);
 	_var = &var;
 	_parent = parent;
-	getSolverRoot().addDomain(this);
+	static if (HAS_RAND_ATTRIB) {
+	  getSolverRoot().addDomain(this);
+	}
       }
 
       bool isConcrete() {
