@@ -9,7 +9,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 abstract class CstVarTerm: CstVarExpr
 {
 
-  CstBddExpr toBdd() {
+  CstBddTerm toBdd() {
     auto zero = new CstVal!int(0); // CstVal!int.allocate(0);
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
@@ -279,15 +279,25 @@ abstract class CstVecDomain(alias R): CstVarTerm, CstDomain
     }
   }
 
+  CstBddExpr getNopBddExpr() {
+    return new CstNopBddExpr(this);
+  }
+  
 }
 
 abstract class CstBddTerm: CstBddExpr
 {
   abstract override CstBddTerm unwind(CstVarIterBase itr, uint n);
 
-  CstBdd2BddExpr opBinary(string op)(CstBddTerm other)
+  CstBddTerm opBinary(string op)(CstBddTerm other)
   {
     static if(op == "&") {
+      if (this.cstExprIsNop()) {
+	return other;
+      }
+      if (other.cstExprIsNop()) {
+	return this;
+      }
       return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
     }
     static if(op == "|") {
@@ -298,40 +308,49 @@ abstract class CstBddTerm: CstBddExpr
     }
   }
 
-  CstNotBddExpr opUnary(string op)()
+  CstBddTerm opUnary(string op)()
   {
     static if(op == "*") {	// "!" in cstx is translated as "*"
       return new CstNotBddExpr(this);
     }
   }
 
-  CstBdd2BddExpr implies(CstBddTerm other)
+  CstBddTerm implies(CstBddTerm other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
   }
 
-  CstBdd2BddExpr implies(CstVarTerm other)
+  CstBddTerm implies(CstVarTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
   }
 
-  CstBdd2BddExpr logicOr(CstBddTerm other)
+  CstBddTerm logicOr(CstBddTerm other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
   }
 
-  CstBdd2BddExpr logicOr(CstVarTerm other)
+  CstBddTerm logicOr(CstVarTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
   }
 
-  CstBdd2BddExpr logicAnd(CstBddTerm other)
+  CstBddTerm logicAnd(CstBddTerm other)
   {
+    if (this.cstExprIsNop()) {
+      return other;
+    }
+    if (other.cstExprIsNop()) {
+      return this;
+    }
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
-  CstBdd2BddExpr logicAnd(CstVarTerm other)
+  CstBddTerm logicAnd(CstVarTerm other)
   {
+    if (this.cstExprIsNop()) {
+      return other.toBdd();
+    }
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
 
@@ -381,8 +400,8 @@ class CstVarIter(RV): CstVarTerm, CstVarIterBase
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
-  override CstDomain[] getRndDomains() {
-    return [_arrVar._arrLen]; // _arrVar.arrLen.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return [_arrVar._arrLen]; // _arrVar.arrLen.getRndDomains(resolved);
   }
 
   override string name() {
@@ -488,11 +507,11 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
     return _parent.parentLenIsUnresolved();
   }
       
-  override CstDomain[] getRndDomains() {
-    return _parent.getDomainLens();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _parent.getDomainLens(resolved);
   }
 
-  CstDomain[] getDomainLens() {
+  CstDomain[] getDomainLens(bool resolved) {
     return [this];
   }
   
@@ -579,8 +598,17 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
     }
   }
 
+  bool isResolved() {
+    return stage().solved();
+  }
+  
   void _esdl__doRandomize(_esdl__RandGen randGen) {
     assert(false);
+  }
+  
+  void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+    assert(s is stage);
+    _parent.buildElements();
   }
   
   bool isRand() {
@@ -718,7 +746,7 @@ abstract class CstValBase: CstVarTerm
     return true;
   }
 
-  override CstDomain[] getRndDomains() {
+  override CstDomain[] getRndDomains(bool resolved) {
     return [];
   }
 
@@ -905,8 +933,8 @@ class CstVec2VecExpr: CstVarTerm
     return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
   }
 
-  override CstDomain[] getRndDomains() {
-    return _lhs.getRndDomains() ~ _rhs.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
   override bool refresh(CstStage stage, Buddy buddy) {
@@ -1090,12 +1118,12 @@ class CstVecSliceExpr: CstVarTerm
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
   }
 
-  override CstDomain[] getRndDomains() {
+  override CstDomain[] getRndDomains(bool resolved) {
     if(_rhs is null) {
-      return _vec.getRndDomains() ~ _lhs.getRndDomains();
+      return _vec.getRndDomains(resolved) ~ _lhs.getRndDomains(resolved);
     }
     else {
-      return _vec.getRndDomains() ~ _lhs.getRndDomains() ~ _rhs.getRndDomains();
+      return _vec.getRndDomains(resolved) ~ _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
     }
   }
 
@@ -1230,8 +1258,8 @@ class CstNotVecExpr: CstVarTerm
     return "( ~ " ~ _expr.name ~ " )";
   }
 
-  override CstDomain[] getRndDomains() {
-    return _expr.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _expr.getRndDomains(resolved);
   }
 
   override bool refresh(CstStage stage, Buddy buddy) {
@@ -1316,8 +1344,8 @@ class CstNegVecExpr: CstVarTerm
     return "( - " ~ _expr.name ~ " )";
   }
 
-  override CstDomain[] getRndDomains() {
-    return _expr.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _expr.getRndDomains(resolved);
   }
 
   override bool refresh(CstStage stage, Buddy buddy) {
@@ -1444,8 +1472,8 @@ class CstBdd2BddExpr: CstBddTerm
     // return reqs;
   }
 
-  override CstDomain[] getRndDomains() {
-    return _lhs.getRndDomains() ~ _rhs.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
 
@@ -1524,11 +1552,15 @@ class CstNopBddExpr: CstBddTerm
   CstVarExpr _vec;
 
   override CstVarIterBase[] itrVars() {
-    return [];
+    return _vec.itrVars();
   }
 
   this(CstVarExpr vec) {
     _vec = vec;
+  }
+
+  override bool cstExprIsNop() {
+    return true;
   }
 
   override string name() {
@@ -1536,15 +1568,15 @@ class CstNopBddExpr: CstBddTerm
   }
 
   override bool refresh(CstStage stage, Buddy buddy) {
-    return false;
+    return _vec.refresh(stage, buddy);
   }
   
   override CstVarPrim[] preReqs() {
-    return [];
+    return _vec.preReqs();
   }
     
-  override CstDomain[] getRndDomains() {
-    return _vec.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _vec.getRndDomains(resolved);
   }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
@@ -1552,15 +1584,25 @@ class CstNopBddExpr: CstBddTerm
   }
 
   override CstNopBddExpr unwind(CstVarIterBase itr, uint n) {
-    return this;
+    bool shouldUnwind = false;
+    foreach(var; itrVars()) {
+      if(itr is var) {
+	shouldUnwind = true;
+	break;
+      }
+    }
+    if(! shouldUnwind) return this;
+    else {
+      return new CstNopBddExpr(_vec.unwind(itr, n));
+    }
   }
 
   override CstDomain[] unresolvedIdxs() {
-    return [];
+    return _vec.unresolvedIdxs();
   }
 
   override bool hasUnresolvedIdx() {
-    return false;
+    return _vec.hasUnresolvedIdx();
   }
 
   override uint resolveLap() {
@@ -1636,8 +1678,8 @@ class CstVec2BddExpr: CstBddTerm
     // return reqs;
   }
     
-  override CstDomain[] getRndDomains() {
-    return _lhs.getRndDomains() ~ _rhs.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {
@@ -1726,7 +1768,7 @@ class CstBddConst: CstBddTerm
     else return "FALSE";
   }
 
-  override CstDomain[] getRndDomains() {
+  override CstDomain[] getRndDomains(bool resolved) {
     return [];
   }
 
@@ -1776,8 +1818,8 @@ class CstNotBddExpr: CstBddTerm
     return _expr.preReqs();
   }
 
-  override CstDomain[] getRndDomains() {
-    return _expr.getRndDomains();
+  override CstDomain[] getRndDomains(bool resolved) {
+    return _expr.getRndDomains(resolved);
   }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {

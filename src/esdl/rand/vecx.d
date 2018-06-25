@@ -226,7 +226,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;
       }
       
-      override CstDomain[] getRndDomains() {
+      override CstDomain[] getRndDomains(bool resolved) {
 	static if (HAS_RAND_ATTRIB) {
 	  if(isRand) return [this];
 	  else return [];
@@ -236,7 +236,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstDomain[] getDomainLens() {
+      CstDomain[] getDomainLens(bool resolved) {
 	assert(false);
       }
 
@@ -250,6 +250,16 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if(stage is null) {
 	    randGen.gen(*_var);
 	  }
+	}
+	else {
+	  assert(false);
+	}
+      }
+
+      void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	static if (HAS_RAND_ATTRIB) {
+	  assert (stage is s);
+	  randGen.gen(*_var);
 	}
 	else {
 	  assert(false);
@@ -433,7 +443,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _parent.hasUnresolvedIdx(); // no _relatedIdxs for this instance
       }
       
-      CstDomain[] getDomainLens() {
+      CstDomain[] getDomainLens(bool resolved) {
 	assert(false);
       }
 
@@ -447,11 +457,11 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       // cases we need to list all the elements of the array that could
       // finally represent the given element that we are currently
       // dealing with.
-      override CstDomain[] getRndDomains() {
+      override CstDomain[] getRndDomains(bool resolved) {
 	CstDomain[] domains;
 	static if (HAS_RAND_ATTRIB) {
 	  if (_indexExpr) {
-	    if (_indexExpr.isConst()) {
+	    if (_indexExpr.isConst() || resolved) {
 	      // domains = cast (CstDomain[]) _parent.getDomainElems(_indexExpr.evaluate());
 	      foreach(pp; _parent.getDomainElems(cast(size_t) _indexExpr.evaluate())) {
 		domains ~= pp;
@@ -459,8 +469,8 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	    }
 	    else {
 	      // FIXME -- if the expression has been solved
-	      // return _parent.getRndDomains(_indexExpr.evaluate()) ;
-	      domains = _indexExpr.getRndDomains();
+	      // return _parent.getRndDomainsAtIdx(_indexExpr.evaluate()) ;
+	      domains = _indexExpr.getRndDomains(resolved);
 	      foreach(pp; _parent.getDomainElems(-1)) {
 		domains ~= pp;
 	      }
@@ -479,13 +489,13 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if(_indexExpr) {
 	    // FIXME -- if the expression has been solved
 	    // return _parent.getDomainElems(_indexExpr.evaluate()) ;
-	    domains = _indexExpr.getRndDomains() ~ _parent.getRndDomains();
+	    domains = _indexExpr.getRndDomains(resolved) ~ _parent.getRndDomains(resolved);
 	  }
 	  else {
 	    // foreach(pp; _parent.getDomainElems(_pindex)) {
 	    //   domains ~= pp;
 	    // }
-	    domains = _parent.getRndDomains();
+	    domains = _parent.getRndDomains(resolved);
 	  }
 	  return domains;
 	}
@@ -523,6 +533,18 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
+      void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	static if (HAS_RAND_ATTRIB) {
+	  assert (stage is s);
+	  E val;
+	  randGen.gen(val);
+	  collate(val);
+	}
+	else {
+	  assert(false, name());
+	}
+      }
+      
       override E* getRef() {
 	if(_indexExpr) {
 	  return _parent.getRef(cast(size_t) _indexExpr.evaluate());
@@ -806,12 +828,15 @@ class CstVecArr(V, alias R, int N=0)
 
 	static if (HAS_RAND_ATTRIB) {
 	  EV[] getDomainElems(long idx) {
-	    if(idx < 0) return _elems;
+	    if (idx < 0) {
+	      if (_arrLen.isResolved()) return _elems[0.._arrLen.evaluate()];
+	      else return _elems;
+	    }
 	    else return [_elems[cast(size_t) idx]];
 	  }
 	}
 
-	// CstDomain[] getRndDomains() {
+	// CstDomain[] getRndDomains(bool resolved) {
 	//   static if (false) {	// This function can only be there for leaf nodes
 	//     static if (HAS_RAND_ATTRIB) {
 	//       CstDomain[] domains;
@@ -829,7 +854,7 @@ class CstVecArr(V, alias R, int N=0)
 	//   }
 	// }
 
-	CstDomain[] getDomainLens() {
+	CstDomain[] getDomainLens(bool resolved) {
 	  static if (HAS_RAND_ATTRIB) {
 	    CstDomain[] domains;
 	    if(_arrLen.isRand) domains ~= _arrLen;
@@ -911,6 +936,36 @@ class CstVecArr(V, alias R, int N=0)
 		setLen(arr[idx[0]], v, idx[1..$]);
 	      }
 	    }
+
+	  void buildElements(size_t v=size_t.max) {
+	    if (v == size_t.max) {
+	      v = getLen();
+	    }
+	    size_t currLen = _elems.length;
+	    // import std.stdio;
+	    // writeln("Length was ", currLen, " new ", v);
+	    if (currLen < v) {
+	      _elems.length = v;
+	      for (size_t i=currLen; i!=v; ++i) {
+		import std.conv: to;
+		_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+				   this, cast(uint) i);
+	      }
+	    }
+	  }
+	
+	  void setLen(N...)(size_t v, N idx) {
+	    static if (HAS_RAND_ATTRIB) {
+	      static if (N.length == 0) {
+		buildElements(v);
+	      }
+	      setLen(*_var, v, idx);
+	    }
+	    else {
+	      assert(false);
+	    }
+	  }
+
 	}
 	else {
 	  void setLen(N...)(size_t v, N idx) {
@@ -931,28 +986,6 @@ class CstVecArr(V, alias R, int N=0)
 	  return getLen(*_var, idx);
 	}
 
-	void setLen(N...)(size_t v, N idx) {
-	  static if (HAS_RAND_ATTRIB) {
-	    static if (N.length == 0) {
-	      size_t currLen = _elems.length;
-	      // import std.stdio;
-	      // writeln("Length was ", currLen, " new ", v);
-	      if (currLen < v) {
-		_elems.length = v;
-		for (size_t i=currLen; i!=v; ++i) {
-		  import std.conv: to;
-		  _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
-				     this, cast(uint) i);
-		}
-	      }
-	    }
-	    setLen(*_var, v, idx);
-	  }
-	  else {
-	    assert(false);
-	  }
-	}
-
 	bool isUnwindable() {
 	  foreach (var; _relatedIdxs) {
 	    if (! var.solved()) return false;
@@ -971,12 +1004,12 @@ class CstVecArr(V, alias R, int N=0)
 	}
       
 	EV opIndex(CstVarExpr idx) {
-	  foreach (domain; idx.getRndDomains()) {
+	  foreach (domain; idx.getRndDomains(false)) {
 	    addRelatedIdx(domain);
 	  }
 	  if(idx.isConst() && _arrLen.solved()) {
 	    // resolve only if the length has been resolved yet
-	    // And when the length is reolved, we must make sure that
+	    // And when the length is resolved, we must make sure that
 	    // unwinding of iterator takes care of such elements as
 	    // well which are not explicitly onvoking iterators
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
@@ -996,6 +1029,19 @@ class CstVecArr(V, alias R, int N=0)
 	void _esdl__doRandomize(_esdl__RandGen randGen) {
 	  static if (HAS_RAND_ATTRIB) {
 	    assert(arrLen !is null);
+	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	      this[i]._esdl__doRandomize(randGen);
+	    }
+	  }
+	  else {
+	    assert(false);
+	  }
+	}
+
+	void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	  static if (HAS_RAND_ATTRIB) {
+	    assert (stage is s);
+	    assert (arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
 	      this[i]._esdl__doRandomize(randGen);
 	    }
@@ -1163,13 +1209,19 @@ class CstVecArr(V, alias R, int N=0)
 	  static if (HAS_RAND_ATTRIB) {
 	    if(_indexExpr) {
 	      foreach(pp; _parent.getDomainElems(-1)) {
-		if(idx < 0) elems ~= pp._elems;
+		if(idx < 0) {
+		  if (pp._arrLen.isResolved()) elems ~= pp._elems[0..pp._arrLen.evaluate()];
+		  else elems ~= pp._elems;
+		}
 		else elems ~= pp._elems[idx];
 	      }
 	    }
 	    else {
 	      foreach(pp; _parent.getDomainElems(_pindex)) {
-		if(idx < 0) elems ~= pp._elems;
+		if(idx < 0) {
+		  if (pp._arrLen.isResolved()) elems ~= pp._elems[0..pp._arrLen.evaluate()];
+		  else elems ~= pp._elems;
+		}
 		else elems ~= pp._elems[idx];
 	      }
 	    }
@@ -1183,11 +1235,11 @@ class CstVecArr(V, alias R, int N=0)
 	// hierarchy index is not a constant, but an iterator or a
 	// randomized epression. In that case, we shall have to return
 	// more primary elements
-	// CstDomain[] getRndDomains() {
+	// CstDomain[] getRndDomains(bool resolved) {
 	// 	CstDomain[] domains;
 	// 	static if (HAS_RAND_ATTRIB) {
 	// 	  if(_indexExpr) {
-	// 	    domains = _indexExpr.getRndDomains();
+	// 	    domains = _indexExpr.getRndDomains(resolved);
 	// 	    foreach(pp; _parent.getDomainElems(-1)) {
 	// 	      domains ~= pp;
 	// 	    }
@@ -1201,30 +1253,30 @@ class CstVecArr(V, alias R, int N=0)
 	// 	else {
 	// 	  domains ~= _parent.getDomainLens();
 	// 	  if(_indexExpr) {
-	// 	    domains ~= _indexExpr.getRndDomains() ~ _parent.getDomainLens();
+	// 	    domains ~= _indexExpr.getRndDomains(resolved) ~ _parent.getDomainLens(resolved);
 	// 	  }
 	// 	}
 	// 	return domains;
 	// }
 
-	CstDomain[] getDomainLens() {
+	CstDomain[] getDomainLens(bool resolved) {
 	  // if(_pindex.itrVars.length is 0)
 	  if(_indexExpr is null) {
 	    return [_parent[_pindex].arrLen()];
-	    // return domains ~ _parent[_pindex].getDomainLens();
+	    // return domains ~ _parent[_pindex].getDomainLens(resolved);
 	  }
-	  if(_indexExpr.isConst()) {
+	  if (_indexExpr.isConst() || resolved) {
 	    CstDomain[] domains;
-	    domains ~= _parent[cast(size_t) _indexExpr.evaluate()].getDomainLens();
+	    domains ~= _parent[cast(size_t) _indexExpr.evaluate()].getDomainLens(resolved);
 	    return domains;
 	  }
 	  else {
 	    CstDomain[] domains;
 	    // import std.stdio;
 	    // writeln(_parent.name(), " ", p.name());
-	    domains = _indexExpr.getRndDomains();
+	    domains = _indexExpr.getRndDomains(resolved);
 	    foreach(pp; _parent.getDomainElems(-1)) {
-	      domains ~= pp.getDomainLens();
+	      domains ~= pp.getDomainLens(resolved);
 	    }
 	    return domains;
 	  }
@@ -1285,19 +1337,26 @@ class CstVecArr(V, alias R, int N=0)
 	      }
 	    }
 
+	  void buildElements(size_t v=size_t.max) {
+	    if (v == size_t.max) {
+	      v = getLen();
+	    }
+	    size_t currLen = _elems.length;
+	    // import std.stdio;
+	    // writeln("Length was ", currLen, " new ", v);
+	    if (currLen < v) {
+	      _elems.length = v;
+	      for (size_t i=currLen; i!=v; ++i) {
+		import std.conv: to;
+		_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+				   this, cast(uint) i);
+	      }
+	    }
+	  }
+
 	  void setLen(N...)(size_t v, N idx) {
 	    static if (N.length == 0) {
-	      size_t currLen = _elems.length;
-	      // import std.stdio;
-	      // writeln("Length was ", currLen, " new ", v);
-	      if (currLen < v) {
-		_elems.length = v;
-		for (size_t i=currLen; i!=v; ++i) {
-		  import std.conv: to;
-		  _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
-				     this, cast(uint) i);
-		}
-	      }
+	      buildElements(v);
 	    }
 	    _parent.setLen(v, _pindex, idx);
 	  }
@@ -1343,7 +1402,7 @@ class CstVecArr(V, alias R, int N=0)
 	}
       
 	EV opIndex(CstVarExpr idx) {
-	  foreach (domain; idx.getRndDomains()) {
+	  foreach (domain; idx.getRndDomains(false)) {
 	    addRelatedIdx(domain);
 	  }
 	  if(idx.isConst()) {
@@ -1381,6 +1440,19 @@ class CstVecArr(V, alias R, int N=0)
 	  static if (HAS_RAND_ATTRIB) {
 	    assert(arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	      this[i]._esdl__doRandomize(randGen);
+	    }
+	  }
+	  else {
+	    assert(false);
+	  }
+	}
+
+	void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	  static if (HAS_RAND_ATTRIB) {
+	    assert (stage is s);
+	    assert (arrLen !is null);
+	    for (size_t i=0; i != arrLen.evaluate(); ++i) {
 	      this[i]._esdl__doRandomize(randGen);
 	    }
 	  }

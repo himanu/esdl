@@ -99,7 +99,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;
       }
       
-      override CstDomain[] getRndDomains() {
+      override CstDomain[] getRndDomains(bool resolved) {
 	static if (HAS_RAND_ATTRIB) {
 	  if(isRand) return [this];
 	  else return [];
@@ -109,7 +109,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstDomain[] getDomainLens() {
+      CstDomain[] getDomainLens(bool resolved) {
 	assert(false);
       }
 
@@ -123,6 +123,16 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if(stage is null) {
 	    randGen.gen(*_var);
 	  }
+	}
+	else {
+	  assert(false);
+	}
+      }
+
+      void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	static if (HAS_RAND_ATTRIB) {
+	  assert (stage is s);
+	  randGen.gen(*_var);
 	}
 	else {
 	  assert(false);
@@ -174,7 +184,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _parent.hasUnresolvedIdx(); // no _relatedIdxs for this instance
       }
       
-      CstDomain[] getDomainLens() {
+      CstDomain[] getDomainLens(bool resolved) {
 	assert(false);
       }
 
@@ -188,19 +198,19 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       // cases we need to list all the elements of the array that could
       // finally represent the given element that we are currently
       // dealing with.
-      override CstDomain[] getRndDomains() {
+      override CstDomain[] getRndDomains(bool resolved) {
 	CstDomain[] domains;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
 	    // FIXME -- if the expression has been solved
 	    // return _parent.getRndDomains(_indexExpr.evaluate()) ;
-	    domains = _indexExpr.getRndDomains();
-	    foreach(pp; _parent.getRndDomains(-1)) {
+	    domains = _indexExpr.getRndDomains(resolved);
+	    foreach(pp; _parent.getRndDomainsAtIdx(-1)) {
 	      domains ~= pp;
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getRndDomains(_index)) {
+	    foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
 	      domains ~= pp;
 	    }
 	  }
@@ -209,14 +219,14 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	else {
 	  if(_indexExpr) {
 	    // FIXME -- if the expression has been solved
-	    // return _parent.getRndDomains(_indexExpr.evaluate()) ;
-	    domains = _indexExpr.getRndDomains() ~ _parent.getRndDomains();
+	    // return _parent.getRndDomainsAtIdx(_indexExpr.evaluate()) ;
+	    domains = _indexExpr.getRndDomains(resolved) ~ _parent.getRndDomains(resolved);
 	  }
 	  else {
-	    // foreach(pp; _parent.getRndDomains(_index)) {
+	    // foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
 	    //   domains ~= pp;
 	    // }
-	    domains = _parent.getRndDomains();
+	    domains = _parent.getRndDomains(resolved);
 	  }
 	  return domains;
 	}
@@ -237,13 +247,12 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _parent.unwind(itr,n)[_index];
       }
 
-      void _esdl__doRandomize(_esdl__RandGen randGen) {
+      void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
 	static if (HAS_RAND_ATTRIB) {
-	  if(stage is null) {
-	    E val;
-	    randGen.gen(val);
-	    collate(val);
-	  }
+	  assert (stage is s);
+	  E val;
+	  randGen.gen(val);
+	  collate(val);
 	}
 	else {
 	  assert(false, name());
@@ -371,13 +380,13 @@ class CstObjArr(V, alias R, int N=0)
 	}
 
 	static if (HAS_RAND_ATTRIB) {
-	  EV[] getRndDomains(int idx) {
+	  EV[] getRndDomainsAtIdx(int idx) {
 	    if(idx < 0) return _elems;
 	    else return [_elems[idx]];
 	  }
 	}
 
-	CstDomain[] getRndDomains() {
+	CstDomain[] getRndDomains(bool resolved) {
 	  static if (HAS_RAND_ATTRIB) {
 	    CstDomain[] domains;
 	    foreach(elem; _elems) {
@@ -390,7 +399,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstDomain[] getDomainLens() {
+	CstDomain[] getDomainLens(bool resolved) {
 	  static if (HAS_RAND_ATTRIB) {
 	    CstDomain[] domains;
 	    if(_arrLen.isRand) domains ~= _arrLen;
@@ -496,7 +505,7 @@ class CstObjArr(V, alias R, int N=0)
 	}
       
 	EV opIndex(CstVarExpr idx) {
-	  foreach (domain; idx.getRndDomains()) {
+	  foreach (domain; idx.getRndDomains(resolved)) {
 	    addRelatedIdx(domain);
 	  }
 	  if(idx.isConst()) {
@@ -530,6 +539,20 @@ class CstObjArr(V, alias R, int N=0)
 	    if(_elems.length == 0) this.build();
 	    assert(arrLen !is null);
 	    for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	      this[i]._esdl__doRandomize(randGen);
+	    }
+	  }
+	  else {
+	    assert(false);
+	  }
+	}
+
+	void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	  static if (HAS_RAND_ATTRIB) {
+	    if(_elems.length == 0) this.build();
+	    assert (stage is s);
+	    assert (arrLen !is null);
+	    for (size_t i=0; i != arrLen.evaluate(); ++i) {
 	      this[i]._esdl__doRandomize(randGen);
 	    }
 	  }
@@ -663,17 +686,17 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return _parent.hasUnresolvedIdx();
       }
 
-      EV[] getRndDomains(int idx) {
+      EV[] getRndDomainsAtIdx(int idx) {
 	EV[] domains;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
-	    foreach(pp; _parent.getRndDomains(-1)) {
+	    foreach(pp; _parent.getRndDomainsAtIdx(-1)) {
 	      if(idx < 0) domains ~= pp._elems;
 	      else domains ~= pp._elems[idx];
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getRndDomains(_index)) {
+	    foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
 	      if(idx < 0) domains ~= pp._elems;
 	      else domains ~= pp._elems[idx];
 	    }
@@ -688,31 +711,31 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       // hierarchy index is not a constant, but an iterator or a
       // randomized epression. In that case, we shall have to return
       // more primary elements
-      CstDomain[] getRndDomains() {
+      CstDomain[] getRndDomains(bool resolved) {
 	CstDomain[] domains;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
-	    domains = _indexExpr.getRndDomains();
-	    foreach(pp; _parent.getRndDomains(-1)) {
+	    domains = _indexExpr.getRndDomains(resolved);
+	    foreach(pp; _parent.getRndDomainsAtIdx(-1)) {
 	      domains ~= pp;
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getRndDomains(_index)) {
+	    foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
 	      domains ~= pp;
 	    }
 	  }
 	}
 	else {
-	  domains ~= _parent.getDomainLens();
+	  domains ~= _parent.getDomainLens(resolved);
 	  if(_indexExpr) {
-	    domains ~= _indexExpr.getRndDomains() ~ _parent.getDomainLens();
+	    domains ~= _indexExpr.getRndDomains(resolved) ~ _parent.getDomainLens(resolved);
 	  }
 	}
 	return domains;
       }
 
-      CstDomain[] getDomainLens() {
+      CstDomain[] getDomainLens(bool resolved) {
 	// if(_index.itrVars.length is 0)
 	if(_indexExpr is null) {
 	  return [_parent[_index].arrLen()];
@@ -720,15 +743,15 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
 	if(_indexExpr.isConst()) {
 	  CstDomain[] domains;
-	  domains ~= _parent[cast(size_t) _indexExpr.evaluate()].getDomainLens();
+	  domains ~= _parent[cast(size_t) _indexExpr.evaluate()].getDomainLens(resolved);
 	  return domains;
 	}
 	else {
 	  CstDomain[] domains;
-	  foreach(p; getRndDomains()) {
+	  foreach(p; getRndDomains(resolved)) {
 	    // import std.stdio;
 	    // writeln(_parent.name(), " ", p.name());
-	    domains ~= p.getDomainLens();
+	    domains ~= p.getDomainLens(resolved);
 	  }
 	  return domains;
 	}
@@ -821,7 +844,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
       
       EV opIndex(CstVarExpr idx) {
-	foreach (domain; idx.getRndDomains()) {
+	foreach (domain; idx.getRndDomains(resolved)) {
 	  addRelatedIdx(domain);
 	}
 	if(idx.isConst()) {
@@ -860,6 +883,20 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	static if (HAS_RAND_ATTRIB) {
 	  if(_elems.length == 0) this.build();
 	  assert(arrLen !is null);
+	  for(size_t i=0; i != arrLen.evaluate(); ++i) {
+	    this[i]._esdl__doRandomize(randGen);
+	  }
+	}
+	else {
+	  assert(false);
+	}
+      }
+
+      void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+	static if (HAS_RAND_ATTRIB) {
+	  if (_elems.length == 0) this.build();
+	  assert (stage is s);
+	  assert (arrLen !is null);
 	  for(size_t i=0; i != arrLen.evaluate(); ++i) {
 	    this[i]._esdl__doRandomize(randGen);
 	  }

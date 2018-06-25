@@ -6,7 +6,6 @@ import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
 class CstStage {
-  int _id = -1;
   // List of randomized variables associated with this stage. A
   // variable can be associated with only one stage
   CstDomain[] _domVars;
@@ -17,8 +16,21 @@ class CstStage {
   
   BDD _solveBDD;
 
+  int _id = -1;
+
   ~this() {
     _solveBDD.reset();
+  }
+  
+  void copyFrom(CstStage from) {
+    _domVars = from._domVars;
+    _bddExprs = from._bddExprs;
+    _solveBDD = from._solveBDD;
+  }
+
+  // return true is _bddExprs match
+  bool compare(CstStage other) {
+    return other._bddExprs == _bddExprs;
   }
   
   void id(uint i) {
@@ -71,6 +83,9 @@ interface CstDomain
   abstract uint bitcount();
   abstract void reset();
   abstract BDD getPrimBdd(Buddy buddy);
+  abstract CstBddExpr getNopBddExpr();
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   final bool solved() {
     if(isRand()) {
       return stage() !is null && stage().solved();
@@ -85,12 +100,13 @@ interface CstVarPrim
 {
   abstract string name();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   abstract bool isRand();
   // abstract ulong value();
 
   abstract void _esdl__reset();
   abstract bool isVarArr();
-  abstract CstDomain[] getDomainLens();
+  abstract CstDomain[] getDomainLens(bool resolved);
   abstract void solveBefore(CstVarPrim other);
   abstract void addPreRequisite(CstVarPrim other);
 
@@ -130,7 +146,7 @@ abstract class CstVarExpr
   // given constraint equation together. And so, given a constraint
   // equation, we want to list out the elements that need to be
   // grouped together.
-  abstract CstDomain[] getRndDomains();
+  abstract CstDomain[] getRndDomains(bool resolved);
 
   // get the list of stages this expression should be avaluated in
   // abstract CstStage[] getStages();
@@ -218,11 +234,15 @@ abstract class CstBddExpr
 
   abstract CstBddExpr unwind(CstVarIterBase itr, uint n);
 
-  abstract CstDomain[] getRndDomains();
+  abstract CstDomain[] getRndDomains(bool resolved);
 
   // abstract CstStage[] getStages();
 
   abstract BDD getBDD(CstStage stage, Buddy buddy);
+
+  bool cstExprIsNop() {
+    return false;
+  }
 
 }
 
@@ -275,7 +295,7 @@ class CstBlock: CstBddExpr
     return _exprs.length == 0;
   }
   
-  override CstDomain[] getRndDomains() {
+  override CstDomain[] getRndDomains(bool resolved) {
     assert(false);
   }
 
