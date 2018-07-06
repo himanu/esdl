@@ -253,7 +253,7 @@ class _esdl__RandGen
 
   @property void gen(T)(ref T t) {
     static if (isBoolean!T) {
-      t = flip();
+      t = cast(T) flip();
     }
     else static if(isIntegral!T) {
       t = uniform!(T)(_gen);

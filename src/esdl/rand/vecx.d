@@ -829,7 +829,7 @@ class CstVecArr(V, alias R, int N=0)
 	static if (HAS_RAND_ATTRIB) {
 	  EV[] getDomainElems(long idx) {
 	    if (idx < 0) {
-	      if (_arrLen.isResolved()) return _elems[0.._arrLen.evaluate()];
+	      if (_arrLen.isResolved()) return _elems[0..(cast(size_t) _arrLen.evaluate())];
 	      else return _elems;
 	    }
 	    else return [_elems[cast(size_t) idx]];
@@ -1204,13 +1204,13 @@ class CstVecArr(V, alias R, int N=0)
 	  return [_parent._arrLen];
 	}
 
-	EV[] getDomainElems(long idx) {
+	EV[] getDomainElems(size_t idx) {
 	  EV[] elems;
 	  static if (HAS_RAND_ATTRIB) {
 	    if(_indexExpr) {
 	      foreach(pp; _parent.getDomainElems(-1)) {
 		if(idx < 0) {
-		  if (pp._arrLen.isResolved()) elems ~= pp._elems[0..pp._arrLen.evaluate()];
+		  if (pp._arrLen.isResolved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
 		  else elems ~= pp._elems;
 		}
 		else elems ~= pp._elems[idx];
@@ -1219,7 +1219,7 @@ class CstVecArr(V, alias R, int N=0)
 	    else {
 	      foreach(pp; _parent.getDomainElems(_pindex)) {
 		if(idx < 0) {
-		  if (pp._arrLen.isResolved()) elems ~= pp._elems[0..pp._arrLen.evaluate()];
+		  if (pp._arrLen.isResolved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
 		  else elems ~= pp._elems;
 		}
 		else elems ~= pp._elems[idx];
@@ -1284,7 +1284,7 @@ class CstVecArr(V, alias R, int N=0)
 
 	RV flatten() {
 	  if (_indexExpr !is null) {
-	    return _parent.flatten()[_indexExpr.evaluate()];
+	    return _parent.flatten()[cast(size_t)_indexExpr.evaluate()];
 	  }
 	  else {
 	    return this;
