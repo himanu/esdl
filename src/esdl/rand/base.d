@@ -16,6 +16,9 @@ class CstStage {
   
   BDD _solveBDD;
 
+  double[uint] _bddDist;
+  
+
   int _id = -1;
 
   ~this() {
@@ -26,6 +29,7 @@ class CstStage {
     _domVars = from._domVars;
     _bddExprs = from._bddExprs;
     _solveBDD = from._solveBDD;
+    _bddDist = from._bddDist;
   }
 
   // return true is _bddExprs match
@@ -191,6 +195,9 @@ abstract class CstBddExpr
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
+
+  CstBddExpr[] _uwExprs;
+  CstVarIterBase _uwItr;
   
   // unwind recursively untill no unwinding is possible
   CstBddExpr[] unwind() {
@@ -212,17 +219,28 @@ abstract class CstBddExpr
   }
 
   CstBddExpr[] unwind(CstVarIterBase itr) {
-    CstBddExpr[] retval;
     if(! itr.isUnwindable()) {
       assert(false, "CstVarIterBase is not unwindabe yet");
     }
-    auto max = itr.maxVal();
+    auto currLen = itr.maxVal();
     // import std.stdio;
-    // writeln("maxVal is ", max);
-    for (uint i = 0; i != max; ++i) {
-      retval ~= this.unwind(itr, i);
+    // writeln("maxVal is ", currLen);
+
+    if (_uwItr !is itr) {
+      _uwItr = itr;
+      _uwExprs.length = 0;
     }
-    return retval;
+    
+    if (currLen > _uwExprs.length) {
+      // import std.stdio;
+      // writeln("Need to unwind ", currLen - _uwExprs.length, " times");
+      for (uint i = cast(uint) _uwExprs.length;
+	   i != currLen; ++i) {
+	_uwExprs ~= this.unwind(itr, i);
+      }
+    }
+    
+    return _uwExprs[0..currLen];
   }
 
   CstVarIterBase unwindableItr() {

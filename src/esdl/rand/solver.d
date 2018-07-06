@@ -302,8 +302,9 @@ abstract class _esdl__SolverRoot {
 	savedStages.length > stageIdx &&
 	savedStages[stageIdx]._bddExprs == stage._bddExprs) {
       // import std.stdio;
-      // writeln("here");
+      // writeln("Reusing previous BDD solution");
       stage._solveBDD = savedStages[stageIdx]._solveBDD;
+      stage._bddDist = savedStages[stageIdx]._bddDist;
       solveBDD = stage._solveBDD;
     }
     else {
@@ -320,13 +321,16 @@ abstract class _esdl__SolverRoot {
 	// writeln(expr.name());
       }
       stage._solveBDD = solveBDD;
+      stage._bddDist.clear();
+      solveBDD.satDist(stage._bddDist);
     }
 
-    double[uint] bddDist;
-    solveBDD.satDist(bddDist);
 
+    // import std.stdio;
+    // writeln("bddDist: ", stage._bddDist);
+    
     auto solution = solveBDD.randSatOne(this._esdl__rGen.get(),
-					bddDist);
+					stage._bddDist);
     auto solVecs = solution.toVector();
 
     byte[] bits;
