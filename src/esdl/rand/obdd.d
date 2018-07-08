@@ -125,7 +125,7 @@ struct BddDomain
 {
 
   /* The name of this _domain. */
-  private string _name;
+  // private string _name;
   /* The index of this _domain. */
   private int _index;
 
@@ -136,12 +136,13 @@ struct BddDomain
   /* The BDD variable set.  Actually constructed in extDomain(), etc. */
   private BDD _var;		// FIXBDD
 
-  void name(string n) {
-    _name = n;
-  }
+  // void name(string n) {
+  //   _name = n;
+  // }
 
   string name() {
-    return _name;
+    return format("%s", index);
+    // return _name;
   }
 
   void index(int i) {
@@ -212,7 +213,7 @@ struct BddDomain
     if (bits <= 0) {
       throw new BddException();
     }
-    this._name = format("%s", index);
+    // this._name = format("%s", index);
     this._index = index;
     this._realsize = (cast(ulong) 2) ^^bits;
     this._ivar.length = bits;
@@ -222,12 +223,12 @@ struct BddDomain
     _var.reset();
   }
 
-  void setName(string name) {
-    this._name = name;
-  }
+  // void setName(string name) {
+  //   this._name = name;
+  // }
 
   string getName() {
-    return _name;
+    return name();
   }
 
   int getIndex() {
