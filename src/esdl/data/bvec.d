@@ -2773,6 +2773,44 @@ public auto toBitVec(T)(T t) if(isIntegral!T) {
   return res;
  }
 
+public B toBitVec(B, T)(T t) if(isIntegral!T) {
+  static if(isSigned!T) {
+    alias R = BitVec!(8*T.sizeof);
+  }
+  else {
+    alias R = UBitVec!(8*T.sizeof);
+  }
+  R tmp = t;
+  B res = cast(B) tmp;
+  return res;
+ }
+
+public auto toBit(size_t N, T)(T t) if(isIntegral!T) {
+  static if(isSigned!T) {
+    alias R = BitVec!(8*T.sizeof);
+  }
+  else {
+    alias R = UBitVec!(8*T.sizeof);
+  }
+  alias B = Bit!(N);
+  R tmp = t;
+  B res = cast(B) tmp;
+  return res;
+ }
+
+public auto toUBit(size_t N, T)(T t) if(isIntegral!T) {
+  static if(isSigned!T) {
+    alias R = BitVec!(8*T.sizeof);
+  }
+  else {
+    alias R = UBitVec!(8*T.sizeof);
+  }
+  alias B = UBit!(N);
+  R tmp = t;
+  B res = cast(B) tmp;
+  return res;
+ }
+
 // Utility functions
 private uint multibyteDivAssign(uint [] dest, uint divisor, uint overflow) {
   ulong c = cast(ulong)overflow;
