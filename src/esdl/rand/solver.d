@@ -1,5 +1,6 @@
 module esdl.rand.solver;
 import esdl.rand.obdd;
+import std.container.array;
 
 import esdl.rand.base: CstVarPrim, CstStage, CstBddExpr,// , CstValAllocator
   CstDomain, CstBlock;
@@ -92,7 +93,7 @@ abstract class _esdl__SolverRoot {
 
   Buddy _esdl__buddy;
 
-  BddDomain[] _domains;
+  Array!uint _domains;		// indexes of domains
 
   CstDomain[] _cstDomains;
 
@@ -496,22 +497,22 @@ abstract class _esdl__SolverRoot {
     _domains ~= _esdl__buddy.extDomain(domain.bitcount);
   }
 
-  void addDomains(CstDomain[] domains) {
-    int[] domList;
+  // void addDomains(CstDomain[] domains) {
+  //   uint[] domList;
 
-    // foreach (vec; domains) {
-    //   assert(vec.domIndex == uint.max);
-    //   // vec.domIndex = uint.max;
-    // }
+  //   // foreach (vec; domains) {
+  //   //   assert(vec.domIndex == uint.max);
+  //   //   // vec.domIndex = uint.max;
+  //   // }
 
-    foreach(vec; domains) {
-      if(vec.domIndex == uint.max) {
-	vec.domIndex = this._domIndex++;
-	domList ~= vec.bitcount;
-      }
-    }
-    _domains ~= _esdl__buddy.extDomain(domList);
-  }
+  //   foreach(vec; domains) {
+  //     if(vec.domIndex == uint.max) {
+  // 	vec.domIndex = this._domIndex++;
+  // 	domList ~= vec.bitcount;
+  //     }
+  //   }
+  //   _domains ~= _esdl__buddy.extDomain(domList);
+  // }
 
   void printSolution() {
     // import std.stdio;
