@@ -1,7 +1,8 @@
 module esdl.rand.misc;
 
 import esdl.data.bvec: isBitVector;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+import std.traits: isIntegral, isBoolean, isArray,
+  isStaticArray, isDynamicArray, EnumMembers;
 import std.meta: AliasSeq;
 
 // To be returned when no @rand or @norand is found
@@ -214,12 +215,16 @@ class _esdl__RandGen
 
   private Random _gen;
 
-  this(uint _seed) {
-    _gen = Random(_seed);
+  private uint _seed;
+
+  this(uint seed) {
+    _seed = seed;
+    _gen = Random(seed);
   }
 
-  void seed(uint _seed) {
-    _gen.seed(_seed);
+  void seed(uint seed) {
+    _seed = seed;
+    _gen.seed(seed);
   }
 
   bool flip() {
@@ -234,26 +239,32 @@ class _esdl__RandGen
 
   @property T gen(T)() {
     static if (isBoolean!T) {
-      T val = flip();
+      return flip();
+    }
+    else static if (is (T == enum)) {
+      static immutable T[EnumMembers!T.length] vals = [EnumMembers!T];
+      return vals[uniform(0, cast(uint) vals.length, _gen)];
+    }
+    else static if (isIntegral!T) {
+      return uniform!(T)(_gen);
+    }
+    else static if (isBitVector!T) {
+      T val;
+      val.randomize(_gen);
       return val;
     }
-    else static if(isIntegral!T) {
-      T val = uniform!(T)(_gen);
-      return val;
+    else {
+      static assert(false);
     }
-    else static if(isBitVector!T) {
-	T val;
-	val.randomize(_gen);
-	return val;
-      }
-      else {
-	static assert(false);
-      }
   }
 
   @property void gen(T)(ref T t) {
     static if (isBoolean!T) {
       t = cast(T) flip();
+    }
+    else static if (is (T == enum)) {
+      static immutable T[EnumMembers!T.length] vals = [EnumMembers!T];
+      t = vals[uniform(0, cast(uint) vals.length, _gen)];
     }
     else static if(isIntegral!T) {
       t = uniform!(T)(_gen);

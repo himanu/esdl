@@ -145,7 +145,7 @@ abstract class CstVarTerm: CstVarExpr
     }
   CstNotBddExpr opUnary(string op)() if(op == "*") {
     // static if(op == "*") {	// "!" in cstx is translated as "*"
-    return new CstNotBddExpr(_esdl__toBdd(this));
+    return new CstNotBddExpr(this.toBdd());
     // }
     // else {
     //   static assert(false);
@@ -176,36 +176,37 @@ abstract class CstVecDomain(alias R): CstVarTerm, CstDomain
   BddVec _valvec;
 
   static if (HAS_RAND_ATTRIB) {
-    BddVec       _domvec;
+    // BddVec       _domvec;
     uint         _domIndex = uint.max;
     CstStage     _stage = null;
     uint         _resolveLap = 0;
   }
   
   ~this() {
-    static if (HAS_RAND_ATTRIB) {
-      _domvec.reset();
-    }
+    // static if (HAS_RAND_ATTRIB) {
+    //   _domvec.reset();
+    // }
     _valvec.reset();
   }    
 
-  ref BddVec bddvec() {
+  ref BddVec bddvec(Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
-      return _domvec;
+      return buddy.getVec(_domIndex);
+      // return _domvec;
     }
     else {
       return _valvec;
     }
   }
 
-  void bddvec(BddVec b) {
-    static if (HAS_RAND_ATTRIB) {
-      _domvec = b;
-    }
-    else {
-      assert(false);
-    }
-  }
+  // void bddvec(BddVec b) {
+  //   static if (HAS_RAND_ATTRIB) {
+  //     _domvec = b;
+  //   }
+  //   else {
+  //     assert(false);
+  //   }
+  // }
 
   uint domIndex() {
     static if (HAS_RAND_ATTRIB) {
@@ -484,7 +485,7 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
   }
 
   ~this() {
-    _domvec.reset();
+    // _domvec.reset();
     _valvec.reset();
     _primBdd.reset();
   }
@@ -565,7 +566,8 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
       else {
 	assert(stage() !is null, "stage null for: " ~ name());
 	if(this.isRand && stage() is s) {
-	  return _domvec;
+	  return bddvec(buddy);
+	  // return _domvec;
 	}
 	else if((! this.isRand) ||
 		this.isRand && stage().solved()) { // work with the value
@@ -639,7 +641,7 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
 
   BDD getPrimBdd(Buddy buddy) {
     if(_primBdd.isZero()) {
-      _primBdd = this.bddvec.lte(buddy.buildVec(_parent.maxArrLen));
+      _primBdd = this.bddvec(buddy).lte(buddy.buildVec(_parent.maxArrLen));
     }
     return _primBdd;
   }
@@ -824,6 +826,10 @@ class CstVal(T = int): CstValBase
 
   this(T value) {
     _val = value;
+  }
+
+  ~this() {
+    _valvec.reset();
   }
 
   override bool refresh(CstStage stage, Buddy buddy) {
@@ -1519,6 +1525,16 @@ class CstBdd2BddExpr: CstBddTerm
     _lhs.resolveLap(lap);
     _rhs.resolveLap(lap);
   }
+
+  bool getIntRangeSet(T)(ref IntRangeSet rset) {
+    if (op == CstBddOp.LOGICAND) {
+      return false;
+    }
+    if (op == CstBddOp.LOGICOR) {
+      return false;
+    }
+    else return false;
+  }
 }
 
 // TBD
@@ -1545,6 +1561,11 @@ class CstIteBddExpr: CstBddTerm
   override bool refresh(CstStage stage, Buddy buddy) {
     assert(false);
   }
+
+  bool getIntRangeSet(T)(ref IntRangeSet rset) {
+    return false;
+  }
+
 }
 
 class CstNopBddExpr: CstBddTerm
@@ -1611,6 +1632,10 @@ class CstNopBddExpr: CstBddTerm
   
   override void resolveLap(uint lap) {
     _vec.resolveLap(lap);
+  }
+
+  bool getIntRangeSet(T)(ref IntRangeSet rset) {
+    return true;
   }
 }
 
@@ -1740,6 +1765,16 @@ class CstVec2BddExpr: CstBddTerm
     _lhs.resolveLap(lap);
     _rhs.resolveLap(lap);
   }
+
+
+  bool getIntRangeSet(T)(ref IntRangeSet rset) {
+    auto lrnd = _lhs.getRndDomains(true);
+    auto rrnd = _rhs.getRndDomains(true);
+
+    if (rrnd.length == 0) {
+      
+    }
+  }
 }
 
 class CstBddConst: CstBddTerm
@@ -1864,7 +1899,7 @@ class CstNotBddExpr: CstBddTerm
 
 // CstBdd2BddExpr logicOr(CstVarExpr other)
 // {
-//   return new CstBdd2BddExpr(_esdl__toBdd(this), _esdl__toBdd(other), CstBddOp.LOGICOR);
+//   return new CstBdd2BddExpr(toBdd(this), toBdd(other), CstBddOp.LOGICOR);
 // }
 
 auto _esdl__logicOr(P, Q)(P p, Q q) {
@@ -1874,7 +1909,7 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
     _p = new CstBddConst(p);
   }
   else static if (is (P: CstVarExpr)) {
-    _p = _esdl__toBdd(p);
+    _p = toBdd(p);
   }
   else {
     _p = p;
@@ -1883,7 +1918,7 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
     _q = new CstBddConst(q);
   }
   else static if (is (Q: CstVarExpr)) {
-    _q = _esdl__toBdd(q);
+    _q = toBdd(q);
   }
   else {
     _q = q;
@@ -1898,7 +1933,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
     _p = new CstBddConst(p);
   }
   else static if (is (P: CstVarExpr)) {
-    _p = _esdl__toBdd(p);
+    _p = toBdd(p);
   }
   else {
     _p = p;
@@ -1907,7 +1942,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
     _q = new CstBddConst(q);
   }
   else static if (is (Q: CstVarExpr)) {
-    _q = _esdl__toBdd(q);
+    _q = toBdd(q);
   }
   else {
     _q = q;

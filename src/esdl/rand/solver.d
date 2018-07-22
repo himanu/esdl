@@ -112,18 +112,45 @@ abstract class _esdl__SolverRoot {
   }
 	
   bool _esdl__isSeeded = false;
+  uint _esdl__seed;
 
   CstBlock _esdl__cstEqns;
 
   CstStage[] savedStages;
+
+  uint getRandomSeed() {
+    return _esdl__seed;
+  }
+
+  void seedRandom(uint seed) {
+    _esdl__seed = seed;
+    _esdl__rGen.seed(seed);    
+  }
   
   this(uint seed, bool isSeeded, string name,
        _esdl__SolverRoot parent) {
+    import std.random: Random, uniform;
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
     }
-    _esdl__rGen = new _esdl__RandGen(seed);
     _esdl__isSeeded = isSeeded;
+    if (isSeeded is true) {
+      _esdl__seed = seed;
+    }
+    else {
+      import esdl.base.core: Procedure;
+      auto proc = Procedure.self;
+      if (proc !is null) {
+	Random procRgen = proc.getRandGen();
+	_esdl__seed = uniform!(uint)(procRgen);
+      }
+      else {
+	// no active simulation -- use global rand generator
+	_esdl__seed = uniform!(uint)();
+      }
+    }
+    _esdl__rGen = new _esdl__RandGen(_esdl__seed);
+
     if(parent is null) {
       _esdl__buddy = new Buddy(400, 400);
       _esdl__cstEqns = new CstBlock();
@@ -171,7 +198,7 @@ abstract class _esdl__SolverRoot {
 
     // CstValAllocator.mark();
 
-    CstStage[] unsolvedStages;	// unresolved stages -- all
+    CstStage[] unsolvedStages;
 
     int stageIdx=0;
     CstBddExpr[] unsolvedExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
@@ -274,8 +301,8 @@ abstract class _esdl__SolverRoot {
     BDD solveBDD = _esdl__buddy.one();
     foreach(vec; stage._domVars) {
       if(vec.stage is stage) {
-	if(vec.bddvec.isNull()) {
-	  vec.bddvec.buildVec(_domains[vec.domIndex], vec.signed);
+	if(vec.bddvec(_esdl__buddy).isNull()) {
+	  vec.bddvec(_esdl__buddy).buildVec(vec.domIndex, vec.signed);
 	}
       }
     }
@@ -494,7 +521,7 @@ abstract class _esdl__SolverRoot {
     _cstDomains ~= domain;
     useBuddy(_esdl__buddy);
     domain.domIndex = this._domIndex++;
-    _domains ~= _esdl__buddy.extDomain(domain.bitcount);
+    _domains ~= _esdl__buddy.extDomVec(domain.bitcount);
   }
 
   // void addDomains(CstDomain[] domains) {
@@ -511,7 +538,7 @@ abstract class _esdl__SolverRoot {
   // 	domList ~= vec.bitcount;
   //     }
   //   }
-  //   _domains ~= _esdl__buddy.extDomain(domList);
+  //   _domains ~= _esdl__buddy.extDomVec(domList);
   // }
 
   void printSolution() {

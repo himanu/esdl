@@ -558,12 +558,20 @@ mixin template Randomization()
     void seedRandom(int seed) {
       _esdl__randSeed = seed;
       _esdl__randSeeded = true;
-      if(_esdl__solverInst !is null) {
-	_esdl__solverInst._esdl__rGen.seed(seed);
+      if (_esdl__solverInst !is null) {
+	_esdl__solverInst.seedRandom(seed);
       }
     }
     bool _esdl__isRandSeeded() {
       return _esdl__randSeeded;
+    }
+    uint _esdl__getRandomSeed() {
+      if (_esdl__solverInst !is null) {
+	return _esdl__solverInst.getRandomSeed();
+      }
+      else {
+	return _esdl__randSeed;
+      }
     }
     alias srandom = seedRandom;	// SV names the similar method srandom
     void _esdl__initSolver() {

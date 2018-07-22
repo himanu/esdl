@@ -11,6 +11,8 @@ import esdl.rand.base: CstVarPrim, CstVarExpr, CstVarIterBase,
 import esdl.rand.expr: CstVarLen, CstVecDomain, _esdl__cstVal;
 import esdl.rand.solver: _esdl__SolverRoot;
 
+import esdl.rand.intr: IntRangeSet;
+
 // Consolidated Proxy Class
 // template CstVecBase(T, int I, int N=0) {
 //   alias CstVecBase = CstVecBase!(typeof(T.tupleof[I]),
@@ -43,7 +45,7 @@ abstract class CstVecBase(V, alias R, int N)
       import std.traits;
       if(_primBdd.isZero()) {
 	foreach(e; EnumMembers!E) {
-	  _primBdd = _primBdd | this.bddvec.equ(buddy.buildVec(e));
+	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
 	}
       }
       return _primBdd;
@@ -310,7 +312,8 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	static if (HAS_RAND_ATTRIB) {
 	  assert(stage(), "Stage not set for " ~ this.name());
 	  if(this.isRand && s is stage()) {
-	    return _domvec;
+	    return bddvec(buddy);
+	    // return _domvec;
 	  }
 	  else if((! this.isRand) ||
 		  this.isRand && stage().solved()) { // work with the value
@@ -358,6 +361,13 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 
       override bool isOrderingExpr() {
 	return false;		// only CstVecOrderingExpr return true
+      }
+
+      static if (isIntegral!V) {
+	IntRangeSet!(Unconst!V) _rangeSet;
+      }
+      else static if (V.SIZE <= 64) {
+	IntRangeSet!(V.ISSIGNED, V.SIZE) _rangeSet;
       }
     }
 
@@ -618,7 +628,8 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  else {
 	    assert(stage(), "Stage not set for " ~ this.name());
 	    if(this.isRand && s is stage()) {
-	      return _domvec;
+	      return bddvec(buddy);
+	      // return _domvec;
 	    }
 	    else if((! this.isRand) ||
 		    this.isRand && stage().solved()) { // work with the value
@@ -742,13 +753,13 @@ abstract class CstVecArrBase(V, alias R, int N=0)
     assert(false, "signed not implemented for CstVecArrBase");
   }
 
-  ref BddVec bddvec() {
+  ref BddVec bddvec(Buddy buddy) {
     assert(false, "bddvec not implemented for CstVecArrBase");
   }
 
-  void bddvec(BddVec b) {
-    assert(false, "bddvec not implemented for CstVecArrBase");
-  }
+  // void bddvec(BddVec b) {
+  //   assert(false, "bddvec not implemented for CstVecArrBase");
+  // }
 
   void solveBefore(CstVarPrim other) {
     static if (HAS_RAND_ATTRIB) {

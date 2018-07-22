@@ -18,7 +18,6 @@ class CstStage {
 
   double[uint] _bddDist;
   
-
   int _id = -1;
 
   ~this() {
@@ -75,8 +74,8 @@ class CstStage {
 interface CstDomain
 {
   abstract string name();
-  abstract ref BddVec bddvec();
-  abstract void bddvec(BddVec b);
+  abstract ref BddVec bddvec(Buddy buddy);
+  // abstract void bddvec(BddVec b);
   abstract void collate(ulong v, int word=0);
   abstract CstStage stage();
   abstract void stage(CstStage s);
@@ -261,7 +260,6 @@ abstract class CstBddExpr
   bool cstExprIsNop() {
     return false;
   }
-
 }
 
 class CstBlock: CstBddExpr
@@ -337,7 +335,7 @@ class CstBlock: CstBddExpr
 
   void opOpAssign(string op)(CstVarExpr other)
     if(op == "~") {
-      _exprs ~= _esdl__toBdd(other);
+      _exprs ~= toBdd(other);
     }
 
   void opOpAssign(string op)(CstBlock other)
