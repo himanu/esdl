@@ -46,7 +46,8 @@ enum BddOp : ubyte {		// bdd.h:50
     }
 
 // bdd.h:75
-class BddPair {
+class BddPair
+{
   int *result;
   int last;
   int id;
@@ -62,9 +63,18 @@ class BddPair {
   }
 
   // pair.c:252
-  void set(int[] oldvar, int[] newvar) {
+  void set(ref Array!int oldvar, ref Array!int newvar) {
     if(oldvar.length != newvar.length)
       throw new BddException("Sizes of the BDD Arrays do not match");
+
+    for(size_t n = 0; n != oldvar.length; ++n)
+      this.set(oldvar[n], newvar[n]);
+  }
+
+  void set(int[] oldvar, int[] newvar) {
+    if(oldvar.length != newvar.length) {
+      throw new BddException("Sizes of the BDD Arrays do not match");
+    }
 
     for(size_t n = 0; n != oldvar.length; ++n)
       this.set(oldvar[n], newvar[n]);
@@ -123,7 +133,8 @@ class BddPair {
   // }
 }
 
-struct BddDomain
+
+struct BddDomain // fdd.c:52
 {
   /* The name of this _domain. */
   // private string _name;
@@ -165,13 +176,6 @@ struct BddDomain
     return _realsize;
   }
 
-  // int[] ivar()
-  // {
-  //   import std.stdio;
-  //   writeln("getting in ivar: >> ", _ivar);
-  //   return _ivar;
-  // }
-
   void var(BDD v) {
     _var = v;
   }
@@ -207,21 +211,19 @@ struct BddDomain
 
   void freeMem() {
     free(_ivar);
+    _ivar = null;
   }
    
   
-  this(int index, uint bits) {
-    if (bits <= 0) {
-      throw new BddException();
-    }
-    // this._name = format("%s", index);
-    this._index = index;
+  this(int index, uint bits) {	// fdd.c:1033
+    this._index = index;	// not in c version
     this._realsize = (cast(ulong) 2) ^^bits;
-    this._ivar = cast(int*) malloc(int.sizeof * bits);
     this._binsize = bits;
+    this._ivar = cast(int*) malloc(int.sizeof * bits);
     for (size_t i=0; i!=bits; ++i) {
       this._ivar[i] = 0;
     }
+    this._var = getBuddy().one();
   }
 
   void reset() {
@@ -243,7 +245,7 @@ struct BddDomain
   BDD domain() {
 
     /* Encode V<=X-1. V is the variables in 'var' and X is the domain size */
-    long val = size() - 1;
+    long val = _realsize - 1;
     BDD d = getBuddy.one();
     auto ivar = get_ivars();
     for (int n = 0; n < this.varNum(); n++) {
@@ -258,9 +260,9 @@ struct BddDomain
     return d;
   }
 
-  ulong size() {
-    return cast(ulong) this.realsize;
-  }
+  // ulong size() {
+  //   return cast(ulong) this.realsize;
+  // }
 
   BDD buildAdd(BddDomain that, long value)
   {
@@ -318,10 +320,10 @@ struct BddDomain
 
   BDD buildEquals(BddDomain that)
   {
-    if(this.size() != that.size())
+    if(this._realsize != that._realsize)
       {
 	throw new BddException(format("Size of %s != size of that %s ( %s vs %s",
-				      this, that, this.size(), that.size()));
+				      this, that, this._realsize, that._realsize));
       }
 
     BDD e = getBuddy.one();
@@ -347,7 +349,7 @@ struct BddDomain
 
   BDD ithVar(long val)
   {
-    if(val < 0 || val > size())
+    if(val < 0 || val > _realsize)
       {
 	throw new BddException(format("%s is out of range", val));
       }
@@ -368,13 +370,13 @@ struct BddDomain
 
   BDD varRange(long lo, long hi)
   {
-    if(lo < 0 || hi >= size() || lo > hi)
+    if(lo < 0 || hi >= _realsize || lo > hi)
       {
 	throw new BddException(format("range < %s, %s > is invalid", lo, hi));
       }
 
     BDD result = getBuddy.zero();
-    int[] ivar = this.get_ivars();
+    auto ivar = this.get_ivars();
     while(lo <= hi)
       {
 	BDD v = getBuddy.one();
@@ -505,12 +507,7 @@ struct BddVec
 
   import esdl.data.bvec: isBitVector;
   
-  version(BDDVEC_DYNARR) {
-    private BDD[] _bitvec;	// FIXBDD
-  }
-  else {
-    private Array!BDD _bitvec;
-  }
+  private Array!BDD _bitvec;
   
   private bool _signed = false;
 
@@ -553,20 +550,15 @@ struct BddVec
     // BDD.enable_delref();
   }
 
-  version(BDDVEC_DYNARR) {
-    ~this() {
-      foreach (bdd; _bitvec) {
-	bdd.reset();
-      }
-    }
-  }
-  else {
-    ~this() {
-      foreach (bdd; _bitvec) {
-	bdd.reset();
-      }
-    }
-  }
+  // ~this() {
+  //   foreach (bdd; _bitvec) {
+  //   	bdd.reset();
+  //   }
+  //   for (size_t i=0; i!=_bitvec.length; ++i) {
+  //	auto bdd = _bitvec[i];
+  //	bdd.reset();
+  //   }
+  // }
 
 
   void buildVec(T)(T val)
@@ -682,7 +674,19 @@ struct BddVec
     }
   }
 
+  void initialize(ref Array!int var) {
+    for(int n = 0 ; n < size ; n++) {
+      this.bitvec[n] = getBuddy.ithVar(var[n]);
+    }
+  }
+
   void initialize(Buddy buddy, int[] var) {
+    for(int n = 0 ; n < size ; n++) {
+      this.bitvec[n] = buddy.ithVar(var[n]);
+    }
+  }
+
+  void initialize(Buddy buddy, ref Array!int var) {
     for(int n = 0 ; n < size ; n++) {
       this.bitvec[n] = buddy.ithVar(var[n]);
     }
@@ -883,13 +887,12 @@ struct BddVec
     return val;
   }
 
-  void reset()
-  {
+  void reset() {
     // size = 0;
     foreach(ref bdd; _bitvec) {
       bdd.reset();
     }
-    _bitvec.length = 0;
+    _bitvec.clear();
   }
 
   // bvec addref(bvec v)
@@ -1648,6 +1651,8 @@ struct BDD
 {
   uint _index;
 
+  alias _index this;
+
   version(BUDDY_ROOT) {
     Buddy _buddy;
     const bool opEquals(ref const BDD other) {
@@ -1681,6 +1686,11 @@ struct BDD
   
   void reset() {
     // call this from the destructor of BddVec/BddDomain
+    // when buddy is getting GCed, the BDDs that are members of the
+    // various BddVec and BddDomain instances need not be delRef'ed
+    // also delRef requires a buddy instance that will not be
+    // available at the time GC kicks in -- buddy instance being
+    // thread local (static). GC runs on a different thread
     debug(BUDDY) writeln("Reset called for ", _index);
     _index = 0;
   }
@@ -2136,7 +2146,7 @@ struct BDD
 	for(n = 0; n < buddy.numberOfDomains(); n++)
 	  {
 	    BddDomain dom = buddy.getDomain(n);
-	    int[] ivar = dom.get_ivars();
+	    auto ivar = dom.get_ivars();
 	    bool found = false;
 	    for(m = 0; m < dom.varNum() && !found; m++)
 	      {
@@ -2154,7 +2164,7 @@ struct BDD
       for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
 	  BddDomain dom = buddy.getDomain(n);
-	  int[] ivar = dom.get_ivars();
+	  auto ivar = dom.get_ivars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
 	    {
@@ -2175,7 +2185,7 @@ struct BDD
       for(n = 0, num = 0; n < buddy.numberOfDomains(); n++)
 	{
 	  BddDomain dom = buddy.getDomain(n);
-	  int[] ivar = dom.get_ivars();
+	  auto ivar = dom.get_ivars();
 	  bool found = false;
 	  for(m = 0; m < dom.varNum() && !found; m++)
 	    {
@@ -2239,7 +2249,7 @@ struct BDD
     for(n = 0; n < fdvarnum; n++)
       {
 	BddDomain dom = buddy.getDomain(n);
-	int[] ivar = dom.get_ivars();
+	auto ivar = dom.get_ivars();
 
 	long val = 0;
 	for(int m = dom.varNum() - 1; m >= 0; m--)
@@ -2254,30 +2264,26 @@ struct BDD
     return res;
   }
 
-  private static int[] varset2levels(BDD r)
-  {
+  private static int[] varset2levels(BDD r) {
     int size = 0;
     BDD p = r.dup();
-    while(!p.isOne() && !p.isZero())
-      {
-	++size;
-	BDD p2 = p.high();
-	p = p2;
-      }
+    while (!p.isOne() && !p.isZero()) {
+      ++size;
+      BDD p2 = p.high();
+      p = p2;
+    }
     int[] result = new int[size];
     size = -1;
     p = r.dup();
-    while(!p.isOne() && !p.isZero())
-      {
-	result[++size] = p.level();
-	BDD p2 = p.high();
-	p = p2;
-      }
+    while(!p.isOne() && !p.isZero()) {
+      result[++size] = p.level();
+      BDD p2 = p.high();
+      p = p2;
+    }
     return result;
   }
 
-  BDD replace(BddPair pair)
-  {
+  BDD replace(BddPair pair) {
     uint x = _index;
     return makeBdd(buddy.bdd_replace(x, pair));
   }
@@ -2469,22 +2475,18 @@ struct BDD
       }
   }
 
-  byte[][] toVector()
-  {
+  byte[][] toVector() {
     byte[] set;
     byte[][] res;
-    if(_index < 2)
-      {
-	if(_index == 0)
-	  {
-	    assert(false, "Constraints do not converge");
-	  }
-	else
-	  {
-	    // empty set
-	    return res;
-	  }
+    if (_index < 2) {
+      if (_index == 0) {
+	assert(false, "Constraints do not converge");
       }
+      else {
+	// empty set
+	return res;
+      }
+    }
 
     // set = new byte[](buddy.varNum());
     set.length = buddy.varNum();
@@ -2560,7 +2562,7 @@ struct BDD
 
 	    BddDomain domain_n = buddy.getDomain(n);
 
-	    int[] vars = domain_n.get_ivars();
+	    auto vars = domain_n.get_ivars();
 	    size_t binsize = vars.length;
 	    for(int m=0 ; m<binsize ; m++)
 	      if(set[vars[m]] != 0)
@@ -2957,7 +2959,7 @@ class Buddy
 
   struct BddCache
   {
-    BddCacheData[] table;
+    Array!BddCacheData table;
     bool initialized = false;
 
     void init(uint size)
@@ -2965,8 +2967,6 @@ class Buddy
       size = primeGte(size);
       table.reserve(size);
       table.length = size;
-
-
 
       foreach(ref entry; table)
 	{
@@ -3130,15 +3130,15 @@ class Buddy
   uint _nodeSize() @property {return cast(uint) _nodes.length;}
   int _maxNodeSize; /* Maximum allowed number of _nodes */
   int _maxNodeIncr; /* Max. # of _nodes used to inc. table */
-  BddNode[] _nodes; /* All of the BDD _nodes */
+  Array!BddNode _nodes; /* All of the BDD _nodes */
   int _freePos; /* First free node */
   int _freeNum; /* Number of free _nodes */
   int _produced; /* Number of new _nodes ever produced */
   int _varNum; /* Number of defined BDD variables */
-  int[] _refStack; /* Internal node reference stack */
+  Array!int _refStack; /* Internal node reference stack */
   int _refStackTop; /* Internal node reference stack top */
-  int[] _var2Level; /* Variable -> level table */
-  int[] _level2Var; /* Level -> variable table */
+  Array!int _var2Level; /* Variable -> level table */
+  Array!int _level2Var; /* Level -> variable table */
   bool _resized; /* Flag indicating a resize of the nodetable */
 
   BddCacheStat bddcachestats;
@@ -3152,7 +3152,7 @@ class Buddy
 
   /*=== PRIVATE KERNEL VARIABLES =========================================*/
 
-  int[] _varSet; /* Set of defined BDD variables */
+  Array!int _varSet; /* Set of defined BDD variables */
   int _gbCollectNum; /* Number of garbage collections */
   int _cacheSize; /* Size of the operator caches */
   long _gbcClock; /* Clock ticks used in GBC */
@@ -3221,6 +3221,16 @@ class Buddy
   }
 
   BDD makeSet(int[] varset)
+  {
+    BDD res = one();
+    int varnum = cast(int) varset.length;
+    for(int v = varnum-1 ; v >= 0 ; --v) {
+      res = res.and(ithVar(varset[v]));
+    }
+    return res;
+  }
+
+  BDD makeSet(ref Array!int varset)
   {
     BDD res = one();
     int varnum = cast(int) varset.length;
@@ -4865,8 +4875,7 @@ class Buddy
     return res;
   }
 
-  int bdd_support(int r)
-  {
+  int bdd_support(int r) {
     import core.stdc.string: memset;
     static int supportSize = 0;
     int n;
@@ -4878,10 +4887,12 @@ class Buddy
       return BddTrue;
 
     /* On-demand allocation of support set */
-    if(supportSize < _varNum)
-      {
-	supportSet.length = _varNum;
-	memset(supportSet.ptr, 0, _varNum*int.sizeof);
+    if(supportSize < _varNum) {
+	if ((supportSet= cast (int*) malloc(_varNum * int.sizeof)) is null) {
+	  bdd_error(BddError.BDD_MEMORY);
+	  return BddFalse;
+	}
+	memset(supportSet, 0, _varNum*int.sizeof);
 	supportSize = _varNum;
 	supportID = 0;
       }
@@ -4892,12 +4903,11 @@ class Buddy
      * - and instead of reading the whole array afterwards, we just
      *   look from 'min' to 'max' used BDD variables.
      */
-    if(supportID == 0x0FFFFFFF)
-      {
-	/* We probably don't get here -- but let's just be sure */
-	memset(supportSet.ptr, 0, _varNum*int.sizeof);
-	supportID = 0;
-      }
+    if(supportID == 0x0FFFFFFF) {
+      /* We probably don't get here -- but let's just be sure */
+      memset(supportSet, 0, _varNum * int.sizeof);
+      supportID = 0;
+    }
     ++supportID;
     supportMin = LEVEL(r);
     supportMax = supportMin;
@@ -4907,23 +4917,23 @@ class Buddy
 
     bdd_disable_reorder();
 
-    for(n = supportMax; n >= supportMin; --n)
-      if(supportSet[n] == supportID)
-	{
-	  int tmp;
-	  // res is an int -- so delref and addref are required
-	  addRef(res);
-	  tmp = bdd_makenode(n, 0, res);
-	  delRef(res);
-	  res = tmp;
-	}
+    for (n = supportMax; n >= supportMin; --n) {
+      if (supportSet[n] == supportID) {
+	int tmp;
+	// res is an int -- so delref and addref are required
+	addRef(res);
+	tmp = bdd_makenode(n, 0, res);
+	delRef(res);
+	res = tmp;
+      }
+    }
 
     bdd_enable_reorder();
 
     return res;
   }
 
-  void support_rec(int r, int[] support)
+  void support_rec(int r, int* support)
   {
 
     if(r < 2)
@@ -5326,20 +5336,20 @@ class Buddy
 
   int bdd_nodecount(int r)
   {
-    int[] num = new int[](1);
+    int num = 0;
 
     CHECK(r);
 
     bdd_markcount(r, num);
     bdd_unmark(r);
 
-    return num[0];
+    return num;
   }
 
   int bdd_anodecount(int[] r)
   {
     int n;
-    int[] cou = new int[](1);
+    int cou = 0;
 
     for(n = 0; n < r.length; n++)
       bdd_markcount(r[n], cou);
@@ -5347,7 +5357,7 @@ class Buddy
     for(n = 0; n < r.length; n++)
       bdd_unmark(r[n]);
 
-    return cou[0];
+    return cou;
   }
 
   int[] bdd_varprofile(int r)
@@ -5460,58 +5470,56 @@ class Buddy
 
     CHECK(r);
 
-    allsatProfile.length = _varNum;
+    if ((allsatProfile = cast(byte*) malloc(_varNum)) is null) {
+      bdd_error(BddError.BDD_MEMORY);
+      return;
+    }
 
-    for(v = LEVEL(r) - 1; v >= 0; --v)
+    for(v = LEVEL(r) - 1; v >= 0; --v) {
       allsatProfile[_level2Var[v]] = -1;
+    }
 
     INITREF();
 
     allsat_rec(r, result);
 
-    // free(allsatProfile);
-    allsatProfile.length = 0;
+    free(allsatProfile);
   }
 
-  void allsat_rec(int r, byte[][] result)
-  {
-    if(r == 1)
-      {
-	byte[] b = allsatProfile[0.._varNum].dup;
-	result ~= b;
-	return;
-      }
-
-    if(r == 0)
+  void allsat_rec(int r, byte[][] result) {
+    if (r == 1) {
+      byte[] b = allsatProfile[0.._varNum].dup;
+      result ~= b;
       return;
+    }
 
-    if(!LOW(r) == 0)
-      {
-	int v;
+    if (r == 0) {
+      return;
+    }
 
-	allsatProfile[_level2Var[LEVEL(r)]] = 0;
+    if (!LOW(r) == 0) {
+      int v;
 
-	for(v = LEVEL(LOW(r)) - 1; v > LEVEL(r); --v)
-	  {
-	    allsatProfile[_level2Var[v]] = -1;
-	  }
+      allsatProfile[_level2Var[LEVEL(r)]] = 0;
 
-	allsat_rec(LOW(r), result);
+      for (v = LEVEL(LOW(r)) - 1; v > LEVEL(r); --v) {
+	allsatProfile[_level2Var[v]] = -1;
       }
 
-    if(!HIGH(r) == 0)
-      {
-	int v;
+      allsat_rec(LOW(r), result);
+    }
 
-	allsatProfile[_level2Var[LEVEL(r)]] = 1;
+    if(!HIGH(r) == 0) {
+      int v;
 
-	for(v = LEVEL(HIGH(r)) - 1; v > LEVEL(r); --v)
-	  {
-	    allsatProfile[_level2Var[v]] = -1;
-	  }
+      allsatProfile[_level2Var[LEVEL(r)]] = 1;
 
-	allsat_rec(HIGH(r), result);
+      for (v = LEVEL(HIGH(r)) - 1; v > LEVEL(r); --v) {
+	allsatProfile[_level2Var[v]] = -1;
       }
+
+      allsat_rec(HIGH(r), result);
+    }
   }
 
   void bdd_satdist(int r, ref double[uint] dist)
@@ -5796,7 +5804,7 @@ class Buddy
     bdd_mark(HIGH(i));
   }
 
-  void bdd_markcount(int i, int[] cou)
+  void bdd_markcount(int i, ref int cou)
   {
 
     if(i < 2)
@@ -5806,7 +5814,7 @@ class Buddy
       return;
 
     SETMARK(i);
-    cou[0] += 1;
+    cou += 1;
 
     bdd_markcount(LOW(i), cou);
     bdd_markcount(HIGH(i), cou);
@@ -6073,7 +6081,7 @@ class Buddy
   int appexop; /* Current operator for appex */
   int appexid; /* Current cache id for appex */
   int quantid; /* Current cache id for quantifications */
-  int[] quantvarset; /* Current variable set for quant. */
+  int* quantvarset; /* Current variable set for quant. */
   int quantvarsetID; /* Current id used in quantvarset */
   int quantlast; /* Current last variable to be quant. */
   int replaceid; /* Current cache id for replace */
@@ -6084,7 +6092,7 @@ class Buddy
   int supportID; /* Current ID(true value) for support */
   int supportMin; /* Min. used level in support calc. */
   int supportMax; /* Max. used level in support calc. */
-  int[] supportSet; /* The found support set */
+  int* supportSet; /* The found support set */
   BddCache _applyCache; /* Cache for apply results */
   BddCache _iteCache; /* Cache for ITE results */
   BddCache _quantCache; /* Cache for exist/forall results */
@@ -6100,7 +6108,7 @@ class Buddy
      to avoid compiler warning about 'first'
      being clobbered by setjmp */
 
-  byte[] allsatProfile; /* Variable profile for bdd_allsat() */
+  byte* allsatProfile; /* Variable profile for bdd_allsat() */
 
   void bdd_operator_init(int cachesize)
   {
@@ -6117,14 +6125,16 @@ class Buddy
       }
 
     quantvarsetID = 0;
-    quantvarset.length = 0;
+    quantvarset = null;
     cacheratio = 0;
-    supportSet.length = 0;
+    supportSet = null;
   }
 
   void bdd_operator_done()
   {
-    quantvarset.length = 0;
+    if (quantvarset !is null) {
+      free(quantvarset);
+    }
 
     _applyCache.done();
     _iteCache.done();
@@ -6135,7 +6145,9 @@ class Buddy
     _countCache.done();
     _log2countCache.done();
 
-    supportSet.length = 0;
+    if (supportSet !is null) {
+      free(supportSet);
+    }
   }
 
   void bdd_operator_reset()
@@ -6166,11 +6178,16 @@ class Buddy
   {
     import core.stdc.string : memset, memcpy;
 
-    quantvarset.length = 0;
+    if (quantvarset !is null) {
+      free(quantvarset);
+    }
 
-    quantvarset.length = _varNum;
+    // #define NEW(t,n) ( (t*)malloc(sizeof(t)*(n)) )
+    if ((quantvarset = cast(int*) malloc(int.sizeof * _varNum)) is null) {
+      bdd_error(BddError.BDD_MEMORY);
+    }
 
-    memset(quantvarset.ptr, 0, int.sizeof * _varNum);
+    memset(quantvarset, 0, int.sizeof * _varNum);
     quantvarsetID = 0;
 
     _countCache.reset();
@@ -6703,10 +6720,7 @@ class Buddy
 
     while(dis.next !is null)
       {
-	BddTree[] f = new BddTree[](1);
-	f[0] = first;
-	dis = reorder_swapwin3(dis, f);
-	first = f[0];
+	dis = reorder_swapwin3(dis, first);
 
 	if(_verbose > 1)
 	  {
@@ -6742,10 +6756,7 @@ class Buddy
 
       while(dis.next !is null && dis.next.next !is null)
 	{
-	  BddTree[] f = new BddTree[](1);
-	  f[0] = first;
-	  dis = reorder_swapwin3(dis, f);
-	  first = f[0];
+	  dis = reorder_swapwin3(dis, first);
 
 	  if(_verbose > 1)
 	    {
@@ -6765,7 +6776,7 @@ class Buddy
     return first;
   }
 
-  BddTree reorder_swapwin3(BddTree dis, BddTree[] first)
+  BddTree reorder_swapwin3(BddTree dis, ref BddTree first)
   {
     bool setfirst = dis.prev is null;
     BddTree next = dis;
@@ -6781,7 +6792,7 @@ class Buddy
 	} else {
 	next = dis;
 	if(setfirst)
-	  first[0] = dis.prev;
+	  first = dis.prev;
       }
     } else /* Real win3 swap */ {
       int pos = 0;
@@ -6832,14 +6843,14 @@ class Buddy
 	blockdown(dis);
 	next = dis;
 	if(setfirst)
-	  first[0] = dis.prev;
+	  first = dis.prev;
       }
 
       if(pos >= 2) /* C A B -> C B A* */ {
 	blockdown(dis);
 	next = dis.prev;
 	if(setfirst)
-	  first[0] = dis.prev.prev;
+	  first = dis.prev.prev;
       }
 
       if(pos >= 3) /* C B A -> B C* A */ {
@@ -6847,14 +6858,14 @@ class Buddy
 	blockdown(dis);
 	next = dis;
 	if(setfirst)
-	  first[0] = dis.prev;
+	  first = dis.prev;
       }
 
       if(pos >= 4) /* B C A -> B A C* */ {
 	blockdown(dis);
 	next = dis.prev;
 	if(setfirst)
-	  first[0] = dis.prev.prev;
+	  first = dis.prev.prev;
       }
 
       if(pos >= 5) /* B A C -> A B* C */ {
@@ -6862,14 +6873,14 @@ class Buddy
 	blockdown(dis);
 	next = dis;
 	if(setfirst)
-	  first[0] = dis.prev;
+	  first = dis.prev;
       }
     }
 
     return next;
   }
 
-  BddTree reorder_sift_seq(BddTree t, BddTree[] seq, int num)
+  BddTree reorder_sift_seq(BddTree t, ref Array!BddTree seq, int num)
   {
     BddTree dis;
     int n;
@@ -7021,7 +7032,7 @@ class Buddy
     import std.random;
 
     BddTree dis;
-    BddTree[] seq;
+    Array!BddTree seq;
     int n, num = 0;
 
     if(t is null)
@@ -7029,7 +7040,7 @@ class Buddy
 
     for(dis = t; dis !is null; dis = dis.next)
       num++;
-    seq = new BddTree[](num);
+    seq.length = num;
     for(dis = t, num = 0; dis !is null; dis = dis.next)
       seq[num++] = dis;
 
@@ -7076,7 +7087,7 @@ class Buddy
   BddTree reorder_sift(BddTree t)
   {
     BddTree dis;
-    BddTree[] seq;
+    Array!BddTree seq;
     sizePair[] p;
     int n, num;
 
@@ -7085,8 +7096,8 @@ class Buddy
     for(dis = t, num = 0; dis !is null; dis = dis.next)
       dis.pos = num++;
 
-    p = new sizePair[](num);
-    seq = new BddTree[](num);
+    p.length = num;
+    seq.length = num;
 
     for(dis = t, n = 0; dis !is null; dis = dis.next, n++)
       {
@@ -7276,48 +7287,38 @@ class Buddy
     int _nodes = getNodeTableSize();
     int cache = getCacheSize();
 
+    bdd_fdd_done();
+    bdd_vec_done();
+    bdd_fdd_init();
     // FIXMALLOC
-    foreach (ref dom; _domains) {
-      dom.reset();
-      dom.freeMem();
-    }
-
-    _domains.length = 0;
     // if(_domains !is null) {
     //   GC.free(cast(void*)_domains);
     //   _domains = null;
     // }
     // _domainsLen = 0;
     
-    fdvarnum = 0;
-    firstbddvar = 0;
-    done();
+    bdd_done();
     initialize(_nodes, cache);
   }
 
-  void done()
-  {
-    bdd_done();
-  }
-
-  void bdd_done()
-  {
+  void bdd_done() {
     /*sanitycheck(); FIXME */
-    //bdd_fdd_done();
+    bdd_fdd_done();
+    bdd_vec_done();
     bdd_reorder_done();
     bdd_pairs_done();
 
 
     // free(_nodes);
-    _nodes = null; 
-    // free(_refStack);
-    _refStack = null;
-    // free(_varSet);
-    _varSet = null; 
-    // free(_var2Level);
-    _var2Level = null;
-    // free(_level2Var);
-    _level2Var = null;
+    // _nodes = null; 
+    // // free(_refStack);
+    // _refStack = null;
+    // // free(_varSet);
+    // _varSet = null; 
+    // // free(_var2Level);
+    // _var2Level = null;
+    // // free(_level2Var);
+    // _level2Var = null;
 
     bdd_operator_done();
 
@@ -7341,23 +7342,18 @@ class Buddy
   //   _errorCond = 0;
   // }
 
-  int setMaxNodeNum(int size)
-  {
-    return bdd_setmaxnodenum(size);
-  }
-
-  int bdd_setmaxnodenum(int size)
-  {
-    if(size > _nodeSize || size == 0)
-      {
-	int old = _maxNodeSize;
-	_maxNodeSize = size;
-	return old;
-      }
+  int bdd_setmaxnodenum(int size) {
+    if (size > _nodeSize || size == 0)  {
+      int old = _maxNodeSize;
+      _maxNodeSize = size;
+      return old;
+    }
 
     return bdd_error(BddError.BDD_NODES);
   }
 
+  alias setMaxNodeNum = bdd_setmaxnodenum;
+  
   double setMinFreeNodes(double x)
   {
     return bdd_setminfreenodes(cast(int)(x * 100.)) / 100.;
@@ -7677,10 +7673,10 @@ class Buddy
   BddTree vartree;
   int blockid;
 
-  int[] extroots;
+  int* extroots;
   int extrootsize;
 
-  levelData[] levels; /* Indexed by variable! */
+  levelData* levels; /* Indexed by variable! */
 
   static class levelData
   {
@@ -8270,26 +8266,27 @@ class Buddy
     return res;
   }
 
-  int reorder_init()
-  {
+  int reorder_init() {
     int n;
 
     reorder_handler(true, reorderstats);
 
-    levels.length = _varNum;
+    if ((levels = cast(levelData*) malloc(levelData.sizeof * _varNum)) is null) {
+      return -1;
+    }
 
-    for(n = 0; n < _varNum; n++)
-      {
-	levels[n] = new levelData();
-	levels[n].start = -1;
-	levels[n].size = 0;
-	levels[n].nodenum = 0;
-      }
+    for (n = 0; n < _varNum; n++)  {
+      levels[n] = new levelData();
+      levels[n].start = -1;
+      levels[n].size = 0;
+      levels[n].nodenum = 0;
+    }
 
     /* First mark and recursive refcou. all roots and childs. Also do some
      * setup here for both setLevellookup and reorder_gbc */
-    if(mark_roots() < 0)
+    if(mark_roots() < 0) {
       return -1;
+    }
 
     /* Initialize the hash tables */
     reorder_setLevellookup();
@@ -8410,56 +8407,54 @@ class Buddy
       }
   }
 
-  int mark_roots()
-  {
-    bool[] dep = new bool[](_varNum);
+  int mark_roots() {
+    bool* dep = cast(bool*) malloc(_varNum);
     int n;
 
-    for(n = 2, extrootsize = 0; n < _nodeSize; n++)
-      {
+    for (n = 2, extrootsize = 0; n < _nodeSize; n++) {
 	/* This is where we go from .level to .var!
 	 * - Do NOT use the LEVEL macro here. */
 	SETLEVELANDMARK(n, _level2Var[LEVELANDMARK(n)]);
 
-	if(HASREF(n))
-	  {
-	    SETMARK(n);
-	    extrootsize++;
-	  }
-      }
+	if (HASREF(n)) {
+	  SETMARK(n);
+	  extrootsize++;
+	}
+    }
 
-    extroots.length = extrootsize;
+    if ((extroots = cast(int*) (malloc (int.sizeof * extrootsize))) is null) {
+      return bdd_error(BddError.BDD_MEMORY);
+    }
 
     iactmtx = imatrixNew(_varNum);
 
-    for(n = 2, extrootsize = 0; n < _nodeSize; n++)
-      {
+    for (n = 2, extrootsize = 0; n < _nodeSize; n++) {
 
-	if(MARKED(n))
-	  {
-	    UNMARK(n);
-	    extroots[extrootsize++] = n;
+      if (MARKED(n)) {
+	UNMARK(n);
+	extroots[extrootsize++] = n;
 
-	    for(int i = 0; i < _varNum; ++i)
-	      dep[i] = false;
-	    dep[VARr(n)] = true;
-	    levels[VARr(n)].nodenum++;
+	for (int i = 0; i < _varNum; ++i) {
+	  dep[i] = false;
+	}
+	dep[VARr(n)] = true;
+	levels[VARr(n)].nodenum++;
 
-	    addref_rec(LOW(n), dep);
-	    addref_rec(HIGH(n), dep);
+	addref_rec(LOW(n), dep);
+	addref_rec(HIGH(n), dep);
 
-	    addDependencies(dep);
-	  }
-
-	/* Make sure the hash field is empty. This saves a loop in the
-	   initial GBC */
-	SETHASH(n, 0);
+	addDependencies(dep);
       }
+
+      /* Make sure the hash field is empty. This saves a loop in the
+	 initial GBC */
+      SETHASH(n, 0);
+    }
 
     SETHASH(0, 0);
     SETHASH(1, 0);
 
-    // free(dep);
+    free(dep);
     return 0;
   }
 
@@ -8480,7 +8475,7 @@ class Buddy
     return mtx;
   }
 
-  void addref_rec(int r, bool[] dep)
+  void addref_rec(int r, bool* dep)
   {
     if(r < 2)
       return;
@@ -8510,21 +8505,17 @@ class Buddy
     INCREF(r);
   }
 
-  void addDependencies(bool[] dep)
-  {
+  void addDependencies(bool* dep) {
     int n, m;
 
-    for(n = 0; n < _varNum; n++)
-      {
-	for(m = n; m < _varNum; m++)
-	  {
-	    if((dep[n]) &&(dep[m]))
-	      {
-		imatrixSet(iactmtx, n, m);
-		imatrixSet(iactmtx, m, n);
-	      }
-	  }
+    for (n = 0; n < _varNum; n++) {
+      for (m = n; m < _varNum; m++) {
+	if ((dep[n]) && (dep[m])) {
+	  imatrixSet(iactmtx, n, m);
+	  imatrixSet(iactmtx, m, n);
+	}
       }
+    }
   }
 
   void imatrixSet(imatrix mtx, int a, int b)
@@ -8561,26 +8552,23 @@ class Buddy
       }
   }
 
-  void reorder_done()
-  {
+  void reorder_done() {
     int n;
 
-    for(n = 0; n < extrootsize; n++)
+    for (n = 0; n < extrootsize; n++) {
       SETMARK(extroots[n]);
-    for(n = 2; n < _nodeSize; n++)
-      {
-	if(MARKED(n))
-	  UNMARK(n);
-	else
-	  CLEARREF(n);
+    }
+    for(n = 2; n < _nodeSize; n++) {
+      if(MARKED(n)) UNMARK(n);
+      else          CLEARREF(n);
 
-	/* This is where we go from .var to .level again!
-	 * - Do NOT use the LEVEL macro here. */
-	SETLEVELANDMARK(n, _var2Level[LEVELANDMARK(n)]);
-      }
+      /* This is where we go from .var to .level again!
+       * - Do NOT use the LEVEL macro here. */
+      SETLEVELANDMARK(n, _var2Level[LEVELANDMARK(n)]);
+    }
 
-    // free(extroots);
-    // free(levels);
+    free(extroots);
+    free(levels);
     imatrixDelete(iactmtx);
     bdd_gbc();
 
@@ -9236,61 +9224,89 @@ class Buddy
 
   /**** FINITE DOMAINS ****/
 
+  protected int _firstbddvar;
+  protected int _fdvaralloc;
+  protected int _fdvarnum;
+
   // FIXMALLOC
-  protected Array!BddDomain _domains;
+  protected Array!BddDomain _domains; // define as domain in fdd.c:67
   // protected BddDomain* _domains;
   // protected size_t _domainsLen;
-  
-  protected int fdvarnum;
-  protected int firstbddvar;
 
+  protected Array!BddVec _vecs;
+  
   void incr_firstbddvar()
   {
-    firstbddvar++;
+    _firstbddvar++;
   }
 
+  // fdd.c:1033
+  void Domain_allocate(int a, long range) {
+    ulong calcsize = 2;
+    int binsize;
+   
+    if (range <= 0  || range > long.max/2) {
+      bdd_error(BddError.BDD_RANGE);
+      return;
+    }
 
+    while (calcsize < range) {
+      binsize++;
+      calcsize <<= 1;
+    }
 
-  protected BddDomain createDomain(int a, uint b) {
+    Domain_create(a, binsize);
+  }
+
+  // We diverge from c version in that the parameter b is number of
+  // bits instead of range
+  protected BddDomain Domain_create(int a, uint b) {
     return BddDomain(a, b);
   }
 
-  uint extDomain(uint domainSize) {
-    int offset = fdvarnum;
+  alias createDomain = Domain_create;
 
-    _domains.length(_domains.length + 1);
+  uint extDomVec(uint domainSize) {
+    _vecs.length = _vecs.length + 1;
+    return extDomain(domainSize);
+  }
+
+  uint extDomain(uint domainSize) {
+    int offset = _fdvarnum;
+
+    _domains.length = _domains.length + 1;
 
     /* Create BDD variable tables */
-    _domains[fdvarnum] = createDomain(fdvarnum, domainSize);
-    uint extravars = _domains[fdvarnum].varNum();
+    _domains[_fdvarnum] = Domain_create(_fdvarnum, domainSize);
+    uint extravars = _domains[_fdvarnum].varNum();
 
-    uint binoffset = firstbddvar;
+    uint binoffset = _firstbddvar;
     int _varNum = varNum();
-    if(firstbddvar + extravars > _varNum) {
-      setVarNum(firstbddvar + extravars);
+    if(_firstbddvar + extravars > _varNum) {
+      setVarNum(_firstbddvar + extravars);
     }
 
     /* Set correct variable sequence(interleaved) */
     bool more = true;
     for (uint bn = 0; more; ++bn) {
       more = false;
-      if(bn < _domains[fdvarnum].varNum()) {
+      if(bn < _domains[_fdvarnum].varNum()) {
 	more = true;
-	_domains[fdvarnum].get_ivars[bn] = binoffset++;
+	_domains[_fdvarnum].get_ivars[bn] = binoffset++;
       }
     }
 
-    _domains[fdvarnum].var = makeSet(_domains[fdvarnum].get_ivars);
+    _domains[_fdvarnum].var = makeSet(_domains[_fdvarnum].get_ivars);
 
-    fdvarnum += 1;
-    firstbddvar += extravars;
+    _fdvarnum += 1;
+    _firstbddvar += extravars;
 
     return offset;
   }
 
   // BddDomain[] extDomain(uint[] domainSizes)
   // {
-  //   int offset = fdvarnum;
+  //   int offset = _fdvarnum;
   //   int binoffset;
   //   int extravars = 0;
   //   int n, bn;
@@ -9311,8 +9327,8 @@ class Buddy
   //   //   // _domainsLen = num;
   //   // } else /* Allocated before */ {
   //   //   // FIXMALLOC
-  //   //   if(fdvarnum + num > _domains.length)
-  //   //   // if(fdvarnum + num > _domainsLen)
+  //   //   if(_fdvarnum + num > _domains.length)
+  //   //   // if(_fdvarnum + num > _domainsLen)
   //   // 	{
   //   // 	  // FIXMALLOC
   //   // 	  // auto fdvaralloc = _domains.length + max(num, _domains.length);
@@ -9343,14 +9359,14 @@ class Buddy
 
   //   /* Create BDD variable tables */
   //   for(n = 0; n < num; n++) {
-  //     _domains[n + fdvarnum] = createDomain(n + fdvarnum, domainSizes[n]);
-  //     extravars += _domains[n + fdvarnum].varNum();
+  //     _domains[n + _fdvarnum] = Domain_create(n + _fdvarnum, domainSizes[n]);
+  //     extravars += _domains[n + _fdvarnum].varNum();
   //   }
 
-  //   binoffset = firstbddvar;
+  //   binoffset = _firstbddvar;
   //   int _varNum = varNum();
-  //   if(firstbddvar + extravars > _varNum) {
-  //     setVarNum(firstbddvar + extravars);
+  //   if(_firstbddvar + extravars > _varNum) {
+  //     setVarNum(_firstbddvar + extravars);
   //   }
 
   //   /* Set correct variable sequence(interleaved) */
@@ -9359,21 +9375,21 @@ class Buddy
 
   //     for(n = 0; n < num; n++)
   // 	{
-  // 	  if(bn < _domains[n + fdvarnum].varNum())
+  // 	  if(bn < _domains[n + _fdvarnum].varNum())
   // 	    {
   // 	      more = true;
-  // 	      _domains[n + fdvarnum].get_ivars[bn] = binoffset++;
+  // 	      _domains[n + _fdvarnum].get_ivars[bn] = binoffset++;
   // 	    }
   // 	}
   //   }
 
   //   for(n = 0; n < num; n++) {
-  //     _domains[n + fdvarnum].var =
-  // 	makeSet(_domains[n + fdvarnum].get_ivars);
+  //     _domains[n + _fdvarnum].var =
+  // 	makeSet(_domains[n + _fdvarnum].get_ivars);
   //   }
 
-  //   fdvarnum += num;
-  //   firstbddvar += extravars;
+  //   _fdvarnum += num;
+  //   _firstbddvar += extravars;
 
   //   // FIXMALLOC
   //   // BddDomain[] r = _domains[offset..offset+num];
@@ -9397,31 +9413,14 @@ class Buddy
     // FIXMALLOC
     auto fdvaralloc = _domains.length;
     // auto fdvaralloc = _domainsLen;
-    if(fdvarnum + 1 > fdvaralloc)
-      {
-	fdvaralloc += fdvaralloc;
+    if (_fdvarnum + 1 > fdvaralloc) {
+      fdvaralloc += fdvaralloc;
+    }
 
-	// FIXMALLOC
-	_domains.length = fdvaralloc;
-	// void* mem = GC.malloc(BddDomain.sizeof * fdvaralloc);
-	// memset(mem, 0, BddDomain.sizeof * fdvaralloc);
-	// BddDomain* dom = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * fdvaralloc);
-	// for (size_t i=0; i!=_domainsLen; ++i) {
-	//   dom[i] = _domains[i];
-	// }
-	// for (size_t i=_domainsLen; i!=fdvaralloc; ++i) {
-	//   dom[i] = BddDomain.init;
-	// }
-	// if(_domains !is null) {
-	//   GC.free(cast(void*)_domains);
-	// }
-	// _domains = dom;
-	// _domainsLen = fdvaralloc;
-      }
-
-    d = _domains[fdvarnum];
+    d = _domains[_fdvarnum];
     d.realsize = d1.realsize * d2.realsize;
-    d.ivar = new int[d1.varNum() + d2.varNum()];
+    d._ivar = cast(int*) realloc(d._ivar, int.sizeof * (d1.varNum() + d2.varNum()));
+    d._binsize = d1.varNum() + d2.varNum();
 
     for(n = 0; n < d1.varNum(); n++)
       d.get_ivars[n] = d1.get_ivars[n];
@@ -9431,9 +9430,16 @@ class Buddy
     d.var = makeSet(d.get_ivars);
     //addRef(d.var);
 
-    fdvarnum++;
+    _fdvarnum++;
     return d;
   }
+
+  void Domain_done(ref BddDomain d) {
+    free(d._ivar);
+    d._var.reset();		// do not use delRef -- see comments
+				// in BDD.reset method definition
+  }
+
 
   /**
    * <p>Returns a BDD defining all the variable sets used to define the variable
@@ -9454,28 +9460,46 @@ class Buddy
   //   return res;
   // }
 
+  void bdd_fdd_init() {
+    _domains.clear();
+    _fdvarnum = 0;
+    _fdvaralloc = 0;
+    _firstbddvar = 0;
+  }
+
+
+  void bdd_vec_done() {
+    if (_vecs.length > 0) {
+      for (int n=0 ; n < _fdvarnum ; n++) {
+	_vecs[n].reset();
+      }
+      _vecs.clear();
+    }
+  }
+  
+  void bdd_fdd_done() {
+    if (_domains.length > 0) {
+      for (int n=0 ; n < _fdvarnum ; n++) {
+	Domain_done(_domains[n]);
+      }
+      // free(domain);
+      _domains.clear();
+    }
+  }
+  
+  void fdd_clearall() {
+    bdd_vec_done();
+    bdd_fdd_done();
+    bdd_fdd_init();
+  }
+
   /**
    * <p>Clear all allocated finite _domains blocks that were defined by extDomain()
    * or overlapDomain().</p>
    *
    * <p>Compare to fdd_clearall.</p>
    */
-  void clearAllDomains()
-  {
-    foreach (ref dom; _domains) {
-      dom.reset();
-    }
-    // FIXMALLOC
-    _domains.length = 0;
-    // if(_domains !is null) {
-    //   GC.free(cast(void*)_domains);
-    //   _domains = null;
-    // }
-    // _domainsLen = 0;
-    
-    fdvarnum = 0;
-    firstbddvar = 0;
-  }
+  alias clearAllDomains = fdd_clearall;
 
   /**
    * <p>Returns the number of finite _domains blocks defined by calls to
@@ -9483,10 +9507,14 @@ class Buddy
    *
    * <p>Compare to fdd_domainsnum.</p>
    */
-  int numberOfDomains()
-  {
-    return fdvarnum;
+  int fdd_domainnum() {
+    if (! _running) {
+      bdd_error(BddError.BDD_RUNNING);
+    }
+    return _fdvarnum;
   }
+  
+  alias numberOfDomains = fdd_domainnum;
 
   /**
    * <p>Returns the ith finite _domains block, as defined by calls to
@@ -9494,9 +9522,16 @@ class Buddy
    */
   BddDomain getDomain(int i)
   {
-    if(i < 0 || i >= fdvarnum)
+    if(i < 0 || i >= _fdvarnum)
       throw new BddException("Index out of bound!");
     return _domains[i];
+  }
+
+  ref BddVec getVec(int i)
+  {
+    if(i < 0 || i >= _fdvarnum)
+      throw new BddException("Index out of bound!");
+    return _vecs[i];
   }
 
   // TODO: fdd_file_hook, fdd_strm_hook
@@ -9766,7 +9801,7 @@ class Buddy
     // FIXMALLOC
     for(int i = 0; i < INSTANCE._domains.length; ++i) {
       INSTANCE._domains[i] =
-	INSTANCE.createDomain(i, this._domains[i]._binsize);
+	INSTANCE.Domain_create(i, this._domains[i]._binsize);
     }
     return INSTANCE;
   }
