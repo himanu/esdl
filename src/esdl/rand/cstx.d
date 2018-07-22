@@ -1126,17 +1126,24 @@ struct CstParser {
     // if a left parenthesis has been found at the beginning it can only
     // be a normal statement
     if(srcCursor > srcTag) return StmtToken.STMT;
-    srcTag = parseIdentifier();
-    if(srcCursor > srcTag) {
-      if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
-      if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
-      if(CST[srcTag..srcCursor] == "solve") return StmtToken.BEFORE;
-      // not a keyword
-      return StmtToken.STMT;
+
+    if ((CST[srcCursor] >= 'A' && CST[srcCursor] <= 'Z') ||
+	(CST[srcCursor] >= 'a' && CST[srcCursor] <= 'z') ||
+	(CST[srcCursor] == '_')) {
+	
+      srcTag = parseIdentifier();
+      if(srcCursor > srcTag) {
+	if(CST[srcTag..srcCursor] == "foreach") return StmtToken.FOREACH;
+	if(CST[srcTag..srcCursor] == "if") return StmtToken.IFCOND;
+	if(CST[srcTag..srcCursor] == "solve") return StmtToken.BEFORE;
+	// not a keyword
+	return StmtToken.STMT;
+      }
     }
-    if(CST[srcCursor] is '{') return StmtToken.BLOCK;
-    if(CST[srcCursor] is '}') return StmtToken.ENDBLOCK;
-    return StmtToken.ERROR;
+    if (CST[srcCursor] is '{') return StmtToken.BLOCK;
+    if (CST[srcCursor] is '}') return StmtToken.ENDBLOCK;
+    return StmtToken.STMT;
+      // return StmtToken.ERROR;
   }
 
 
