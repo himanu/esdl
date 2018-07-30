@@ -113,7 +113,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RJ unwind(CstVarIterBase itr, uint n) {
+      override RJ unroll(CstVarIterBase itr, uint n) {
 	// itrVars is always empty
 	return this;
       }
@@ -232,7 +232,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RJ unwind(CstVarIterBase itr, uint n) {
+      override RJ unroll(CstVarIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -242,9 +242,9 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
 	if(! found) return this;
 	if(_indexExpr) {
-	  return _parent.unwind(itr,n)[_indexExpr.unwind(itr,n)];
+	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
 	}
-	return _parent.unwind(itr,n)[_index];
+	return _parent.unroll(itr,n)[_index];
       }
 
       void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
@@ -410,7 +410,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
     
-	RJ unwind(CstVarIterBase itr, uint n) {
+	RJ unroll(CstVarIterBase itr, uint n) {
 	  return this;
 	}
 
@@ -487,7 +487,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	bool isUnwindable() {
+	bool isUnrollable() {
 	  foreach (var; _relatedIdxs) {
 	    if (! var.solved()) return false;
 	  }
@@ -757,7 +757,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RJ unwind(CstVarIterBase itr, uint n) {
+      RJ unroll(CstVarIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -767,9 +767,9 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
 	if(! found) return this;
 	if(_indexExpr) {
-	  return _parent.unwind(itr,n)[_indexExpr.unwind(itr,n)];
+	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
 	}
-	return _parent.unwind(itr,n)[_index];
+	return _parent.unroll(itr,n)[_index];
       }
 
       static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
@@ -826,7 +826,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      bool isUnwindable() {
+      bool isUnrollable() {
 	foreach (var; _relatedIdxs) {
 	  if (! var.solved()) return false;
 	}

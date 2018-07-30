@@ -220,6 +220,10 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return [];
       }
 
+      override CstVarIterBase getIterator() {
+	return null;
+      }
+
       override CstDomain[] unresolvedIdxs() {
 	return [];
       }
@@ -242,7 +246,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unwind(CstVarIterBase itr, uint n) {
+      override RV unroll(CstVarIterBase itr, uint n) {
 	// itrVars is always empty
 	return this;
       }
@@ -437,11 +441,22 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       override CstVarIterBase[] itrVars() {
-	if(_indexExpr) {
+	if (_indexExpr) {
 	  return _parent.itrVars() ~ _indexExpr.itrVars();
 	}
 	else {
 	  return _parent.itrVars();
+	}
+      }
+
+      override CstVarIterBase getIterator() {
+	CstVarIterBase pitr = _parent.getIterator();
+	if (_indexExpr) {
+	  if (pitr !is null) return pitr;
+	  else return _indexExpr.getIterator();
+	}
+	else {
+	  return pitr;
 	}
       }
 
@@ -511,7 +526,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unwind(CstVarIterBase itr, uint n) {
+      override RV unroll(CstVarIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -523,10 +538,10 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  return this;
 	}
 	else if(_indexExpr) {
-	  return _parent.unwind(itr,n)[_indexExpr.unwind(itr,n)];
+	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
 	}
 	else {
-	  return _parent.unwind(itr,n)[_pindex];
+	  return _parent.unroll(itr,n)[_pindex];
 	}
       }
 
@@ -837,6 +852,10 @@ class CstVecArr(V, alias R, int N=0)
 	  return [];		// N = 0 -- no _parent
 	}
 
+	CstVarIterBase getIterator() {
+	  return null;		// N = 0 -- no _parent
+	}
+
 	static if (HAS_RAND_ATTRIB) {
 	  EV[] getDomainElems(long idx) {
 	    if (idx < 0) {
@@ -876,7 +895,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unwind(CstVarIterBase itr, uint n) {
+	RV unroll(CstVarIterBase itr, uint n) {
 	  return this;
 	}
 
@@ -997,7 +1016,7 @@ class CstVecArr(V, alias R, int N=0)
 	  return getLen(*_var, idx);
 	}
 
-	bool isUnwindable() {
+	bool isUnrollable() {
 	  foreach (var; _relatedIdxs) {
 	    if (! var.solved()) return false;
 	  }
@@ -1021,7 +1040,7 @@ class CstVecArr(V, alias R, int N=0)
 	  if(idx.isConst() && _arrLen.solved()) {
 	    // resolve only if the length has been resolved yet
 	    // And when the length is resolved, we must make sure that
-	    // unwinding of iterator takes care of such elements as
+	    // unrolling of iterator takes care of such elements as
 	    // well which are not explicitly onvoking iterators
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		   " have not been built");
@@ -1183,6 +1202,17 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
+	CstVarIterBase getIterator() {
+	  auto pitr = _parent.getIterator();
+	  if (pitr !is null) return pitr;
+	  else {
+	    if (_indexExpr) {
+	      return _indexExpr.getIterator();
+	    }
+	    else return null;
+	  }
+	}
+
 	bool parentLenIsUnresolved() {
 	  return (! _parent._arrLen.solved());
 	}
@@ -1302,7 +1332,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	RV unwind(CstVarIterBase itr, uint n) {
+	RV unroll(CstVarIterBase itr, uint n) {
 	  bool found = false;
 	  foreach(var; itrVars()) {
 	    if(itr is var) {
@@ -1314,10 +1344,10 @@ class CstVecArr(V, alias R, int N=0)
 	    return this;
 	  }
 	  else if(_indexExpr) {
-	    return _parent.unwind(itr,n)[_indexExpr.unwind(itr,n)];
+	    return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
 	  }
 	  else {
-	    return _parent.unwind(itr,n)[_pindex];
+	    return _parent.unroll(itr,n)[_pindex];
 	  }
 	}
 
@@ -1395,7 +1425,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	bool isUnwindable() {
+	bool isUnrollable() {
 	  foreach (var; _relatedIdxs) {
 	    if (! var.solved()) return false;
 	  }

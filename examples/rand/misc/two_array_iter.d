@@ -22,7 +22,7 @@ class Bar
   }
 
   Constraint! q{
-    foo.length == 8;
+    foo.length > bar.length;
     foreach (i, b; bar) foo[i] == bar[i];
   } cst_arr;
 

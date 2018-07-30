@@ -128,8 +128,10 @@ abstract class CstVarExpr
   abstract string name();
   
   // Array of indexes this expression has to resolve before it can be
-  // convertted into an BDD
+  // converted into a BDD
   abstract CstVarIterBase[] itrVars();
+  // get the primary (outermost foreach) iterator CstVarExpr
+  abstract CstVarIterBase getIterator();
   abstract bool hasUnresolvedIdx();
   abstract CstDomain[] unresolvedIdxs();
 
@@ -160,7 +162,7 @@ abstract class CstVarExpr
 
   abstract long evaluate();
 
-  abstract CstVarExpr unwind(CstVarIterBase itr, uint n);
+  abstract CstVarExpr unroll(CstVarIterBase itr, uint n);
 
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
@@ -174,9 +176,9 @@ interface CstVarIterBase
 {
   abstract uint maxVal();
 
-  abstract bool isUnwindable();
+  abstract bool isUnrollable();
 
-
+  abstract string name();
 }
 
 abstract class CstBddExpr
@@ -186,6 +188,7 @@ abstract class CstBddExpr
   abstract bool refresh(CstStage stage, Buddy buddy);
   
   abstract CstVarIterBase[] itrVars(); //  {
+  abstract CstVarIterBase getIterator(); //  {
 
   abstract CstVarPrim[] preReqs();
 
@@ -197,29 +200,46 @@ abstract class CstBddExpr
 
   CstBddExpr[] _uwExprs;
   CstVarIterBase _uwItr;
-  
-  // unwind recursively untill no unwinding is possible
-  CstBddExpr[] unwind() {
-    CstBddExpr[] unwound;
-    auto itr = this.unwindableItr();
-    if(itr is null) {
-      return [this];
+
+  // unroll recursively untill no unrolling is possible
+  void unroll(uint lap,
+	      ref CstBddExpr[] unrollable,
+	      ref CstBddExpr[] unresolved,
+	      ref CstBddExpr[] resolved) {
+    CstBddExpr[] unrolled;
+    auto itr = this.unrollableItr();
+    if (itr is null) {
+      unrolled ~= this;
     }
     else {
-      foreach(expr; this.unwind(itr)) {
-	// import std.stdio;
-	// writeln(this.name(), " unwound expr: ", expr.name());
-	// writeln(expr.name());
-	if(expr.unwindableItr() is null) unwound ~= expr;
-	else unwound ~= expr.unwind();
+      unrolled = this.unroll(itr);
+    }
+
+    if (this.hasUnresolvedIdx()) {
+      // TBD -- check that we may need to call resolveLap on each of the unrolled expression
+      foreach (expr; unrolled) {
+	this.resolveLap(lap);
+      }
+      
+      if (this.itrVars().length == 1) {
+	unresolved ~= unrolled;
+      }
+      else {
+	unresolved ~= unrolled;
       }
     }
-    return unwound;
+    else {
+      resolved ~= unrolled;
+    }
   }
 
-  CstBddExpr[] unwind(CstVarIterBase itr) {
-    if(! itr.isUnwindable()) {
-      assert(false, "CstVarIterBase is not unwindabe yet");
+  CstBddExpr[] unroll(CstVarIterBase itr) {
+    assert (itr is getIterator());
+
+    import std.stdio;
+    writeln("Iterator variable: ", itr.name());
+    if(! itr.isUnrollable()) {
+      assert(false, "CstVarIterBase is not unrollabe yet");
     }
     auto currLen = itr.maxVal();
     // import std.stdio;
@@ -232,24 +252,24 @@ abstract class CstBddExpr
     
     if (currLen > _uwExprs.length) {
       // import std.stdio;
-      // writeln("Need to unwind ", currLen - _uwExprs.length, " times");
+      // writeln("Need to unroll ", currLen - _uwExprs.length, " times");
       for (uint i = cast(uint) _uwExprs.length;
 	   i != currLen; ++i) {
-	_uwExprs ~= this.unwind(itr, i);
+	_uwExprs ~= this.unroll(itr, i);
       }
     }
     
     return _uwExprs[0..currLen];
   }
 
-  CstVarIterBase unwindableItr() {
+  CstVarIterBase unrollableItr() {
     foreach(itr; itrVars()) {
-      if(itr.isUnwindable()) return itr;
+      if(itr.isUnrollable()) return itr;
     }
     return null;
   }
 
-  abstract CstBddExpr unwind(CstVarIterBase itr, uint n);
+  abstract CstBddExpr unroll(CstVarIterBase itr, uint n);
 
   abstract CstDomain[] getRndDomains(bool resolved);
 
@@ -267,11 +287,13 @@ class CstBlock: CstBddExpr
   CstBddExpr[] _exprs;
   bool[] _booleans;
 
-  // CstVarIterBase[] _itrVars;
 
   override CstVarIterBase[] itrVars() {
     assert(false, "itrVars() is not implemented for CstBlock");
-    // return _itrVars;
+  }
+
+  override CstVarIterBase getIterator() {
+    assert(false, "getIterator() is not implemented for CstBlock");
   }
 
   override bool hasUnresolvedIdx() {
@@ -315,8 +337,8 @@ class CstBlock: CstBddExpr
     assert(false);
   }
 
-  override CstBlock unwind(CstVarIterBase itr, uint n) {
-    assert(false, "Can not unwind a CstBlock");
+  override CstBlock unroll(CstVarIterBase itr, uint n) {
+    assert(false, "Can not unroll a CstBlock");
   }
 
   override BDD getBDD(CstStage stage, Buddy buddy) {

@@ -201,53 +201,58 @@ abstract class _esdl__SolverRoot {
     CstStage[] unsolvedStages;
 
     int stageIdx=0;
-    CstBddExpr[] unsolvedExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
+    CstBddExpr[] unrolledExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
+    CstBddExpr[] toResolveExprs;   			// need resolution wrt LAP logic
+    CstBddExpr[] unresolvedExprs;			// need resolution wrt LAP logic
     
     // import std.stdio;
-    // writeln("There are ", unsolvedExprs.length, " number of unsolved expressions");
+    // writeln("There are ", unrolledExprs.length, " number of unsolved expressions");
     // writeln("There are ", _cstDomains.length, " number of domains");
 
-    while(unsolvedExprs.length > 0 || unsolvedStages.length > 0) {
+    while(unrolledExprs.length > 0 || unsolvedStages.length > 0) {
       lap += 1;
-      
-      CstBddExpr[] cstExprs = unsolvedExprs;
-      unsolvedExprs.length = 0;
+
       CstStage[] cstStages = unsolvedStages;
       unsolvedStages.length = 0;
 
-      CstBddExpr[] uwExprs;	// unwound expressions
-      CstBddExpr[] solveExprs;
+      CstBddExpr[] cstExprs = unrolledExprs;
+      unrolledExprs.length = 0;
+      toResolveExprs = unresolvedExprs;
+      unresolvedExprs.length = 0;
 
-      // unwind all the unwindable expressions
+      CstBddExpr[] uwExprs;	// unwound expressions
+
+      // unroll all the unrollable expressions
       foreach(expr; cstExprs) {
 	// import std.stdio;
-	// writeln("Unwinding: ", expr.name());
-	// auto unwound = expr.unwind();
+	// writeln("Unrolling: ", expr.name());
+	// auto unwound = expr.unroll();
 	// for (size_t i=0; i!=unwound.length; ++i) {
 	//   writeln("Unwound as: ", unwound[i].name());
 	// }
-	uwExprs ~= expr.unwind();
+	expr.unroll(lap, unrolledExprs, unrolledExprs, toResolveExprs// uwExprs
+		    );
       }
 
-      foreach(expr; uwExprs) {
-	// if(expr.itrVars().length is 0) {
-	if(expr.hasUnresolvedIdx()) {
-	  // import std.stdio;
-	  // writeln("Adding expression ", expr.name(), " to unresolved");
-	  expr.resolveLap(lap);
-	  unsolvedExprs ~= expr;
-	}
-	else {
-	  solveExprs ~= expr;
-	}
-      }
+      // foreach(expr; uwExprs) {
+      // 	// if(expr.itrVars().length is 0) {
+      // 	if(expr.hasUnresolvedIdx()) {
+      // 	  import std.stdio;
+      // 	  writeln("Adding expression ", expr.name(), " to unresolved");
+      // 	  expr.resolveLap(lap);
+      // 	  unrolledExprs ~= expr;
+      // 	}
+      // 	// else {
+      // 	//   toResolveExprs ~= expr;
+      // 	// }
+      // }
 
-      foreach (expr; solveExprs) {
+      foreach (expr; toResolveExprs) {
 	// import std.stdio;
 	uint elap = expr.resolveLap();
-	// writefln("Unwind Lap of the expr %s is %s", expr.name() , lap);
+	// writefln("Unroll Lap of the expr %s is %s", expr.name() , lap);
 	if (elap == lap) {
-	  unsolvedExprs ~= expr;
+	  unresolvedExprs ~= expr;
 	}
 	else {
 	  // import std.stdio;
