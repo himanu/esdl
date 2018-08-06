@@ -350,7 +350,8 @@ template _esdl__ConstraintsDecl(T, int I=0)
 	  " = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").FILE;\n" ~
 	  "  enum size_t _esdl__LINE_" ~ NAME ~
 	  " = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").LINE;\n" ~
-	  cast(string) constraintXlate(CONSTRAINT, FILE, LINE, "_esdl__cst_func_" ~ NAME) ~
+	  "  CstBlock _esdl__cst_block_" ~ NAME ~ ";\n" ~
+	  cast(string) constraintXlate(CONSTRAINT, FILE, LINE, NAME) ~
 	  "  Constraint!(_esdl__CONSTRAINT_" ~ NAME ~
 	  ", _esdl__FILE_" ~ NAME ~ ", _esdl__LINE_" ~ NAME ~ ") " ~
 	  NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
@@ -392,7 +393,7 @@ template _esdl__CstInits(T, int I=0)
 	enum string _esdl__CstInits = "    " ~ NAME ~
 	  " = new _esdl__Constraint!(_esdl__CONSTRAINT_" ~ NAME ~
 	  ", _esdl__FILE_" ~ NAME ~ ", _esdl__LINE_" ~ NAME ~
-	  ",\"" ~ NAME ~ "\")();\n    _esdl__cstsList ~= " ~
+	  ", \"" ~ NAME ~ "\")();\n    _esdl__cstsList ~= " ~
 	  NAME ~ // ";\n    this._esdl__outer." ~ NAME ~ " = " ~ NAME ~
 	  ";\n" ~ _esdl__CstInits!(T, I+1);
       }
@@ -627,6 +628,7 @@ mixin template _esdl__SolverMixin()
     }
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
+    CstBlock _esdl__cst_block;
     mixin(constraintXlate(_esdl__CstString, FILE, LINE));
     debug(CONSTRAINTS) {
       pragma(msg, "// constraintXlate! STARTS\n");
@@ -687,6 +689,7 @@ mixin template _esdl__SolverMixin()
 
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
+    CstBlock _esdl__cst_block;
     mixin(constraintXlate(_esdl__CstString, FILE, LINE));
     debug(CONSTRAINTS) {
       pragma(msg, "// randomizeWith! STARTS\n");

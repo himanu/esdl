@@ -10,7 +10,7 @@ class CstStage {
   // variable can be associated with only one stage
   CstDomain[] _domVars;
   // The Bdd expressions that apply to this stage
-  CstBddExpr[] _bddExprs;
+  CstEquation[] _bddEqns;
   // These are the length variables that this stage will solve
   // CstVarPrim[] _preReqs;
   
@@ -26,14 +26,14 @@ class CstStage {
   
   void copyFrom(CstStage from) {
     _domVars = from._domVars;
-    _bddExprs = from._bddExprs;
+    _bddEqns = from._bddEqns;
     _solveBDD = from._solveBDD;
     _bddDist = from._bddDist;
   }
 
-  // return true is _bddExprs match
+  // return true is _bddEqns match
   bool compare(CstStage other) {
-    return other._bddExprs == _bddExprs;
+    return other._bddEqns == _bddEqns;
   }
   
   void id(uint i) {
@@ -168,7 +168,7 @@ abstract class CstVarExpr
     return false;		// only CstVecOrderingExpr return true
   }
 
-  abstract void setBddContext(CstBddExpr expr,
+  abstract void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps);
@@ -202,33 +202,47 @@ abstract class CstBddExpr
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
 
-  abstract void setBddContext(CstBddExpr expr,
+  abstract void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps);
 
-  CstBddExpr[] _uwExprs;
-  CstVarIterBase _uwItr;
-  CstBddExpr _cstExpr;
+  abstract CstBddExpr unroll(CstVarIterBase itr, uint n);
 
-  CstVarPrim[] _vars;
-  CstVarPrim[] _deps;
-  CstVarIterBase _iter;
-  bool _contextSet;
+  abstract CstDomain[] getRndDomains(bool resolved);
 
-  final void setBddContext() {
-    if (_contextSet is false) {
-      setBddContext(this, _vars, _iter, _deps);
-      _contextSet = true;
-    }
+  // abstract CstStage[] getStages();
+
+  abstract BDD getBDD(CstStage stage, Buddy buddy);
+
+  bool cstExprIsNop() {
+    return false;
   }
+}
+
+class CstEquation
+{
+  string name() {
+    return "EQN:" ~ _expr.name();
+  }
+  // alias _expr this;
+
+  CstBddExpr _expr;
+
+  CstVarIterBase _uwItr;
+  CstEquation[] _uwExprs;
   
+  this(CstBddExpr expr) {
+    _expr = expr;
+    this.setBddContext();
+  }
+
   // unroll recursively untill no unrolling is possible
   void unroll(uint lap,
-	      ref CstBddExpr[] unrollable,
-	      ref CstBddExpr[] unresolved,
-	      ref CstBddExpr[] resolved) {
-    CstBddExpr[] unrolled;
+	      ref CstEquation[] unrollable,
+	      ref CstEquation[] unresolved,
+	      ref CstEquation[] resolved) {
+    CstEquation[] unrolled;
     auto itr = this.unrollableItr();
     if (itr is null) {
       unrolled ~= this;
@@ -237,13 +251,13 @@ abstract class CstBddExpr
       unrolled = this.unroll(itr);
     }
 
-    if (this.hasUnresolvedIdx()) {
+    if (_expr.hasUnresolvedIdx()) {
       // TBD -- check that we may need to call resolveLap on each of the unrolled expression
       foreach (expr; unrolled) {
-	this.resolveLap(lap);
+	_expr.resolveLap(lap);
       }
       
-      if (this.itrVars().length == 1) {
+      if (_expr.itrVars().length == 1) {
 	unresolved ~= unrolled;
       }
       else {
@@ -255,11 +269,16 @@ abstract class CstBddExpr
     }
   }
 
-  CstBddExpr[] unroll(CstVarIterBase itr) {
-    assert (itr is getIterator());
+  CstVarIterBase unrollableItr() {
+    foreach(itr; _expr.itrVars()) {
+      if(itr.isUnrollable()) return itr;
+    }
+    return null;
+  }
 
-    import std.stdio;
-    writeln("Iterator variable: ", itr.name());
+  CstEquation[] unroll(CstVarIterBase itr) {
+    assert (itr is _expr.getIterator());
+
     if(! itr.isUnrollable()) {
       assert(false, "CstVarIterBase is not unrollabe yet");
     }
@@ -277,133 +296,78 @@ abstract class CstBddExpr
       // writeln("Need to unroll ", currLen - _uwExprs.length, " times");
       for (uint i = cast(uint) _uwExprs.length;
 	   i != currLen; ++i) {
-	_uwExprs ~= this.unroll(itr, i);
+	_uwExprs ~= new CstEquation(_expr.unroll(itr, i));
       }
     }
     
     return _uwExprs[0..currLen];
   }
 
-  CstVarIterBase unrollableItr() {
-    foreach(itr; itrVars()) {
-      if(itr.isUnrollable()) return itr;
+  CstVarPrim[] _vars;
+  CstVarPrim[] _deps;
+  CstVarIterBase _iter;
+  bool _contextSet;
+
+  final void setBddContext() {
+    if (_contextSet is false) {
+      _expr.setBddContext(this, _vars, _iter, _deps);
+      _contextSet = true;
     }
-    return null;
   }
 
-  abstract CstBddExpr unroll(CstVarIterBase itr, uint n);
-
-  abstract CstDomain[] getRndDomains(bool resolved);
-
-  // abstract CstStage[] getStages();
-
-  abstract BDD getBDD(CstStage stage, Buddy buddy);
-
-  bool cstExprIsNop() {
-    return false;
+  CstBddExpr getExpr() {
+    return _expr;
   }
 }
 
-class CstBlock: CstBddExpr
+class CstBlock
 {
-  CstBddExpr[] _exprs;
+  CstEquation[] _eqns;
   bool[] _booleans;
 
-
-  override CstVarIterBase[] itrVars() {
-    assert(false, "itrVars() is not implemented for CstBlock");
-  }
-
-  override CstVarIterBase getIterator() {
-    assert(false, "getIterator() is not implemented for CstBlock");
-  }
-
-  override bool hasUnresolvedIdx() {
-    assert(false, "hasUnresolvedIdx() is not implemented for CstBlock");
-  }
-  
-  override CstDomain[] unresolvedIdxs() {
-    assert(false, "unresolvedIdxs() is not implemented for CstBlock");
-  }
-  
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     bool result = false;
-    foreach (expr; _exprs) {
-      result |= expr.refresh(stage, buddy);
+    foreach (eqn; _eqns) {
+      result |= eqn.getExpr().refresh(stage, buddy);
     }
     return result;
   }
   
-  
-  override string name() {
+  string name() {
     string name_ = "";
-    foreach(expr; _exprs) {
-      name_ ~= " & " ~ expr.name() ~ "\n";
+    foreach(eqn; _eqns) {
+      name_ ~= " & " ~ eqn.name() ~ "\n";
     }
     return name_;
   }
 
-  override CstVarPrim[] preReqs() {
-    assert(false);
-  }
-    
   void _esdl__reset() {
-    _exprs.length = 0;
+    _eqns.length = 0;
   }
 
   bool isEmpty() {
-    return _exprs.length == 0;
+    return _eqns.length == 0;
   }
   
-  override CstDomain[] getRndDomains(bool resolved) {
-    assert(false);
-  }
-
-  override CstBlock unroll(CstVarIterBase itr, uint n) {
-    assert(false, "Can not unroll a CstBlock");
-  }
-
-  override BDD getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "getBDD not implemented for CstBlock");
-  }
-
   void opOpAssign(string op)(bool other)
     if(op == "~") {
       _booleans ~= other;
     }
 
-  void opOpAssign(string op)(CstBddExpr other)
+  void opOpAssign(string op)(CstEquation other)
     if(op == "~") {
-      _exprs ~= other;
-    }
-
-  void opOpAssign(string op)(CstVarExpr other)
-    if(op == "~") {
-      _exprs ~= toBdd(other);
+      _eqns ~= other;
     }
 
   void opOpAssign(string op)(CstBlock other)
     if(op == "~") {
       if(other is null) return;
-      foreach(expr; other._exprs) {
-	_exprs ~= expr;
+      foreach(eqn; other._eqns) {
+	_eqns ~= eqn;
       }
       foreach(boolean; other._booleans) {
 	_booleans ~= boolean;
       }
     }
 
-  override uint resolveLap() {
-    assert(false, "resolveLap not callable for CstBlock");
-  }
-  override void resolveLap(uint lap) {
-    assert(false, "resolveLap not callable for CstBlock");
-  }
-
-  override void setBddContext(CstBddExpr expr,
-			      ref CstVarPrim[] vars,
-			      ref CstVarIterBase iter,
-			      ref CstVarPrim[] deps) {
-    assert(false, "setBddContext not callable for CstBlock");
-  }
 }

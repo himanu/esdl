@@ -461,7 +461,7 @@ class CstVarIter(RV): CstVarTerm, CstVarIterBase
     assert(false, "Can not evaluate a Itr Variable without unrolling");
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -740,7 +740,7 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -783,7 +783,7 @@ abstract class CstValBase: CstVarTerm
     return this;
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1119,7 +1119,7 @@ class CstVec2VecExpr: CstVarTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1298,7 +1298,7 @@ class CstVecSliceExpr: CstVarTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1394,7 +1394,7 @@ class CstNotVecExpr: CstVarTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1490,7 +1490,7 @@ class CstNegVecExpr: CstVarTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1637,7 +1637,7 @@ class CstBdd2BddExpr: CstBddTerm
     else return false;
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1677,7 +1677,7 @@ class CstIteBddExpr: CstBddTerm
     return false;
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1759,7 +1759,7 @@ class CstNopBddExpr: CstBddTerm
     return true;
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1915,7 +1915,7 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -1977,7 +1977,7 @@ class CstBddConst: CstBddTerm
   }
   override void resolveLap(uint lap) {}
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
@@ -2055,7 +2055,7 @@ class CstNotBddExpr: CstBddTerm
     _expr.resolveLap(lap);
   }
 
-  override void setBddContext(CstBddExpr expr,
+  override void setBddContext(CstEquation eqn,
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {

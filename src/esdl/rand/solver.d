@@ -3,7 +3,7 @@ import esdl.rand.obdd;
 import std.container.array;
 
 import esdl.rand.base: CstVarPrim, CstStage, CstBddExpr,// , CstValAllocator
-  CstDomain, CstBlock;
+  CstDomain, CstEquation, CstBlock;
 import esdl.rand.misc;
 
 
@@ -201,24 +201,24 @@ abstract class _esdl__SolverRoot {
     CstStage[] unsolvedStages;
 
     int stageIdx=0;
-    CstBddExpr[] unrolledExprs = _esdl__cstEqns._exprs;	// unstaged Expressions -- all
-    CstBddExpr[] toResolveExprs;   			// need resolution wrt LAP logic
-    CstBddExpr[] unresolvedExprs;			// need resolution wrt LAP logic
+    CstEquation[] unrolledEqns = _esdl__cstEqns._eqns;	// unstaged Expressions -- all
+    CstEquation[] toResolveEqns;   			// need resolution wrt LAP logic
+    CstEquation[] unresolvedEqns;			// need resolution wrt LAP logic
     
     // import std.stdio;
-    // writeln("There are ", unrolledExprs.length, " number of unsolved expressions");
+    // writeln("There are ", unrolledEqns.length, " number of unsolved expressions");
     // writeln("There are ", _cstDomains.length, " number of domains");
 
-    while(unrolledExprs.length > 0 || unsolvedStages.length > 0) {
+    while(unrolledEqns.length > 0 || unsolvedStages.length > 0) {
       lap += 1;
 
       CstStage[] cstStages = unsolvedStages;
       unsolvedStages.length = 0;
 
-      CstBddExpr[] cstExprs = unrolledExprs;
-      unrolledExprs.length = 0;
-      toResolveExprs = unresolvedExprs;
-      unresolvedExprs.length = 0;
+      CstEquation[] cstExprs = unrolledEqns;
+      unrolledEqns.length = 0;
+      toResolveEqns = unresolvedEqns;
+      unresolvedEqns.length = 0;
 
       CstBddExpr[] uwExprs;	// unwound expressions
 
@@ -230,7 +230,7 @@ abstract class _esdl__SolverRoot {
 	// for (size_t i=0; i!=unwound.length; ++i) {
 	//   writeln("Unwound as: ", unwound[i].name());
 	// }
-	expr.unroll(lap, unrolledExprs, unrolledExprs, toResolveExprs// uwExprs
+	expr.unroll(lap, unrolledEqns, unrolledEqns, toResolveEqns// uwExprs
 		    );
       }
 
@@ -240,24 +240,24 @@ abstract class _esdl__SolverRoot {
       // 	  import std.stdio;
       // 	  writeln("Adding expression ", expr.name(), " to unresolved");
       // 	  expr.resolveLap(lap);
-      // 	  unrolledExprs ~= expr;
+      // 	  unrolledEqns ~= expr;
       // 	}
       // 	// else {
-      // 	//   toResolveExprs ~= expr;
+      // 	//   toResolveEqns ~= expr;
       // 	// }
       // }
 
-      foreach (expr; toResolveExprs) {
+      foreach (eqn; toResolveEqns) {
 	// import std.stdio;
-	uint elap = expr.resolveLap();
-	// writefln("Unroll Lap of the expr %s is %s", expr.name() , lap);
+	uint elap = eqn.getExpr().resolveLap();
+	// writefln("Unroll Lap of the eqn %s is %s", eqn.name() , lap);
 	if (elap == lap) {
-	  unresolvedExprs ~= expr;
+	  unresolvedEqns ~= eqn;
 	}
 	else {
 	  // import std.stdio;
-	  // writeln("Adding expr ", expr.name(), " to stage");
-	  addCstStage(expr, cstStages);
+	  // writeln("Adding eqn ", eqn.name(), " to stage");
+	  addCstStage(eqn, cstStages);
 	}
       }
 
@@ -281,17 +281,17 @@ abstract class _esdl__SolverRoot {
     // import std.stdio;
     
     import std.conv;
-    CstBddExpr[] allExprs = stage._bddExprs;
-    CstBddExpr[] exprs;
+    CstEquation[] allEqns = stage._bddEqns;
+    CstEquation[] eqns;
     // writeln("Here in solveStage: ", stageIdx);
 
-    foreach (expr; allExprs) {
-      if (! expr.cstExprIsNop()) {
-	exprs ~= expr;
+    foreach (eqn; allEqns) {
+      if (! eqn.getExpr().cstExprIsNop()) {
+	eqns ~= eqn;
       }
     }
 
-    if (exprs.length == 0) {
+    if (eqns.length == 0) {
       // import std.stdio;
       // writeln("Only NOP expressions!");
       foreach(vec; stage._domVars) {
@@ -314,26 +314,26 @@ abstract class _esdl__SolverRoot {
 
     // make the bdd tree
     bool refreshed = false;
-    foreach (expr; exprs) {
+    foreach (eqn; eqns) {
       // import std.stdio;
-      refreshed |= expr.refresh(stage, _esdl__buddy);
+      refreshed |= eqn.getExpr().refresh(stage, _esdl__buddy);
       // writeln("refreshed: ", refreshed);
     }
     // import std.stdio;
     // writeln("Saved Stages: ", savedStages.length);
     // writeln("Saved Stages Index: ", stageIdx);
     // if (savedStages.length > stageIdx) {
-    //   foreach (expr; savedStages[stageIdx]._bddExprs) {
-    // 	writeln("saved: ", expr.name());
+    //   foreach (eqn; savedStages[stageIdx]._bddEqns) {
+    // 	writeln("saved: ", eqn.name());
     //   }
-    //   writeln("Comparison: ", savedStages[stageIdx]._bddExprs[0] == stage._bddExprs[0]);
+    //   writeln("Comparison: ", savedStages[stageIdx]._bddEqns[0] == stage._bddEqns[0]);
     // }
-    // foreach (expr; stage._bddExprs) {
-    //   writeln("saved: ", expr.name());
+    // foreach (eqn; stage._bddEqns) {
+    //   writeln("saved: ", eqn.name());
     // }
     if ((! refreshed) &&
 	savedStages.length > stageIdx &&
-	savedStages[stageIdx]._bddExprs == stage._bddExprs) {
+	savedStages[stageIdx]._bddEqns == stage._bddEqns) {
       // import std.stdio;
       // writeln("Reusing previous BDD solution");
       stage._solveBDD = savedStages[stageIdx]._solveBDD;
@@ -347,11 +347,11 @@ abstract class _esdl__SolverRoot {
 	  solveBDD = solveBDD & primBdd;
 	}
       }
-      foreach(expr; exprs) {
+      foreach(eqn; eqns) {
 	// import std.stdio;
-	// writeln("here too for exprs: ", expr.name);
-	solveBDD = solveBDD & expr.getBDD(stage, _esdl__buddy);
-	// writeln(expr.name());
+	// writeln("here too for eqns: ", eqn.name);
+	solveBDD = solveBDD & eqn.getExpr().getBDD(stage, _esdl__buddy);
+	// writeln(eqn.name());
       }
       stage._solveBDD = solveBDD;
       stage._bddDist.clear();
@@ -415,9 +415,9 @@ abstract class _esdl__SolverRoot {
   //   }
   // }
 
-  void addCstStage(CstBddExpr expr, ref CstStage[] cstStages) {
+  void addCstStage(CstEquation eqn, ref CstStage[] cstStages) {
     // uint stage = cast(uint) _cstStages.length;
-    auto vecs = expr.getRndDomains(true);
+    auto vecs = eqn.getExpr().getRndDomains(true);
     // import std.stdio;
     // foreach (vec; vecs) writeln(vec.name());
     CstStage stage;
@@ -427,7 +427,7 @@ abstract class _esdl__SolverRoot {
 	if (vec.stage() is null) {
 	  // import std.stdio;
 	  // writeln("new stage for vec: ", vec.name());
-	  // writeln("expr: ", expr.name());
+	  // writeln("eqn: ", eqn.name());
 	  if (stage is null) {
 	    stage = new CstStage();
 	    cstStages ~= stage;
@@ -449,10 +449,10 @@ abstract class _esdl__SolverRoot {
       cstStages ~= stage;
     }
     // import std.stdio;
-    // writeln(expr.name());
+    // writeln(eqn.name());
     // assert (stage !is null);
-    // writeln(stage._bddExprs.length);
-    stage._bddExprs ~= expr;
+    // writeln(stage._bddEqns.length);
+    stage._bddEqns ~= eqn;
   }
 
   void mergeCstStages(CstStage fromStage, CstStage toStage,
@@ -465,13 +465,13 @@ abstract class _esdl__SolverRoot {
       vec.stage = toStage;
     }
     toStage._domVars ~= fromStage._domVars;
-    toStage._bddExprs ~= fromStage._bddExprs;
+    toStage._bddEqns ~= fromStage._bddEqns;
     if(cstStages[$-1] is fromStage) {
       cstStages.length -= 1;
     }
     else {
       fromStage._domVars.length = 0;
-      fromStage._bddExprs.length = 0;
+      fromStage._bddEqns.length = 0;
     }
   }
 
@@ -489,22 +489,17 @@ abstract class _esdl__SolverRoot {
       _esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
     }
 
-    foreach (expr; _esdl__cstEqns._exprs) {
-      unresolvedIdxs ~= expr.unresolvedIdxs();
+    foreach (eqn; _esdl__cstEqns._eqns) {
+      unresolvedIdxs ~= eqn.getExpr().unresolvedIdxs();
     }
 
     foreach(idx; unresolvedIdxs) {
-      _esdl__cstEqns ~= idx.getNopBddExpr();
+      _esdl__cstEqns ~= new CstEquation(idx.getNopBddExpr());
       // import std.stdio;
       // writeln(idx.name());
       // writeln(idx.getNopBddExpr().name());
     }
     
-    // just so that each domain gets a list bdd expressions the
-    // expression is involved in
-    foreach (expr; _esdl__cstEqns._exprs) {
-      expr.setBddContext();
-    }
   }
   
   void initDomains() { // (T)(T t) {
