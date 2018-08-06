@@ -168,6 +168,10 @@ abstract class CstVarExpr
     return false;		// only CstVecOrderingExpr return true
   }
 
+  abstract void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps);
 }
 
 
@@ -198,9 +202,27 @@ abstract class CstBddExpr
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
 
+  abstract void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps);
+
   CstBddExpr[] _uwExprs;
   CstVarIterBase _uwItr;
+  CstBddExpr _cstExpr;
 
+  CstVarPrim[] _vars;
+  CstVarPrim[] _deps;
+  CstVarIterBase _iter;
+  bool _contextSet;
+
+  final void setBddContext() {
+    if (_contextSet is false) {
+      setBddContext(this, _vars, _iter, _deps);
+      _contextSet = true;
+    }
+  }
+  
   // unroll recursively untill no unrolling is possible
   void unroll(uint lap,
 	      ref CstBddExpr[] unrollable,
@@ -376,5 +398,12 @@ class CstBlock: CstBddExpr
   }
   override void resolveLap(uint lap) {
     assert(false, "resolveLap not callable for CstBlock");
+  }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+    assert(false, "setBddContext not callable for CstBlock");
   }
 }

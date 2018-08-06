@@ -500,6 +500,11 @@ abstract class _esdl__SolverRoot {
       // writeln(idx.getNopBddExpr().name());
     }
     
+    // just so that each domain gets a list bdd expressions the
+    // expression is involved in
+    foreach (expr; _esdl__cstEqns._exprs) {
+      expr.setBddContext();
+    }
   }
   
   void initDomains() { // (T)(T t) {

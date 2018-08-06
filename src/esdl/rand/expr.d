@@ -460,6 +460,12 @@ class CstVarIter(RV): CstVarTerm, CstVarIterBase
   override long evaluate() {
     assert(false, "Can not evaluate a Itr Variable without unrolling");
   }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
@@ -734,10 +740,17 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
     return false;		// only CstVecOrderingExpr return true
   }
 
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 abstract class CstValBase: CstVarTerm
 {
+  CstBddExpr _cstExpr;
+  
   override CstVarPrim[] preReqs() {
     return [];
   }
@@ -768,6 +781,12 @@ abstract class CstValBase: CstVarTerm
 
   override CstVarTerm unroll(CstVarIterBase l, uint n) {
     return this;
+  }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
   }
 }
 
@@ -1099,6 +1118,12 @@ class CstVec2VecExpr: CstVarTerm
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 class CstVecSliceExpr: CstVarTerm
@@ -1272,6 +1297,12 @@ class CstVecSliceExpr: CstVarTerm
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 class CstNotVecExpr: CstVarTerm
@@ -1362,6 +1393,12 @@ class CstNotVecExpr: CstVarTerm
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 class CstNegVecExpr: CstVarTerm
@@ -1451,6 +1488,12 @@ class CstNegVecExpr: CstVarTerm
 
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
+  }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
   }
 }
 
@@ -1593,6 +1636,12 @@ class CstBdd2BddExpr: CstBddTerm
     }
     else return false;
   }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 // TBD
@@ -1628,6 +1677,12 @@ class CstIteBddExpr: CstBddTerm
     return false;
   }
 
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+    assert(false, "TBD");
+  }
 }
 
 class CstNopBddExpr: CstBddTerm
@@ -1702,6 +1757,12 @@ class CstNopBddExpr: CstBddTerm
 
   bool getIntRangeSet(T)(ref IntRangeSet rset) {
     return true;
+  }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
   }
 }
 
@@ -1853,6 +1914,12 @@ class CstVec2BddExpr: CstBddTerm
       
     }
   }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 class CstBddConst: CstBddTerm
@@ -1909,6 +1976,12 @@ class CstBddConst: CstBddTerm
     return 0;
   }
   override void resolveLap(uint lap) {}
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
+  }
 }
 
 class CstNotBddExpr: CstBddTerm
@@ -1980,6 +2053,12 @@ class CstNotBddExpr: CstBddTerm
   }
   override void resolveLap(uint lap) {
     _expr.resolveLap(lap);
+  }
+
+  override void setBddContext(CstBddExpr expr,
+			      ref CstVarPrim[] vars,
+			      ref CstVarIterBase iter,
+			      ref CstVarPrim[] deps) {
   }
 }
 

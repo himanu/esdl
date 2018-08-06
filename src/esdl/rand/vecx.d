@@ -7,7 +7,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 import esdl.rand.obdd;
 import esdl.rand.misc;
 import esdl.rand.base: CstVarPrim, CstVarExpr, CstVarIterBase,
-  CstStage, CstDomain; // CstValAllocator,
+  CstStage, CstDomain, CstBddExpr; // CstValAllocator,
 import esdl.rand.expr: CstVarLen, CstVecDomain, _esdl__cstVal;
 import esdl.rand.solver: _esdl__SolverRoot;
 
@@ -373,6 +373,13 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       else static if (V.SIZE <= 64) {
 	IntRangeSet!(V.ISSIGNED, V.SIZE) _rangeSet;
       }
+
+      override void setBddContext(CstBddExpr expr,
+				  ref CstVarPrim[] vars,
+				  ref CstVarIterBase iter,
+				  ref CstVarPrim[] deps) {
+      }
+
     }
 
 class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
@@ -686,6 +693,12 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 
       override bool isOrderingExpr() {
 	return false;		// only CstVecOrderingExpr return true
+      }
+
+      override void setBddContext(CstBddExpr expr,
+				  ref CstVarPrim[] vars,
+				  ref CstVarIterBase iter,
+				  ref CstVarPrim[] deps) {
       }
     }
 
@@ -1126,6 +1139,11 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
+	void setBddContext(CstBddExpr expr,
+			   ref CstVarPrim[] vars,
+			   ref CstVarIterBase iter,
+			   ref CstVarPrim[] deps) {
+	}
       }
 
 class CstVecArr(V, alias R, int N=0)
@@ -1547,4 +1565,9 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
+	void setBddContext(CstBddExpr expr,
+			   ref CstVarPrim[] vars,
+			   ref CstVarIterBase iter,
+			   ref CstVarPrim[] deps) {
+	}
       }
