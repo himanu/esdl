@@ -225,16 +225,42 @@ class CstEquation
   string name() {
     return "EQN:" ~ _expr.name();
   }
+
+  string describe() {
+    string description = name() ~ "\n";
+    if (_iter !is null) {
+      description ~= "    iterator: \n";
+      description ~= "\t" ~ _iter.name() ~ "\n";
+    }
+    if (_vars.length > 0) {
+      description ~= "    variables: \n";
+      foreach (var; _vars) {
+	description ~= "\t" ~ var.name() ~ "\n";
+      }
+    }
+    if (_deps.length > 0) {
+      description ~= "    depends: \n";
+      foreach (dep; _deps) {
+	description ~= "\t" ~ dep.name() ~ "\n";
+      }
+    }
+    description ~= "\n";
+    return description;
+  }
   // alias _expr this;
 
   CstBddExpr _expr;
 
   CstVarIterBase _uwItr;
-  CstEquation[] _uwExprs;
+  CstEquation[] _uwEqns;
   
   this(CstBddExpr expr) {
     _expr = expr;
     this.setBddContext();
+    debug(CSTEQNS) {
+      import std.stdio;
+      stderr.writeln(this.describe());
+    }
   }
 
   // unroll recursively untill no unrolling is possible
@@ -288,19 +314,19 @@ class CstEquation
 
     if (_uwItr !is itr) {
       _uwItr = itr;
-      _uwExprs.length = 0;
+      _uwEqns.length = 0;
     }
     
-    if (currLen > _uwExprs.length) {
+    if (currLen > _uwEqns.length) {
       // import std.stdio;
-      // writeln("Need to unroll ", currLen - _uwExprs.length, " times");
-      for (uint i = cast(uint) _uwExprs.length;
+      // writeln("Need to unroll ", currLen - _uwEqns.length, " times");
+      for (uint i = cast(uint) _uwEqns.length;
 	   i != currLen; ++i) {
-	_uwExprs ~= new CstEquation(_expr.unroll(itr, i));
+	_uwEqns ~= new CstEquation(_expr.unroll(itr, i));
       }
     }
     
-    return _uwExprs[0..currLen];
+    return _uwEqns[0..currLen];
   }
 
   CstVarPrim[] _vars;

@@ -465,6 +465,8 @@ class CstVarIter(RV): CstVarTerm, CstVarIterBase
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    assert(iter is null || iter is this);
+    iter = this;
   }
 }
 
@@ -744,6 +746,16 @@ class CstVarLen(RV): CstVecDomain!(RV.RAND), CstVarPrim
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    bool listed;
+    foreach (var; vars) {
+      if (var is this) {
+	listed = true;
+	break;
+      }
+    }
+    if (listed is false) {
+      vars ~= this;
+    }
   }
 }
 
@@ -787,6 +799,7 @@ abstract class CstValBase: CstVarTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    // nothing in a CstValBase
   }
 }
 
@@ -1123,6 +1136,8 @@ class CstVec2VecExpr: CstVarTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _lhs.setBddContext(eqn, vars, iter, deps);
+    _rhs.setBddContext(eqn, vars, iter, deps);
   }
 }
 
@@ -1302,6 +1317,11 @@ class CstVecSliceExpr: CstVarTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _vec.setBddContext(eqn, vars, iter, deps);
+    _lhs.setBddContext(eqn, deps, iter, deps);
+    if (_rhs !is null) {
+      _rhs.setBddContext(eqn, deps, iter, deps);
+    }
   }
 }
 
@@ -1398,6 +1418,7 @@ class CstNotVecExpr: CstVarTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _expr.setBddContext(eqn, vars, iter, deps);
   }
 }
 
@@ -1494,6 +1515,7 @@ class CstNegVecExpr: CstVarTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _expr.setBddContext(eqn, vars, iter, deps);
   }
 }
 
@@ -1641,6 +1663,8 @@ class CstBdd2BddExpr: CstBddTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _lhs.setBddContext(eqn, vars, iter, deps);
+    _rhs.setBddContext(eqn, vars, iter, deps);
   }
 }
 
@@ -1763,6 +1787,7 @@ class CstNopBddExpr: CstBddTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    // nothing for CstNopBddExpr
   }
 }
 
@@ -1919,6 +1944,8 @@ class CstVec2BddExpr: CstBddTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _lhs.setBddContext(eqn, vars, iter, deps);
+    _rhs.setBddContext(eqn, vars, iter, deps);
   }
 }
 
@@ -1981,6 +2008,7 @@ class CstBddConst: CstBddTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    // nothing for CstBddConst
   }
 }
 
@@ -2059,6 +2087,7 @@ class CstNotBddExpr: CstBddTerm
 			      ref CstVarPrim[] vars,
 			      ref CstVarIterBase iter,
 			      ref CstVarPrim[] deps) {
+    _expr.setBddContext(eqn, vars, iter, deps);
   }
 }
 

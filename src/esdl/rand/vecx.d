@@ -378,6 +378,16 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 				  ref CstVarPrim[] vars,
 				  ref CstVarIterBase iter,
 				  ref CstVarPrim[] deps) {
+	bool listed;
+	foreach (var; vars) {
+	  if (var is this) {
+	    listed = true;
+	    break;
+	  }
+	}
+	if (listed is false) {
+	  vars ~= this;
+	}
       }
 
     }
@@ -699,6 +709,20 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 				  ref CstVarPrim[] vars,
 				  ref CstVarIterBase iter,
 				  ref CstVarPrim[] deps) {
+	bool listed;
+	foreach (var; vars) {
+	  if (var is this) {
+	    listed = true;
+	    break;
+	  }
+	}
+	if (listed is false) {
+	  vars ~= this;
+	}
+
+	if (_indexExpr !is null) {
+	  _indexExpr.setBddContext(eqn, deps, iter, deps);
+	}
       }
     }
 
@@ -1143,6 +1167,16 @@ class CstVecArr(V, alias R, int N=0)
 			   ref CstVarPrim[] vars,
 			   ref CstVarIterBase iter,
 			   ref CstVarPrim[] deps) {
+	  bool listed;
+	  foreach (var; vars) {
+	    if (var is this) {
+	      listed = true;
+	      break;
+	    }
+	  }
+	  if (listed is false) {
+	    vars ~= this;
+	  }
 	}
       }
 
@@ -1569,5 +1603,19 @@ class CstVecArr(V, alias R, int N=0)
 			   ref CstVarPrim[] vars,
 			   ref CstVarIterBase iter,
 			   ref CstVarPrim[] deps) {
+	  bool listed;
+	  foreach (var; vars) {
+	    if (var is this) {
+	      listed = true;
+	      break;
+	    }
+	  }
+	  if (listed is false) {
+	    vars ~= this;
+	  }
+
+	  if (_indexExpr !is null) {
+	    _indexExpr.setBddContext(eqn, deps, iter, deps);
+	  }
 	}
       }
