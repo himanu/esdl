@@ -721,6 +721,13 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
 
 	if (_indexExpr !is null) {
+	  // Here we need to put the parent as a dep for the eqn
+	  // and since this prim needs resolution, the constituents of
+	  // the indexExpr need to trigger a function that finds out
+	  // whether the _indexExpr has been fully resolved or
+	  // not. When the indexExpr gets resolved, it should inform
+	  // the parent about resolution which in turn should inform
+	  // the eqn that it can go ahead
 	  _indexExpr.setBddContext(eqn, deps, iter, deps);
 	}
       }

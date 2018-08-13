@@ -99,6 +99,18 @@ interface CstDomain
   }
 }
 
+// The agent keeps a list of clients that are dependent on the agent
+interface CstAgent
+{
+  abstract void post(CstClient client);
+}
+
+// The client keeps a list of agents that when resolved makes the client happy
+interface CstClient
+{
+  abstract void trigger(CstAgent agent);
+}
+
 interface CstVarPrim
 {
   abstract string name();
@@ -332,13 +344,9 @@ class CstEquation
   CstVarPrim[] _vars;
   CstVarPrim[] _deps;
   CstVarIterBase _iter;
-  bool _contextSet;
 
   final void setBddContext() {
-    if (_contextSet is false) {
-      _expr.setBddContext(this, _vars, _iter, _deps);
-      _contextSet = true;
-    }
+    _expr.setBddContext(this, _vars, _iter, _deps);
   }
 
   CstBddExpr getExpr() {
