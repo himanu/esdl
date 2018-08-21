@@ -1,6 +1,7 @@
 module esdl.rand.base;
 
 import esdl.rand.obdd;
+import esdl.rand.intr;
 import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
@@ -12,7 +13,7 @@ class CstStage {
   // The Bdd expressions that apply to this stage
   CstEquation[] _bddEqns;
   // These are the length variables that this stage will solve
-  // CstVarPrim[] _preReqs;
+  // CstVecPrim[] _preReqs;
   
   BDD _solveBDD;
 
@@ -111,19 +112,19 @@ interface CstClient
   abstract void trigger(CstAgent agent);
 }
 
-interface CstVarPrim
+interface CstVecPrim
 {
   abstract string name();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   abstract bool isRand();
-  // abstract ulong value();
+  // abstract long value();
 
   abstract void _esdl__reset();
   abstract bool isVarArr();
   abstract CstDomain[] getDomainLens(bool resolved);
-  abstract void solveBefore(CstVarPrim other);
-  abstract void addPreRequisite(CstVarPrim other);
+  abstract void solveBefore(CstVecPrim other);
+  abstract void addPreRequisite(CstVecPrim other);
 
   // this method is used for getting implicit constraints that are required for
   // dynamic arrays and for enums
@@ -132,7 +133,7 @@ interface CstVarPrim
 }
 
 
-abstract class CstVarExpr
+abstract class CstVecExpr
 {
 
   // alias evaluate this;
@@ -141,9 +142,9 @@ abstract class CstVarExpr
   
   // Array of indexes this expression has to resolve before it can be
   // converted into a BDD
-  abstract CstVarIterBase[] itrVars();
-  // get the primary (outermost foreach) iterator CstVarExpr
-  abstract CstVarIterBase getIterator();
+  abstract CstVecIterBase[] itrVars();
+  // get the primary (outermost foreach) iterator CstVecExpr
+  abstract CstVecIterBase getIterator();
   abstract bool hasUnresolvedIdx();
   abstract CstDomain[] unresolvedIdxs();
 
@@ -151,7 +152,7 @@ abstract class CstVarExpr
   abstract void resolveLap(uint lap);
   
   // List of Array Variables
-  abstract CstVarPrim[] preReqs();
+  abstract CstVecPrim[] preReqs();
 
   bool isConst() {
     return false;
@@ -174,21 +175,26 @@ abstract class CstVarExpr
 
   abstract long evaluate();
 
-  abstract CstVarExpr unroll(CstVarIterBase itr, uint n);
+  abstract bool getVal(ref long val);
+  
+  abstract CstVecExpr unroll(CstVecIterBase itr, uint n);
 
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 
   abstract void setBddContext(CstEquation eqn,
-			      ref CstVarPrim[] vars,
-			      ref CstVarIterBase iter,
-			      ref CstVarPrim[] deps);
+			      ref CstVecPrim[] vars,
+			      ref CstVecPrim[] vals,
+			      ref CstVecIterBase iter,
+			      ref CstVecPrim[] deps);
+
+  abstract bool getIntMods(ref IntRangeModSet modSet);
 }
 
 
 // This class represents an unwound Foreach itr at vec level
-interface CstVarIterBase
+interface CstVecIterBase
 {
   abstract uint maxVal();
 
@@ -203,10 +209,10 @@ abstract class CstBddExpr
 
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  abstract CstVarIterBase[] itrVars(); //  {
-  abstract CstVarIterBase getIterator(); //  {
+  abstract CstVecIterBase[] itrVars(); //  {
+  abstract CstVecIterBase getIterator(); //  {
 
-  abstract CstVarPrim[] preReqs();
+  abstract CstVecPrim[] preReqs();
 
   abstract bool hasUnresolvedIdx();
   abstract CstDomain[] unresolvedIdxs();
@@ -215,11 +221,14 @@ abstract class CstBddExpr
   abstract void resolveLap(uint lap);
 
   abstract void setBddContext(CstEquation eqn,
-			      ref CstVarPrim[] vars,
-			      ref CstVarIterBase iter,
-			      ref CstVarPrim[] deps);
+			      ref CstVecPrim[] vars,
+			      ref CstVecPrim[] vals,
+			      ref CstVecIterBase iter,
+			      ref CstVecPrim[] deps);
 
-  abstract CstBddExpr unroll(CstVarIterBase itr, uint n);
+  abstract bool getIntRange(ref IntRangeSet!long rangeSet);
+
+  abstract CstBddExpr unroll(CstVecIterBase itr, uint n);
 
   abstract CstDomain[] getRndDomains(bool resolved);
 
@@ -250,6 +259,12 @@ class CstEquation
 	description ~= "\t" ~ var.name() ~ "\n";
       }
     }
+    if (_vals.length > 0) {
+      description ~= "    values: \n";
+      foreach (val; _vals) {
+	description ~= "\t" ~ val.name() ~ "\n";
+      }
+    }
     if (_deps.length > 0) {
       description ~= "    depends: \n";
       foreach (dep; _deps) {
@@ -263,7 +278,7 @@ class CstEquation
 
   CstBddExpr _expr;
 
-  CstVarIterBase _uwItr;
+  CstVecIterBase _uwItr;
   CstEquation[] _uwEqns;
   
   this(CstBddExpr expr) {
@@ -307,18 +322,18 @@ class CstEquation
     }
   }
 
-  CstVarIterBase unrollableItr() {
+  CstVecIterBase unrollableItr() {
     foreach(itr; _expr.itrVars()) {
       if(itr.isUnrollable()) return itr;
     }
     return null;
   }
 
-  CstEquation[] unroll(CstVarIterBase itr) {
+  CstEquation[] unroll(CstVecIterBase itr) {
     assert (itr is _expr.getIterator());
 
     if(! itr.isUnrollable()) {
-      assert(false, "CstVarIterBase is not unrollabe yet");
+      assert(false, "CstVecIterBase is not unrollabe yet");
     }
     auto currLen = itr.maxVal();
     // import std.stdio;
@@ -341,17 +356,26 @@ class CstEquation
     return _uwEqns[0..currLen];
   }
 
-  CstVarPrim[] _vars;
-  CstVarPrim[] _deps;
-  CstVarIterBase _iter;
+  CstVecPrim[] _vars;
+  CstVecPrim[] _vals;
+  CstVecPrim[] _deps;
+  CstVecIterBase _iter;
 
   final void setBddContext() {
-    _expr.setBddContext(this, _vars, _iter, _deps);
+    _expr.setBddContext(this, _vars, _vals, _iter, _deps);
   }
 
   CstBddExpr getExpr() {
     return _expr;
   }
+
+  IntRangeSet!long _rangeSet;
+
+  ref IntRangeSet!long getIntRange() {
+    _expr.getIntRange(_rangeSet);
+    return _rangeSet;
+  }
+
 }
 
 class CstBlock

@@ -1,8 +1,9 @@
 module esdl.rand.intr;
 
-import std.traits: isIntegral;
+import std.traits: isIntegral, isSigned;
 import std.container.array;
 import std.traits: Unsigned;
+import esdl.data.bvec;
 
 T larger(T) (T a, T b) {
   if (a > b) return a;
@@ -138,17 +139,10 @@ struct IntRangeSet(T)
     }
   }
 
-  void opOpAssign(string op)(IntRange!T r) {
-    static if (op == "~") {
-      ranges ~= r;
-      this.optimize();
-    }
-  }
-
-  void opOpAssign(string op)(IntRangeSet other) {
+  void opOpAssign(string op)(IntRangeSet!T other) {
     static if (op == "|") {
       ranges ~= other.ranges;
-      optRanges();
+      optimize();
     }
     static if (op == "&") {
       this.optimize();
@@ -159,6 +153,28 @@ struct IntRangeSet(T)
 	  if (tRange &= oRange) {
 	    newRanges ~= tRange;
 	  }
+	}
+      }
+      ranges = newRanges;
+      this.optimize();
+    }
+  }
+
+  void opOpAssign(string op)(IntRange!T other) {
+    static if (op == "~") {
+      ranges ~= other;
+      this.optimize();
+    }
+    static if (op == "|") {
+      ranges ~= other;
+      optimize();
+    }
+    static if (op == "&") {
+      this.optimize();
+      Array!(IntRange!T) newRanges;
+      foreach (tRange; this.ranges) {
+	if (tRange &= other) {
+	  newRanges ~= tRange;
 	}
       }
       ranges = newRanges;
@@ -209,40 +225,58 @@ struct IntRangeSet(T)
   }
 }
 
-template IntRangeSet(bool S, uint N)
+template IntRangeType(V)
 {
-  static if (N > 32) {
-    static if (S) alias T = long;
-    else alias T = ulong;
+  static if (isIntegral!V)
+    {
+      enum N = V.sizeof * 8;
+      enum S = isSigned!V;
+    }
+  else static if (isBitVector!V)
+    {
+      enum N = V.SIZE;
+      enum S = V.ISSIGNED;
+    }
+  else static if (isBoolean!V)
+    {
+      enum N = 1;
+      enum S = false;
+    }
+
+  static if (N >= 32) {
+    static if (S) alias IntRangeType = long;
+    else alias IntRangeType = ulong;
   }
-  else static if (N > 16) {
-    static if (S) alias T = int;
-    else alias T = uint;
-  }
-  else static if (N > 8) {
-    static if (S) alias T = short;
-    else alias T = ushort;
-  }
-  else {
-    static if (S) alias T = byte;
-    else alias T = ubyte;
-  }
-  alias IntRangeSet = IntRangeSet!T;
+  else // static if (N > 16)
+    {
+      static if (S) alias IntRangeType = int;
+      else alias IntRangeType = uint;
+    }
+  // else static if (N > 8) {
+  //   static if (S) alias IntRangeType = short;
+  //   else alias IntRangeType = ushort;
+  // }
+  // else {
+  //   static if (S) alias IntRangeType = byte;
+  //   else alias IntRangeType = ubyte;
+  // }
 }
 
-enum IntRangeModOp: byte {ADD, SUB, SUBD, MULT, DIV, DIVD}
+enum IntRangeModOp: byte {ADD, SUB, SUBD, MULT, DIV, DIVD, NEG}
 
-struct IntRangeMod(T)
+struct IntRangeMod
 {
   long _arg;
   IntRangeModOp _op;
+  void apply(IntRange!long) {
+  }
 }
 
-struct IntRangeModSet(T)
+struct IntRangeModSet
 {
-  Array!(IntRangeMod!T) _mods;
+  Array!(IntRangeMod) _mods;
 
-  void opOpAssign(string op)(IntRangeMod!T mod) {
+  void opOpAssign(string op)(IntRangeMod mod) {
     static if (op == "~") {
       _mods ~= mod;
     }
@@ -251,9 +285,9 @@ struct IntRangeModSet(T)
     }
   }
 
-  IntRange!T apply(IntRange!T range, IntRangeOp op) {
+  IntRange!long apply(ref IntRange!long range) {
     foreach (mod; _mods) {
-      mod.apply(range, op);
+      mod.apply(range);
     }
     return range;
   }

@@ -6,9 +6,10 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 
 import esdl.rand.obdd;
 import esdl.rand.misc;
-import esdl.rand.base: CstVarPrim, CstVarExpr, CstVarIterBase,
+import esdl.rand.intr;
+import esdl.rand.base: CstVecPrim, CstVecExpr, CstVecIterBase,
   CstStage, CstDomain, CstBddExpr, CstEquation; // CstValAllocator,
-import esdl.rand.expr: CstVarLen, CstVecDomain, _esdl__cstVal;
+import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal;
 import esdl.rand.solver: _esdl__SolverRoot;
 
 import esdl.rand.intr: IntRangeSet;
@@ -20,7 +21,7 @@ import esdl.rand.intr: IntRangeSet;
 // }
 
 abstract class CstVecBase(V, alias R, int N)
-  if(_esdl__ArrOrder!(V, N) == 0): CstVecDomain!R, CstVarPrim
+  if(_esdl__ArrOrder!(V, N) == 0): CstVecDomain!(ElementTypeN!(V, N), R), CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -32,7 +33,7 @@ abstract class CstVecBase(V, alias R, int N)
   Unconst!E _refreshedVal;
 
   static if (HAS_RAND_ATTRIB) {
-    CstVarPrim[] _preReqs;
+    CstVecPrim[] _preReqs;
   }
 
   this(string name) {
@@ -80,8 +81,24 @@ abstract class CstVecBase(V, alias R, int N)
     return false;
   }
 
-  abstract ulong value();
+  abstract long value();
   
+  override bool getVal(ref long val) {
+    static if (HAS_RAND_ATTRIB) {
+      if(! this.isRand || stage().solved()) {
+	val = value();
+	return true;
+      }
+      else {
+	return false;
+      }
+    }
+    else {
+      val = value();
+      return true;
+    }
+  }
+
   override long evaluate() {
     static if (HAS_RAND_ATTRIB) {
       if(! this.isRand || stage().solved()) {
@@ -134,7 +151,7 @@ abstract class CstVecBase(V, alias R, int N)
     return this.to!string();
   }
 
-  void solveBefore(CstVarPrim other) {
+  void solveBefore(CstVecPrim other) {
     static if (HAS_RAND_ATTRIB) {
       other.addPreRequisite(this);
     }
@@ -143,7 +160,7 @@ abstract class CstVecBase(V, alias R, int N)
     }
   }
 
-  void addPreRequisite(CstVarPrim domain) {
+  void addPreRequisite(CstVecPrim domain) {
     static if (HAS_RAND_ATTRIB) {
       _preReqs ~= domain;
     }
@@ -207,7 +224,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _parent.getSolverRoot();
       }
 	
-      override CstVarPrim[] preReqs() {
+      override CstVecPrim[] preReqs() {
 	static if (HAS_RAND_ATTRIB) {
 	  return _preReqs;
 	}
@@ -216,11 +233,11 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstVarIterBase[] itrVars() {
+      override CstVecIterBase[] itrVars() {
 	return [];
       }
 
-      override CstVarIterBase getIterator() {
+      override CstVecIterBase getIterator() {
 	return null;
       }
 
@@ -246,7 +263,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RV unroll(CstVarIterBase itr, uint n) {
+      override RV unroll(CstVecIterBase itr, uint n) {
 	// itrVars is always empty
 	return this;
       }
@@ -276,7 +293,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _var;
       }
 
-      override ulong value() {
+      override long value() {
 	return cast(long) (*_var);
       }
 
@@ -367,29 +384,31 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      static if (isIntegral!V) {
-	IntRangeSet!(Unconst!V) _rangeSet;
-      }
-      else static if (V.SIZE <= 64) {
-	IntRangeSet!(V.ISSIGNED, V.SIZE) _rangeSet;
-      }
-
       override void setBddContext(CstEquation eqn,
-				  ref CstVarPrim[] vars,
-				  ref CstVarIterBase iter,
-				  ref CstVarPrim[] deps) {
-	bool listed;
-	foreach (var; vars) {
-	  if (var is this) {
-	    listed = true;
-	    break;
+				  ref CstVecPrim[] vars,
+				  ref CstVecPrim[] vals,
+				  ref CstVecIterBase iter,
+				  ref CstVecPrim[] deps) {
+	static if (is (R: _esdl__norand)) {
+	  vals ~= this;
+	}
+	else {
+	  bool listed;
+	  foreach (var; vars) {
+	    if (var is this) {
+	      listed = true;
+	      break;
+	    }
+	  }
+	  if (listed is false) {
+	    vars ~= this;
 	  }
 	}
-	if (listed is false) {
-	  vars ~= this;
-	}
       }
 
+      override bool getIntMods(ref IntRangeModSet modSet) {
+	return true;
+      }
     }
 
 class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
@@ -403,10 +422,10 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       alias P = CstVecArr!(V, R, N-1);
       P _parent;
 
-      CstVarExpr _indexExpr = null;
+      CstVecExpr _indexExpr = null;
       int _pindex = 0;
 
-      this(string name, P parent, CstVarExpr indexExpr) {
+      this(string name, P parent, CstVecExpr indexExpr) {
 	// import std.stdio;
 	// writeln("New ", name);
 	assert(parent !is null);
@@ -437,7 +456,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _parent.getSolverRoot();
       }
 	
-      override CstVarPrim[] preReqs() {
+      override CstVecPrim[] preReqs() {
 	if(_indexExpr) {
 	  static if (HAS_RAND_ATTRIB) {
 	    return _preReqs ~ _parent.arrLen() ~
@@ -457,7 +476,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstVarIterBase[] itrVars() {
+      override CstVecIterBase[] itrVars() {
 	if (_indexExpr) {
 	  return _parent.itrVars() ~ _indexExpr.itrVars();
 	}
@@ -466,8 +485,8 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override CstVarIterBase getIterator() {
-	CstVarIterBase pitr = _parent.getIterator();
+      override CstVecIterBase getIterator() {
+	CstVecIterBase pitr = _parent.getIterator();
 	if (_indexExpr) {
 	  if (pitr !is null) return pitr;
 	  else return _indexExpr.getIterator();
@@ -543,7 +562,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RV unroll(CstVarIterBase itr, uint n) {
+      override RV unroll(CstVecIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -596,7 +615,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override ulong value() {
+      override long value() {
 	if(_indexExpr) {
 	  return *(_parent.getRef(_indexExpr.evaluate()));
 	}
@@ -706,18 +725,24 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       override void setBddContext(CstEquation eqn,
-				  ref CstVarPrim[] vars,
-				  ref CstVarIterBase iter,
-				  ref CstVarPrim[] deps) {
-	bool listed;
-	foreach (var; vars) {
-	  if (var is this) {
-	    listed = true;
-	    break;
-	  }
+				  ref CstVecPrim[] vars,
+				  ref CstVecPrim[] vals,
+				  ref CstVecIterBase iter,
+				  ref CstVecPrim[] deps) {
+	static if (is (R: _esdl__norand)) {
+	  vals ~= this;
 	}
-	if (listed is false) {
-	  vars ~= this;
+	else {
+	  bool listed;
+	  foreach (var; vars) {
+	    if (var is this) {
+	      listed = true;
+	      break;
+	    }
+	  }
+	  if (listed is false) {
+	    vars ~= this;
+	  }
 	}
 
 	if (_indexExpr !is null) {
@@ -728,8 +753,12 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the eqn that it can go ahead
-	  _indexExpr.setBddContext(eqn, deps, iter, deps);
+	  _indexExpr.setBddContext(eqn, deps, vals, iter, deps);
 	}
+      }
+
+      override bool getIntMods(ref IntRangeModSet modSet) {
+	return true;
       }
     }
 
@@ -741,7 +770,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 // }
 
 abstract class CstVecArrBase(V, alias R, int N=0)
-  if(_esdl__ArrOrder!(V, N) != 0): CstVarPrim
+  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -763,7 +792,7 @@ abstract class CstVecArrBase(V, alias R, int N=0)
   }
 
   static if (HAS_RAND_ATTRIB) {
-    CstVarPrim[] _preReqs;
+    CstVecPrim[] _preReqs;
   }
 
   bool isVarArr() {
@@ -776,16 +805,12 @@ abstract class CstVecArrBase(V, alias R, int N=0)
 
   void resetPrimeBdd() { }
 
-  // override CstVec2VecExpr opIndex(CstVarExpr idx) {
+  // override CstVec2VecExpr opIndex(CstVecExpr idx) {
   //   return new CstVec2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
   // }
 
   bool isRand() {
     assert(false, "isRand not implemented for CstVecArrBase");
-  }
-
-  ulong value() {
-    assert(false, "value not implemented for CstVecArrBase");
   }
 
   void collate(ulong v, int word = 0) {
@@ -820,7 +845,7 @@ abstract class CstVecArrBase(V, alias R, int N=0)
   //   assert(false, "bddvec not implemented for CstVecArrBase");
   // }
 
-  void solveBefore(CstVarPrim other) {
+  void solveBefore(CstVecPrim other) {
     static if (HAS_RAND_ATTRIB) {
       other.addPreRequisite(this);
     }
@@ -829,7 +854,7 @@ abstract class CstVecArrBase(V, alias R, int N=0)
     }
   }
 
-  void addPreRequisite(CstVarPrim prim) {
+  void addPreRequisite(CstVecPrim prim) {
     static if (HAS_RAND_ATTRIB) {
       _preReqs ~= prim;
     }
@@ -852,7 +877,7 @@ class CstVecArr(V, alias R, int N=0)
     CstVecArrBase!(V, R, N)
       {
 	alias RV = typeof(this);
-	CstVarLen!RV _arrLen;
+	CstVecLen!RV _arrLen;
 
 	alias RAND=R;
 
@@ -869,7 +894,7 @@ class CstVecArr(V, alias R, int N=0)
 	  _name = name;
 	  _var = &var;
 	  _parent = parent;
-	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	  _arrLen = new CstVecLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
 	  getSolverRoot().addDomain(_arrLen);
 	}
@@ -883,7 +908,7 @@ class CstVecArr(V, alias R, int N=0)
 	  return _parent.getSolverRoot();
 	}
 	
-	CstVarPrim[] preReqs() {
+	CstVecPrim[] preReqs() {
 	  static if (HAS_RAND_ATTRIB) {
 	    return _preReqs;		// N = 0 -- no _parent
 	  }
@@ -892,11 +917,11 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVarIterBase[] itrVars() {
+	CstVecIterBase[] itrVars() {
 	  return [];		// N = 0 -- no _parent
 	}
 
-	CstVarIterBase getIterator() {
+	CstVecIterBase getIterator() {
 	  return null;		// N = 0 -- no _parent
 	}
 
@@ -939,7 +964,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstVarIterBase itr, uint n) {
+	RV unroll(CstVecIterBase itr, uint n) {
 	  return this;
 	}
 
@@ -1077,7 +1102,7 @@ class CstVecArr(V, alias R, int N=0)
 	  _relatedIdxs ~= domain;
 	}
       
-	EV opIndex(CstVarExpr idx) {
+	EV opIndex(CstVecExpr idx) {
 	  foreach (domain; idx.getRndDomains(false)) {
 	    addRelatedIdx(domain);
 	  }
@@ -1135,11 +1160,11 @@ class CstVecArr(V, alias R, int N=0)
 	  return itr;
 	}
 
-	CstVarLen!RV length() {
+	CstVecLen!RV length() {
 	  return _arrLen;
 	}
 
-	CstVarLen!RV arrLen() {
+	CstVecLen!RV arrLen() {
 	  return _arrLen;
 	}
 
@@ -1171,18 +1196,24 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	void setBddContext(CstEquation eqn,
-			   ref CstVarPrim[] vars,
-			   ref CstVarIterBase iter,
-			   ref CstVarPrim[] deps) {
-	  bool listed;
-	  foreach (var; vars) {
-	    if (var is this) {
-	      listed = true;
-	      break;
-	    }
+			   ref CstVecPrim[] vars,
+			   ref CstVecPrim[] vals,
+			   ref CstVecIterBase iter,
+			   ref CstVecPrim[] deps) {
+	  static if (is (R: _esdl__norand)) {
+	    vals ~= this;
 	  }
-	  if (listed is false) {
-	    vars ~= this;
+	  else {
+	    bool listed;
+	    foreach (var; vars) {
+	      if (var is this) {
+		listed = true;
+		break;
+	      }
+	    }
+	    if (listed is false) {
+	      vars ~= this;
+	    }
 	  }
 	}
       }
@@ -1196,22 +1227,22 @@ class CstVecArr(V, alias R, int N=0)
 	import esdl.data.bvec;
 	alias P = CstVecArr!(V, R, N-1);
 	P _parent;
-	CstVarExpr _indexExpr = null;
+	CstVecExpr _indexExpr = null;
 	int _pindex = 0;
 
 	alias RV = typeof(this);
-	CstVarLen!RV _arrLen;
+	CstVecLen!RV _arrLen;
 
 	alias RAND=R;
       
-	this(string name, P parent, CstVarExpr indexExpr) {
+	this(string name, P parent, CstVecExpr indexExpr) {
 	  // import std.stdio;
 	  // writeln("New ", name);
 	  assert(parent !is null);
 	  _name = name;
 	  _parent = parent;
 	  _indexExpr = indexExpr;
-	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	  _arrLen = new CstVecLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
 	  // addDomain only for concrete elements
 	  // getSolverRoot().addDomain(_arrLen);
@@ -1225,7 +1256,7 @@ class CstVecArr(V, alias R, int N=0)
 	  _parent = parent;
 	  // _indexExpr = _esdl__cstVal(index);
 	  _pindex = index;
-	  _arrLen = new CstVarLen!RV(name ~ ".len", this);
+	  _arrLen = new CstVecLen!RV(name ~ ".len", this);
 	  _relatedIdxs ~= _arrLen;
 	  getSolverRoot().addDomain(_arrLen);
 	}
@@ -1239,8 +1270,8 @@ class CstVecArr(V, alias R, int N=0)
 	  return _parent.getSolverRoot();
 	}
 	
-	CstVarPrim[] preReqs() {
-	  CstVarPrim[] req;
+	CstVecPrim[] preReqs() {
+	  CstVecPrim[] req;
 	  static if (HAS_RAND_ATTRIB) {
 	    req = _preReqs ~ _parent.arrLen();
 	  }
@@ -1252,7 +1283,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVarIterBase[] itrVars() {
+	CstVecIterBase[] itrVars() {
 	  if(_indexExpr) {
 	    return _parent.itrVars() ~ _indexExpr.itrVars(); // ~ _arrLen.makeItrVar();
 	  }
@@ -1261,7 +1292,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVarIterBase getIterator() {
+	CstVecIterBase getIterator() {
 	  auto pitr = _parent.getIterator();
 	  if (pitr !is null) return pitr;
 	  else {
@@ -1391,7 +1422,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	RV unroll(CstVarIterBase itr, uint n) {
+	RV unroll(CstVecIterBase itr, uint n) {
 	  bool found = false;
 	  foreach(var; itrVars()) {
 	    if(itr is var) {
@@ -1501,7 +1532,7 @@ class CstVecArr(V, alias R, int N=0)
 	  _relatedIdxs ~= domain;
 	}
       
-	EV opIndex(CstVarExpr idx) {
+	EV opIndex(CstVecExpr idx) {
 	  foreach (domain; idx.getRndDomains(false)) {
 	    addRelatedIdx(domain);
 	  }
@@ -1571,11 +1602,11 @@ class CstVecArr(V, alias R, int N=0)
 	  return itr;
 	}
 
-	CstVarLen!RV length() {
+	CstVecLen!RV length() {
 	  return _arrLen;
 	}
 
-	CstVarLen!RV arrLen() {
+	CstVecLen!RV arrLen() {
 	  return _arrLen;
 	}
 
@@ -1607,22 +1638,28 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	void setBddContext(CstEquation eqn,
-			   ref CstVarPrim[] vars,
-			   ref CstVarIterBase iter,
-			   ref CstVarPrim[] deps) {
-	  bool listed;
-	  foreach (var; vars) {
-	    if (var is this) {
-	      listed = true;
-	      break;
+			   ref CstVecPrim[] vars,
+			   ref CstVecPrim[] vals,
+			   ref CstVecIterBase iter,
+			   ref CstVecPrim[] deps) {
+	  static if (is (R: _esdl__norand)) {
+	    vals ~= this;
+	  }
+	  else {
+	    bool listed;
+	    foreach (var; vars) {
+	      if (var is this) {
+		listed = true;
+		break;
+	      }
 	    }
-	  }
-	  if (listed is false) {
-	    vars ~= this;
-	  }
+	    if (listed is false) {
+	      vars ~= this;
+	    }
 
-	  if (_indexExpr !is null) {
-	    _indexExpr.setBddContext(eqn, deps, iter, deps);
+	    if (_indexExpr !is null) {
+	      _indexExpr.setBddContext(eqn, deps, vals, iter, deps);
+	    }
 	  }
 	}
       }

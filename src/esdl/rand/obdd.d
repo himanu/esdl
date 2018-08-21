@@ -2517,18 +2517,6 @@ struct BDD
     return domain_n.get_ivars();
   }
 
-  // T getVal(T)(short index)
-  // {
-  //   int fdvarnum = buddy.numberOfDomains();
-  //   import std.stdio;
-  //   writeln("There are number of domains: ", fdvarnum);
-  //   BddDomain domain_n = buddy.getDomain(index);
-  //   int[] vars = domain_n.get_ivars();
-
-  //   writeln(vars);
-  //   return T.min;
-  // }
-
   string toStringWithDomains()
   {
     if(this.isZero()) return "F";

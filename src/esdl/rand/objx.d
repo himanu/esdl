@@ -6,9 +6,9 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 
 import esdl.rand.obdd;
 import esdl.rand.misc;
-import esdl.rand.base: CstVarPrim, CstVarExpr, CstVarIterBase,
+import esdl.rand.base: CstVecPrim, CstVecExpr, CstVecIterBase,
   CstStage, CstDomain; // CstValAllocator,
-import esdl.rand.expr: CstVarLen, CstVecDomain, _esdl__cstVal;
+import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal;
 
 
 // Consolidated Proxy Class
@@ -91,7 +91,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
 
-      override CstVarIterBase[] itrVars() {
+      override CstVecIterBase[] itrVars() {
 	return [];
       }
 
@@ -113,7 +113,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RJ unroll(CstVarIterBase itr, uint n) {
+      override RJ unroll(CstVecIterBase itr, uint n) {
 	// itrVars is always empty
 	return this;
       }
@@ -154,10 +154,10 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       alias P = CstObjArr!(V, R, N-1);
       P _parent;
 
-      CstVarExpr _indexExpr = null;
+      CstVecExpr _indexExpr = null;
       int _index = 0;
 
-      this(string name, P parent, CstVarExpr indexExpr) {
+      this(string name, P parent, CstVecExpr indexExpr) {
 	assert(parent !is null);
 	_name = name;
 	_parent = parent;
@@ -171,7 +171,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_index = index;
       }
 
-      override CstVarIterBase[] itrVars() {
+      override CstVecIterBase[] itrVars() {
 	if(_indexExpr) {
 	  return _parent.itrVars() ~ _indexExpr.itrVars();
 	}
@@ -232,7 +232,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RJ unroll(CstVarIterBase itr, uint n) {
+      override RJ unroll(CstVecIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -277,7 +277,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 // }
 
 abstract class CstObjArrBase(V, alias R, int N=0)
-  if(_esdl__ArrOrder!(V, N) != 0): CstVarPrim
+  if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -316,7 +316,7 @@ abstract class CstObjArrBase(V, alias R, int N=0)
     return true;
   }
 
-  // override CstObj2VecExpr opIndex(CstVarExpr idx) {
+  // override CstObj2VecExpr opIndex(CstVecExpr idx) {
   //   return new CstObj2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
   // }
 
@@ -338,7 +338,7 @@ class CstObjArr(V, alias R, int N=0)
     CstObjArrBase!(V, R, N)
       {
 	alias RJ = typeof(this);
-	CstVarLen!RJ _arrLen;
+	CstVecLen!RJ _arrLen;
 
 	alias RAND=R;
 
@@ -351,7 +351,7 @@ class CstObjArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstVarLen!RJ(name ~ ".len", this);
+	      _arrLen = new CstVecLen!RJ(name ~ ".len", this);
 	      _relatedIdxs ~= _arrLen;
 	    }
 	  }
@@ -361,7 +361,7 @@ class CstObjArr(V, alias R, int N=0)
 	    this(string name, ref V var) {
 	      _name = name;
 	      _var = &var;
-	      _arrLen = new CstVarLen!RJ(name ~ ".len", this);
+	      _arrLen = new CstVecLen!RJ(name ~ ".len", this);
 	      _relatedIdxs ~= _arrLen;
 	    }
 	  }
@@ -370,12 +370,12 @@ class CstObjArr(V, alias R, int N=0)
 	  this(string name, ref V var) {
 	    _name = name;
 	    _var = &var;
-	    _arrLen = new CstVarLen!RJ(name ~ ".len", this);
+	    _arrLen = new CstVecLen!RJ(name ~ ".len", this);
 	    _relatedIdxs ~= _arrLen;
 	  }
 	}
 
-	CstVarIterBase[] itrVars() {
+	CstVecIterBase[] itrVars() {
 	  return [];		// N = 0 -- no _parent
 	}
 
@@ -410,7 +410,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
     
-	RJ unroll(CstVarIterBase itr, uint n) {
+	RJ unroll(CstVecIterBase itr, uint n) {
 	  return this;
 	}
 
@@ -504,7 +504,7 @@ class CstObjArr(V, alias R, int N=0)
 	  _relatedIdxs ~= domain;
 	}
       
-	EV opIndex(CstVarExpr idx) {
+	EV opIndex(CstVecExpr idx) {
 	  foreach (domain; idx.getRndDomains(resolved)) {
 	    addRelatedIdx(domain);
 	  }
@@ -594,11 +594,11 @@ class CstObjArr(V, alias R, int N=0)
 	  return itr;
 	}
 
-	CstVarLen!RJ length() {
+	CstVecLen!RJ length() {
 	  return _arrLen;
 	}
 
-	CstVarLen!RJ arrLen() {
+	CstVecLen!RJ arrLen() {
 	  return _arrLen;
 	}
 
@@ -625,20 +625,20 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       import esdl.data.bvec;
       alias P = CstObjArr!(V, R, N-1);
       P _parent;
-      CstVarExpr _indexExpr = null;
+      CstVecExpr _indexExpr = null;
       int _index = 0;
 
       alias RJ = typeof(this);
-      CstVarLen!RJ _arrLen;
+      CstVecLen!RJ _arrLen;
 
       alias RAND=R;
       
-      this(string name, P parent, CstVarExpr indexExpr) {
+      this(string name, P parent, CstVecExpr indexExpr) {
 	assert(parent !is null);
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_arrLen = new CstVarLen!RJ(name ~ ".len", this);
+	_arrLen = new CstVecLen!RJ(name ~ ".len", this);
 	_relatedIdxs ~= _arrLen;
       }
 
@@ -647,7 +647,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_parent = parent;
 	_index = index;
-	_arrLen = new CstVarLen!RJ(name ~ ".len", this);
+	_arrLen = new CstVecLen!RJ(name ~ ".len", this);
 	_relatedIdxs ~= _arrLen;
       }
 
@@ -664,7 +664,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstVarIterBase[] itrVars() {
+      CstVecIterBase[] itrVars() {
 	if(_indexExpr) {
 	  return _parent.itrVars() ~ _indexExpr.itrVars();
 	}
@@ -757,7 +757,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RJ unroll(CstVarIterBase itr, uint n) {
+      RJ unroll(CstVecIterBase itr, uint n) {
 	bool found = false;
 	foreach(var; itrVars()) {
 	  if(itr is var) {
@@ -843,7 +843,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_relatedIdxs ~= domain;
       }
       
-      EV opIndex(CstVarExpr idx) {
+      EV opIndex(CstVecExpr idx) {
 	foreach (domain; idx.getRndDomains(resolved)) {
 	  addRelatedIdx(domain);
 	}
@@ -939,11 +939,11 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return itr;
       }
 
-      CstVarLen!RJ length() {
+      CstVecLen!RJ length() {
 	return _arrLen;
       }
 
-      CstVarLen!RJ arrLen() {
+      CstVecLen!RJ arrLen() {
 	return _arrLen;
       }
 

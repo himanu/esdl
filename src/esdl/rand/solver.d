@@ -2,9 +2,10 @@ module esdl.rand.solver;
 import esdl.rand.obdd;
 import std.container.array;
 
-import esdl.rand.base: CstVarPrim, CstStage, CstBddExpr,// , CstValAllocator
+import esdl.rand.base: CstVecPrim, CstStage, CstBddExpr,
   CstDomain, CstEquation, CstBlock;
 import esdl.rand.misc;
+import esdl.data.bin;
 
 
 abstract class _esdl__ConstraintBase: _esdl__Norand
@@ -84,7 +85,7 @@ abstract class _esdl__SolverRoot {
   bool _esdl__cstWithChanged;
 
   // ParseTree parseList[];
-  CstVarPrim[] _esdl__randsList;
+  CstVecPrim[] _esdl__randsList;
   _esdl__RandGen _esdl__rGen;
 
   _esdl__RandGen _esdl__getRandGen() {
@@ -172,109 +173,121 @@ abstract class _esdl__SolverRoot {
   void _esdl__initCsts() {}
   void _esdl__doRandomize(_esdl__RandGen randGen) {}
 
-  void solve() { // (T)(T t) {
-    // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
+  // void obsoleteSolve() { // (T)(T t) {
+  //   // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
+  //   uint lap = 0;
+  //   // if (_domains.length is 0 // || _esdl__cstWithChanged is true
+  //   // 	) {
+  //   if (_esdl__cstEqns.isEmpty || _esdl__cstWithChanged is true) {
+  //     initEqns();
+  //   }
+
+  //   CstStage[] unsolvedStages;
+
+  //   int stageIdx=0;
+  //   CstEquation[] unrolledEqns = _esdl__cstEqns._eqns;	// unstaged Expressions -- all
+  //   CstEquation[] toResolveEqns;   			// need resolution wrt LAP logic
+  //   CstEquation[] unresolvedEqns;			// need resolution wrt LAP logic
+    
+  //   // import std.stdio;
+  //   // writeln("There are ", unrolledEqns.length, " number of unsolved expressions");
+  //   // writeln("There are ", _cstDomains.length, " number of domains");
+
+  //   while(unrolledEqns.length > 0 || unsolvedStages.length > 0) {
+  //     lap += 1;
+
+  //     CstStage[] cstStages = unsolvedStages;
+  //     unsolvedStages.length = 0;
+
+  //     CstEquation[] cstExprs = unrolledEqns;
+  //     unrolledEqns.length = 0;
+  //     toResolveEqns = unresolvedEqns;
+  //     unresolvedEqns.length = 0;
+
+  //     CstBddExpr[] uwExprs;	// unwound expressions
+
+  //     // unroll all the unrollable expressions
+  //     foreach(expr; cstExprs) {
+  // 	// import std.stdio;
+  // 	// writeln("Unrolling: ", expr.name());
+  // 	// auto unwound = expr.unroll();
+  // 	// for (size_t i=0; i!=unwound.length; ++i) {
+  // 	//   writeln("Unwound as: ", unwound[i].name());
+  // 	// }
+  // 	expr.unroll(lap, unrolledEqns, unrolledEqns, toResolveEqns// uwExprs
+  // 		    );
+  //     }
+
+  //     // foreach(expr; uwExprs) {
+  //     // 	// if(expr.itrVars().length is 0) {
+  //     // 	if(expr.hasUnresolvedIdx()) {
+  //     // 	  import std.stdio;
+  //     // 	  writeln("Adding expression ", expr.name(), " to unresolved");
+  //     // 	  expr.resolveLap(lap);
+  //     // 	  unrolledEqns ~= expr;
+  //     // 	}
+  //     // 	// else {
+  //     // 	//   toResolveEqns ~= expr;
+  //     // 	// }
+  //     // }
+
+  //     foreach (eqn; toResolveEqns) {
+  // 	// import std.stdio;
+  // 	uint elap = eqn.getExpr().resolveLap();
+  // 	// writefln("Unroll Lap of the eqn %s is %s", eqn.name() , lap);
+  // 	if (elap == lap) {
+  // 	  unresolvedEqns ~= eqn;
+  // 	}
+  // 	else {
+  // 	  // import std.stdio;
+  // 	  // writeln("Adding eqn ", eqn.name(), " to stage");
+  // 	  addCstStage(eqn, cstStages);
+  // 	}
+  //     }
+
+  //     foreach(stage; cstStages) {
+  // 	if(stage !is null) {
+  // 	  solveStage(stage, stageIdx);
+  // 	}
+  // 	else {
+  // 	  // assert(stage._domVars.length !is 0);
+  // 	  unsolvedStages ~= stage;
+  // 	}
+  //     }
+  //   }
+  // }
+
+  Bin!CstEquation solveEqns;
+  Bin!CstStage solveStages;
+  
+  void solve() {
+    int stageIdx=0;
+
     uint lap = 0;
-    // if (_domains.length is 0 // || _esdl__cstWithChanged is true
-    // 	) {
+
     if (_esdl__cstEqns.isEmpty || _esdl__cstWithChanged is true) {
       initEqns();
     }
-    //initDomains();
 
-    //   // _esdl__cstEqns._esdl__reset(); // start empty
     
-    //   // take all the constraints -- even if disabled
-    //   // if (_esdl__cstEqns.isEmpty()) {
-    //   // foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
-    //   // 	_esdl__cstEqns ~= cst.getCstExpr();
-    //   // }
-    //   // if(_esdl__cstWith !is null) {
-    //   // 	_esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
-    //   // }
-    //   //}
+    solveEqns ~= _esdl__cstEqns._eqns;
 
-    // }
-
-    // CstValAllocator.mark();
-
-    CstStage[] unsolvedStages;
-
-    int stageIdx=0;
-    CstEquation[] unrolledEqns = _esdl__cstEqns._eqns;	// unstaged Expressions -- all
-    CstEquation[] toResolveEqns;   			// need resolution wrt LAP logic
-    CstEquation[] unresolvedEqns;			// need resolution wrt LAP logic
-    
-    // import std.stdio;
-    // writeln("There are ", unrolledEqns.length, " number of unsolved expressions");
-    // writeln("There are ", _cstDomains.length, " number of domains");
-
-    while(unrolledEqns.length > 0 || unsolvedStages.length > 0) {
+    while (solveEqns.length > 0) {
       lap += 1;
 
-      CstStage[] cstStages = unsolvedStages;
-      unsolvedStages.length = 0;
-
-      CstEquation[] cstExprs = unrolledEqns;
-      unrolledEqns.length = 0;
-      toResolveEqns = unresolvedEqns;
-      unresolvedEqns.length = 0;
-
-      CstBddExpr[] uwExprs;	// unwound expressions
-
-      // unroll all the unrollable expressions
-      foreach(expr; cstExprs) {
-	// import std.stdio;
-	// writeln("Unrolling: ", expr.name());
-	// auto unwound = expr.unroll();
-	// for (size_t i=0; i!=unwound.length; ++i) {
-	//   writeln("Unwound as: ", unwound[i].name());
-	// }
-	expr.unroll(lap, unrolledEqns, unrolledEqns, toResolveEqns// uwExprs
-		    );
+      foreach (n, eqn; solveEqns) {
+	addCstStage(eqn);
       }
 
-      // foreach(expr; uwExprs) {
-      // 	// if(expr.itrVars().length is 0) {
-      // 	if(expr.hasUnresolvedIdx()) {
-      // 	  import std.stdio;
-      // 	  writeln("Adding expression ", expr.name(), " to unresolved");
-      // 	  expr.resolveLap(lap);
-      // 	  unrolledEqns ~= expr;
-      // 	}
-      // 	// else {
-      // 	//   toResolveEqns ~= expr;
-      // 	// }
-      // }
-
-      foreach (eqn; toResolveEqns) {
-	// import std.stdio;
-	uint elap = eqn.getExpr().resolveLap();
-	// writefln("Unroll Lap of the eqn %s is %s", eqn.name() , lap);
-	if (elap == lap) {
-	  unresolvedEqns ~= eqn;
-	}
-	else {
-	  // import std.stdio;
-	  // writeln("Adding eqn ", eqn.name(), " to stage");
-	  addCstStage(eqn, cstStages);
-	}
-      }
-
-      foreach(stage; cstStages) {
+      solveEqns.length = 0;
+      
+      foreach(n, stage; solveStages) {
 	if(stage !is null) {
 	  solveStage(stage, stageIdx);
 	}
-	else {
-	  // assert(stage._domVars.length !is 0);
-	  unsolvedStages ~= stage;
-	}
       }
-      
+      solveStages.length = 0;
     }
-
-    // CstValAllocator.reset();
-    
   }
 
   void solveStage(CstStage stage, ref int stageIdx) {
@@ -404,7 +417,7 @@ abstract class _esdl__SolverRoot {
   }
 
   // list of constraint eqns to solve at a given stage
-  // void addCstStage(CstVarPrim prim, ref CstStage[] cstStages) {
+  // void addCstStage(CstVecPrim prim, ref CstStage[] cstStages) {
   //   assert (prim !is null);
   //   if(prim.stage() is null) {
   //     CstStage stage = new CstStage();
@@ -415,8 +428,8 @@ abstract class _esdl__SolverRoot {
   //   }
   // }
 
-  void addCstStage(CstEquation eqn, ref CstStage[] cstStages) {
-    // uint stage = cast(uint) _cstStages.length;
+  void addCstStage(CstEquation eqn) {
+    // uint stage = cast(uint) _solveStages.length;
     auto vecs = eqn.getExpr().getRndDomains(true);
     // import std.stdio;
     // foreach (vec; vecs) writeln(vec.name());
@@ -430,23 +443,23 @@ abstract class _esdl__SolverRoot {
 	  // writeln("eqn: ", eqn.name());
 	  if (stage is null) {
 	    stage = new CstStage();
-	    cstStages ~= stage;
+	    solveStages ~= stage;
 	  }
 	  vec.stage = stage;
 	  stage._domVars ~= vec;
-	  // cstStages[stage]._domVars ~= vec;
+	  // solveStages[stage]._domVars ~= vec;
 	}
 	if (stage !is vec.stage()) { // need to merge stages
 	  // import std.stdio;
 	  // writeln("merging");
-	  mergeCstStages(stage, vec.stage(), cstStages);
+	  mergeCstStages(stage, vec.stage());
 	  stage = vec.stage();
 	}
       }
     }
     if (stage is null) {
       stage = new CstStage();
-      cstStages ~= stage;
+      solveStages ~= stage;
     }
     // import std.stdio;
     // writeln(eqn.name());
@@ -455,8 +468,7 @@ abstract class _esdl__SolverRoot {
     stage._bddEqns ~= eqn;
   }
 
-  void mergeCstStages(CstStage fromStage, CstStage toStage,
-		      ref CstStage[] cstStages) {
+  void mergeCstStages(CstStage fromStage, CstStage toStage) {
     if(fromStage is null) {
       // fromStage has not been created yet
       return;
@@ -466,8 +478,8 @@ abstract class _esdl__SolverRoot {
     }
     toStage._domVars ~= fromStage._domVars;
     toStage._bddEqns ~= fromStage._bddEqns;
-    if(cstStages[$-1] is fromStage) {
-      cstStages.length -= 1;
+    if(solveStages[$-1] is fromStage) {
+      solveStages.length = solveStages.length - 1;
     }
     else {
       fromStage._domVars.length = 0;
