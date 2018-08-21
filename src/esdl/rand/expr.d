@@ -7,15 +7,15 @@ import esdl.rand.base;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-abstract class CstVecTerm: CstVecExpr
+interface CstVecTerm: CstVecExpr
 {
 
-  CstBddTerm toBdd() {
+  final CstBddTerm toBdd() {
     auto zero = new CstVal!int(0); // CstVal!int.allocate(0);
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
-  override abstract CstVecTerm unroll(CstVecIterBase itr, uint n);
+  abstract CstVecTerm unroll(CstVecIterBase itr, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecTerm other)
   {
@@ -123,8 +123,7 @@ abstract class CstVecTerm: CstVecExpr
 	}
       }
 
-  CstVecTerm opIndex(CstVecExpr index)
-  {
+  final CstVecTerm opIndex(CstVecExpr index) {
     // assert(false, "Index operation defined only for Arrays");
     return new CstVecSliceExpr(this, index);
   }
@@ -134,8 +133,7 @@ abstract class CstVecTerm: CstVecExpr
       return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
     }
 
-  CstVecTerm opSlice(CstVecExpr lhs, CstVecExpr rhs)
-  {
+  final CstVecTerm opSlice(CstVecExpr lhs, CstVecExpr rhs) {
     return new CstVecSliceExpr(this, lhs, rhs);
   }
 
@@ -170,7 +168,7 @@ abstract class CstVecTerm: CstVecExpr
   }
 }
 
-abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
+abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -194,7 +192,7 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     _valvec.reset();
   }    
 
-  ref BddVec bddvec(Buddy buddy) {
+  override ref BddVec bddvec(Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
       return buddy.getVec(_domIndex);
       // return _domvec;
@@ -213,7 +211,7 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
   //   }
   // }
 
-  uint domIndex() {
+  override uint domIndex() {
     static if (HAS_RAND_ATTRIB) {
       return _domIndex;
     }
@@ -222,7 +220,7 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     }
   }
 
-  void domIndex(uint s) {
+  override void domIndex(uint s) {
     static if (HAS_RAND_ATTRIB) {
       _domIndex = s;
     }
@@ -231,13 +229,13 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     }
   }
 
-  void reset() {
+  override void reset() {
     static if (HAS_RAND_ATTRIB) {
       _domIndex = uint.max;
     }
   }
   
-  CstStage stage() {
+  override CstStage stage() {
     static if (HAS_RAND_ATTRIB) {
       return _stage;
     }
@@ -246,7 +244,7 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     }
   }
 
-  void stage(CstStage s) {
+  override void stage(CstStage s) {
     static if (HAS_RAND_ATTRIB) {
       _stage = s;
     }
@@ -255,7 +253,7 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     }
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     static if (HAS_RAND_ATTRIB) {
       if (_stage !is null && _stage.solved()) {
 	return 0;
@@ -272,7 +270,7 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     else return 0;
   }
 
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     static if (HAS_RAND_ATTRIB) {
       if (_stage !is null && _stage.solved()) {
 	_resolveLap = 0;
@@ -285,13 +283,13 @@ abstract class CstVecDomain(T, alias R): CstVecTerm, CstDomain
     }
   }
 
-  CstBddExpr getNopBddExpr() {
+  override CstBddExpr getNopBddExpr() {
     return new CstNopBddExpr(this);
   }
   
 }
 
-abstract class CstBddTerm: CstBddExpr
+interface CstBddTerm: CstBddExpr
 {
   abstract override CstBddTerm unroll(CstVecIterBase itr, uint n);
 
@@ -321,27 +319,27 @@ abstract class CstBddTerm: CstBddExpr
     }
   }
 
-  CstBddTerm implies(CstBddTerm other)
+  final CstBddTerm implies(CstBddTerm other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
   }
 
-  CstBddTerm implies(CstVecTerm other)
+  final CstBddTerm implies(CstVecTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
   }
 
-  CstBddTerm logicOr(CstBddTerm other)
+  final CstBddTerm logicOr(CstBddTerm other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
   }
 
-  CstBddTerm logicOr(CstVecTerm other)
+  final CstBddTerm logicOr(CstVecTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
   }
 
-  CstBddTerm logicAnd(CstBddTerm other)
+  final CstBddTerm logicAnd(CstBddTerm other)
   {
     if (this.cstExprIsNop()) {
       return other;
@@ -352,7 +350,7 @@ abstract class CstBddTerm: CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
-  CstBddTerm logicAnd(CstVecTerm other)
+  final CstBddTerm logicAnd(CstVecTerm other)
   {
     if (this.cstExprIsNop()) {
       return other.toBdd();
@@ -471,16 +469,17 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   }
 
   override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+			      ref CstDomain[] deps) {
     assert(iter is null || iter is this);
     iter = this;
   }
 
   override bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
+    assert (false,
+	    "getIntMods should not be called when an iterator is still not resolved");
   }
 }
 
@@ -516,29 +515,29 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _primBdd.reset();
   }
 
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _preReqs ~ _parent.preReqs();
   }
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _parent.itrVars();
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return _parent.getIterator();
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _parent.parentUnresolvedIdxs();
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     // just must make sure that the
     // array -- if it has a parent array -- is not an abstract element of the parent array
     return _parent.parentLenIsUnresolved();
   }
       
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _parent.getDomainLens(resolved);
   }
 
@@ -562,7 +561,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   //   if(isRand) stages = [this.stage()];
   //   return stages;
   // }
-  override bool refresh(CstStage s, Buddy buddy) {
+  bool refresh(CstStage s, Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
       auto fparent = _parent.flatten();
       if (fparent !is _parent) {
@@ -587,7 +586,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
 
-  override BddVec getBDD(CstStage s, Buddy buddy) {
+  BddVec getBDD(CstStage s, Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
       auto fparent = _parent.flatten();
       if (fparent !is _parent) {
@@ -613,7 +612,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
 
-  override bool getVal(ref long val) {
+  bool getVal(ref long val) {
     static if (HAS_RAND_ATTRIB) {
       assert(stage() !is null);
       if(! this.isRand || stage().solved()) {
@@ -630,7 +629,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
 
-  override long evaluate() {
+  long evaluate() {
     static if (HAS_RAND_ATTRIB) {
       assert(stage() !is null);
       if(! this.isRand || stage().solved()) {
@@ -651,16 +650,16 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return stage().solved();
   }
   
-  void _esdl__doRandomize(_esdl__RandGen randGen) {
+  override void _esdl__doRandomize(_esdl__RandGen randGen) {
     assert(false);
   }
   
-  void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+  override void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
     assert(s is stage);
     _parent.buildElements();
   }
   
-  bool isRand() {
+  override bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       import std.traits;
       if (isStaticArray!(RV.L)) return false;
@@ -686,7 +685,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return this.to!string();
   }
 
-  BDD getPrimBdd(Buddy buddy) {
+  override BDD getPrimBdd(Buddy buddy) {
     if(_primBdd.isZero()) {
       _primBdd = this.bddvec(buddy).lte(buddy.buildVec(_parent.maxArrLen));
     }
@@ -712,7 +711,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _itrVar;
   }
 
-  uint bitcount() {
+  override uint bitcount() {
     if (_parent.maxArrLen == -1) {
       return 32;
     }
@@ -723,7 +722,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return i;
   }
 
-  bool signed() {
+  override bool signed() {
     return false;
   }
 
@@ -731,7 +730,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.getLen();
   }
 
-  void collate(ulong v, int word = 0) {
+  override void collate(ulong v, int word = 0) {
     assert(word == 0);
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
@@ -742,7 +741,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     
   }
 
-  override CstVecLen!RV unroll(CstVecIterBase itr, uint n) {
+  CstVecLen!RV unroll(CstVecIterBase itr, uint n) {
     return _parent.unroll(itr,n).arrLen();
   }
 
@@ -763,19 +762,19 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _preReqs ~= domain;
   }
 
-  override bool isConst() {
+  bool isConst() {
     return false;
   }
   
-  override bool isOrderingExpr() {
+  bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+  void setBddContext(CstEquation eqn,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+			      ref CstDomain[] deps) {
     bool listed;
     foreach (var; vars) {
       if (var is this) {
@@ -788,7 +787,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
+  bool getIntMods(ref IntRangeModSet modSet) {
     return true;
   }
 }
@@ -797,31 +796,31 @@ abstract class CstValBase: CstVecTerm
 {
   CstBddExpr _cstExpr;
   
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return [];
   }
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return [];
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return null;
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return [];
   }
       
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return false;
   }
       
-  override bool isConst() {
+  bool isConst() {
     return true;
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return [];
   }
 
@@ -829,15 +828,15 @@ abstract class CstValBase: CstVecTerm
     return this;
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
+  bool getIntMods(ref IntRangeModSet modSet) {
+    return false;
   }
 }
 
@@ -892,7 +891,7 @@ class CstVal(T = int): CstValBase
   T _val;			// the value of the constant
   BddVec _valvec;
 
-  override string name() {
+  string name() {
     return _val.to!string();
   }
 
@@ -916,7 +915,7 @@ class CstVal(T = int): CstValBase
     _valvec.reset();
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     if (_valvec.isNull()) {
       _valvec.buildVec(buddy, _val);
       return true;
@@ -926,7 +925,7 @@ class CstVal(T = int): CstValBase
     }
   }
   
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
+  BddVec getBDD(CstStage stage, Buddy buddy) {
     return _valvec;
   }
 
@@ -934,12 +933,12 @@ class CstVal(T = int): CstValBase
     return &_val;
   }
 
-  override bool getVal(ref long val) {
+  bool getVal(ref long val) {
     val = _val;
     return true;
   }
 
-  override long evaluate() {
+  long evaluate() {
     return _val;
   }
 
@@ -951,13 +950,13 @@ class CstVal(T = int): CstValBase
     return false;
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return 0;			// const
   }
 
-  override void resolveLap(uint lap) {}
+  void resolveLap(uint lap) {}
 
-  override bool isOrderingExpr() {
+  bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 }
@@ -1006,16 +1005,16 @@ class CstVec2VecExpr: CstVecTerm
 
   IntRangeModSet _modSet;
   // CstDomain[] _preReqs;
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _lhs.preReqs() ~ _rhs.preReqs();
   }
 
   CstVecIterBase[] _itrVars;
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _itrVars;
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     auto litr = _lhs.getIterator();
     auto ritr = _rhs.getIterator();
     if (litr !is null) {
@@ -1029,29 +1028,29 @@ class CstVec2VecExpr: CstVecTerm
 
   CstDomain[] _unresolvedIdxs;
   
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _unresolvedIdxs;
   }
   
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
   }
       
-  override string name() {
+  string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
     return r || l;
   }
   
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
+  BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
 	     "CstVec2VecExpr: Need to unroll the itrVars" ~
@@ -1099,34 +1098,82 @@ class CstVec2VecExpr: CstVecTerm
     }
   }
 
-  override bool getVal(ref long val) {
-
-    long lvec;
-    long rvec;
-    if (! _lhs.getVal(lvec)) {
+  bool getIntMods(ref IntRangeModSet modSet) {
+    long lval;
+    long rval;
+    if (_lhs.getVal(lval)) {	// left side is a value
+      final switch(_op) {
+      case CstBinVecOp.AND: return false;
+      case CstBinVecOp.OR:  return false;
+      case CstBinVecOp.XOR: return false;
+      case CstBinVecOp.ADD: modSet ~= IntRangeMod(lval, IntRangeModOp.ADD);
+	return _rhs.getIntMods(modSet);
+      case CstBinVecOp.SUB: modSet ~= IntRangeMod(lval, IntRangeModOp.SUBD);
+	return _rhs.getIntMods(modSet);
+      case CstBinVecOp.MUL: modSet ~= IntRangeMod(lval, IntRangeModOp.MULT);
+	return _rhs.getIntMods(modSet);
+      case CstBinVecOp.DIV: modSet ~= IntRangeMod(lval, IntRangeModOp.DIVD);
+	return _rhs.getIntMods(modSet);
+      case CstBinVecOp.REM: return false;
+      case CstBinVecOp.LSH: return false;
+      case CstBinVecOp.RSH: return false;
+      case CstBinVecOp.BITINDEX:
+	assert(false, "BITINDEX is not implemented yet!");
+      }
+    }
+    else if (_rhs.getVal(rval)) {	// left side is a value
+      final switch(_op) {
+      case CstBinVecOp.AND: return false;
+      case CstBinVecOp.OR:  return false;
+      case CstBinVecOp.XOR: return false;
+      case CstBinVecOp.ADD: modSet ~= IntRangeMod(rval, IntRangeModOp.ADD);
+	return _lhs.getIntMods(modSet);
+      case CstBinVecOp.SUB: modSet ~= IntRangeMod(rval, IntRangeModOp.SUB);
+	return _lhs.getIntMods(modSet);
+      case CstBinVecOp.MUL: modSet ~= IntRangeMod(rval, IntRangeModOp.MULT);
+	return _lhs.getIntMods(modSet);
+      case CstBinVecOp.DIV: modSet ~= IntRangeMod(rval, IntRangeModOp.DIV);
+	return _lhs.getIntMods(modSet);
+      case CstBinVecOp.REM: return false;
+      case CstBinVecOp.LSH: return false;
+      case CstBinVecOp.RSH: return false;
+      case CstBinVecOp.BITINDEX:
+	assert(false, "BITINDEX is not implemented yet!");
+      }
+    }
+    else {
       return false;
     }
-    if (! _rhs.getVal(rvec)) {
+  }
+
+  bool getVal(ref long val) {
+
+    long lval;
+    long rval;
+    if (! _lhs.getVal(lval)) {
+      return false;
+    }
+    if (! _rhs.getVal(rval)) {
       return false;
     }
 
     final switch(_op) {
-    case CstBinVecOp.AND: val = lvec &  rvec; return true;
-    case CstBinVecOp.OR:  val = lvec |  rvec; return true;
-    case CstBinVecOp.XOR: val = lvec ^  rvec; return true;
-    case CstBinVecOp.ADD: val = lvec +  rvec; return true;
-    case CstBinVecOp.SUB: val = lvec -  rvec; return true;
-    case CstBinVecOp.MUL: val = lvec *  rvec; return true;
-    case CstBinVecOp.DIV: val = lvec /  rvec; return true;
-    case CstBinVecOp.REM: val = lvec %  rvec; return true;
-    case CstBinVecOp.LSH: val = lvec << rvec; return true;
-    case CstBinVecOp.RSH: val = lvec >> rvec; return true;
+    case CstBinVecOp.AND: val = lval &  rval; return true;
+    case CstBinVecOp.OR:  val = lval |  rval; return true;
+    case CstBinVecOp.XOR: val = lval ^  rval; return true;
+    case CstBinVecOp.ADD: val = lval +  rval; return true;
+    case CstBinVecOp.SUB: val = lval -  rval; return true;
+    case CstBinVecOp.MUL: val = lval *  rval; return true;
+    case CstBinVecOp.DIV: val = lval /  rval; return true;
+    case CstBinVecOp.REM: val = lval %  rval; return true;
+    case CstBinVecOp.LSH: val = lval << rval; return true;
+    case CstBinVecOp.RSH: val = lval >> rval; return true;
     case CstBinVecOp.BITINDEX:
       assert(false, "BITINDEX is not implemented yet!");
     }
   }
 
-  override long evaluate() {
+  long evaluate() {
     auto lvec = _lhs.evaluate();
     auto rvec = _rhs.evaluate();
 
@@ -1183,38 +1230,35 @@ class CstVec2VecExpr: CstVecTerm
     }
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     auto lhs = _lhs.resolveLap();
     auto rhs = _rhs.resolveLap();
     if (rhs > lhs) return rhs;
     else return lhs;
   }
 
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _lhs.resolveLap(lap);
     _rhs.resolveLap(lap);
   }
   
-  override bool isConst() {
+  bool isConst() {
     return false;
   }
 
-  override bool isOrderingExpr() {
+  bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
     _lhs.setBddContext(eqn, vars, vals, iter, deps);
     _rhs.setBddContext(eqn, vars, vals, iter, deps);
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
-  }
 }
 
 class CstVecSliceExpr: CstVecTerm
@@ -1224,7 +1268,7 @@ class CstVecSliceExpr: CstVecTerm
   CstVecExpr _rhs;
 
   // CstDomain[] _preReqs;
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     // CstVecPrim[] reqs;
     if(_rhs is null) {
       return _vec.preReqs() ~ _lhs.preReqs();
@@ -1246,11 +1290,11 @@ class CstVecSliceExpr: CstVecTerm
   }
   
   CstVecIterBase[] _itrVars;
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _itrVars;
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     auto litr = _lhs.getIterator();
     auto ritr = _rhs.getIterator();
     if (litr !is null) {
@@ -1263,22 +1307,22 @@ class CstVecSliceExpr: CstVecTerm
   }
 
   CstDomain[] _unresolvedIdxs;
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _unresolvedIdxs;
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return
       _lhs.hasUnresolvedIdx() ||
       _rhs.hasUnresolvedIdx() ||
       _vec.hasUnresolvedIdx();
   }
 
-  override string name() {
+  string name() {
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     if(_rhs is null) {
       return _vec.getRndDomains(resolved) ~ _lhs.getRndDomains(resolved);
     }
@@ -1287,13 +1331,13 @@ class CstVecSliceExpr: CstVecTerm
     }
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
     return r || l;
   }
   
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
+  BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
 	     "CstVecSliceExpr: Need to unroll the itrVars" ~
@@ -1312,11 +1356,11 @@ class CstVecSliceExpr: CstVecTerm
     return vec[lvec..rvec];
   }
 
-  override bool getVal(ref long val) {
+  bool getVal(ref long val) {
     return false;
   }
 
-  override long evaluate() {
+  long evaluate() {
     // auto vec  = _vec.evaluate();
     // auto lvec = _lhs.evaluate();
     // auto rvec = _rhs.evaluate();
@@ -1377,27 +1421,27 @@ class CstVecSliceExpr: CstVecTerm
 
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return _vec.resolveLap();
   }
 
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _vec.resolveLap(lap);
   }
 
-  override bool isConst() {
+  bool isConst() {
     return false;
   }
 
-  override bool isOrderingExpr() {
+  bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+  void setBddContext(CstEquation eqn,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+			      ref CstDomain[] deps) {
     _vec.setBddContext(eqn, vars, vals, iter, deps);
     _lhs.setBddContext(eqn, deps, vals, iter, deps);
     if (_rhs !is null) {
@@ -1405,8 +1449,8 @@ class CstVecSliceExpr: CstVecTerm
     }
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
+  bool getIntMods(ref IntRangeModSet modSet) {
+    return false;
   }
 }
 
@@ -1417,40 +1461,40 @@ class CstNotVecExpr: CstVecTerm
   CstVecExpr _expr;
 
   // CstDomain[] _preReqs;
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _expr.preReqs();
   }
 
   CstVecIterBase[] _itrVars;
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _itrVars;
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return _expr.getIterator();
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _expr.unresolvedIdxs();
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _expr.hasUnresolvedIdx();
   }
       
-  override string name() {
+  string name() {
     return "( ~ " ~ _expr.name ~ " )";
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _expr.getRndDomains(resolved);
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     return _expr.refresh(stage, buddy);
   }
   
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
+  BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
 	     "CstNotVecExpr: Need to unroll the itrVars" ~
@@ -1460,13 +1504,13 @@ class CstNotVecExpr: CstVecTerm
     return ~(_expr.getBDD(stage, buddy));
   }
 
-  override bool getVal(ref long val) {
+  bool getVal(ref long val) {
     auto retval = _expr.getVal(val);
     val = ~val;
     return retval;
   }
 
-  override long evaluate() {
+  long evaluate() {
     return ~(_expr.evaluate());
   }
 
@@ -1489,32 +1533,32 @@ class CstNotVecExpr: CstVecTerm
     _itrVars = _expr.itrVars;
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return _expr.resolveLap();
   }
 
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _expr.resolveLap(lap);
   }
   
-  override bool isConst() {
+  bool isConst() {
     return false;
   }
 
-  override bool isOrderingExpr() {
+  bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+  void setBddContext(CstEquation eqn,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+			      ref CstDomain[] deps) {
     _expr.setBddContext(eqn, vars, vals, iter, deps);
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
+  bool getIntMods(ref IntRangeModSet modSet) {
+    return false;
   }
 }
 
@@ -1526,40 +1570,40 @@ class CstNegVecExpr: CstVecTerm
 
   IntRangeModSet _modSet;
   // CstDomain[] _preReqs;
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _expr.preReqs();
   }
 
   CstVecIterBase[] _itrVars;
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _itrVars;
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return _expr.getIterator();
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _expr.unresolvedIdxs();
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _expr.hasUnresolvedIdx();
   }
       
-  override string name() {
+  string name() {
     return "( - " ~ _expr.name ~ " )";
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _expr.getRndDomains(resolved);
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     return _expr.refresh(stage, buddy);
   }
   
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
+  BddVec getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
 	     "CstNegVecExpr: Need to unroll the itrVars" ~
@@ -1569,13 +1613,13 @@ class CstNegVecExpr: CstVecTerm
     return -(_expr.getBDD(stage, buddy));
   }
 
-  override bool getVal(ref long val) {
+  bool getVal(ref long val) {
     auto retval = _expr.getVal(val);
     val = -val;
     return retval;
   }
 
-  override long evaluate() {
+  long evaluate() {
     return -(_expr.evaluate());
   }
 
@@ -1598,32 +1642,33 @@ class CstNegVecExpr: CstVecTerm
     _itrVars = _expr.itrVars;
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return _expr.resolveLap();
   }
 
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _expr.resolveLap(lap);
   }
   
-  override bool isConst() {
+  bool isConst() {
     return false;
   }
 
-  override bool isOrderingExpr() {
+  bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
     _expr.setBddContext(eqn, vars, vals, iter, deps);
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
+  bool getIntMods(ref IntRangeModSet modSet) {
+    modSet ~= IntRangeMod(0, IntRangeModOp.SUBD);
+    return _expr.getIntMods(modSet);    
   }
 }
 
@@ -1640,11 +1685,11 @@ class CstBdd2BddExpr: CstBddTerm
 
   CstDomain[] _unresolvedIdxs;
   
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
        return _itrVars;
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     auto litr = _lhs.getIterator();
     auto ritr = _rhs.getIterator();
     if (litr !is null) {
@@ -1680,25 +1725,25 @@ class CstBdd2BddExpr: CstBddTerm
     }
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
     return r || l;
   }
   
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _unresolvedIdxs;
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
   }
 
-  override string name() {
+  string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
 
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _lhs.preReqs() ~ _rhs.preReqs();
     // CstVecPrim[] reqs;
     // foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
@@ -1709,12 +1754,12 @@ class CstBdd2BddExpr: CstBddTerm
     // return reqs;
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
 
-  override BDD getBDD(CstStage stage, Buddy buddy) {
+  BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
 	     "CstBdd2BddExpr: Need to unroll the itrVars" ~
@@ -1746,13 +1791,13 @@ class CstBdd2BddExpr: CstBddTerm
     }
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     uint lhs = _lhs.resolveLap();
     uint rhs = _rhs.resolveLap();
     if (lhs > rhs) return lhs;
     else return rhs;
   }
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _lhs.resolveLap(lap);
     _rhs.resolveLap(lap);
   }
@@ -1767,17 +1812,21 @@ class CstBdd2BddExpr: CstBddTerm
     else return false;
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+  void setBddContext(CstEquation eqn,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+			      ref CstDomain[] deps) {
     _lhs.setBddContext(eqn, vars, vals, iter, deps);
     _rhs.setBddContext(eqn, vars, vals, iter, deps);
   }
 
-  override bool getIntRange(ref IntRangeSet!long rangeSet) {
+  bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
+  }
+
+  bool cstExprIsNop() {
+    return false;
   }
 }
 
@@ -1786,27 +1835,27 @@ class CstIteBddExpr: CstBddTerm
 {
   CstVecIterBase[] _itrVars;
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     assert(false, "TBD");
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     assert(false, "TBD");
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     assert(false, "TBD");
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     assert(false, "TBD");
   }
 
-  override string name() {
+  string name() {
     return "CstIteBddExpr";
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     assert(false);
   }
 
@@ -1814,28 +1863,59 @@ class CstIteBddExpr: CstBddTerm
     return false;
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
     assert(false, "TBD");
   }
 
-  override bool getIntRange(ref IntRangeSet!long rangeSet) {
+  bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
   }
+
+  bool cstExprIsNop() {
+    return false;
+  }
+
+  CstVecPrim[] preReqs() {
+    assert(false, "TBD");
+  }    
+
+  uint resolveLap() {
+    assert(false, "TBD");
+  }    
+
+  void resolveLap(uint lap) {
+    assert(false, "TBD");
+  }    
+
+  CstBddTerm unroll(CstVecIterBase itr, uint n) {
+    assert(false, "TBD");
+  }
+
+  CstDomain[] getRndDomains(bool resolved) {
+    assert(false, "TBD");
+  }
+
+  // abstract CstStage[] getStages();
+
+  abstract BDD getBDD(CstStage stage, Buddy buddy) {
+    assert(false, "TBD");
+  }
+
 }
 
 class CstNopBddExpr: CstBddTerm
 {
   CstVecExpr _vec;
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _vec.itrVars();
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return _vec.getIterator();
   }
   
@@ -1843,27 +1923,27 @@ class CstNopBddExpr: CstBddTerm
     _vec = vec;
   }
 
-  override bool cstExprIsNop() {
+  bool cstExprIsNop() {
     return true;
   }
 
-  override string name() {
+  string name() {
     return "( NOP: " ~ _vec.name ~ " )";
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     return _vec.refresh(stage, buddy);
   }
   
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _vec.preReqs();
   }
     
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _vec.getRndDomains(resolved);
   }
 
-  override BDD getBDD(CstStage stage, Buddy buddy) {
+  BDD getBDD(CstStage stage, Buddy buddy) {
     return buddy.one();
   }
 
@@ -1881,19 +1961,19 @@ class CstNopBddExpr: CstBddTerm
     }
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _vec.unresolvedIdxs();
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _vec.hasUnresolvedIdx();
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return _vec.resolveLap();
   }
   
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _vec.resolveLap(lap);
   }
 
@@ -1901,17 +1981,18 @@ class CstNopBddExpr: CstBddTerm
     return true;
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
     // nothing for CstNopBddExpr
   }
 
-  override bool getIntRange(ref IntRangeSet!long rangeSet) {
+  bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
   }
+
 }
 
 class CstVec2BddExpr: CstBddTerm
@@ -1925,11 +2006,11 @@ class CstVec2BddExpr: CstBddTerm
   CstVecIterBase[] _itrVars;
   CstDomain[] _unresolvedIdxs;
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
        return _itrVars;
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     auto litr = _lhs.getIterator();
     auto ritr = _rhs.getIterator();
     if (litr !is null) {
@@ -1941,7 +2022,7 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
        return _unresolvedIdxs;
   }
 
@@ -1969,17 +2050,17 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  override string name() {
+  string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     auto l = _lhs.refresh(stage, buddy);
     auto r = _rhs.refresh(stage, buddy);
     return r || l;
   }
   
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _lhs.preReqs() ~ _rhs.preReqs();
     // CstVecPrim[] reqs;
     // foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
@@ -1990,11 +2071,11 @@ class CstVec2BddExpr: CstBddTerm
     // return reqs;
   }
     
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
-  override BDD getBDD(CstStage stage, Buddy buddy) {
+  BDD getBDD(CstStage stage, Buddy buddy) {
     if (this.itrVars.length !is 0) {
       // foreach (itr; itrVars) {
       // 	import std.stdio;
@@ -2037,18 +2118,18 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     uint lhs = _lhs.resolveLap();
     uint rhs = _rhs.resolveLap();
     if (lhs > rhs) return lhs;
     else return rhs;
   }
   
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _lhs.resolveLap(lap);
     _rhs.resolveLap(lap);
   }
@@ -2063,17 +2144,21 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
     _lhs.setBddContext(eqn, vars, vals, iter, deps);
     _rhs.setBddContext(eqn, vars, vals, iter, deps);
   }
 
-  override bool getIntRange(ref IntRangeSet!long rangeSet) {
+  bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
+  }
+
+  bool cstExprIsNop() {
+    return false;
   }
 }
 
@@ -2081,11 +2166,11 @@ class CstBddConst: CstBddTerm
 {
   immutable bool _expr;
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
        return [];
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return null;
   }
   
@@ -2093,25 +2178,25 @@ class CstBddConst: CstBddTerm
     _expr = expr;
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     return false;
   }
   
-  override BDD getBDD(CstStage stage, Buddy buddy) {
+  BDD getBDD(CstStage stage, Buddy buddy) {
     if(_expr) return buddy.one();
     else return buddy.zero();
   }
 
-  override string name() {
+  string name() {
     if(_expr) return "TRUE";
     else return "FALSE";
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return [];
   }
 
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return [];
   }
 
@@ -2119,29 +2204,33 @@ class CstBddConst: CstBddTerm
     return this;
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return [];
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return false;
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return 0;
   }
-  override void resolveLap(uint lap) {}
+  void resolveLap(uint lap) {}
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+  void setBddContext(CstEquation eqn,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+			      ref CstDomain[] deps) {
     // nothing for CstBddConst
   }
 
-  override bool getIntRange(ref IntRangeSet!long rangeSet) {
+  bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
+  }
+
+  bool cstExprIsNop() {
+    return false;
   }
 }
 
@@ -2153,31 +2242,31 @@ class CstNotBddExpr: CstBddTerm
     _expr = expr;
   }
 
-  override CstVecIterBase[] itrVars() {
+  CstVecIterBase[] itrVars() {
     return _expr.itrVars();
   }
 
-  override CstVecIterBase getIterator() {
+  CstVecIterBase getIterator() {
     return _expr.getIterator();
   }
 
-  override string name() {
+  string name() {
     return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
   }
 
-  override bool refresh(CstStage stage, Buddy buddy) {
+  bool refresh(CstStage stage, Buddy buddy) {
     return _expr.refresh(stage, buddy);
   }
   
-  override CstVecPrim[] preReqs() {
+  CstVecPrim[] preReqs() {
     return _expr.preReqs();
   }
 
-  override CstDomain[] getRndDomains(bool resolved) {
+  CstDomain[] getRndDomains(bool resolved) {
     return _expr.getRndDomains(resolved);
   }
 
-  override BDD getBDD(CstStage stage, Buddy buddy) {
+  BDD getBDD(CstStage stage, Buddy buddy) {
     if(this.itrVars.length !is 0) {
       assert(false,
 	     "CstBdd2BddExpr: Need to unroll the itrVars" ~
@@ -2201,31 +2290,35 @@ class CstNotBddExpr: CstBddTerm
     }
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIdxs() {
     return _expr.unresolvedIdxs();
   }
 
-  override bool hasUnresolvedIdx() {
+  bool hasUnresolvedIdx() {
     return _expr.hasUnresolvedIdx();
   }
 
-  override uint resolveLap() {
+  uint resolveLap() {
     return _expr.resolveLap();
   }
-  override void resolveLap(uint lap) {
+  void resolveLap(uint lap) {
     _expr.resolveLap(lap);
   }
 
-  override void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
-			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps) {
+  void setBddContext(CstEquation eqn,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstVecIterBase iter,
+		     ref CstDomain[] deps) {
     _expr.setBddContext(eqn, vars, vals, iter, deps);
   }
 
-  override bool getIntRange(ref IntRangeSet!long rangeSet) {
+  bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
+  }
+
+  bool cstExprIsNop() {
+    return false;
   }
 }
 

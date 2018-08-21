@@ -72,7 +72,7 @@ class CstStage {
 // }
 
 
-interface CstDomain
+abstract class CstDomain
 {
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
@@ -133,7 +133,7 @@ interface CstVecPrim
 }
 
 
-abstract class CstVecExpr
+interface CstVecExpr
 {
 
   // alias evaluate this;
@@ -154,9 +154,9 @@ abstract class CstVecExpr
   // List of Array Variables
   abstract CstVecPrim[] preReqs();
 
-  bool isConst() {
-    return false;
-  }
+  abstract bool isConst();//  {
+  //   return false;
+  // }
 
   // get all the primary bdd vectors that constitute a given bdd
   // expression
@@ -179,15 +179,15 @@ abstract class CstVecExpr
   
   abstract CstVecExpr unroll(CstVecIterBase itr, uint n);
 
-  bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
+  abstract bool isOrderingExpr();//  {
+  //   return false;		// only CstVecOrderingExpr return true
+  // }
 
   abstract void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps);
+			      ref CstDomain[] deps);
 
   abstract bool getIntMods(ref IntRangeModSet modSet);
 }
@@ -203,7 +203,7 @@ interface CstVecIterBase
   abstract string name();
 }
 
-abstract class CstBddExpr
+interface CstBddExpr
 {
   string name();
 
@@ -221,10 +221,10 @@ abstract class CstBddExpr
   abstract void resolveLap(uint lap);
 
   abstract void setBddContext(CstEquation eqn,
-			      ref CstVecPrim[] vars,
-			      ref CstVecPrim[] vals,
+			      ref CstDomain[] vars,
+			      ref CstDomain[] vals,
 			      ref CstVecIterBase iter,
-			      ref CstVecPrim[] deps);
+			      ref CstDomain[] deps);
 
   abstract bool getIntRange(ref IntRangeSet!long rangeSet);
 
@@ -236,9 +236,7 @@ abstract class CstBddExpr
 
   abstract BDD getBDD(CstStage stage, Buddy buddy);
 
-  bool cstExprIsNop() {
-    return false;
-  }
+  abstract bool cstExprIsNop();
 }
 
 class CstEquation
@@ -356,9 +354,9 @@ class CstEquation
     return _uwEqns[0..currLen];
   }
 
-  CstVecPrim[] _vars;
-  CstVecPrim[] _vals;
-  CstVecPrim[] _deps;
+  CstDomain[] _vars;
+  CstDomain[] _vals;
+  CstDomain[] _deps;
   CstVecIterBase _iter;
 
   final void setBddContext() {

@@ -262,13 +262,13 @@ template IntRangeType(V)
   // }
 }
 
-enum IntRangeModOp: byte {ADD, SUB, SUBD, MULT, DIV, DIVD, NEG}
+enum IntRangeModOp: byte {ADD, SUB, SUBD, MULT, DIV, DIVD}
 
 struct IntRangeMod
 {
   long _arg;
   IntRangeModOp _op;
-  void apply(IntRange!long) {
+  void apply(ref IntRange!long) {
   }
 }
 
