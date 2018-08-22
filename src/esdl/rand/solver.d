@@ -1,9 +1,8 @@
 module esdl.rand.solver;
 import esdl.rand.obdd;
-import std.container.array;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstBddExpr,
-  CstDomain, CstEquation, CstBlock;
+  CstDomain, CstEquation, CstBlock, _esdl__Solver;
 import esdl.rand.misc;
 import esdl.data.bin;
 
@@ -78,94 +77,24 @@ template _esdl__baseHasRandomization(T) {
   }
 }
 
-abstract class _esdl__SolverRoot {
+
+abstract class _esdl__SolverRoot: _esdl__Solver
+{
   // Keep a list of constraints in the class
   _esdl__ConstraintBase[] _esdl__cstsList;
   _esdl__ConstraintBase _esdl__cstWith;
   bool _esdl__cstWithChanged;
 
-  // ParseTree parseList[];
-  CstVecPrim[] _esdl__randsList;
-  _esdl__RandGen _esdl__rGen;
-
-  _esdl__RandGen _esdl__getRandGen() {
-    return _esdl__rGen;
-  }
-
-  Buddy _esdl__buddy;
-
-  Array!uint _domains;		// indexes of domains
-
-  CstDomain[] _cstDomains;
-
-  uint _domIndex = 0;
-  
-  // compositional parent -- not inheritance based
-  _esdl__SolverRoot _parent = null;
-
-  _esdl__SolverRoot getSolverRoot() {
-    if (_parent is null || _parent is this) {
-      return this;
-    }
-    else {
-      return _parent.getSolverRoot();
-    }
-  }
-	
-  bool _esdl__isSeeded = false;
-  uint _esdl__seed;
-
   CstBlock _esdl__cstEqns;
 
   CstStage[] savedStages;
 
-  uint getRandomSeed() {
-    return _esdl__seed;
-  }
-
-  void seedRandom(uint seed) {
-    _esdl__seed = seed;
-    _esdl__rGen.seed(seed);    
-  }
-  
   this(uint seed, bool isSeeded, string name,
        _esdl__SolverRoot parent) {
-    import std.random: Random, uniform;
-    debug(NOCONSTRAINTS) {
-      assert(false, "Constraint engine started");
-    }
-    _esdl__isSeeded = isSeeded;
-    if (isSeeded is true) {
-      _esdl__seed = seed;
-    }
-    else {
-      import esdl.base.core: Procedure;
-      auto proc = Procedure.self;
-      if (proc !is null) {
-	Random procRgen = proc.getRandGen();
-	_esdl__seed = uniform!(uint)(procRgen);
-      }
-      else {
-	// no active simulation -- use global rand generator
-	_esdl__seed = uniform!(uint)();
-      }
-    }
-    _esdl__rGen = new _esdl__RandGen(_esdl__seed);
-
-    if(parent is null) {
-      _esdl__buddy = new Buddy(400, 400);
+    super(seed, isSeeded, name, parent);
+    if (parent is null) {
       _esdl__cstEqns = new CstBlock();
     }
-    else {
-      _parent = parent;
-    }
-  }
-
-  ~this() {
-    _esdl__cstsList.length   = 0;
-    _esdl__cstWith           = null;
-    _esdl__cstWithChanged    = true;
-    _esdl__randsList.length  = 0;
   }
 
   // overridden by Randomization mixin -- see meta.d
@@ -184,7 +113,7 @@ abstract class _esdl__SolverRoot {
 
   //   CstStage[] unsolvedStages;
 
-  //   int stageIdx=0;
+  //   int stageIndx=0;
   //   CstEquation[] unrolledEqns = _esdl__cstEqns._eqns;	// unstaged Expressions -- all
   //   CstEquation[] toResolveEqns;   			// need resolution wrt LAP logic
   //   CstEquation[] unresolvedEqns;			// need resolution wrt LAP logic
@@ -220,7 +149,7 @@ abstract class _esdl__SolverRoot {
 
   //     // foreach(expr; uwExprs) {
   //     // 	// if(expr.itrVars().length is 0) {
-  //     // 	if(expr.hasUnresolvedIdx()) {
+  //     // 	if(expr.hasUnresolvedIndx()) {
   //     // 	  import std.stdio;
   //     // 	  writeln("Adding expression ", expr.name(), " to unresolved");
   //     // 	  expr.resolveLap(lap);
@@ -247,7 +176,7 @@ abstract class _esdl__SolverRoot {
 
   //     foreach(stage; cstStages) {
   // 	if(stage !is null) {
-  // 	  solveStage(stage, stageIdx);
+  // 	  solveStage(stage, stageIndx);
   // 	}
   // 	else {
   // 	  // assert(stage._domVars.length !is 0);
@@ -261,7 +190,9 @@ abstract class _esdl__SolverRoot {
   Bin!CstStage solveStages;
   
   void solve() {
-    int stageIdx=0;
+    assert(_root is this);
+
+    int stageIndx=0;
 
     uint lap = 0;
 
@@ -283,20 +214,20 @@ abstract class _esdl__SolverRoot {
       
       foreach(n, stage; solveStages) {
 	if(stage !is null) {
-	  solveStage(stage, stageIdx);
+	  solveStage(stage, stageIndx);
 	}
       }
       solveStages.length = 0;
     }
   }
 
-  void solveStage(CstStage stage, ref int stageIdx) {
+  void solveStage(CstStage stage, ref int stageIndx) {
     // import std.stdio;
     
     import std.conv;
     CstEquation[] allEqns = stage._bddEqns;
     CstEquation[] eqns;
-    // writeln("Here in solveStage: ", stageIdx);
+    // writeln("Here in solveStage: ", stageIndx);
 
     foreach (eqn; allEqns) {
       if (! eqn.getExpr().cstExprIsNop()) {
@@ -311,8 +242,8 @@ abstract class _esdl__SolverRoot {
 	// writeln("Randomizing: ", vec.name());
 	vec._esdl__doRandomize(this._esdl__rGen, stage);
       }
-      stage.id(stageIdx);
-      stageIdx += 1;
+      stage.id(stageIndx);
+      stageIndx += 1;
       return;
     }
     // initialize the bdd vectors
@@ -334,23 +265,23 @@ abstract class _esdl__SolverRoot {
     }
     // import std.stdio;
     // writeln("Saved Stages: ", savedStages.length);
-    // writeln("Saved Stages Index: ", stageIdx);
-    // if (savedStages.length > stageIdx) {
-    //   foreach (eqn; savedStages[stageIdx]._bddEqns) {
+    // writeln("Saved Stages Index: ", stageIndx);
+    // if (savedStages.length > stageIndx) {
+    //   foreach (eqn; savedStages[stageIndx]._bddEqns) {
     // 	writeln("saved: ", eqn.name());
     //   }
-    //   writeln("Comparison: ", savedStages[stageIdx]._bddEqns[0] == stage._bddEqns[0]);
+    //   writeln("Comparison: ", savedStages[stageIndx]._bddEqns[0] == stage._bddEqns[0]);
     // }
     // foreach (eqn; stage._bddEqns) {
     //   writeln("saved: ", eqn.name());
     // }
     if ((! refreshed) &&
-	savedStages.length > stageIdx &&
-	savedStages[stageIdx]._bddEqns == stage._bddEqns) {
+	savedStages.length > stageIndx &&
+	savedStages[stageIndx]._bddEqns == stage._bddEqns) {
       // import std.stdio;
       // writeln("Reusing previous BDD solution");
-      stage._solveBDD = savedStages[stageIdx]._solveBDD;
-      stage._bddDist = savedStages[stageIdx]._bddDist;
+      stage._solveBDD = savedStages[stageIndx]._solveBDD;
+      stage._bddDist = savedStages[stageIndx]._bddDist;
       solveBDD = stage._solveBDD;
     }
     else {
@@ -403,17 +334,17 @@ abstract class _esdl__SolverRoot {
 	}
       }
     }
-    stage.id(stageIdx);
+    stage.id(stageIndx);
 
     // save for future reference
-    while (savedStages.length <= stageIdx) {
+    while (savedStages.length <= stageIndx) {
       savedStages ~= new CstStage();
     }
-    assert(savedStages[stageIdx] !is stage);
+    assert(savedStages[stageIndx] !is stage);
 
-    savedStages[stageIdx].copyFrom(stage);
+    savedStages[stageIndx].copyFrom(stage);
 
-    stageIdx += 1;
+    stageIndx += 1;
   }
 
   // list of constraint eqns to solve at a given stage
@@ -488,7 +419,8 @@ abstract class _esdl__SolverRoot {
   }
 
   void initEqns() {
-    CstDomain[] unresolvedIdxs;
+    assert(_root is this);
+    CstDomain[] unresolvedIndxs;
 
     _esdl__cstEqns._esdl__reset(); // start empty
 
@@ -502,19 +434,20 @@ abstract class _esdl__SolverRoot {
     }
 
     foreach (eqn; _esdl__cstEqns._eqns) {
-      unresolvedIdxs ~= eqn.getExpr().unresolvedIdxs();
+      unresolvedIndxs ~= eqn.getExpr().unresolvedIndxs();
     }
 
-    foreach(idx; unresolvedIdxs) {
-      _esdl__cstEqns ~= new CstEquation(idx.getNopBddExpr());
+    foreach(indx; unresolvedIndxs) {
+      _esdl__cstEqns ~= new CstEquation(this, indx.getNopBddExpr());
       // import std.stdio;
-      // writeln(idx.name());
-      // writeln(idx.getNopBddExpr().name());
+      // writeln(indx.name());
+      // writeln(indx.getNopBddExpr().name());
     }
     
   }
   
   void initDomains() { // (T)(T t) {
+    assert(_root is this);
     // int[] domList;
     
 
@@ -530,15 +463,6 @@ abstract class _esdl__SolverRoot {
     // foreach(stmt; _esdl__cstEqns._exprs) {
     //   addDomains(stmt.getRndDomains(false));
     // }
-  }
-
-  void addDomain(CstDomain domain) {
-    // import std.stdio;
-    // writeln("Adding domain: ", domain.name());
-    _cstDomains ~= domain;
-    useBuddy(_esdl__buddy);
-    domain.domIndex = this._domIndex++;
-    _domains ~= _esdl__buddy.extDomVec(domain.bitcount);
   }
 
   // void addDomains(CstDomain[] domains) {

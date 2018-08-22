@@ -6,7 +6,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 
 import esdl.rand.obdd;
 import esdl.rand.misc;
-import esdl.rand.base: CstVecPrim, CstVecExpr, CstVecIterBase,
+import esdl.rand.base: CstVecPrim, CstVecExpr, CstIteratorBase,
   CstStage, CstDomain; // CstValAllocator,
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal;
 
@@ -91,11 +91,11 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
 
-      override CstVecIterBase[] iterVars() {
+      override CstIteratorBase[] iterVars() {
 	return [];
       }
 
-      override bool hasUnresolvedIdx() {
+      override bool hasUnresolvedIndx() {
 	return false;
       }
       
@@ -113,7 +113,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RJ unroll(CstVecIterBase iter, uint n) {
+      override RJ unroll(CstIteratorBase iter, uint n) {
 	// iterVars is always empty
 	return this;
       }
@@ -171,7 +171,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_index = index;
       }
 
-      override CstVecIterBase[] iterVars() {
+      override CstIteratorBase[] iterVars() {
 	if(_indexExpr) {
 	  return _parent.iterVars() ~ _indexExpr.iterVars();
 	}
@@ -180,8 +180,8 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override bool hasUnresolvedIdx() {
-	return _parent.hasUnresolvedIdx(); // no _relatedIdxs for this instance
+      override bool hasUnresolvedIndx() {
+	return _parent.hasUnresolvedIndx(); // no _relatedIndxs for this instance
       }
       
       CstDomain[] getDomainLens(bool resolved) {
@@ -205,12 +205,12 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	    // FIXME -- if the expression has been solved
 	    // return _parent.getRndDomains(_indexExpr.evaluate()) ;
 	    domains = _indexExpr.getRndDomains(resolved);
-	    foreach(pp; _parent.getRndDomainsAtIdx(-1)) {
+	    foreach(pp; _parent.getRndDomainsAtIndx(-1)) {
 	      domains ~= pp;
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
+	    foreach(pp; _parent.getRndDomainsAtIndx(_index)) {
 	      domains ~= pp;
 	    }
 	  }
@@ -219,11 +219,11 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	else {
 	  if(_indexExpr) {
 	    // FIXME -- if the expression has been solved
-	    // return _parent.getRndDomainsAtIdx(_indexExpr.evaluate()) ;
+	    // return _parent.getRndDomainsAtIndx(_indexExpr.evaluate()) ;
 	    domains = _indexExpr.getRndDomains(resolved) ~ _parent.getRndDomains(resolved);
 	  }
 	  else {
-	    // foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
+	    // foreach(pp; _parent.getRndDomainsAtIndx(_index)) {
 	    //   domains ~= pp;
 	    // }
 	    domains = _parent.getRndDomains(resolved);
@@ -232,7 +232,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RJ unroll(CstVecIterBase iter, uint n) {
+      override RJ unroll(CstIteratorBase iter, uint n) {
 	bool found = false;
 	foreach(var; iterVars()) {
 	  if(iter is var) {
@@ -316,8 +316,8 @@ abstract class CstObjArrBase(V, alias R, int N=0)
     return true;
   }
 
-  // override CstObj2VecExpr opIndex(CstVecExpr idx) {
-  //   return new CstObj2VecExpr(this, idx, CstBinVecOp.IDXINDEX);
+  // override CstObj2VecExpr opIndex(CstVecExpr indx) {
+  //   return new CstObj2VecExpr(this, indx, CstBinVecOp.INDXINDEX);
   // }
 
   bool isRand() {
@@ -352,7 +352,7 @@ class CstObjArr(V, alias R, int N=0)
 	      _name = name;
 	      _var = &var;
 	      _arrLen = new CstVecLen!RJ(name ~ ".len", this);
-	      _relatedIdxs ~= _arrLen;
+	      _relatedIndxs ~= _arrLen;
 	    }
 	  }
 
@@ -362,7 +362,7 @@ class CstObjArr(V, alias R, int N=0)
 	      _name = name;
 	      _var = &var;
 	      _arrLen = new CstVecLen!RJ(name ~ ".len", this);
-	      _relatedIdxs ~= _arrLen;
+	      _relatedIndxs ~= _arrLen;
 	    }
 	  }
 	}
@@ -371,18 +371,18 @@ class CstObjArr(V, alias R, int N=0)
 	    _name = name;
 	    _var = &var;
 	    _arrLen = new CstVecLen!RJ(name ~ ".len", this);
-	    _relatedIdxs ~= _arrLen;
+	    _relatedIndxs ~= _arrLen;
 	  }
 	}
 
-	CstVecIterBase[] iterVars() {
+	CstIteratorBase[] iterVars() {
 	  return [];		// N = 0 -- no _parent
 	}
 
 	static if (HAS_RAND_ATTRIB) {
-	  EV[] getRndDomainsAtIdx(int idx) {
-	    if(idx < 0) return _elems;
-	    else return [_elems[idx]];
+	  EV[] getRndDomainsAtIndx(int indx) {
+	    if(indx < 0) return _elems;
+	    else return [_elems[indx]];
 	  }
 	}
 
@@ -410,7 +410,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
     
-	RJ unroll(CstVecIterBase iter, uint n) {
+	RJ unroll(CstIteratorBase iter, uint n) {
 	  return this;
 	}
 
@@ -418,8 +418,8 @@ class CstObjArr(V, alias R, int N=0)
 	  return false;		// no parent
 	}
 
-	bool hasUnresolvedIdx() {
-	  foreach (domain; _relatedIdxs) {
+	bool hasUnresolvedIndx() {
+	  foreach (domain; _relatedIndxs) {
 	    if (! domain.solved()) {
 	      return true;
 	    }
@@ -427,27 +427,27 @@ class CstObjArr(V, alias R, int N=0)
 	  return false;		// N=0 -- no _parent
 	}
       
-	static private auto getRef(A, N...)(ref A arr, N idx)
+	static private auto getRef(A, N...)(ref A arr, N indx)
 	  if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	    static if(N.length == 1) return &(arr[idx[0]]);
+	    static if(N.length == 1) return &(arr[indx[0]]);
 	    else {
-	      return getRef(arr[idx[0]], idx[1..$]);
+	      return getRef(arr[indx[0]], indx[1..$]);
 	    }
 	  }
 
-	auto getRef(J...)(J idx) if(isIntegral!(J[0])) {
-	  return getRef(*_var, cast(size_t) idx);
+	auto getRef(J...)(J indx) if(isIntegral!(J[0])) {
+	  return getRef(*_var, cast(size_t) indx);
 	}
 
 	static if (HAS_RAND_ATTRIB) {
 
-	  static private void setLen(A, N...)(ref A arr, size_t v, N idx)
+	  static private void setLen(A, N...)(ref A arr, size_t v, N indx)
 	    if(isArray!A) {
 	      static if(N.length == 0) {
 		static if(isDynamicArray!A) {
 		  arr.length = v;
 		  // import std.stdio;
-		  // writeln(arr, " idx: ", N.length);
+		  // writeln(arr, " indx: ", N.length);
 		}
 		else {
 		  assert(false, "Can not set length of a fixed length array");
@@ -455,32 +455,32 @@ class CstObjArr(V, alias R, int N=0)
 	      }
 	      else {
 		// import std.stdio;
-		// writeln(arr, " idx: ", N.length);
-		setLen(arr[idx[0]], v, idx[1..$]);
+		// writeln(arr, " indx: ", N.length);
+		setLen(arr[indx[0]], v, indx[1..$]);
 	      }
 	    }
 	}
 	else {
-	  void setLen(N...)(size_t v, N idx) {
-	    // setLen(*_var, v, idx);
+	  void setLen(N...)(size_t v, N indx) {
+	    // setLen(*_var, v, indx);
 	    assert(false, "Can not set value for VarVecArr");
 	  }
 	}
 
-	static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
+	static private size_t getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
 	  static if(N.length == 0) return arr.length;
 	  else {
-	    return getLen(arr[idx[0]], idx[1..$]);
+	    return getLen(arr[indx[0]], indx[1..$]);
 	  }
 	}
 
-	size_t getLen(N...)(N idx) {
-	  return getLen(*_var, idx);
+	size_t getLen(N...)(N indx) {
+	  return getLen(*_var, indx);
 	}
 
-	void setLen(N...)(size_t v, N idx) {
+	void setLen(N...)(size_t v, N indx) {
 	  static if (HAS_RAND_ATTRIB) {
-	    setLen(*_var, v, idx);
+	    setLen(*_var, v, indx);
 	  }
 	  else {
 	    assert(false);
@@ -488,50 +488,50 @@ class CstObjArr(V, alias R, int N=0)
 	}
 
 	bool isUnrollable() {
-	  foreach (var; _relatedIdxs) {
+	  foreach (var; _relatedIndxs) {
 	    if (! var.solved()) return false;
 	  }
 	  return true;
 	}
 
-	CstDomain[] _relatedIdxs;
-	void addRelatedIdx(CstDomain domain) {
-	  foreach (var; _relatedIdxs) {
+	CstDomain[] _relatedIndxs;
+	void addRelatedIndx(CstDomain domain) {
+	  foreach (var; _relatedIndxs) {
 	    if (domain is var) {
 	      return;
 	    }
 	  }
-	  _relatedIdxs ~= domain;
+	  _relatedIndxs ~= domain;
 	}
       
-	EV opIndex(CstVecExpr idx) {
-	  foreach (domain; idx.getRndDomains(resolved)) {
-	    addRelatedIdx(domain);
+	EV opIndex(CstVecExpr indx) {
+	  foreach (domain; indx.getRndDomains(resolved)) {
+	    addRelatedIndx(domain);
 	  }
-	  if(idx.isConst()) {
+	  if(indx.isConst()) {
 	    assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		   " have not been built");
-	    return _elems[cast(size_t) idx.evaluate()];
+	    return _elems[cast(size_t) indx.evaluate()];
 	  }
 	  else {
 	    // static if(isStaticArray!E) {
 	    //   // static array
-	    return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	    return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
 	    // }
 	    // else static if(isDynamicArray!E) {
 	    //   // dynamic array
-	    //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	    //   return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
 	    // }
 	    // else {
-	    //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	    //   return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
 	    // }
 	  }
 	}
 
-	EV opIndex(size_t idx) {
+	EV opIndex(size_t indx) {
 	  build();
-	  assert(_elems[idx]._indexExpr is null);
-	  return _elems[idx];
+	  assert(_elems[indx]._indexExpr is null);
+	  return _elems[indx];
 	}
 
 	void _esdl__doRandomize(_esdl__RandGen randGen) {
@@ -639,7 +639,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_parent = parent;
 	_indexExpr = indexExpr;
 	_arrLen = new CstVecLen!RJ(name ~ ".len", this);
-	_relatedIdxs ~= _arrLen;
+	_relatedIndxs ~= _arrLen;
       }
 
       this(string name, P parent, uint index) {
@@ -648,7 +648,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_parent = parent;
 	_index = index;
 	_arrLen = new CstVecLen!RJ(name ~ ".len", this);
-	_relatedIdxs ~= _arrLen;
+	_relatedIndxs ~= _arrLen;
       }
 
       CstDomain[] preReqs() {
@@ -664,7 +664,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstVecIterBase[] iterVars() {
+      CstIteratorBase[] iterVars() {
 	if(_indexExpr) {
 	  return _parent.iterVars() ~ _indexExpr.iterVars();
 	}
@@ -677,28 +677,28 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return (! _parent._arrLen.solved());
       }
 
-      bool hasUnresolvedIdx() {
-	foreach (domain; _relatedIdxs) {
+      bool hasUnresolvedIndx() {
+	foreach (domain; _relatedIndxs) {
 	  if (! domain.solved()) {
 	    return true;
 	  }
 	}
-	return _parent.hasUnresolvedIdx();
+	return _parent.hasUnresolvedIndx();
       }
 
-      EV[] getRndDomainsAtIdx(int idx) {
+      EV[] getRndDomainsAtIndx(int indx) {
 	EV[] domains;
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
-	    foreach(pp; _parent.getRndDomainsAtIdx(-1)) {
-	      if(idx < 0) domains ~= pp._elems;
-	      else domains ~= pp._elems[idx];
+	    foreach(pp; _parent.getRndDomainsAtIndx(-1)) {
+	      if(indx < 0) domains ~= pp._elems;
+	      else domains ~= pp._elems[indx];
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
-	      if(idx < 0) domains ~= pp._elems;
-	      else domains ~= pp._elems[idx];
+	    foreach(pp; _parent.getRndDomainsAtIndx(_index)) {
+	      if(indx < 0) domains ~= pp._elems;
+	      else domains ~= pp._elems[indx];
 	    }
 	  }
 	}
@@ -716,12 +716,12 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	static if (HAS_RAND_ATTRIB) {
 	  if(_indexExpr) {
 	    domains = _indexExpr.getRndDomains(resolved);
-	    foreach(pp; _parent.getRndDomainsAtIdx(-1)) {
+	    foreach(pp; _parent.getRndDomainsAtIndx(-1)) {
 	      domains ~= pp;
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getRndDomainsAtIdx(_index)) {
+	    foreach(pp; _parent.getRndDomainsAtIndx(_index)) {
 	      domains ~= pp;
 	    }
 	  }
@@ -757,7 +757,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RJ unroll(CstVecIterBase iter, uint n) {
+      RJ unroll(CstIteratorBase iter, uint n) {
 	bool found = false;
 	foreach(var; iterVars()) {
 	  if(iter is var) {
@@ -772,21 +772,21 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return _parent.unroll(iter,n)[_index];
       }
 
-      static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
+      static private size_t getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
 	static if(N.length == 0) return arr.length;
 	else {
-	  return getLen(arr[idx[0]], idx[1..$]);
+	  return getLen(arr[indx[0]], indx[1..$]);
 	}
       }
 
       static if (HAS_RAND_ATTRIB) {
-	static private void setLen(A, N...)(ref A arr, size_t v, N idx)
+	static private void setLen(A, N...)(ref A arr, size_t v, N indx)
 	  if(isArray!A) {
 	    static if(N.length == 0) {
 	      static if(isDynamicArray!A) {
 		arr.length = v;
 		// import std.stdio;
-		// writeln(arr, " idx: ", N.length);
+		// writeln(arr, " indx: ", N.length);
 	      }
 	      else {
 		assert(false, "Can not set length of a fixed length array");
@@ -794,89 +794,89 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	    }
 	    else {
 	      // import std.stdio;
-	      // writeln(arr, " idx: ", N.length);
-	      setLen(arr[idx[0]], v, idx[1..$]);
+	      // writeln(arr, " indx: ", N.length);
+	      setLen(arr[indx[0]], v, indx[1..$]);
 	    }
 	  }
 
-	void setLen(N...)(size_t v, N idx) {
-	  _parent.setLen(v, _index, idx);
+	void setLen(N...)(size_t v, N indx) {
+	  _parent.setLen(v, _index, indx);
 	}
       }
 
-      size_t getLen(N...)(N idx) {
-	return _parent.getLen(_index, idx);
+      size_t getLen(N...)(N indx) {
+	return _parent.getLen(_index, indx);
       }
 
-      static private auto getRef(A, N...)(ref A arr, N idx)
+      static private auto getRef(A, N...)(ref A arr, N indx)
 	if(isArray!A && N.length > 0 && isIntegral!(N[0])) {
-	  static if(N.length == 1) return &(arr[idx[0]]);
+	  static if(N.length == 1) return &(arr[indx[0]]);
 	  else {
-	    return getRef(arr[idx[0]], idx[1..$]);
+	    return getRef(arr[indx[0]], indx[1..$]);
 	  }
 	}
 
-      auto getRef(N...)(N idx) if(isIntegral!(N[0])) {
+      auto getRef(N...)(N indx) if(isIntegral!(N[0])) {
 	if(_indexExpr) {
 	  assert(_indexExpr.isConst());
-	  return _parent.getRef(cast(size_t) _indexExpr.evaluate(), idx);
+	  return _parent.getRef(cast(size_t) _indexExpr.evaluate(), indx);
 	}
 	else {
-	  return _parent.getRef(this._index, idx);
+	  return _parent.getRef(this._index, indx);
 	}
       }
 
       bool isUnrollable() {
-	foreach (var; _relatedIdxs) {
+	foreach (var; _relatedIndxs) {
 	  if (! var.solved()) return false;
 	}
 	return true;
       }
 
-      CstDomain[] _relatedIdxs;
-      void addRelatedIdx(CstDomain domain) {
-	foreach (var; _relatedIdxs) {
+      CstDomain[] _relatedIndxs;
+      void addRelatedIndx(CstDomain domain) {
+	foreach (var; _relatedIndxs) {
 	  if (domain is var) {
 	    return;
 	  }
 	}
-	_relatedIdxs ~= domain;
+	_relatedIndxs ~= domain;
       }
       
-      EV opIndex(CstVecExpr idx) {
-	foreach (domain; idx.getRndDomains(resolved)) {
-	  addRelatedIdx(domain);
+      EV opIndex(CstVecExpr indx) {
+	foreach (domain; indx.getRndDomains(resolved)) {
+	  addRelatedIndx(domain);
 	}
-	if(idx.isConst()) {
+	if(indx.isConst()) {
 	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
 		 " have not been built");
-	  // if(idx.evaluate() >= _elems.length || idx.evaluate() < 0 || _elems is null) {
+	  // if(indx.evaluate() >= _elems.length || indx.evaluate() < 0 || _elems is null) {
 	  // 	import std.stdio;
-	  // 	writeln(this.name(), ":", idx.evaluate());
+	  // 	writeln(this.name(), ":", indx.evaluate());
 	  // }
 	  // import std.stdio;
-	  // writeln(idx.evaluate());
-	  return _elems[cast(size_t) idx.evaluate()];
+	  // writeln(indx.evaluate());
+	  return _elems[cast(size_t) indx.evaluate()];
 	}
 	else {
 	  // static if(isStaticArray!E) {
 	  //   // static array
-	  return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
 	  // }
 	  // else static if(isDynamicArray!E) {
 	  //   // dynamic array
-	  //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  //   return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
 	  // }
 	  // else {
-	  //   return new EV(name ~ "[" ~ idx.name() ~ "]", this, idx);
+	  //   return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
 	  // }
 	}
       }
 
-      EV opIndex(size_t idx) {
+      EV opIndex(size_t indx) {
 	build();
-	assert(_elems[idx]._indexExpr is null);
-	return _elems[idx];
+	assert(_elems[indx]._indexExpr is null);
+	return _elems[indx];
       }
 
       void _esdl__doRandomize(_esdl__RandGen randGen) {
@@ -908,8 +908,8 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
       auto elements() {
 	this.build();
-	auto idx = arrLen.makeIterVar();
-	return this[idx];
+	auto indx = arrLen.makeIterVar();
+	return this[indx];
       }
 
       bool built() {

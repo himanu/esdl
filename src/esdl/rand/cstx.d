@@ -383,14 +383,14 @@ struct CstParser {
     auto srcTag = srcCursor;
     int[MaxHierDepth * 2] idChain = parseIdentifierChain();
     if(idChain[0] != -1) {
-      int idx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-      if(idx == -1) {
+      int indx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+      if(indx == -1) {
 	fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
 	fillDeclaration(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
       }
       else {
-	fill(varMap[idx].xLat);
-	fillDeclaration(varMap[idx].xLatBase);
+	fill(varMap[indx].xLat);
+	fillDeclaration(varMap[indx].xLatBase);
       }
       if(idChain[2] != -1) {
 	fill(".");
@@ -935,10 +935,10 @@ struct CstParser {
       errorToken();
     }
 
-    int idx = idMatch(array);
-    if(idx != -1) {
-      array = varMap[idx].xLat;
-      arrayBase = varMap[idx].xLatBase;
+    int indx = idMatch(array);
+    if(indx != -1) {
+      array = varMap[indx].xLat;
+      arrayBase = varMap[indx].xLatBase;
     }
 
     // add index
@@ -1364,7 +1364,7 @@ struct CstParser {
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
-    fill("  _esdl__block ~= new CstEquation(");
+    fill("  _esdl__block ~= new CstEquation(this, ");
 
     if(ifConds.length !is 0) {
       fill("// Conditions \n        ( ");

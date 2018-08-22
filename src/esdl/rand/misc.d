@@ -9,7 +9,7 @@ import std.meta: AliasSeq;
 enum _esdl__norand;
 
 
-interface _esdl__Norand {}
+interface _esdl__Norand { }
 
 // This is part of the user API, but is intended to be seldom used
 // We do not want to create proxy rand objects for evey element of a

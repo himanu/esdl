@@ -15,7 +15,7 @@ interface CstVecTerm: CstVecExpr
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
-  abstract CstVecTerm unroll(CstVecIterBase iter, uint n);
+  abstract CstVecTerm unroll(CstIteratorBase iter, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecTerm other)
   {
@@ -291,7 +291,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
 interface CstBddTerm: CstBddExpr
 {
-  abstract override CstBddTerm unroll(CstVecIterBase iter, uint n);
+  abstract override CstBddTerm unroll(CstIteratorBase iter, uint n);
 
   CstBddTerm opBinary(string op)(CstBddTerm other)
   {
@@ -360,7 +360,7 @@ interface CstBddTerm: CstBddExpr
 
 }
 
-class CstVecIter(RV): CstVecTerm, CstVecIterBase
+class CstIterator(RV): CstIteratorBase, CstVecTerm
 {
   RV _arrVar;
 
@@ -376,21 +376,21 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
     _arrVar._arrLen.iterVar(this);
   }
 
-  override CstVecIterBase[] iterVars() {
+  override CstIteratorBase[] iterVars() {
     return _arrVar.iterVars() ~ this;
   }
 
-  override CstVecIterBase getIterator() {
-    CstVecIterBase piter = _arrVar.getIterator();
+  override CstIteratorBase getIterator() {
+    CstIteratorBase piter = _arrVar.getIterator();
     if (piter !is null) return piter;
     else return this;
   }
 
-  override bool hasUnresolvedIdx() {
+  override bool hasUnresolvedIndx() {
     return true;
   }
       
-  override CstDomain[] unresolvedIdxs() {
+  override CstDomain[] unresolvedIndxs() {
     return [_arrVar.arrLen()];
   }
   
@@ -418,7 +418,7 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVecTerm unroll(CstVecIterBase iter, uint n) {
+  override CstVecTerm unroll(CstIteratorBase iter, uint n) {
     if(this !is iter) {
       return _arrVar.unroll(iter,n).arrLen().makeIterVar();
     }
@@ -428,7 +428,7 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   }
 
   override uint resolveLap() {
-    assert (false, "resolveLap should never be called on CstVecIter");
+    assert (false, "resolveLap should never be called on CstIterator");
   }
 
   override void resolveLap(uint lap) {}
@@ -471,7 +471,7 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   override void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
     assert(iter is null || iter is this);
     iter = this;
@@ -491,7 +491,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   // This bdd has the constraint on the max length of the array
   BDD _primBdd;
   
-  CstVecIter!RV _iterVar;
+  CstIterator!RV _iterVar;
 
   RV _parent;
 
@@ -519,19 +519,19 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _preReqs ~ _parent.preReqs();
   }
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
     return _parent.iterVars();
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return _parent.getIterator();
   }
 
-  CstDomain[] unresolvedIdxs() {
-    return _parent.parentUnresolvedIdxs();
+  CstDomain[] unresolvedIndxs() {
+    return _parent.parentUnresolvedIndxs();
   }
 
-  bool hasUnresolvedIdx() {
+  bool hasUnresolvedIndx() {
     // just must make sure that the
     // array -- if it has a parent array -- is not an abstract element of the parent array
     return _parent.parentLenIsUnresolved();
@@ -696,17 +696,17 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _primBdd.reset();
   }
 
-  void iterVar(CstVecIter!RV var) {
+  void iterVar(CstIterator!RV var) {
     _iterVar = var;
   }
 
-  CstVecIter!RV iterVar() {
+  CstIterator!RV iterVar() {
     return _iterVar;
   }
 
-  CstVecIter!RV makeIterVar() {
+  CstIterator!RV makeIterVar() {
     if(_iterVar is null) {
-      _iterVar = new CstVecIter!RV(_parent);
+      _iterVar = new CstIterator!RV(_parent);
     }
     return _iterVar;
   }
@@ -741,7 +741,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     
   }
 
-  CstVecLen!RV unroll(CstVecIterBase iter, uint n) {
+  CstVecLen!RV unroll(CstIteratorBase iter, uint n) {
     return _parent.unroll(iter,n).arrLen();
   }
 
@@ -773,7 +773,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
     bool listed;
     foreach (var; vars) {
@@ -800,19 +800,19 @@ abstract class CstValBase: CstVecTerm
     return [];
   }
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
     return [];
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return null;
   }
 
-  CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIndxs() {
     return [];
   }
       
-  bool hasUnresolvedIdx() {
+  bool hasUnresolvedIndx() {
     return false;
   }
       
@@ -824,14 +824,14 @@ abstract class CstValBase: CstVecTerm
     return [];
   }
 
-  override CstVecTerm unroll(CstVecIterBase l, uint n) {
+  override CstVecTerm unroll(CstIteratorBase l, uint n) {
     return this;
   }
 
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
   }
 
@@ -942,11 +942,11 @@ class CstVal(T = int): CstValBase
     return _val;
   }
 
-  override CstDomain[] unresolvedIdxs() {
+  override CstDomain[] unresolvedIndxs() {
     return [];
   }
 
-  override bool hasUnresolvedIdx() {
+  override bool hasUnresolvedIndx() {
     return false;
   }
 
@@ -1009,12 +1009,12 @@ class CstVec2VecExpr: CstVecTerm
     return _lhs.preReqs() ~ _rhs.preReqs();
   }
 
-  CstVecIterBase[] _iterVars;
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] _iterVars;
+  CstIteratorBase[] iterVars() {
     return _iterVars;
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     auto liter = _lhs.getIterator();
     auto riter = _rhs.getIterator();
     if (liter !is null) {
@@ -1026,14 +1026,14 @@ class CstVec2VecExpr: CstVecTerm
     }
   }
 
-  CstDomain[] _unresolvedIdxs;
+  CstDomain[] _unresolvedIndxs;
   
-  CstDomain[] unresolvedIdxs() {
-    return _unresolvedIdxs;
+  CstDomain[] unresolvedIndxs() {
+    return _unresolvedIndxs;
   }
   
-  bool hasUnresolvedIdx() {
-    return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _lhs.hasUnresolvedIndx() || _rhs.hasUnresolvedIndx();
   }
       
   string name() {
@@ -1193,7 +1193,7 @@ class CstVec2VecExpr: CstVecTerm
     }
   }
 
-  override CstVec2VecExpr unroll(CstVecIterBase iter, uint n) {
+  override CstVec2VecExpr unroll(CstIteratorBase iter, uint n) {
     bool found = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -1220,13 +1220,13 @@ class CstVec2VecExpr: CstVecTerm
       if (add) _iterVars ~= var;
     }
 
-    foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
+    foreach (var; lhs.unresolvedIndxs ~ rhs.unresolvedIndxs) {
       bool add = true;
-      foreach (l; _unresolvedIdxs) {
+      foreach (l; _unresolvedIndxs) {
     	if (l is var) add = false;
     	break;
       }
-      if (add) _unresolvedIdxs ~= var;
+      if (add) _unresolvedIndxs ~= var;
     }
   }
 
@@ -1253,7 +1253,7 @@ class CstVec2VecExpr: CstVecTerm
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
     _lhs.setBddContext(eqn, vars, vals, iter, deps);
     _rhs.setBddContext(eqn, vars, vals, iter, deps);
@@ -1289,12 +1289,12 @@ class CstVecSliceExpr: CstVecTerm
     // return reqs;
   }
   
-  CstVecIterBase[] _iterVars;
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] _iterVars;
+  CstIteratorBase[] iterVars() {
     return _iterVars;
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     auto liter = _lhs.getIterator();
     auto riter = _rhs.getIterator();
     if (liter !is null) {
@@ -1306,16 +1306,16 @@ class CstVecSliceExpr: CstVecTerm
     }
   }
 
-  CstDomain[] _unresolvedIdxs;
-  CstDomain[] unresolvedIdxs() {
-    return _unresolvedIdxs;
+  CstDomain[] _unresolvedIndxs;
+  CstDomain[] unresolvedIndxs() {
+    return _unresolvedIndxs;
   }
 
-  bool hasUnresolvedIdx() {
+  bool hasUnresolvedIndx() {
     return
-      _lhs.hasUnresolvedIdx() ||
-      _rhs.hasUnresolvedIdx() ||
-      _vec.hasUnresolvedIdx();
+      _lhs.hasUnresolvedIndx() ||
+      _rhs.hasUnresolvedIndx() ||
+      _vec.hasUnresolvedIndx();
   }
 
   string name() {
@@ -1368,7 +1368,7 @@ class CstVecSliceExpr: CstVecTerm
     assert(false, "Can not evaluate a CstVecSliceExpr!");
   }
 
-  override CstVecSliceExpr unroll(CstVecIterBase iter, uint n) {
+  override CstVecSliceExpr unroll(CstIteratorBase iter, uint n) {
     bool found = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -1405,18 +1405,18 @@ class CstVecSliceExpr: CstVecTerm
       if(add) _iterVars ~= var;
     }
 
-    auto unresolvedIdxs = vec.unresolvedIdxs() ~ lhs.unresolvedIdxs();
+    auto unresolvedIndxs = vec.unresolvedIndxs() ~ lhs.unresolvedIndxs();
     if(rhs !is null) {
-      unresolvedIdxs ~= rhs.unresolvedIdxs();
+      unresolvedIndxs ~= rhs.unresolvedIndxs();
     }
 
-    foreach(idx; unresolvedIdxs) {
+    foreach(indx; unresolvedIndxs) {
       bool add = true;
-      foreach(l; _unresolvedIdxs) {
-	if(l is idx) add = false;
+      foreach(l; _unresolvedIndxs) {
+	if(l is indx) add = false;
 	break;
       }
-      if(add) _unresolvedIdxs ~= idx;
+      if(add) _unresolvedIndxs ~= indx;
     }
 
   }
@@ -1440,7 +1440,7 @@ class CstVecSliceExpr: CstVecTerm
   void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
     _vec.setBddContext(eqn, vars, vals, iter, deps);
     _lhs.setBddContext(eqn, deps, vals, iter, deps);
@@ -1465,21 +1465,21 @@ class CstNotVecExpr: CstVecTerm
     return _expr.preReqs();
   }
 
-  CstVecIterBase[] _iterVars;
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] _iterVars;
+  CstIteratorBase[] iterVars() {
     return _iterVars;
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return _expr.getIterator();
   }
 
-  CstDomain[] unresolvedIdxs() {
-    return _expr.unresolvedIdxs();
+  CstDomain[] unresolvedIndxs() {
+    return _expr.unresolvedIndxs();
   }
 
-  bool hasUnresolvedIdx() {
-    return _expr.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _expr.hasUnresolvedIndx();
   }
       
   string name() {
@@ -1514,7 +1514,7 @@ class CstNotVecExpr: CstVecTerm
     return ~(_expr.evaluate());
   }
 
-  override CstNotVecExpr unroll(CstVecIterBase iter, uint n) {
+  override CstNotVecExpr unroll(CstIteratorBase iter, uint n) {
     bool found = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -1552,7 +1552,7 @@ class CstNotVecExpr: CstVecTerm
   void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
     _expr.setBddContext(eqn, vars, vals, iter, deps);
   }
@@ -1574,21 +1574,21 @@ class CstNegVecExpr: CstVecTerm
     return _expr.preReqs();
   }
 
-  CstVecIterBase[] _iterVars;
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] _iterVars;
+  CstIteratorBase[] iterVars() {
     return _iterVars;
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return _expr.getIterator();
   }
 
-  CstDomain[] unresolvedIdxs() {
-    return _expr.unresolvedIdxs();
+  CstDomain[] unresolvedIndxs() {
+    return _expr.unresolvedIndxs();
   }
 
-  bool hasUnresolvedIdx() {
-    return _expr.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _expr.hasUnresolvedIndx();
   }
       
   string name() {
@@ -1623,7 +1623,7 @@ class CstNegVecExpr: CstVecTerm
     return -(_expr.evaluate());
   }
 
-  override CstNegVecExpr unroll(CstVecIterBase iter, uint n) {
+  override CstNegVecExpr unroll(CstIteratorBase iter, uint n) {
     bool found = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -1661,7 +1661,7 @@ class CstNegVecExpr: CstVecTerm
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
     _expr.setBddContext(eqn, vars, vals, iter, deps);
   }
@@ -1681,15 +1681,15 @@ class CstBdd2BddExpr: CstBddTerm
   CstBddExpr _rhs;
   CstBddOp _op;
 
-  CstVecIterBase[] _iterVars;
+  CstIteratorBase[] _iterVars;
 
-  CstDomain[] _unresolvedIdxs;
+  CstDomain[] _unresolvedIndxs;
   
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
        return _iterVars;
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     auto liter = _lhs.getIterator();
     auto riter = _rhs.getIterator();
     if (liter !is null) {
@@ -1715,13 +1715,13 @@ class CstBdd2BddExpr: CstBddTerm
       if (add) _iterVars ~= var;
     }
 
-    foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
+    foreach (var; lhs.unresolvedIndxs ~ rhs.unresolvedIndxs) {
       bool add = true;
-      foreach (l; _unresolvedIdxs) {
+      foreach (l; _unresolvedIndxs) {
 	if (l is var) add = false;
 	break;
       }
-      if (add) _unresolvedIdxs ~= var;
+      if (add) _unresolvedIndxs ~= var;
     }
   }
 
@@ -1731,12 +1731,12 @@ class CstBdd2BddExpr: CstBddTerm
     return r || l;
   }
   
-  CstDomain[] unresolvedIdxs() {
-    return _unresolvedIdxs;
+  CstDomain[] unresolvedIndxs() {
+    return _unresolvedIndxs;
   }
 
-  bool hasUnresolvedIdx() {
-    return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _lhs.hasUnresolvedIndx() || _rhs.hasUnresolvedIndx();
   }
 
   string name() {
@@ -1777,7 +1777,7 @@ class CstBdd2BddExpr: CstBddTerm
     return retval;
   }
 
-  override CstBdd2BddExpr unroll(CstVecIterBase iter, uint n) {
+  override CstBdd2BddExpr unroll(CstIteratorBase iter, uint n) {
     bool found = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -1815,7 +1815,7 @@ class CstBdd2BddExpr: CstBddTerm
   void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
     _lhs.setBddContext(eqn, vars, vals, iter, deps);
     _rhs.setBddContext(eqn, vars, vals, iter, deps);
@@ -1833,21 +1833,21 @@ class CstBdd2BddExpr: CstBddTerm
 // TBD
 class CstIteBddExpr: CstBddTerm
 {
-  CstVecIterBase[] _iterVars;
+  CstIteratorBase[] _iterVars;
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
     assert(false, "TBD");
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     assert(false, "TBD");
   }
 
-  CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIndxs() {
     assert(false, "TBD");
   }
 
-  bool hasUnresolvedIdx() {
+  bool hasUnresolvedIndx() {
     assert(false, "TBD");
   }
 
@@ -1866,7 +1866,7 @@ class CstIteBddExpr: CstBddTerm
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
     assert(false, "TBD");
   }
@@ -1891,7 +1891,7 @@ class CstIteBddExpr: CstBddTerm
     assert(false, "TBD");
   }    
 
-  CstBddTerm unroll(CstVecIterBase iter, uint n) {
+  CstBddTerm unroll(CstIteratorBase iter, uint n) {
     assert(false, "TBD");
   }
 
@@ -1911,11 +1911,11 @@ class CstNopBddExpr: CstBddTerm
 {
   CstVecExpr _vec;
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
     return _vec.iterVars();
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return _vec.getIterator();
   }
   
@@ -1947,7 +1947,7 @@ class CstNopBddExpr: CstBddTerm
     return buddy.one();
   }
 
-  override CstNopBddExpr unroll(CstVecIterBase iter, uint n) {
+  override CstNopBddExpr unroll(CstIteratorBase iter, uint n) {
     bool shouldUnroll = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -1961,12 +1961,12 @@ class CstNopBddExpr: CstBddTerm
     }
   }
 
-  CstDomain[] unresolvedIdxs() {
-    return _vec.unresolvedIdxs();
+  CstDomain[] unresolvedIndxs() {
+    return _vec.unresolvedIndxs();
   }
 
-  bool hasUnresolvedIdx() {
-    return _vec.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _vec.hasUnresolvedIndx();
   }
 
   uint resolveLap() {
@@ -1984,7 +1984,7 @@ class CstNopBddExpr: CstBddTerm
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
     // nothing for CstNopBddExpr
   }
@@ -2003,14 +2003,14 @@ class CstVec2BddExpr: CstBddTerm
   CstVecExpr _rhs;
   CstBinBddOp _op;
 
-  CstVecIterBase[] _iterVars;
-  CstDomain[] _unresolvedIdxs;
+  CstIteratorBase[] _iterVars;
+  CstDomain[] _unresolvedIndxs;
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
        return _iterVars;
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     auto liter = _lhs.getIterator();
     auto riter = _rhs.getIterator();
     if (liter !is null) {
@@ -2022,8 +2022,8 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  CstDomain[] unresolvedIdxs() {
-       return _unresolvedIdxs;
+  CstDomain[] unresolvedIndxs() {
+       return _unresolvedIndxs;
   }
 
   this(CstVecExpr lhs, CstVecExpr rhs, CstBinBddOp op) {
@@ -2040,13 +2040,13 @@ class CstVec2BddExpr: CstBddTerm
       if (add) _iterVars ~= var;
     }
 
-    foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
+    foreach (var; lhs.unresolvedIndxs ~ rhs.unresolvedIndxs) {
       bool add = true;
-      foreach (l; _unresolvedIdxs) {
+      foreach (l; _unresolvedIndxs) {
 	if (l is var) add = false;
 	break;
       }
-      if (add) _unresolvedIdxs ~= var;
+      if (add) _unresolvedIndxs ~= var;
     }
   }
 
@@ -2100,7 +2100,7 @@ class CstVec2BddExpr: CstBddTerm
     return retval;
   }
 
-  override CstVec2BddExpr unroll(CstVecIterBase iter, uint n) {
+  override CstVec2BddExpr unroll(CstIteratorBase iter, uint n) {
     // import std.stdio;
     // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unwound!");
     bool found = false;
@@ -2118,8 +2118,8 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  bool hasUnresolvedIdx() {
-    return _lhs.hasUnresolvedIdx() || _rhs.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _lhs.hasUnresolvedIndx() || _rhs.hasUnresolvedIndx();
   }
 
   uint resolveLap() {
@@ -2147,7 +2147,7 @@ class CstVec2BddExpr: CstBddTerm
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
     _lhs.setBddContext(eqn, vars, vals, iter, deps);
     _rhs.setBddContext(eqn, vars, vals, iter, deps);
@@ -2166,11 +2166,11 @@ class CstBddConst: CstBddTerm
 {
   immutable bool _expr;
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
        return [];
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return null;
   }
   
@@ -2200,15 +2200,15 @@ class CstBddConst: CstBddTerm
     return [];
   }
 
-  override CstBddConst unroll(CstVecIterBase iter, uint n) {
+  override CstBddConst unroll(CstIteratorBase iter, uint n) {
     return this;
   }
 
-  CstDomain[] unresolvedIdxs() {
+  CstDomain[] unresolvedIndxs() {
     return [];
   }
 
-  bool hasUnresolvedIdx() {
+  bool hasUnresolvedIndx() {
     return false;
   }
 
@@ -2220,7 +2220,7 @@ class CstBddConst: CstBddTerm
   void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
     // nothing for CstBddConst
   }
@@ -2242,11 +2242,11 @@ class CstNotBddExpr: CstBddTerm
     _expr = expr;
   }
 
-  CstVecIterBase[] iterVars() {
+  CstIteratorBase[] iterVars() {
     return _expr.iterVars();
   }
 
-  CstVecIterBase getIterator() {
+  CstIteratorBase getIterator() {
     return _expr.getIterator();
   }
 
@@ -2276,7 +2276,7 @@ class CstNotBddExpr: CstBddTerm
     return (~ bdd);
   }
 
-  override CstNotBddExpr unroll(CstVecIterBase iter, uint n) {
+  override CstNotBddExpr unroll(CstIteratorBase iter, uint n) {
     bool shouldUnroll = false;
     foreach(var; iterVars()) {
       if(iter is var) {
@@ -2290,12 +2290,12 @@ class CstNotBddExpr: CstBddTerm
     }
   }
 
-  CstDomain[] unresolvedIdxs() {
-    return _expr.unresolvedIdxs();
+  CstDomain[] unresolvedIndxs() {
+    return _expr.unresolvedIndxs();
   }
 
-  bool hasUnresolvedIdx() {
-    return _expr.hasUnresolvedIdx();
+  bool hasUnresolvedIndx() {
+    return _expr.hasUnresolvedIndx();
   }
 
   uint resolveLap() {
@@ -2308,7 +2308,7 @@ class CstNotBddExpr: CstBddTerm
   void setBddContext(CstEquation eqn,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
-		     ref CstVecIterBase iter,
+		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
     _expr.setBddContext(eqn, vars, vals, iter, deps);
   }

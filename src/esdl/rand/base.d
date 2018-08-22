@@ -4,7 +4,101 @@ import esdl.rand.obdd;
 import esdl.rand.intr;
 import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
 import esdl.data.bvec: isBitVector;
+import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+
+abstract class _esdl__Solver
+{
+  Buddy _esdl__buddy;
+
+  Array!uint _domains;		// indexes of domains
+
+  CstDomain[] _cstDomains;
+
+  uint _domIndex = 0;
+  
+  // compositional parent -- not inheritance based
+  _esdl__Solver _parent;
+  _esdl__Solver _root;
+
+  void addDomain(CstDomain domain) {
+    // import std.stdio;
+    // writeln("Adding domain: ", domain.name());
+    _root._cstDomains ~= domain;
+    useBuddy(_root._esdl__buddy);
+    domain.domIndex = _root._domIndex++;
+    _root._domains ~= _esdl__buddy.extDomVec(domain.bitcount);
+  }
+
+  _esdl__Solver getSolverRoot() {
+    return _root;
+  }
+
+  _esdl__Solver _getSolverRoot() {
+    if (_parent is null || _parent is this) {
+      return this;
+    }
+    else {
+      return _parent._getSolverRoot();
+    }
+  }
+	
+  CstVecPrim[] _esdl__randsList;
+  _esdl__RandGen _esdl__rGen;
+
+  _esdl__RandGen _esdl__getRandGen() {
+    assert(_root is this);
+    return _root._esdl__rGen;
+  }
+
+  bool _esdl__isSeeded = false;
+  uint _esdl__seed;
+
+  uint getRandomSeed() {
+    assert(_root is this);
+    return _esdl__seed;
+  }
+
+  void seedRandom(uint seed) {
+    assert(_root is this);
+    _esdl__seed = seed;
+    _esdl__rGen.seed(seed);    
+  }
+  
+  this(uint seed, bool isSeeded, string name,
+       _esdl__Solver parent) {
+    import std.random: Random, uniform;
+    debug(NOCONSTRAINTS) {
+      assert(false, "Constraint engine started");
+    }
+    _esdl__isSeeded = isSeeded;
+    if (isSeeded is true) {
+      _esdl__seed = seed;
+    }
+    else {
+      import esdl.base.core: Procedure;
+      auto proc = Procedure.self;
+      if (proc !is null) {
+	Random procRgen = proc.getRandGen();
+	_esdl__seed = uniform!(uint)(procRgen);
+      }
+      else {
+	// no active simulation -- use global rand generator
+	_esdl__seed = uniform!(uint)();
+      }
+    }
+    _esdl__rGen = new _esdl__RandGen(_esdl__seed);
+
+    if(parent is null) {
+      _esdl__buddy = new Buddy(400, 400);
+      _root = this;
+    }
+    else {
+      _parent = parent;
+      _root = _parent._getSolverRoot();
+    }
+  }
+}
 
 class CstStage {
   // List of randomized variables associated with this stage. A
@@ -100,16 +194,10 @@ abstract class CstDomain
   }
 }
 
-// The agent keeps a list of clients that are dependent on the agent
-interface CstAgent
-{
-  abstract void post(CstClient client);
-}
-
 // The client keeps a list of agents that when resolved makes the client happy
-interface CstClient
+interface CstIterCallback
 {
-  abstract void trigger(CstAgent agent);
+  abstract void unroll(CstIteratorBase iter);
 }
 
 interface CstVecPrim
@@ -142,11 +230,11 @@ interface CstVecExpr
   
   // Array of indexes this expression has to resolve before it can be
   // converted into a BDD
-  abstract CstVecIterBase[] iterVars();
+  abstract CstIteratorBase[] iterVars();
   // get the primary (outermost foreach) iterator CstVecExpr
-  abstract CstVecIterBase getIterator();
-  abstract bool hasUnresolvedIdx();
-  abstract CstDomain[] unresolvedIdxs();
+  abstract CstIteratorBase getIterator();
+  abstract bool hasUnresolvedIndx();
+  abstract CstDomain[] unresolvedIndxs();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
@@ -177,7 +265,7 @@ interface CstVecExpr
 
   abstract bool getVal(ref long val);
   
-  abstract CstVecExpr unroll(CstVecIterBase iter, uint n);
+  abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
 
   abstract bool isOrderingExpr();//  {
   //   return false;		// only CstVecOrderingExpr return true
@@ -186,7 +274,7 @@ interface CstVecExpr
   abstract void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps);
 
   abstract bool getIntMods(ref IntRangeModSet modSet);
@@ -194,7 +282,7 @@ interface CstVecExpr
 
 
 // This class represents an unwound Foreach iter at vec level
-interface CstVecIterBase
+abstract class CstIteratorBase
 {
   abstract uint maxVal();
 
@@ -209,13 +297,13 @@ interface CstBddExpr
 
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  abstract CstVecIterBase[] iterVars(); //  {
-  abstract CstVecIterBase getIterator(); //  {
+  abstract CstIteratorBase[] iterVars(); //  {
+  abstract CstIteratorBase getIterator(); //  {
 
   abstract CstVecPrim[] preReqs();
 
-  abstract bool hasUnresolvedIdx();
-  abstract CstDomain[] unresolvedIdxs();
+  abstract bool hasUnresolvedIndx();
+  abstract CstDomain[] unresolvedIndxs();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
@@ -223,12 +311,12 @@ interface CstBddExpr
   abstract void setBddContext(CstEquation eqn,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstVecIterBase iter,
+			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps);
 
   abstract bool getIntRange(ref IntRangeSet!long rangeSet);
 
-  abstract CstBddExpr unroll(CstVecIterBase iter, uint n);
+  abstract CstBddExpr unroll(CstIteratorBase iter, uint n);
 
   abstract CstDomain[] getRndDomains(bool resolved);
 
@@ -274,12 +362,14 @@ class CstEquation
   }
   // alias _expr this;
 
+  _esdl__Solver _solver;
   CstBddExpr _expr;
 
-  CstVecIterBase _uwIter;
+  CstIteratorBase _uwIter;
   CstEquation[] _uwEqns;
   
-  this(CstBddExpr expr) {
+  this(_esdl__Solver solver, CstBddExpr expr) {
+    _solver = solver;
     _expr = expr;
     this.setBddContext();
     debug(CSTEQNS) {
@@ -302,7 +392,7 @@ class CstEquation
       unrolled = this.unroll(iter);
     }
 
-    if (_expr.hasUnresolvedIdx()) {
+    if (_expr.hasUnresolvedIndx()) {
       // TBD -- check that we may need to call resolveLap on each of the unrolled expression
       foreach (expr; unrolled) {
 	_expr.resolveLap(lap);
@@ -320,18 +410,18 @@ class CstEquation
     }
   }
 
-  CstVecIterBase unrollableIter() {
+  CstIteratorBase unrollableIter() {
     foreach(iter; _expr.iterVars()) {
       if(iter.isUnrollable()) return iter;
     }
     return null;
   }
 
-  CstEquation[] unroll(CstVecIterBase iter) {
+  CstEquation[] unroll(CstIteratorBase iter) {
     assert (iter is _expr.getIterator());
 
     if(! iter.isUnrollable()) {
-      assert(false, "CstVecIterBase is not unrollabe yet");
+      assert(false, "CstIteratorBase is not unrollabe yet");
     }
     auto currLen = iter.maxVal();
     // import std.stdio;
@@ -347,7 +437,7 @@ class CstEquation
       // writeln("Need to unroll ", currLen - _uwEqns.length, " times");
       for (uint i = cast(uint) _uwEqns.length;
 	   i != currLen; ++i) {
-	_uwEqns ~= new CstEquation(_expr.unroll(iter, i));
+	_uwEqns ~= new CstEquation(_solver, _expr.unroll(iter, i));
       }
     }
     
@@ -357,7 +447,7 @@ class CstEquation
   CstDomain[] _vars;
   CstDomain[] _vals;
   CstDomain[] _deps;
-  CstVecIterBase _iter;
+  CstIteratorBase _iter;
 
   final void setBddContext() {
     _expr.setBddContext(this, _vars, _vals, _iter, _deps);
