@@ -233,7 +233,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstVecIterBase[] itrVars() {
+      CstVecIterBase[] iterVars() {
 	return [];
       }
 
@@ -263,8 +263,8 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      RV unroll(CstVecIterBase itr, uint n) {
-	// itrVars is always empty
+      RV unroll(CstVecIterBase iter, uint n) {
+	// iterVars is always empty
 	return this;
       }
 
@@ -476,23 +476,23 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      CstVecIterBase[] itrVars() {
+      CstVecIterBase[] iterVars() {
 	if (_indexExpr) {
-	  return _parent.itrVars() ~ _indexExpr.itrVars();
+	  return _parent.iterVars() ~ _indexExpr.iterVars();
 	}
 	else {
-	  return _parent.itrVars();
+	  return _parent.iterVars();
 	}
       }
 
       CstVecIterBase getIterator() {
-	CstVecIterBase pitr = _parent.getIterator();
+	CstVecIterBase piter = _parent.getIterator();
 	if (_indexExpr) {
-	  if (pitr !is null) return pitr;
+	  if (piter !is null) return piter;
 	  else return _indexExpr.getIterator();
 	}
 	else {
-	  return pitr;
+	  return piter;
 	}
       }
 
@@ -562,22 +562,22 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      RV unroll(CstVecIterBase itr, uint n) {
+      RV unroll(CstVecIterBase iter, uint n) {
 	bool found = false;
-	foreach(var; itrVars()) {
-	  if(itr is var) {
+	foreach(var; iterVars()) {
+	  if(iter is var) {
 	    found = true;
 	    break;
 	  }
 	}
-	if(! found) {		// itr is unrelated
+	if(! found) {		// iter is unrelated
 	  return this;
 	}
 	else if(_indexExpr) {
-	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
+	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
 	else {
-	  return _parent.unroll(itr,n)[_pindex];
+	  return _parent.unroll(iter,n)[_pindex];
 	}
       }
 
@@ -913,7 +913,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecIterBase[] itrVars() {
+	CstVecIterBase[] iterVars() {
 	  return [];		// N = 0 -- no _parent
 	}
 
@@ -960,7 +960,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
     
-	RV unroll(CstVecIterBase itr, uint n) {
+	RV unroll(CstVecIterBase iter, uint n) {
 	  return this;
 	}
 
@@ -1147,13 +1147,13 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	auto elements() {
-	  auto itr = arrLen.makeItrVar();
-	  return this[itr];
+	  auto iter = arrLen.makeIterVar();
+	  return this[iter];
 	}
 
 	auto iterator() {
-	  auto itr = arrLen.makeItrVar();
-	  return itr;
+	  auto iter = arrLen.makeIterVar();
+	  return iter;
 	}
 
 	CstVecLen!RV length() {
@@ -1275,18 +1275,18 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecIterBase[] itrVars() {
+	CstVecIterBase[] iterVars() {
 	  if(_indexExpr) {
-	    return _parent.itrVars() ~ _indexExpr.itrVars(); // ~ _arrLen.makeItrVar();
+	    return _parent.iterVars() ~ _indexExpr.iterVars(); // ~ _arrLen.makeIterVar();
 	  }
 	  else {
-	    return _parent.itrVars();
+	    return _parent.iterVars();
 	  }
 	}
 
 	CstVecIterBase getIterator() {
-	  auto pitr = _parent.getIterator();
-	  if (pitr !is null) return pitr;
+	  auto piter = _parent.getIterator();
+	  if (piter !is null) return piter;
 	  else {
 	    if (_indexExpr) {
 	      return _indexExpr.getIterator();
@@ -1383,7 +1383,7 @@ class CstVecArr(V, alias R, int N=0)
 	// }
 
 	CstDomain[] getDomainLens(bool resolved) {
-	  // if(_pindex.itrVars.length is 0)
+	  // if(_pindex.iterVars.length is 0)
 	  if(_indexExpr is null) {
 	    return [_parent[_pindex].arrLen()];
 	    // return domains ~ _parent[_pindex].getDomainLens(resolved);
@@ -1414,10 +1414,10 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	RV unroll(CstVecIterBase itr, uint n) {
+	RV unroll(CstVecIterBase iter, uint n) {
 	  bool found = false;
-	  foreach(var; itrVars()) {
-	    if(itr is var) {
+	  foreach(var; iterVars()) {
+	    if(iter is var) {
 	      found = true;
 	      break;
 	    }
@@ -1426,10 +1426,10 @@ class CstVecArr(V, alias R, int N=0)
 	    return this;
 	  }
 	  else if(_indexExpr) {
-	    return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
+	    return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	  }
 	  else {
-	    return _parent.unroll(itr,n)[_pindex];
+	    return _parent.unroll(iter,n)[_pindex];
 	  }
 	}
 
@@ -1585,13 +1585,13 @@ class CstVecArr(V, alias R, int N=0)
 	}
 
 	auto elements() {
-	  auto idx = arrLen.makeItrVar();
+	  auto idx = arrLen.makeIterVar();
 	  return this[idx];
 	}
 
 	auto iterator() {
-	  auto itr = arrLen.makeItrVar();
-	  return itr;
+	  auto iter = arrLen.makeIterVar();
+	  return iter;
 	}
 
 	CstVecLen!RV length() {

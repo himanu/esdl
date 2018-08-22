@@ -142,7 +142,7 @@ interface CstVecExpr
   
   // Array of indexes this expression has to resolve before it can be
   // converted into a BDD
-  abstract CstVecIterBase[] itrVars();
+  abstract CstVecIterBase[] iterVars();
   // get the primary (outermost foreach) iterator CstVecExpr
   abstract CstVecIterBase getIterator();
   abstract bool hasUnresolvedIdx();
@@ -177,7 +177,7 @@ interface CstVecExpr
 
   abstract bool getVal(ref long val);
   
-  abstract CstVecExpr unroll(CstVecIterBase itr, uint n);
+  abstract CstVecExpr unroll(CstVecIterBase iter, uint n);
 
   abstract bool isOrderingExpr();//  {
   //   return false;		// only CstVecOrderingExpr return true
@@ -193,7 +193,7 @@ interface CstVecExpr
 }
 
 
-// This class represents an unwound Foreach itr at vec level
+// This class represents an unwound Foreach iter at vec level
 interface CstVecIterBase
 {
   abstract uint maxVal();
@@ -209,7 +209,7 @@ interface CstBddExpr
 
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  abstract CstVecIterBase[] itrVars(); //  {
+  abstract CstVecIterBase[] iterVars(); //  {
   abstract CstVecIterBase getIterator(); //  {
 
   abstract CstVecPrim[] preReqs();
@@ -228,7 +228,7 @@ interface CstBddExpr
 
   abstract bool getIntRange(ref IntRangeSet!long rangeSet);
 
-  abstract CstBddExpr unroll(CstVecIterBase itr, uint n);
+  abstract CstBddExpr unroll(CstVecIterBase iter, uint n);
 
   abstract CstDomain[] getRndDomains(bool resolved);
 
@@ -276,7 +276,7 @@ class CstEquation
 
   CstBddExpr _expr;
 
-  CstVecIterBase _uwItr;
+  CstVecIterBase _uwIter;
   CstEquation[] _uwEqns;
   
   this(CstBddExpr expr) {
@@ -294,12 +294,12 @@ class CstEquation
 	      ref CstEquation[] unresolved,
 	      ref CstEquation[] resolved) {
     CstEquation[] unrolled;
-    auto itr = this.unrollableItr();
-    if (itr is null) {
+    auto iter = this.unrollableIter();
+    if (iter is null) {
       unrolled ~= this;
     }
     else {
-      unrolled = this.unroll(itr);
+      unrolled = this.unroll(iter);
     }
 
     if (_expr.hasUnresolvedIdx()) {
@@ -308,7 +308,7 @@ class CstEquation
 	_expr.resolveLap(lap);
       }
       
-      if (_expr.itrVars().length == 1) {
+      if (_expr.iterVars().length == 1) {
 	unresolved ~= unrolled;
       }
       else {
@@ -320,25 +320,25 @@ class CstEquation
     }
   }
 
-  CstVecIterBase unrollableItr() {
-    foreach(itr; _expr.itrVars()) {
-      if(itr.isUnrollable()) return itr;
+  CstVecIterBase unrollableIter() {
+    foreach(iter; _expr.iterVars()) {
+      if(iter.isUnrollable()) return iter;
     }
     return null;
   }
 
-  CstEquation[] unroll(CstVecIterBase itr) {
-    assert (itr is _expr.getIterator());
+  CstEquation[] unroll(CstVecIterBase iter) {
+    assert (iter is _expr.getIterator());
 
-    if(! itr.isUnrollable()) {
+    if(! iter.isUnrollable()) {
       assert(false, "CstVecIterBase is not unrollabe yet");
     }
-    auto currLen = itr.maxVal();
+    auto currLen = iter.maxVal();
     // import std.stdio;
     // writeln("maxVal is ", currLen);
 
-    if (_uwItr !is itr) {
-      _uwItr = itr;
+    if (_uwIter !is iter) {
+      _uwIter = iter;
       _uwEqns.length = 0;
     }
     
@@ -347,7 +347,7 @@ class CstEquation
       // writeln("Need to unroll ", currLen - _uwEqns.length, " times");
       for (uint i = cast(uint) _uwEqns.length;
 	   i != currLen; ++i) {
-	_uwEqns ~= new CstEquation(_expr.unroll(itr, i));
+	_uwEqns ~= new CstEquation(_expr.unroll(iter, i));
       }
     }
     

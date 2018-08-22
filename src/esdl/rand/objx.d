@@ -91,7 +91,7 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
 
-      override CstVecIterBase[] itrVars() {
+      override CstVecIterBase[] iterVars() {
 	return [];
       }
 
@@ -113,8 +113,8 @@ class CstObj(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      override RJ unroll(CstVecIterBase itr, uint n) {
-	// itrVars is always empty
+      override RJ unroll(CstVecIterBase iter, uint n) {
+	// iterVars is always empty
 	return this;
       }
 
@@ -171,12 +171,12 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_index = index;
       }
 
-      override CstVecIterBase[] itrVars() {
+      override CstVecIterBase[] iterVars() {
 	if(_indexExpr) {
-	  return _parent.itrVars() ~ _indexExpr.itrVars();
+	  return _parent.iterVars() ~ _indexExpr.iterVars();
 	}
 	else {
-	  return _parent.itrVars();
+	  return _parent.iterVars();
 	}
       }
 
@@ -232,19 +232,19 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override RJ unroll(CstVecIterBase itr, uint n) {
+      override RJ unroll(CstVecIterBase iter, uint n) {
 	bool found = false;
-	foreach(var; itrVars()) {
-	  if(itr is var) {
+	foreach(var; iterVars()) {
+	  if(iter is var) {
 	    found = true;
 	    break;
 	  }
 	}
 	if(! found) return this;
 	if(_indexExpr) {
-	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
+	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
-	return _parent.unroll(itr,n)[_index];
+	return _parent.unroll(iter,n)[_index];
       }
 
       void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
@@ -375,7 +375,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
 
-	CstVecIterBase[] itrVars() {
+	CstVecIterBase[] iterVars() {
 	  return [];		// N = 0 -- no _parent
 	}
 
@@ -410,7 +410,7 @@ class CstObjArr(V, alias R, int N=0)
 	  }
 	}
     
-	RJ unroll(CstVecIterBase itr, uint n) {
+	RJ unroll(CstVecIterBase iter, uint n) {
 	  return this;
 	}
 
@@ -563,8 +563,8 @@ class CstObjArr(V, alias R, int N=0)
 
 	auto elements() {
 	  this.build();
-	  auto itr = arrLen.makeItrVar();
-	  return this[itr];
+	  auto iter = arrLen.makeIterVar();
+	  return this[iter];
 	}
 
 	bool built() {
@@ -590,8 +590,8 @@ class CstObjArr(V, alias R, int N=0)
 	
 	auto iterator() {
 	  this.build();
-	  auto itr = arrLen.makeItrVar();
-	  return itr;
+	  auto iter = arrLen.makeIterVar();
+	  return iter;
 	}
 
 	CstVecLen!RJ length() {
@@ -664,12 +664,12 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      CstVecIterBase[] itrVars() {
+      CstVecIterBase[] iterVars() {
 	if(_indexExpr) {
-	  return _parent.itrVars() ~ _indexExpr.itrVars();
+	  return _parent.iterVars() ~ _indexExpr.iterVars();
 	}
 	else {
-	  return _parent.itrVars();
+	  return _parent.iterVars();
 	}
       }
 
@@ -736,7 +736,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       CstDomain[] getDomainLens(bool resolved) {
-	// if(_index.itrVars.length is 0)
+	// if(_index.iterVars.length is 0)
 	if(_indexExpr is null) {
 	  return [_parent[_index].arrLen()];
 	  // return domains ~ _parent[_index].getDomainLens();
@@ -757,19 +757,19 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
-      RJ unroll(CstVecIterBase itr, uint n) {
+      RJ unroll(CstVecIterBase iter, uint n) {
 	bool found = false;
-	foreach(var; itrVars()) {
-	  if(itr is var) {
+	foreach(var; iterVars()) {
+	  if(iter is var) {
 	    found = true;
 	    break;
 	  }
 	}
 	if(! found) return this;
 	if(_indexExpr) {
-	  return _parent.unroll(itr,n)[_indexExpr.unroll(itr,n)];
+	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
-	return _parent.unroll(itr,n)[_index];
+	return _parent.unroll(iter,n)[_index];
       }
 
       static private size_t getLen(A, N...)(ref A arr, N idx) if(isArray!A) {
@@ -908,7 +908,7 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 
       auto elements() {
 	this.build();
-	auto idx = arrLen.makeItrVar();
+	auto idx = arrLen.makeIterVar();
 	return this[idx];
       }
 
@@ -935,8 +935,8 @@ class CstObjArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	
       auto iterator() {
 	this.build();
-	auto itr = arrLen.makeItrVar();
-	return itr;
+	auto iter = arrLen.makeIterVar();
+	return iter;
       }
 
       CstVecLen!RJ length() {

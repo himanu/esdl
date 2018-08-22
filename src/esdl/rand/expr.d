@@ -15,7 +15,7 @@ interface CstVecTerm: CstVecExpr
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
-  abstract CstVecTerm unroll(CstVecIterBase itr, uint n);
+  abstract CstVecTerm unroll(CstVecIterBase iter, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecTerm other)
   {
@@ -291,7 +291,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
 interface CstBddTerm: CstBddExpr
 {
-  abstract override CstBddTerm unroll(CstVecIterBase itr, uint n);
+  abstract override CstBddTerm unroll(CstVecIterBase iter, uint n);
 
   CstBddTerm opBinary(string op)(CstBddTerm other)
   {
@@ -371,18 +371,18 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   string _name;
 
   this(RV arrVar) {
-    _name = "itrVar";
+    _name = "iterVar";
     _arrVar = arrVar;
-    _arrVar._arrLen.itrVar(this);
+    _arrVar._arrLen.iterVar(this);
   }
 
-  override CstVecIterBase[] itrVars() {
-    return _arrVar.itrVars() ~ this;
+  override CstVecIterBase[] iterVars() {
+    return _arrVar.iterVars() ~ this;
   }
 
   override CstVecIterBase getIterator() {
-    CstVecIterBase pitr = _arrVar.getIterator();
-    if (pitr !is null) return pitr;
+    CstVecIterBase piter = _arrVar.getIterator();
+    if (piter !is null) return piter;
     else return this;
   }
 
@@ -397,7 +397,7 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   override uint maxVal() {
     if(! this.isUnrollable()) {
       assert(false, "Can not find maxVal since the " ~
-	     "Itr Variable is unrollable");
+	     "Iter Variable is unrollable");
     }
     // import std.stdio;
     // writeln("maxVal for arrVar: ", _arrVar.name(), " is ",
@@ -418,9 +418,9 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVecTerm unroll(CstVecIterBase itr, uint n) {
-    if(this !is itr) {
-      return _arrVar.unroll(itr,n).arrLen().makeItrVar();
+  override CstVecTerm unroll(CstVecIterBase iter, uint n) {
+    if(this !is iter) {
+      return _arrVar.unroll(iter,n).arrLen().makeIterVar();
     }
     else {
       return new CstVal!size_t(n); // CstVal!size_t.allocate(n);
@@ -453,11 +453,11 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   // }
 
   override bool refresh(CstStage s, Buddy buddy) {
-    assert(false, "Can not refresh for a Itr Variable without unrolling");
+    assert(false, "Can not refresh for a Iter Variable without unrolling");
   }
   
   override BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "Can not getBDD for a Itr Variable without unrolling");
+    assert(false, "Can not getBDD for a Iter Variable without unrolling");
   }
 
   override bool getVal(ref long val) {
@@ -465,7 +465,7 @@ class CstVecIter(RV): CstVecTerm, CstVecIterBase
   }
 
   override long evaluate() {
-    assert(false, "Can not evaluate a Itr Variable without unrolling");
+    assert(false, "Can not evaluate a Iter Variable without unrolling");
   }
 
   override void setBddContext(CstEquation eqn,
@@ -491,7 +491,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   // This bdd has the constraint on the max length of the array
   BDD _primBdd;
   
-  CstVecIter!RV _itrVar;
+  CstVecIter!RV _iterVar;
 
   RV _parent;
 
@@ -519,8 +519,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _preReqs ~ _parent.preReqs();
   }
 
-  CstVecIterBase[] itrVars() {
-    return _parent.itrVars();
+  CstVecIterBase[] iterVars() {
+    return _parent.iterVars();
   }
 
   CstVecIterBase getIterator() {
@@ -696,19 +696,19 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _primBdd.reset();
   }
 
-  void itrVar(CstVecIter!RV var) {
-    _itrVar = var;
+  void iterVar(CstVecIter!RV var) {
+    _iterVar = var;
   }
 
-  CstVecIter!RV itrVar() {
-    return _itrVar;
+  CstVecIter!RV iterVar() {
+    return _iterVar;
   }
 
-  CstVecIter!RV makeItrVar() {
-    if(_itrVar is null) {
-      _itrVar = new CstVecIter!RV(_parent);
+  CstVecIter!RV makeIterVar() {
+    if(_iterVar is null) {
+      _iterVar = new CstVecIter!RV(_parent);
     }
-    return _itrVar;
+    return _iterVar;
   }
 
   override uint bitcount() {
@@ -741,8 +741,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     
   }
 
-  CstVecLen!RV unroll(CstVecIterBase itr, uint n) {
-    return _parent.unroll(itr,n).arrLen();
+  CstVecLen!RV unroll(CstVecIterBase iter, uint n) {
+    return _parent.unroll(iter,n).arrLen();
   }
 
   void _esdl__reset() {
@@ -800,7 +800,7 @@ abstract class CstValBase: CstVecTerm
     return [];
   }
 
-  CstVecIterBase[] itrVars() {
+  CstVecIterBase[] iterVars() {
     return [];
   }
 
@@ -1009,20 +1009,20 @@ class CstVec2VecExpr: CstVecTerm
     return _lhs.preReqs() ~ _rhs.preReqs();
   }
 
-  CstVecIterBase[] _itrVars;
-  CstVecIterBase[] itrVars() {
-    return _itrVars;
+  CstVecIterBase[] _iterVars;
+  CstVecIterBase[] iterVars() {
+    return _iterVars;
   }
 
   CstVecIterBase getIterator() {
-    auto litr = _lhs.getIterator();
-    auto ritr = _rhs.getIterator();
-    if (litr !is null) {
-      assert (ritr is null || ritr is litr);
-      return litr;
+    auto liter = _lhs.getIterator();
+    auto riter = _rhs.getIterator();
+    if (liter !is null) {
+      assert (riter is null || riter is liter);
+      return liter;
     }
     else {
-      return ritr;
+      return riter;
     }
   }
 
@@ -1051,9 +1051,9 @@ class CstVec2VecExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if(this.iterVars.length !is 0) {
       assert(false,
-	     "CstVec2VecExpr: Need to unroll the itrVars" ~
+	     "CstVec2VecExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -1193,17 +1193,17 @@ class CstVec2VecExpr: CstVecTerm
     }
   }
 
-  override CstVec2VecExpr unroll(CstVecIterBase itr, uint n) {
+  override CstVec2VecExpr unroll(CstVecIterBase iter, uint n) {
     bool found = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	found = true;
 	break;
       }
     }
     if(! found) return this;
     else {
-      return new CstVec2VecExpr(_lhs.unroll(itr, n), _rhs.unroll(itr, n), _op);
+      return new CstVec2VecExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
     }
   }
 
@@ -1211,13 +1211,13 @@ class CstVec2VecExpr: CstVecTerm
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach (var; lhs.itrVars ~ rhs.itrVars) {
+    foreach (var; lhs.iterVars ~ rhs.iterVars) {
       bool add = true;
-      foreach (l; _itrVars) {
+      foreach (l; _iterVars) {
     	if (l is var) add = false;
     	break;
       }
-      if (add) _itrVars ~= var;
+      if (add) _iterVars ~= var;
     }
 
     foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
@@ -1289,20 +1289,20 @@ class CstVecSliceExpr: CstVecTerm
     // return reqs;
   }
   
-  CstVecIterBase[] _itrVars;
-  CstVecIterBase[] itrVars() {
-    return _itrVars;
+  CstVecIterBase[] _iterVars;
+  CstVecIterBase[] iterVars() {
+    return _iterVars;
   }
 
   CstVecIterBase getIterator() {
-    auto litr = _lhs.getIterator();
-    auto ritr = _rhs.getIterator();
-    if (litr !is null) {
-      assert (ritr is null || ritr is litr);
-      return litr;
+    auto liter = _lhs.getIterator();
+    auto riter = _rhs.getIterator();
+    if (liter !is null) {
+      assert (riter is null || riter is liter);
+      return liter;
     }
     else {
-      return ritr;
+      return riter;
     }
   }
 
@@ -1338,9 +1338,9 @@ class CstVecSliceExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if(this.iterVars.length !is 0) {
       assert(false,
-	     "CstVecSliceExpr: Need to unroll the itrVars" ~
+	     "CstVecSliceExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -1368,10 +1368,10 @@ class CstVecSliceExpr: CstVecTerm
     assert(false, "Can not evaluate a CstVecSliceExpr!");
   }
 
-  override CstVecSliceExpr unroll(CstVecIterBase itr, uint n) {
+  override CstVecSliceExpr unroll(CstVecIterBase iter, uint n) {
     bool found = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	found = true;
 	break;
       }
@@ -1379,11 +1379,11 @@ class CstVecSliceExpr: CstVecTerm
     if(! found) return this;
     else {
       if(_rhs is null) {
-	return new CstVecSliceExpr(_vec.unroll(itr, n), _lhs.unroll(itr, n));
+	return new CstVecSliceExpr(_vec.unroll(iter, n), _lhs.unroll(iter, n));
       }
       else {
-	return new CstVecSliceExpr(_vec.unroll(itr, n),
-				   _lhs.unroll(itr, n), _rhs.unroll(itr, n));
+	return new CstVecSliceExpr(_vec.unroll(iter, n),
+				   _lhs.unroll(iter, n), _rhs.unroll(iter, n));
       }
     }
   }
@@ -1392,17 +1392,17 @@ class CstVecSliceExpr: CstVecTerm
     _vec = vec;
     _lhs = lhs;
     _rhs = rhs;
-    auto itrVars = vec.itrVars ~ lhs.itrVars;
+    auto iterVars = vec.iterVars ~ lhs.iterVars;
     if(rhs !is null) {
-      itrVars ~= rhs.itrVars;
+      iterVars ~= rhs.iterVars;
     }
-    foreach(var; itrVars) {
+    foreach(var; iterVars) {
       bool add = true;
-      foreach(l; _itrVars) {
+      foreach(l; _iterVars) {
 	if(l is var) add = false;
 	break;
       }
-      if(add) _itrVars ~= var;
+      if(add) _iterVars ~= var;
     }
 
     auto unresolvedIdxs = vec.unresolvedIdxs() ~ lhs.unresolvedIdxs();
@@ -1465,9 +1465,9 @@ class CstNotVecExpr: CstVecTerm
     return _expr.preReqs();
   }
 
-  CstVecIterBase[] _itrVars;
-  CstVecIterBase[] itrVars() {
-    return _itrVars;
+  CstVecIterBase[] _iterVars;
+  CstVecIterBase[] iterVars() {
+    return _iterVars;
   }
 
   CstVecIterBase getIterator() {
@@ -1495,9 +1495,9 @@ class CstNotVecExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if(this.iterVars.length !is 0) {
       assert(false,
-	     "CstNotVecExpr: Need to unroll the itrVars" ~
+	     "CstNotVecExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -1514,23 +1514,23 @@ class CstNotVecExpr: CstVecTerm
     return ~(_expr.evaluate());
   }
 
-  override CstNotVecExpr unroll(CstVecIterBase itr, uint n) {
+  override CstNotVecExpr unroll(CstVecIterBase iter, uint n) {
     bool found = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	found = true;
 	break;
       }
     }
     if(! found) return this;
     else {
-      return new CstNotVecExpr(_expr.unroll(itr, n));
+      return new CstNotVecExpr(_expr.unroll(iter, n));
     }
   }
 
   this(CstVecExpr expr) {
     _expr = expr;
-    _itrVars = _expr.itrVars;
+    _iterVars = _expr.iterVars;
   }
 
   uint resolveLap() {
@@ -1574,9 +1574,9 @@ class CstNegVecExpr: CstVecTerm
     return _expr.preReqs();
   }
 
-  CstVecIterBase[] _itrVars;
-  CstVecIterBase[] itrVars() {
-    return _itrVars;
+  CstVecIterBase[] _iterVars;
+  CstVecIterBase[] iterVars() {
+    return _iterVars;
   }
 
   CstVecIterBase getIterator() {
@@ -1604,9 +1604,9 @@ class CstNegVecExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if(this.iterVars.length !is 0) {
       assert(false,
-	     "CstNegVecExpr: Need to unroll the itrVars" ~
+	     "CstNegVecExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
 
@@ -1623,23 +1623,23 @@ class CstNegVecExpr: CstVecTerm
     return -(_expr.evaluate());
   }
 
-  override CstNegVecExpr unroll(CstVecIterBase itr, uint n) {
+  override CstNegVecExpr unroll(CstVecIterBase iter, uint n) {
     bool found = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	found = true;
 	break;
       }
     }
     if(! found) return this;
     else {
-      return new CstNegVecExpr(_expr.unroll(itr, n));
+      return new CstNegVecExpr(_expr.unroll(iter, n));
     }
   }
 
   this(CstVecExpr expr) {
     _expr = expr;
-    _itrVars = _expr.itrVars;
+    _iterVars = _expr.iterVars;
   }
 
   uint resolveLap() {
@@ -1681,23 +1681,23 @@ class CstBdd2BddExpr: CstBddTerm
   CstBddExpr _rhs;
   CstBddOp _op;
 
-  CstVecIterBase[] _itrVars;
+  CstVecIterBase[] _iterVars;
 
   CstDomain[] _unresolvedIdxs;
   
-  CstVecIterBase[] itrVars() {
-       return _itrVars;
+  CstVecIterBase[] iterVars() {
+       return _iterVars;
   }
 
   CstVecIterBase getIterator() {
-    auto litr = _lhs.getIterator();
-    auto ritr = _rhs.getIterator();
-    if (litr !is null) {
-      assert (ritr is null || ritr is litr);
-      return litr;
+    auto liter = _lhs.getIterator();
+    auto riter = _rhs.getIterator();
+    if (liter !is null) {
+      assert (riter is null || riter is liter);
+      return liter;
     }
     else {
-      return ritr;
+      return riter;
     }
   }
 
@@ -1706,13 +1706,13 @@ class CstBdd2BddExpr: CstBddTerm
     _rhs = rhs;
     _op = op;
 
-    foreach (var; lhs.itrVars ~ rhs.itrVars) {
+    foreach (var; lhs.iterVars ~ rhs.iterVars) {
       bool add = true;
-      foreach (l; _itrVars) {
+      foreach (l; _iterVars) {
 	if (l is var) add = false;
 	break;
       }
-      if (add) _itrVars ~= var;
+      if (add) _iterVars ~= var;
     }
 
     foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
@@ -1760,9 +1760,9 @@ class CstBdd2BddExpr: CstBddTerm
 
 
   BDD getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if(this.iterVars.length !is 0) {
       assert(false,
-	     "CstBdd2BddExpr: Need to unroll the itrVars" ~
+	     "CstBdd2BddExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -1777,17 +1777,17 @@ class CstBdd2BddExpr: CstBddTerm
     return retval;
   }
 
-  override CstBdd2BddExpr unroll(CstVecIterBase itr, uint n) {
+  override CstBdd2BddExpr unroll(CstVecIterBase iter, uint n) {
     bool found = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	found = true;
 	break;
       }
     }
     if(! found) return this;
     else {
-      return new CstBdd2BddExpr(_lhs.unroll(itr, n), _rhs.unroll(itr, n), _op);
+      return new CstBdd2BddExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
     }
   }
 
@@ -1833,9 +1833,9 @@ class CstBdd2BddExpr: CstBddTerm
 // TBD
 class CstIteBddExpr: CstBddTerm
 {
-  CstVecIterBase[] _itrVars;
+  CstVecIterBase[] _iterVars;
 
-  CstVecIterBase[] itrVars() {
+  CstVecIterBase[] iterVars() {
     assert(false, "TBD");
   }
 
@@ -1891,7 +1891,7 @@ class CstIteBddExpr: CstBddTerm
     assert(false, "TBD");
   }    
 
-  CstBddTerm unroll(CstVecIterBase itr, uint n) {
+  CstBddTerm unroll(CstVecIterBase iter, uint n) {
     assert(false, "TBD");
   }
 
@@ -1911,8 +1911,8 @@ class CstNopBddExpr: CstBddTerm
 {
   CstVecExpr _vec;
 
-  CstVecIterBase[] itrVars() {
-    return _vec.itrVars();
+  CstVecIterBase[] iterVars() {
+    return _vec.iterVars();
   }
 
   CstVecIterBase getIterator() {
@@ -1947,17 +1947,17 @@ class CstNopBddExpr: CstBddTerm
     return buddy.one();
   }
 
-  override CstNopBddExpr unroll(CstVecIterBase itr, uint n) {
+  override CstNopBddExpr unroll(CstVecIterBase iter, uint n) {
     bool shouldUnroll = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	shouldUnroll = true;
 	break;
       }
     }
     if(! shouldUnroll) return this;
     else {
-      return new CstNopBddExpr(_vec.unroll(itr, n));
+      return new CstNopBddExpr(_vec.unroll(iter, n));
     }
   }
 
@@ -2003,22 +2003,22 @@ class CstVec2BddExpr: CstBddTerm
   CstVecExpr _rhs;
   CstBinBddOp _op;
 
-  CstVecIterBase[] _itrVars;
+  CstVecIterBase[] _iterVars;
   CstDomain[] _unresolvedIdxs;
 
-  CstVecIterBase[] itrVars() {
-       return _itrVars;
+  CstVecIterBase[] iterVars() {
+       return _iterVars;
   }
 
   CstVecIterBase getIterator() {
-    auto litr = _lhs.getIterator();
-    auto ritr = _rhs.getIterator();
-    if (litr !is null) {
-      assert (ritr is null || ritr is litr);
-      return litr;
+    auto liter = _lhs.getIterator();
+    auto riter = _rhs.getIterator();
+    if (liter !is null) {
+      assert (riter is null || riter is liter);
+      return liter;
     }
     else {
-      return ritr;
+      return riter;
     }
   }
 
@@ -2031,13 +2031,13 @@ class CstVec2BddExpr: CstBddTerm
     _rhs = rhs;
     _op = op;
 
-    foreach (var; lhs.itrVars ~ rhs.itrVars) {
+    foreach (var; lhs.iterVars ~ rhs.iterVars) {
       bool add = true;
-      foreach (l; _itrVars) {
+      foreach (l; _iterVars) {
 	if (l is var) add = false;
 	break;
       }
-      if (add) _itrVars ~= var;
+      if (add) _iterVars ~= var;
     }
 
     foreach (var; lhs.unresolvedIdxs ~ rhs.unresolvedIdxs) {
@@ -2076,13 +2076,13 @@ class CstVec2BddExpr: CstBddTerm
   }
 
   BDD getBDD(CstStage stage, Buddy buddy) {
-    if (this.itrVars.length !is 0) {
-      // foreach (itr; itrVars) {
+    if (this.iterVars.length !is 0) {
+      // foreach (iter; iterVars) {
       // 	import std.stdio;
-      // 	writeln(name(), " : ", itr.name());
+      // 	writeln(name(), " : ", iter.name());
       // }
       assert(false,
-	     "CstVec2BddExpr: Need to unroll the itrVars" ~
+	     "CstVec2BddExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
     auto lvec = _lhs.getBDD(stage, buddy);
@@ -2100,21 +2100,21 @@ class CstVec2BddExpr: CstBddTerm
     return retval;
   }
 
-  override CstVec2BddExpr unroll(CstVecIterBase itr, uint n) {
+  override CstVec2BddExpr unroll(CstVecIterBase iter, uint n) {
     // import std.stdio;
     // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unwound!");
     bool found = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	found = true;
 	break;
       }
     }
     if(! found) return this;
     else {
-      // writeln("RHS: ", _rhs.unroll(itr, n).name());
-      // writeln("LHS: ", _lhs.unroll(itr, n).name());
-      return new CstVec2BddExpr(_lhs.unroll(itr, n), _rhs.unroll(itr, n), _op);
+      // writeln("RHS: ", _rhs.unroll(iter, n).name());
+      // writeln("LHS: ", _lhs.unroll(iter, n).name());
+      return new CstVec2BddExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
     }
   }
 
@@ -2166,7 +2166,7 @@ class CstBddConst: CstBddTerm
 {
   immutable bool _expr;
 
-  CstVecIterBase[] itrVars() {
+  CstVecIterBase[] iterVars() {
        return [];
   }
 
@@ -2200,7 +2200,7 @@ class CstBddConst: CstBddTerm
     return [];
   }
 
-  override CstBddConst unroll(CstVecIterBase itr, uint n) {
+  override CstBddConst unroll(CstVecIterBase iter, uint n) {
     return this;
   }
 
@@ -2242,8 +2242,8 @@ class CstNotBddExpr: CstBddTerm
     _expr = expr;
   }
 
-  CstVecIterBase[] itrVars() {
-    return _expr.itrVars();
+  CstVecIterBase[] iterVars() {
+    return _expr.iterVars();
   }
 
   CstVecIterBase getIterator() {
@@ -2267,26 +2267,26 @@ class CstNotBddExpr: CstBddTerm
   }
 
   BDD getBDD(CstStage stage, Buddy buddy) {
-    if(this.itrVars.length !is 0) {
+    if(this.iterVars.length !is 0) {
       assert(false,
-	     "CstBdd2BddExpr: Need to unroll the itrVars" ~
+	     "CstBdd2BddExpr: Need to unroll the iterVars" ~
 	     " before attempting to solve BDD");
     }
     auto bdd = _expr.getBDD(stage, buddy);
     return (~ bdd);
   }
 
-  override CstNotBddExpr unroll(CstVecIterBase itr, uint n) {
+  override CstNotBddExpr unroll(CstVecIterBase iter, uint n) {
     bool shouldUnroll = false;
-    foreach(var; itrVars()) {
-      if(itr is var) {
+    foreach(var; iterVars()) {
+      if(iter is var) {
 	shouldUnroll = true;
 	break;
       }
     }
     if(! shouldUnroll) return this;
     else {
-      return new CstNotBddExpr(_expr.unroll(itr, n));
+      return new CstNotBddExpr(_expr.unroll(iter, n));
     }
   }
 
