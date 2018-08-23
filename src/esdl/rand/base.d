@@ -165,9 +165,66 @@ class CstStage {
 //   abstract void markIndex();
 // }
 
+class CstAnnotatedDomain
+{
+  CstEquation[] _varEqns;
+  CstEquation[] _valEqns;
+  CstEquation[] _depEqns;
+
+  void registerVarEqn(CstEquation varEqn) {
+    bool flag;
+    foreach (eqn; _varEqns) {
+      if (eqn is varEqn) {
+	flag = true;
+	break;
+      }
+    }
+    if (! flag) {
+      _varEqns ~= varEqn;
+    }
+  }
+  
+  void registerValEqn(CstEquation valEqn) {
+    bool flag;
+    foreach (eqn; _valEqns) {
+      if (eqn is valEqn) {
+	flag = true;
+	break;
+      }
+    }
+    if (! flag) {
+      _valEqns ~= valEqn;
+    }
+  }
+  
+  void registerDepEqn(CstEquation depEqn) {
+    bool flag;
+    foreach (eqn; _depEqns) {
+      if (eqn is depEqn) {
+	flag = true;
+	break;
+      }
+    }
+    if (! flag) {
+      _depEqns ~= depEqn;
+    }
+  }
+  
+}
 
 abstract class CstDomain
 {
+  CstAnnotatedDomain _annotation;
+
+  CstAnnotatedDomain annotation() {
+    if (_annotation is null) {
+      _annotation = new CstAnnotatedDomain();
+    }
+    return _annotation;
+  }
+
+  alias annotation this;
+
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
@@ -284,10 +341,17 @@ interface CstVecExpr
 // This class represents an unwound Foreach iter at vec level
 abstract class CstIteratorBase
 {
+  CstIterCallback[] _cbs;
+  void registerRolled(CstIterCallback cb) {
+    _cbs ~= cb;
+  }
+  void unroll() {
+    foreach (cb; _cbs) {
+      cb.unroll(this);
+    }
+  }
   abstract uint maxVal();
-
   abstract bool isUnrollable();
-
   abstract string name();
 }
 
@@ -327,39 +391,12 @@ interface CstBddExpr
   abstract bool cstExprIsNop();
 }
 
-class CstEquation
+class CstEquation: CstIterCallback
 {
   string name() {
     return "EQN:" ~ _expr.name();
   }
 
-  string describe() {
-    string description = name() ~ "\n";
-    if (_iter !is null) {
-      description ~= "    iterator: \n";
-      description ~= "\t" ~ _iter.name() ~ "\n";
-    }
-    if (_vars.length > 0) {
-      description ~= "    variables: \n";
-      foreach (var; _vars) {
-	description ~= "\t" ~ var.name() ~ "\n";
-      }
-    }
-    if (_vals.length > 0) {
-      description ~= "    values: \n";
-      foreach (val; _vals) {
-	description ~= "\t" ~ val.name() ~ "\n";
-      }
-    }
-    if (_deps.length > 0) {
-      description ~= "    depends: \n";
-      foreach (dep; _deps) {
-	description ~= "\t" ~ dep.name() ~ "\n";
-      }
-    }
-    description ~= "\n";
-    return description;
-  }
   // alias _expr this;
 
   _esdl__Solver _solver;
@@ -389,7 +426,7 @@ class CstEquation
       unrolled ~= this;
     }
     else {
-      unrolled = this.unroll(iter);
+      unrolled = this.unrollIter(iter);
     }
 
     if (_expr.hasUnresolvedIndx()) {
@@ -417,7 +454,34 @@ class CstEquation
     return null;
   }
 
-  CstEquation[] unroll(CstIteratorBase iter) {
+  void unroll(CstIteratorBase iter) {
+    assert (iter is _expr.getIterator());
+
+    if(! iter.isUnrollable()) {
+      assert(false, "CstIteratorBase is not unrollabe yet");
+    }
+    auto currLen = iter.maxVal();
+    // import std.stdio;
+    // writeln("maxVal is ", currLen);
+
+    if (_uwIter !is iter) {
+      _uwIter = iter;
+      _uwEqns.length = 0;
+    }
+    
+    if (currLen > _uwEqns.length) {
+      // import std.stdio;
+      // writeln("Need to unroll ", currLen - _uwEqns.length, " times");
+      for (uint i = cast(uint) _uwEqns.length;
+	   i != currLen; ++i) {
+	_uwEqns ~= new CstEquation(_solver, _expr.unroll(iter, i));
+      }
+    }
+    
+    // return _uwEqns[0..currLen];
+  }
+
+  CstEquation[] unrollIter(CstIteratorBase iter) {
     assert (iter is _expr.getIterator());
 
     if(! iter.isUnrollable()) {
@@ -451,6 +515,10 @@ class CstEquation
 
   final void setBddContext() {
     _expr.setBddContext(this, _vars, _vals, _iter, _deps);
+    if (_iter !is null) _iter.registerRolled(this);
+    foreach (var; _vars) var.registerVarEqn(this);
+    foreach (val; _vals) val.registerValEqn(this);
+    foreach (dep; _deps) dep.registerDepEqn(this);
   }
 
   CstBddExpr getExpr() {
@@ -464,6 +532,33 @@ class CstEquation
     return _rangeSet;
   }
 
+  string describe() {
+    string description = name() ~ "\n";
+    if (_iter !is null) {
+      description ~= "    iterator: \n";
+      description ~= "\t" ~ _iter.name() ~ "\n";
+    }
+    if (_vars.length > 0) {
+      description ~= "    variables: \n";
+      foreach (var; _vars) {
+	description ~= "\t" ~ var.name() ~ "\n";
+      }
+    }
+    if (_vals.length > 0) {
+      description ~= "    values: \n";
+      foreach (val; _vals) {
+	description ~= "\t" ~ val.name() ~ "\n";
+      }
+    }
+    if (_deps.length > 0) {
+      description ~= "    depends: \n";
+      foreach (dep; _deps) {
+	description ~= "\t" ~ dep.name() ~ "\n";
+      }
+    }
+    description ~= "\n";
+    return description;
+  }
 }
 
 class CstBlock

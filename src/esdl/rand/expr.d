@@ -737,6 +737,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     // import std.stdio;
     // writeln("Setting length for array: ", _parent.name(), " to ", v);
     _parent.setLen(cast(size_t) v);
+    _iterVar.unroll();
     // writeln("Getting length for array: ", _parent.name(), " as ", _parent.getLen());
     
   }
