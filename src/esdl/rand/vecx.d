@@ -9,7 +9,8 @@ import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIteratorBase,
   CstStage, CstDomain, CstBddExpr, CstEquation, _esdl__Solver; // CstValAllocator,
-import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal;
+import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
+  CstVecTerm;
 
 import esdl.rand.intr: IntRangeSet;
 
@@ -25,7 +26,6 @@ abstract class CstVecBase(V, alias R, int N)
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
   alias E = ElementTypeN!(V, N);
-  alias RV = typeof(this);
 
   string _name;
 
@@ -41,7 +41,7 @@ abstract class CstVecBase(V, alias R, int N)
 
   static if(HAS_RAND_ATTRIB && is(E == enum)) {
     BDD _primBdd;
-    BDD getPrimBdd(Buddy buddy) {
+    override BDD getPrimBdd(Buddy buddy) {
       import std.traits;
       if(_primBdd.isZero()) {
 	foreach(e; EnumMembers!E) {
@@ -196,6 +196,9 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       import std.range;
       import esdl.data.bvec;
 
+      alias E = ElementTypeN!(V, N);
+      alias RV = typeof(this);
+
       V* _var;
       _esdl__Solver _parent;
     
@@ -262,7 +265,8 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(false);
       }
 
-      RV unroll(CstIteratorBase iter, uint n) {
+      // RV
+      CstVecExpr unroll(CstIteratorBase iter, uint n) {
 	// iterVars is always empty
 	return this;
       }
@@ -561,7 +565,8 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      RV unroll(CstIteratorBase iter, uint n) {
+      // RV
+      CstVecExpr unroll(CstIteratorBase iter, uint n) {
 	bool found = false;
 	foreach(var; iterVars()) {
 	  if(iter is var) {

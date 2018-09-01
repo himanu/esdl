@@ -85,7 +85,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   _esdl__ConstraintBase _esdl__cstWith;
   bool _esdl__cstWithChanged;
 
-  CstBlock _esdl__cstEqns;
+  CstBlock _esdl__cstExprs;
 
   CstStage[] savedStages;
 
@@ -93,7 +93,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
        _esdl__SolverRoot parent) {
     super(seed, isSeeded, name, parent);
     if (parent is null) {
-      _esdl__cstEqns = new CstBlock();
+      _esdl__cstExprs = new CstBlock();
     }
   }
 
@@ -107,14 +107,14 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   //   uint lap = 0;
   //   // if (_domains.length is 0 // || _esdl__cstWithChanged is true
   //   // 	) {
-  //   if (_esdl__cstEqns.isEmpty || _esdl__cstWithChanged is true) {
+  //   if (_esdl__cstExprs.isEmpty || _esdl__cstWithChanged is true) {
   //     initEqns();
   //   }
 
   //   CstStage[] unsolvedStages;
 
   //   int stageIndx=0;
-  //   CstEquation[] unrolledEqns = _esdl__cstEqns._eqns;	// unstaged Expressions -- all
+  //   CstEquation[] unrolledEqns = _esdl__cstExprs._exprs;	// unstaged Expressions -- all
   //   CstEquation[] toResolveEqns;   			// need resolution wrt LAP logic
   //   CstEquation[] unresolvedEqns;			// need resolution wrt LAP logic
     
@@ -186,25 +186,56 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   //   }
   // }
 
+  Bin!CstEquation allEqns;
+
   Bin!CstEquation solveEqns;
   Bin!CstStage solveStages;
+  
+  void initEqns() {
+    assert(_root is this);
+    CstDomain[] unresolvedIndxs;
+
+    _esdl__cstExprs._esdl__reset(); // start empty
+
+    // take all the constraints -- even if disabled
+    foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
+      _esdl__cstExprs ~= cst.getCstExpr();
+    }
+
+    if(_esdl__cstWith !is null) {
+      _esdl__cstExprs ~= _esdl__cstWith.getCstExpr();
+    }
+
+    foreach (expr; _esdl__cstExprs._exprs) {
+      unresolvedIndxs ~= expr.unresolvedIndxs();
+    }
+
+    foreach(indx; unresolvedIndxs) {
+      _esdl__cstExprs ~= indx.getNopBddExpr();
+    }
+    
+    foreach (expr; _esdl__cstExprs._exprs) {
+      auto eqn = new CstEquation(this, expr);
+      allEqns ~= eqn;
+    }
+  }
   
   void solve() {
     assert(_root is this);
 
     int stageIndx=0;
 
-    uint lap = 0;
-
-    if (_esdl__cstEqns.isEmpty || _esdl__cstWithChanged is true) {
+    if (_esdl__cstExprs.isEmpty || _esdl__cstWithChanged is true) {
       initEqns();
     }
 
+    foreach (n, eqn; allEqns) {
+      if (eqn.solvable()) {
+	solveEqns ~= eqn;
+      }
+    }
     
-    solveEqns ~= _esdl__cstEqns._eqns;
-
     while (solveEqns.length > 0) {
-      lap += 1;
 
       foreach (n, eqn; solveEqns) {
 	addCstStage(eqn);
@@ -336,6 +367,11 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
     stage.id(stageIndx);
 
+    foreach (vec; stage._domVars) {
+      vec.execCbs();
+    }
+    
+
     // save for future reference
     while (savedStages.length <= stageIndx) {
       savedStages ~= new CstStage();
@@ -418,34 +454,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
   }
 
-  void initEqns() {
-    assert(_root is this);
-    CstDomain[] unresolvedIndxs;
-
-    _esdl__cstEqns._esdl__reset(); // start empty
-
-    // take all the constraints -- even if disabled
-    foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
-      _esdl__cstEqns ~= cst.getCstExpr();
-    }
-
-    if(_esdl__cstWith !is null) {
-      _esdl__cstEqns ~= _esdl__cstWith.getCstExpr();
-    }
-
-    foreach (eqn; _esdl__cstEqns._eqns) {
-      unresolvedIndxs ~= eqn.getExpr().unresolvedIndxs();
-    }
-
-    foreach(indx; unresolvedIndxs) {
-      _esdl__cstEqns ~= new CstEquation(this, indx.getNopBddExpr());
-      // import std.stdio;
-      // writeln(indx.name());
-      // writeln(indx.getNopBddExpr().name());
-    }
-    
-  }
-  
   void initDomains() { // (T)(T t) {
     assert(_root is this);
     // int[] domList;
@@ -460,7 +468,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     // _esdl__buddy.clearAllDomains();
 
     
-    // foreach(stmt; _esdl__cstEqns._exprs) {
+    // foreach(stmt; _esdl__cstExprs._exprs) {
     //   addDomains(stmt.getRndDomains(false));
     // }
   }

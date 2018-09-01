@@ -775,28 +775,17 @@ struct CstParser {
   }
 
   void translateBlock(string name) {
-    string funcName = "_esdl__cst_func_" ~ name;
-    string blockName;
     import std.conv: to;
     fill("// Constraint @ File: " ~ FILE ~ " Line: " ~ LINE.to!string ~ "\n\n");
     if (name == "") {
-      fill("override CstBlock getCstExpr() {\n");
-      blockName = "_esdl__cst_block";
+      fill("override CstBlock getCstExpr() {" ~
+	   "\n  auto cstExpr = new CstBlock;\n");
     }
     else {
-      fill("CstBlock " ~ funcName ~ "() {\n");
-      blockName = "_esdl__cst_block_" ~ name;
+      fill("CstBlock _esdl__cst_func_" ~ name ~ "() {" ~
+	   "\n  auto cstExpr = new CstBlock;\n");
     }
-      
-    fill("  if (" ~ blockName ~ " !is null) return " ~
-	 blockName ~ ";\n");
-
-    fill("  CstBlock _esdl__block = new CstBlock();\n");
-
     procBlock();
-
-    fill("  " ~ blockName ~ " = _esdl__block;\n");
-    fill("  return _esdl__block;\n}\n");
   }
 
   char[] translateExpr() {
@@ -1364,7 +1353,7 @@ struct CstParser {
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
-    fill("  _esdl__block ~= new CstEquation(this, ");
+    fill("  cstExpr ~= ");
 
     if(ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
@@ -1398,10 +1387,10 @@ struct CstParser {
 	     srcCursor.to!string);
     }
     if(ifConds.length !is 0) {
-      fill("));\n");
+      fill(");\n");
     }
     else {
-      fill(");\n");
+      fill(";\n");
     }
   }
 
@@ -1445,6 +1434,7 @@ struct CstParser {
 
       switch(stmtToken) {
       case StmtToken.ENDCST:
+	fill("  return cstExpr;\n}\n");
 	return;
       case StmtToken.ENDBLOCK:
 	fill("    // END OF BLOCK \n");

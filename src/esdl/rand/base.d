@@ -21,6 +21,8 @@ abstract class _esdl__Solver
   _esdl__Solver _parent;
   _esdl__Solver _root;
 
+  uint _lap;
+
   void addDomain(CstDomain domain) {
     // import std.stdio;
     // writeln("Adding domain: ", domain.name());
@@ -209,6 +211,12 @@ class CstAnnotatedDomain
       _depEqns ~= depEqn;
     }
   }
+
+  void markAsUnresolved(uint lap) {
+    foreach (eqn; _varEqns) {
+      eqn.markAsUnresolved(lap);
+    }
+  }
   
 }
 
@@ -225,6 +233,11 @@ abstract class CstDomain
 
   alias annotation this;
 
+  void execCbs() {
+    execIterCbs();
+  }
+
+  void execIterCbs() { }
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
@@ -345,7 +358,7 @@ abstract class CstIteratorBase
   void registerRolled(CstIterCallback cb) {
     _cbs ~= cb;
   }
-  void unroll() {
+  void unrollCbs() {
     foreach (cb; _cbs) {
       cb.unroll(this);
     }
@@ -403,7 +416,7 @@ class CstEquation: CstIterCallback
   CstBddExpr _expr;
 
   CstIteratorBase _uwIter;
-  CstEquation[] _uwEqns;
+  Array!CstEquation _uwEqns;
   
   this(_esdl__Solver solver, CstBddExpr expr) {
     _solver = solver;
@@ -425,9 +438,9 @@ class CstEquation: CstIterCallback
     if (iter is null) {
       unrolled ~= this;
     }
-    else {
-      unrolled = this.unrollIter(iter);
-    }
+    // else {
+    //   unrolled = this.unrollIter(iter);
+    // }
 
     if (_expr.hasUnresolvedIndx()) {
       // TBD -- check that we may need to call resolveLap on each of the unrolled expression
@@ -481,38 +494,61 @@ class CstEquation: CstIterCallback
     // return _uwEqns[0..currLen];
   }
 
-  CstEquation[] unrollIter(CstIteratorBase iter) {
-    assert (iter is _expr.getIterator());
+  // CstEquation[] unrollIter(CstIteratorBase iter) {
+  //   assert (iter is _expr.getIterator());
 
-    if(! iter.isUnrollable()) {
-      assert(false, "CstIteratorBase is not unrollabe yet");
-    }
-    auto currLen = iter.maxVal();
-    // import std.stdio;
-    // writeln("maxVal is ", currLen);
+  //   if(! iter.isUnrollable()) {
+  //     assert(false, "CstIteratorBase is not unrollabe yet");
+  //   }
+  //   auto currLen = iter.maxVal();
+  //   // import std.stdio;
+  //   // writeln("maxVal is ", currLen);
 
-    if (_uwIter !is iter) {
-      _uwIter = iter;
-      _uwEqns.length = 0;
-    }
+  //   if (_uwIter !is iter) {
+  //     _uwIter = iter;
+  //     _uwEqns.length = 0;
+  //   }
     
-    if (currLen > _uwEqns.length) {
-      // import std.stdio;
-      // writeln("Need to unroll ", currLen - _uwEqns.length, " times");
-      for (uint i = cast(uint) _uwEqns.length;
-	   i != currLen; ++i) {
-	_uwEqns ~= new CstEquation(_solver, _expr.unroll(iter, i));
-      }
-    }
+  //   if (currLen > _uwEqns.length) {
+  //     // import std.stdio;
+  //     // writeln("Need to unroll ", currLen - _uwEqns.length, " times");
+  //     for (uint i = cast(uint) _uwEqns.length;
+  // 	   i != currLen; ++i) {
+  // 	_uwEqns ~= new CstEquation(_solver, _expr.unroll(iter, i));
+  //     }
+  //   }
     
-    return _uwEqns[0..currLen];
-  }
+  //   return _uwEqns[0..currLen];
+  // }
 
   CstDomain[] _vars;
   CstDomain[] _vals;
   CstDomain[] _deps;
   CstIteratorBase _iter;
 
+  int _lap;
+
+  final void markAsUnresolved(uint lap) {
+    if (_lap != lap) {	 // already marked -- avoid infinite recursion
+      _lap = lap;
+      foreach (var; _vars) {
+	var.markAsUnresolved(lap);
+      }
+    }
+  }
+
+  final bool markIfUnresolved(uint lap) {
+    if (_deps.length > 0 || _iter !is null) {
+      this.markAsUnresolved(lap);
+      return true;
+    }
+    return false;
+  }
+  
+  final bool solvable() {
+    return _deps.length == 0 && _iter is null;
+  }
+  
   final void setBddContext() {
     _expr.setBddContext(this, _vars, _vals, _iter, _deps);
     if (_iter !is null) _iter.registerRolled(this);
@@ -563,31 +599,31 @@ class CstEquation: CstIterCallback
 
 class CstBlock
 {
-  CstEquation[] _eqns;
+  CstBddExpr[] _exprs;
   bool[] _booleans;
 
   bool refresh(CstStage stage, Buddy buddy) {
     bool result = false;
-    foreach (eqn; _eqns) {
-      result |= eqn.getExpr().refresh(stage, buddy);
+    foreach (expr; _exprs) {
+      result |= expr.refresh(stage, buddy);
     }
     return result;
   }
   
   string name() {
     string name_ = "";
-    foreach(eqn; _eqns) {
-      name_ ~= " & " ~ eqn.name() ~ "\n";
+    foreach(expr; _exprs) {
+      name_ ~= " & " ~ expr.name() ~ "\n";
     }
     return name_;
   }
 
   void _esdl__reset() {
-    _eqns.length = 0;
+    _exprs.length = 0;
   }
 
   bool isEmpty() {
-    return _eqns.length == 0;
+    return _exprs.length == 0;
   }
   
   void opOpAssign(string op)(bool other)
@@ -595,16 +631,16 @@ class CstBlock
       _booleans ~= other;
     }
 
-  void opOpAssign(string op)(CstEquation other)
+  void opOpAssign(string op)(CstBddExpr other)
     if(op == "~") {
-      _eqns ~= other;
+      _exprs ~= other;
     }
 
   void opOpAssign(string op)(CstBlock other)
     if(op == "~") {
       if(other is null) return;
-      foreach(eqn; other._eqns) {
-	_eqns ~= eqn;
+      foreach(expr; other._exprs) {
+	_exprs ~= expr;
       }
       foreach(boolean; other._booleans) {
 	_booleans ~= boolean;

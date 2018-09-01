@@ -15,7 +15,7 @@ interface CstVecTerm: CstVecExpr
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
-  abstract CstVecTerm unroll(CstIteratorBase iter, uint n);
+  abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecTerm other)
   {
@@ -418,7 +418,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
-  override CstVecTerm unroll(CstIteratorBase iter, uint n) {
+  override CstVecExpr unroll(CstIteratorBase iter, uint n) {
     if(this !is iter) {
       return _arrVar.unroll(iter,n).arrLen().makeIterVar();
     }
@@ -737,7 +737,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     // import std.stdio;
     // writeln("Setting length for array: ", _parent.name(), " to ", v);
     _parent.setLen(cast(size_t) v);
-    _iterVar.unroll();
     // writeln("Getting length for array: ", _parent.name(), " as ", _parent.getLen());
     
   }
@@ -791,6 +790,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   bool getIntMods(ref IntRangeModSet modSet) {
     return true;
   }
+
+  override void execIterCbs() {
+    _iterVar.unrollCbs();
+  }
 }
 
 abstract class CstValBase: CstVecTerm
@@ -825,7 +828,7 @@ abstract class CstValBase: CstVecTerm
     return [];
   }
 
-  override CstVecTerm unroll(CstIteratorBase l, uint n) {
+  override CstVecExpr unroll(CstIteratorBase l, uint n) {
     return this;
   }
 
