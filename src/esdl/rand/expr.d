@@ -373,7 +373,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   this(RV arrVar) {
     _name = "iterVar";
     _arrVar = arrVar;
-    _arrVar._arrLen.iterVar(this);
+    // _arrVar._arrLen.iterVar(this);
   }
 
   override CstIteratorBase[] iterVars() {
@@ -468,7 +468,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     assert(false, "Can not evaluate a Iter Variable without unrolling");
   }
 
-  override void setBddContext(CstEquation eqn,
+  override void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase iter,
@@ -507,6 +507,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     assert(parent !is null);
     _name = name;
     _parent = parent;
+    _iterVar = new CstIterator!RV(_parent);
   }
 
   ~this() {
@@ -770,7 +771,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase iter,
@@ -792,6 +793,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   override void execIterCbs() {
+    assert(_iterVar !is null);
     _iterVar.unrollCbs();
   }
 }
@@ -832,7 +834,7 @@ abstract class CstValBase: CstVecTerm
     return this;
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
@@ -1254,13 +1256,13 @@ class CstVec2VecExpr: CstVecTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
-    _lhs.setBddContext(eqn, vars, vals, iter, deps);
-    _rhs.setBddContext(eqn, vars, vals, iter, deps);
+    _lhs.setBddContext(pred, vars, vals, iter, deps);
+    _rhs.setBddContext(pred, vars, vals, iter, deps);
   }
 
 }
@@ -1441,15 +1443,15 @@ class CstVecSliceExpr: CstVecTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
-    _vec.setBddContext(eqn, vars, vals, iter, deps);
-    _lhs.setBddContext(eqn, deps, vals, iter, deps);
+    _vec.setBddContext(pred, vars, vals, iter, deps);
+    _lhs.setBddContext(pred, deps, vals, iter, deps);
     if (_rhs !is null) {
-      _rhs.setBddContext(eqn, deps, vals, iter, deps);
+      _rhs.setBddContext(pred, deps, vals, iter, deps);
     }
   }
 
@@ -1553,12 +1555,12 @@ class CstNotVecExpr: CstVecTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
-    _expr.setBddContext(eqn, vars, vals, iter, deps);
+    _expr.setBddContext(pred, vars, vals, iter, deps);
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
@@ -1662,12 +1664,12 @@ class CstNegVecExpr: CstVecTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
-    _expr.setBddContext(eqn, vars, vals, iter, deps);
+    _expr.setBddContext(pred, vars, vals, iter, deps);
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
@@ -1816,13 +1818,13 @@ class CstBdd2BddExpr: CstBddTerm
     else return false;
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase iter,
 			      ref CstDomain[] deps) {
-    _lhs.setBddContext(eqn, vars, vals, iter, deps);
-    _rhs.setBddContext(eqn, vars, vals, iter, deps);
+    _lhs.setBddContext(pred, vars, vals, iter, deps);
+    _rhs.setBddContext(pred, vars, vals, iter, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {
@@ -1867,7 +1869,7 @@ class CstIteBddExpr: CstBddTerm
     return false;
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
@@ -1985,7 +1987,7 @@ class CstNopBddExpr: CstBddTerm
     return true;
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
@@ -2148,13 +2150,13 @@ class CstVec2BddExpr: CstBddTerm
     }
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
-    _lhs.setBddContext(eqn, vars, vals, iter, deps);
-    _rhs.setBddContext(eqn, vars, vals, iter, deps);
+    _lhs.setBddContext(pred, vars, vals, iter, deps);
+    _rhs.setBddContext(pred, vars, vals, iter, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {
@@ -2221,7 +2223,7 @@ class CstBddConst: CstBddTerm
   }
   void resolveLap(uint lap) {}
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase iter,
@@ -2309,12 +2311,12 @@ class CstNotBddExpr: CstBddTerm
     _expr.resolveLap(lap);
   }
 
-  void setBddContext(CstEquation eqn,
+  void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase iter,
 		     ref CstDomain[] deps) {
-    _expr.setBddContext(eqn, vars, vals, iter, deps);
+    _expr.setBddContext(pred, vars, vals, iter, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {

@@ -60,6 +60,9 @@ struct CstParser {
   char[] outBuffer;
   
   string dummy;			// sometimes required in dryRun
+
+  string _solver;
+  
   size_t outCursor = 0;
   size_t dclCursor = 0;
 
@@ -763,7 +766,8 @@ struct CstParser {
     assert(curs == 11);
   }
 
-  char[] translate(string name) {
+  char[] translate(string solver, string name) {
+    _solver = solver;
 
     translateBlock(name);
 
@@ -775,17 +779,30 @@ struct CstParser {
   }
 
   void translateBlock(string name) {
+    string blockName;
     import std.conv: to;
     fill("// Constraint @ File: " ~ FILE ~ " Line: " ~ LINE.to!string ~ "\n\n");
     if (name == "") {
-      fill("override CstBlock getCstExpr() {" ~
-	   "\n  auto cstExpr = new CstBlock;\n");
+      fill("override CstBlock getCstExpr() {\n"//  ~
+	   // "\n  auto cstExpr = new CstBlock;\n"
+	   );
+      blockName = "_esdl__cst_block";
     }
     else {
-      fill("CstBlock _esdl__cst_func_" ~ name ~ "() {" ~
-	   "\n  auto cstExpr = new CstBlock;\n");
+      fill("CstBlock _esdl__cst_func_" ~ name ~ "() {\n"//  ~
+	   // "\n  auto cstExpr = new CstBlock;\n"
+	   );
+      blockName = "_esdl__cst_block_" ~ name;
     }
+
+    fill("  if (" ~ blockName ~ " !is null) return " ~
+	 blockName ~ ";\n");
+
+    fill("  CstBlock _esdl__block = new CstBlock();\n");
+
     procBlock();
+    fill("  " ~ blockName ~ " = _esdl__block;\n");
+    fill("  return _esdl__block;\n}\n");
   }
 
   char[] translateExpr() {
@@ -1353,7 +1370,7 @@ struct CstParser {
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
-    fill("  cstExpr ~= ");
+    fill("  _esdl__block ~= new CstPredicate(" ~ _solver ~ ", ");
 
     if(ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
@@ -1387,10 +1404,10 @@ struct CstParser {
 	     srcCursor.to!string);
     }
     if(ifConds.length !is 0) {
-      fill(");\n");
+      fill("));\n");
     }
     else {
-      fill(";\n");
+      fill(");\n");
     }
   }
 
@@ -1434,7 +1451,7 @@ struct CstParser {
 
       switch(stmtToken) {
       case StmtToken.ENDCST:
-	fill("  return cstExpr;\n}\n");
+	fill("    // END OF CONSTRAINT BLOCK \n");
 	return;
       case StmtToken.ENDBLOCK:
 	fill("    // END OF BLOCK \n");

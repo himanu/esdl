@@ -8,7 +8,7 @@ import esdl.rand.obdd;
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIteratorBase,
-  CstStage, CstDomain, CstBddExpr, CstEquation, _esdl__Solver; // CstValAllocator,
+  CstStage, CstDomain, CstBddExpr, CstPredicate, _esdl__Solver; // CstValAllocator,
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm;
 
@@ -387,7 +387,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setBddContext(CstEquation eqn,
+      void setBddContext(CstPredicate pred,
 				  ref CstDomain[] vars,
 				  ref CstDomain[] vals,
 				  ref CstIteratorBase iter,
@@ -728,7 +728,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setBddContext(CstEquation eqn,
+      void setBddContext(CstPredicate pred,
 			 ref CstDomain[] vars,
 			 ref CstDomain[] vals,
 			 ref CstIteratorBase iter,
@@ -750,14 +750,14 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
 
 	if (_indexExpr !is null) {
-	  // Here we need to put the parent as a dep for the eqn
+	  // Here we need to put the parent as a dep for the pred
 	  // and since this prim needs resolution, the constituents of
 	  // the indexExpr need to trigger a function that finds out
 	  // whether the _indexExpr has been fully resolved or
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
-	  // the eqn that it can go ahead
-	  _indexExpr.setBddContext(eqn, deps, vals, iter, deps);
+	  // the pred that it can go ahead
+	  _indexExpr.setBddContext(pred, deps, vals, iter, deps);
 	}
       }
 
@@ -1191,7 +1191,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	// void setBddContext(CstEquation eqn,
+	// void setBddContext(CstPredicate pred,
 	// 		   ref CstDomain[] vars,
 	// 		   ref CstDomain[] vals,
 	// 		   ref CstIteratorBase iter,
@@ -1629,7 +1629,7 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	// void setBddContext(CstEquation eqn,
+	// void setBddContext(CstPredicate pred,
 	// 		   ref CstDomain[] vars,
 	// 		   ref CstDomain[] vals,
 	// 		   ref CstIteratorBase iter,
@@ -1650,7 +1650,7 @@ class CstVecArr(V, alias R, int N=0)
 	//     }
 
 	//     if (_indexExpr !is null) {
-	//       _indexExpr.setBddContext(eqn, deps, vals, iter, deps);
+	//       _indexExpr.setBddContext(pred, deps, vals, iter, deps);
 	//     }
 	//   }
 	// }
