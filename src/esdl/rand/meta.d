@@ -629,13 +629,12 @@ mixin template _esdl__SolverMixin()
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
     CstBlock _esdl__cst_block;
-    mixin(constraintXlate("this", _esdl__CstString, FILE, LINE));
     debug(CONSTRAINTS) {
       pragma(msg, "// constraintXlate! STARTS\n");
-      pragma(msg, constraintXlate("this", _esdl__CstString, FILE, LINE));
+      pragma(msg, constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
       pragma(msg, "// constraintXlate! ENDS\n");
-      
     }
+    mixin(constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
   }
 
   class _esdl__Constraint(string _esdl__CstString, string FILE, size_t LINE, string NAME):

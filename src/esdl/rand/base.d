@@ -5,6 +5,8 @@ import esdl.rand.intr;
 import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import esdl.data.bin;
+import std.algorithm;
+import std.array;
 import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
@@ -378,6 +380,7 @@ abstract class CstIteratorBase
   abstract uint maxVal();
   abstract bool isUnrollable();
   abstract string name();
+  abstract CstIteratorBase unrollIter(CstIteratorBase iter, uint n);
 }
 
 interface CstBddExpr
@@ -419,7 +422,7 @@ interface CstBddExpr
 class CstPredicate: CstIterCallback
 {
   string name() {
-    return "PRED:" ~ _expr.name();
+    return "PREDICATE: " ~ _expr.name();
   }
 
   // alias _expr this;
@@ -430,10 +433,11 @@ class CstPredicate: CstIterCallback
   CstIteratorBase _uwIter;
   Array!CstPredicate _uwPreds;
   
-  this(_esdl__Solver solver, CstBddExpr expr) {
+  this(_esdl__Solver solver, CstBddExpr expr, CstIteratorBase[] iters ...) {
     assert(solver !is null);
     _solver = solver;
     _expr = expr;
+    _iters = iters;
     this.setBddContext();
     debug(CSTPREDS) {
       import std.stdio;
@@ -500,7 +504,8 @@ class CstPredicate: CstIterCallback
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
       for (uint i = cast(uint) _uwPreds.length;
 	   i != currLen; ++i) {
-	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i));
+	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i),
+				     _iters[1..$].map!(tr => tr.unrollIter(iter, i)).array);
       }
     }
 
@@ -546,6 +551,7 @@ class CstPredicate: CstIterCallback
   CstDomain[] _vals;
   CstDomain[] _deps;
   CstIteratorBase _iter;
+  CstIteratorBase[] _iters;
 
   int _lap;
 
@@ -591,9 +597,11 @@ class CstPredicate: CstIterCallback
 
   string describe() {
     string description = name() ~ "\n";
-    if (_iter !is null) {
-      description ~= "    iterator: \n";
-      description ~= "\t" ~ _iter.name() ~ "\n";
+    if (_iters.length > 0) {
+      description ~= "    iterators: \n";
+      foreach (iter; _iters) {
+	description ~= "\t" ~ iter.name() ~ "\n";
+      }
     }
     if (_vars.length > 0) {
       description ~= "    variables: \n";

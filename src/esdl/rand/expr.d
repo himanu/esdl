@@ -418,6 +418,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
   }
+
   override CstVecExpr unroll(CstIteratorBase iter, uint n) {
     if(this !is iter) {
       return _arrVar.unroll(iter,n).arrLen().makeIterVar();
@@ -425,6 +426,11 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     else {
       return new CstVal!size_t(n); // CstVal!size_t.allocate(n);
     }
+  }
+
+  override CstIteratorBase unrollIter(CstIteratorBase iter, uint n) {
+    assert(this !is iter);
+    return _arrVar.unroll(iter,n).arrLen().makeIterVar();
   }
 
   override uint resolveLap() {

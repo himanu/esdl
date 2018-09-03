@@ -76,6 +76,9 @@ struct CstParser {
 
   VarPair[] varMap = [];
 
+  string[] iterators;
+  
+
   // list of if conditions that are currently active
   Condition[] ifConds = [];
 
@@ -97,6 +100,12 @@ struct CstParser {
     this.LINE = LINE;
   }
 
+  size_t retreat(size_t step) {
+    size_t start = outCursor;
+    outCursor -= step;
+    return start;
+  }
+  
   size_t fill(in string source) {
     size_t start = outCursor;
     if(! dryRun) {
@@ -948,6 +957,8 @@ struct CstParser {
     }
 
     // add index
+    iterators ~= array ~ ".iterator()";
+    
     if(index.length != 0) {
       VarPair x;
       x.varName  = index;
@@ -969,6 +980,8 @@ struct CstParser {
     else {
       procStmt();
     }
+
+    iterators = iterators[0..$-1];
 
     if(index.length != 0) {
       varMap = varMap[0..$-2];
@@ -1404,11 +1417,16 @@ struct CstParser {
 	     srcCursor.to!string);
     }
     if(ifConds.length !is 0) {
-      fill("));\n");
+      fill(")");
     }
-    else {
-      fill(");\n");
+
+    if (iterators.length != 0) {
+      foreach (iterator; iterators) {
+	fill(", " ~ iterator);
+      }
     }
+
+    fill(");\n");
   }
 
   void procStmt() {
