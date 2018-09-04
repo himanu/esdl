@@ -388,10 +388,10 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       void setBddContext(CstPredicate pred,
-				  ref CstDomain[] vars,
-				  ref CstDomain[] vals,
-				  ref CstIteratorBase iter,
-				  ref CstDomain[] deps) {
+			 ref CstDomain[] vars,
+			 ref CstDomain[] vals,
+			 ref CstIteratorBase[] iters,
+			 ref CstDomain[] deps) {
 	static if (is (R: _esdl__norand)) {
 	  vals ~= this;
 	}
@@ -731,7 +731,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       void setBddContext(CstPredicate pred,
 			 ref CstDomain[] vars,
 			 ref CstDomain[] vals,
-			 ref CstIteratorBase iter,
+			 ref CstIteratorBase[] iters,
 			 ref CstDomain[] deps) {
 	static if (is (R: _esdl__norand)) {
 	  vals ~= this;
@@ -749,6 +749,8 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  }
 	}
 
+	_parent.setBddContext(pred, vars, vals, iters, deps);
+
 	if (_indexExpr !is null) {
 	  // Here we need to put the parent as a dep for the pred
 	  // and since this prim needs resolution, the constituents of
@@ -757,7 +759,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
-	  _indexExpr.setBddContext(pred, deps, vals, iter, deps);
+	  _indexExpr.setBddContext(pred, deps, vals, iters, deps);
 	}
       }
 
@@ -1191,27 +1193,20 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	// void setBddContext(CstPredicate pred,
-	// 		   ref CstDomain[] vars,
-	// 		   ref CstDomain[] vals,
-	// 		   ref CstIteratorBase iter,
-	// 		   ref CstDomain[] deps) {
-	//   static if (is (R: _esdl__norand)) {
-	//     vals ~= this;
-	//   }
-	//   else {
-	//     bool listed;
-	//     foreach (var; vars) {
-	//       if (var is this) {
-	// 	listed = true;
-	// 	break;
-	//       }
-	//     }
-	//     if (listed is false) {
-	//       vars ~= this;
-	//     }
-	//   }
-	// }
+	void setBddContext(CstPredicate pred,
+			   ref CstDomain[] vars,
+			   ref CstDomain[] vals,
+			   ref CstIteratorBase[] iters,
+			   ref CstDomain[] deps) {
+	  // arrlen should not be handled here. It is handled as part
+	  // of the indexExpr in the elements when required (that is
+	  // when indexExpr is not contant, but an expression)
+	  
+	  // auto iter = arrLen.makeIterVar();
+	  // iters ~= iter;
+
+	  // no parent
+	}
       }
 
 class CstVecArr(V, alias R, int N=0)
@@ -1629,29 +1624,20 @@ class CstVecArr(V, alias R, int N=0)
 	  }
 	}
 
-	// void setBddContext(CstPredicate pred,
-	// 		   ref CstDomain[] vars,
-	// 		   ref CstDomain[] vals,
-	// 		   ref CstIteratorBase iter,
-	// 		   ref CstDomain[] deps) {
-	//   static if (is (R: _esdl__norand)) {
-	//     vals ~= this;
-	//   }
-	//   else {
-	//     bool listed;
-	//     foreach (var; vars) {
-	//       if (var is this) {
-	// 	listed = true;
-	// 	break;
-	//       }
-	//     }
-	//     if (listed is false) {
-	//       vars ~= this;
-	//     }
-
-	//     if (_indexExpr !is null) {
-	//       _indexExpr.setBddContext(pred, deps, vals, iter, deps);
-	//     }
-	//   }
-	// }
+	void setBddContext(CstPredicate pred,
+			   ref CstDomain[] vars,
+			   ref CstDomain[] vals,
+			   ref CstIteratorBase[] iters,
+			   ref CstDomain[] deps) {
+	  // arrlen should not be handled here. It is handled as part
+	  // of the indexExpr in the elements when required (that is
+	  // when indexExpr is not contant, but an expression)
+	  
+	  // auto iter = arrLen.makeIterVar();
+	  // iters ~= iter;
+	  _parent.setBddContext(pred, vals, vals, iters, deps);
+	  if (_indexExpr !is null) {
+	    _indexExpr.setBddContext(pred, deps, vals, iters, deps);
+	  }
+	}
       }

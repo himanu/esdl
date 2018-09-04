@@ -358,7 +358,7 @@ interface CstVecExpr
   abstract void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstIteratorBase iter,
+			      ref CstIteratorBase[] iters,
 			      ref CstDomain[] deps);
 
   abstract bool getIntMods(ref IntRangeModSet modSet);
@@ -403,7 +403,7 @@ interface CstBddExpr
   abstract void setBddContext(CstPredicate pred,
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
-			      ref CstIteratorBase iter,
+			      ref CstIteratorBase[] iters,
 			      ref CstDomain[] deps);
 
   abstract bool getIntRange(ref IntRangeSet!long rangeSet);
@@ -512,7 +512,7 @@ class CstPredicate: CstIterCallback
     // Do not use foreach here since we may have more elements than current
     _solver.resetUnrolled();
     for (size_t i=0; i!=currLen; ++i) {
-      if (_uwPreds[i]._iter is null) {
+      if (this._iters.length == 1) {
 	_solver.addUnrolled(_uwPreds[i]);
       }
     }
@@ -573,15 +573,29 @@ class CstPredicate: CstIterCallback
   }
   
   final bool solvable() {
-    return _deps.length == 0 && _iter is null;
+    return _deps.length == 0 && _iters.length == 0;
   }
   
   final void setBddContext() {
-    _expr.setBddContext(this, _vars, _vals, _iter, _deps);
-    if (_iter !is null) _iter.registerRolled(this);
+    CstIteratorBase[] varIters;
+    CstIteratorBase[] pasredIters = _iters;
+    
+    _expr.setBddContext(this, _vars, _vals, varIters, _deps);
+
+    // foreach (varIter; varIters) {
+    //   import std.stdio;
+    //   stderr.writeln("Found Iterator: ", varIter.name());
+    // }
+    
     foreach (var; _vars) var.registerVarPred(this);
     foreach (val; _vals) val.registerValPred(this);
     foreach (dep; _deps) dep.registerDepPred(this);
+
+    // take only the parsed iterators that are found in the expression
+    // as well
+    _iters = pasredIters.filter!(itr => canFind(varIters, itr)).array;
+    
+    if (_iters.length != 0) _iters[0].registerRolled(this);
   }
 
   CstBddExpr getExpr() {
