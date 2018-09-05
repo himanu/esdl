@@ -24,7 +24,33 @@ abstract class _esdl__Solver
   _esdl__Solver _parent;
   _esdl__Solver _root;
 
+  Bin!CstPredicate _rolledPreds;
+  Bin!CstPredicate _resolvedPreds;
+  Bin!CstPredicate _toResolvedPreds;
+  Bin!CstPredicate _toSolvePreds;
+  Bin!CstPredicate _solvePreds;
+  Bin!CstPredicate _unresolvedPreds;
+  Bin!CstPredicate _toUnresolvedPreds;
+
+  // the integer variable _lap is incremented everytime a set of @rand
+  // variables is made available for constraint solving. This 
+  // variable is used for:
+  // 1. marking the predicates that have unresolved dependencies
+  //    and/or have a relation with such predicates. When some
+  //    predicated are resolved it may lead to some of these
+  //    predicates becoming available
   uint _lap;
+  // _cycle is incremented once everytime randomize function is
+  // called. The use of this variable within a @rand variable is to
+  // indicate that the variable has been solved. Within a predicate,
+  // this variable indicates that the predicate has been solved for
+  // the indiated randomization cycle. There are two more places where
+  // this variable is used:
+  // 1. To indicate that iterator has been unrolled for a vec array in
+  //    a given randomization cycle.
+  // 2. To indicate that the index expression has been resolved for a
+  //    vec/vec-array for the indicated randomization cycle
+  uint _cycle;
 
   void addDomain(CstDomain domain) {
     // import std.stdio;
@@ -111,7 +137,7 @@ abstract class _esdl__Solver
   }
   
   void addUnrolled(CstPredicate pred) {
-    _unrolledPreds ~= pred;
+    _resolvedPreds ~= pred;
   }
   
 }
@@ -570,6 +596,10 @@ class CstPredicate: CstIterCallback
       return true;
     }
     return false;
+  }
+
+  final bool isRolled() {
+    return this._iters.length > 0;
   }
   
   final bool solvable() {

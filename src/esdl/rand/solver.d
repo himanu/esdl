@@ -187,10 +187,10 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   //   }
   // }
 
-  Bin!CstPredicate allPreds;
+  Bin!CstPredicate _allPreds;
 
-  Bin!CstPredicate solvePreds;
-  Bin!CstStage solveStages;
+  Bin!CstPredicate _solvePreds;
+  Bin!CstStage _solveStages;
 
   void initPreds() {
     assert(_root is this);
@@ -216,7 +216,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
     
     foreach (pred; _esdl__cstExprs._preds) {
-      allPreds ~= pred;
+      _allPreds ~= pred;
     }
   }
   
@@ -229,26 +229,38 @@ abstract class _esdl__SolverRoot: _esdl__Solver
       initPreds();
     }
 
-    foreach (n, pred; allPreds) {
-      if (pred.solvable()) {
-	solvePreds ~= pred;
+    // reset all bins
+    _rolledPreds.reset();
+    _resolvedPreds.reset();
+    _toResolvedPreds.reset();
+    _toSolvePreds.reset();
+    _solvePreds.reset();
+    _unresolvedPreds.reset();
+    _toUnresolvedPreds.reset();
+
+    foreach (pred; _allPreds) {
+      if (pred.isRolled()) {
+	_rolledPreds ~= pred;
+      }
+      else {
+	_resolvedPreds ~= pred;
       }
     }
     
-    while (solvePreds.length > 0) {
+    while (_resolvedPreds.length > 0) {
+      _solvePreds.reset();
+      _resolvedPreds.swop(_solvePreds);
 
-      foreach (n, pred; solvePreds) {
+      foreach (n, pred; _solvePreds) {
 	addCstStage(pred);
       }
 
-      solvePreds.length = 0;
-      
-      foreach(n, stage; solveStages) {
+      foreach(n, stage; _solveStages) {
 	if(stage !is null) {
 	  solveStage(stage, stageIndx);
 	}
       }
-      solveStages.length = 0;
+      _solveStages.length = 0;
     }
   }
 
@@ -410,11 +422,11 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 	  // writeln("pred: ", pred.name());
 	  if (stage is null) {
 	    stage = new CstStage();
-	    solveStages ~= stage;
+	    _solveStages ~= stage;
 	  }
 	  vec.stage = stage;
 	  stage._domVars ~= vec;
-	  // solveStages[stage]._domVars ~= vec;
+	  // _solveStages[stage]._domVars ~= vec;
 	}
 	if (stage !is vec.stage()) { // need to merge stages
 	  // import std.stdio;
@@ -426,7 +438,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
     if (stage is null) {
       stage = new CstStage();
-      solveStages ~= stage;
+      _solveStages ~= stage;
     }
     // import std.stdio;
     // writeln(pred.name());
@@ -445,8 +457,8 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
     toStage._domVars ~= fromStage._domVars;
     toStage._predicates ~= fromStage._predicates;
-    if(solveStages[$-1] is fromStage) {
-      solveStages.length = solveStages.length - 1;
+    if(_solveStages[$-1] is fromStage) {
+      _solveStages.length = _solveStages.length - 1;
     }
     else {
       fromStage._domVars.length = 0;
