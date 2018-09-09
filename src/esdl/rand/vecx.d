@@ -456,11 +456,19 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
 	_root = getSolverRoot();
-	_root.addDomain(this);
+	if (this.isConcrete()) {
+	  _root.addDomain(this);
+	}
       }
 
+      override bool opEquals(Object other) {
+	auto rhs = cast(RV) other;
+	if (rhs is null) return false;
+	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
+      }
+      
       bool isConcrete() {
-	return (_indexExpr is null);
+	return (_indexExpr is null && _parent.isConcrete());
       }
 
       _esdl__Solver getSolverRoot() {
@@ -536,9 +544,10 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  if (_indexExpr) {
 	    if (_indexExpr.isConst() || resolved) {
 	      // domains = cast (CstDomain[]) _parent.getDomainElems(_indexExpr.evaluate());
-	      foreach(pp; _parent.getDomainElems(cast(size_t) _indexExpr.evaluate())) {
-		domains ~= pp;
-	      }
+	      // foreach(pp; _parent.getDomainElems(cast(size_t) _indexExpr.evaluate())) {
+	      // 	domains ~= pp;
+	      // }
+	      domains ~= _parent[_indexExpr.evaluate()];
 	    }
 	    else {
 	      // FIXME -- if the expression has been solved
@@ -551,9 +560,10 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	    }
 	  }
 	  else {
-	    foreach(pp; _parent.getDomainElems(_pindex)) {
-	      domains ~= pp;
-	    }
+	    domains ~= _parent[_pindex];
+	    // foreach(pp; _parent.getDomainElems(_pindex)) {
+	    //   domains ~= pp;
+	    // }
 	    // domains =  cast (CstDomain[]) _parent.getDomainElems(_pindex);
 	  }
 	  return domains;
@@ -757,8 +767,9 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	    vars ~= this;
 	  }
 	}
-
-	deps ~= _parent._arrLen;
+	if (_parent.isConcrete()) {
+	  deps ~= _parent._arrLen;
+	}
 	_parent.setBddContext(pred, vars, vals, iters, deps);
 
 	if (_indexExpr !is null) {
@@ -911,7 +922,6 @@ class CstVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
 	_relatedIndxs ~= _arrLen;
 	_root = getSolverRoot();
-	_root.addDomain(_arrLen);
       }
 
       bool isConcrete() {
@@ -1069,17 +1079,11 @@ class CstVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
 	
 	void setLen(N...)(size_t v, N indx) {
-	  static if (HAS_RAND_ATTRIB) {
-	    static if (N.length == 0) {
-	      buildElements(v);
-	    }
-	    setLen(*_var, v, indx);
+	  static if (N.length == 0) {
+	    buildElements(v);
 	  }
-	  else {
-	    assert(false);
-	  }
+	  setLen(*_var, v, indx);
 	}
-
       }
       else {
 	void setLen(N...)(size_t v, N indx) {
@@ -1252,8 +1256,6 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
 	_relatedIndxs ~= _arrLen;
 	_root = getSolverRoot();
-	// addDomain only for concrete elements
-	// getSolverRoot().addDomain(_arrLen);
       }
 
       this(string name, P parent, uint index) {
@@ -1267,11 +1269,16 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
 	_relatedIndxs ~= _arrLen;
 	_root = getSolverRoot();
-	_root.addDomain(_arrLen);
       }
 
+      override bool opEquals(Object other) {
+	auto rhs = cast(RV) other;
+	if (rhs is null) return false;
+	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
+      }
+      
       bool isConcrete() {
-	return (_indexExpr is null);
+	return (_indexExpr is null && _parent.isConcrete());
       }
 
       _esdl__Solver getSolverRoot() {
@@ -1653,7 +1660,9 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  
 	// auto iter = arrLen.makeIterVar();
 	// iters ~= iter;
-	deps ~= _parent._arrLen;
+	if (_parent.isConcrete()) {
+	  deps ~= _parent._arrLen;
+	}
 	_parent.setBddContext(pred, vals, vals, iters, deps);
 	if (_indexExpr !is null) {
 	  _indexExpr.setBddContext(pred, deps, vals, iters, deps);

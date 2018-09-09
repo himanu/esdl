@@ -130,14 +130,13 @@ abstract class _esdl__Solver
     }
   }
 
-  Bin!CstPredicate _unrolledPreds;
-  
-  void resetUnrolled() {
-    _unrolledPreds.reset();
-  }
-  
   void addUnrolled(CstPredicate pred) {
-    _resolvedPreds ~= pred;
+    if (pred.isResolved(true)) {
+      _resolvedPreds ~= pred;
+    }
+    else {
+      _unresolvedPreds ~= pred;
+    }
   }
   
 }
@@ -209,9 +208,9 @@ class CstStage {
 
 class CstAnnotatedDomain
 {
+  CstDepCallback[] _depCbs;
   CstPredicate[] _varPreds;
   CstPredicate[] _valPreds;
-  CstPredicate[] _depPreds;
 
   void registerVarPred(CstPredicate varPred) {
     bool flag;
@@ -239,16 +238,16 @@ class CstAnnotatedDomain
     }
   }
   
-  void registerDepPred(CstPredicate depPred) {
+  void registerDepPred(CstDepCallback depCb) {
     bool flag;
-    foreach (pred; _depPreds) {
-      if (pred is depPred) {
+    foreach (cb; _depCbs) {
+      if (cb is depCb) {
 	flag = true;
 	break;
       }
     }
     if (! flag) {
-      _depPreds ~= depPred;
+      _depCbs ~= depCb;
     }
   }
 
@@ -275,9 +274,15 @@ abstract class CstDomain
 
   void execCbs() {
     execIterCbs();
+    execDepCbs();
   }
 
   void execIterCbs() { }
+  void execDepCbs() {
+    foreach (cb; _depCbs) {
+      cb.doResolve();
+    }
+  }
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
@@ -307,7 +312,12 @@ abstract class CstDomain
 // The client keeps a list of agents that when resolved makes the client happy
 interface CstIterCallback
 {
-  abstract void unroll(CstIteratorBase iter);
+  abstract void doUnroll();
+}
+
+interface CstDepCallback
+{
+  abstract void doResolve();
 }
 
 interface CstVecPrim
@@ -400,13 +410,14 @@ abstract class CstIteratorBase
   }
   void unrollCbs() {
     foreach (cb; _cbs) {
-      cb.unroll(this);
+      cb.doUnroll();
     }
   }
   abstract uint maxVal();
   abstract bool isUnrollable();
   abstract string name();
   abstract CstIteratorBase unrollIter(CstIteratorBase iter, uint n);
+  abstract CstDomain getLenVec();
 }
 
 interface CstBddExpr
@@ -445,7 +456,7 @@ interface CstBddExpr
   abstract bool cstExprIsNop();
 }
 
-class CstPredicate: CstIterCallback
+class CstPredicate: CstIterCallback, CstDepCallback
 {
   string name() {
     return "PREDICATE: " ~ _expr.name();
@@ -455,15 +466,19 @@ class CstPredicate: CstIterCallback
 
   _esdl__Solver _solver;
   CstBddExpr _expr;
+  CstPredicate _parent;
+  bool _markResolve;
+  uint _unrollCycle;
 
   CstIteratorBase _uwIter;
   Array!CstPredicate _uwPreds;
   
-  this(_esdl__Solver solver, CstBddExpr expr, CstIteratorBase[] iters ...) {
+  this(_esdl__Solver solver, CstBddExpr expr, CstPredicate parent, CstIteratorBase[] iters ...) {
     assert(solver !is null);
     _solver = solver;
     _expr = expr;
     _iters = iters;
+    _parent = parent;
     this.setBddContext();
     debug(CSTPREDS) {
       import std.stdio;
@@ -530,13 +545,12 @@ class CstPredicate: CstIterCallback
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
       for (uint i = cast(uint) _uwPreds.length;
 	   i != currLen; ++i) {
-	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i),
+	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i), this,
 				     _iters[1..$].map!(tr => tr.unrollIter(iter, i)).array);
       }
     }
 
     // Do not use foreach here since we may have more elements than current
-    _solver.resetUnrolled();
     for (size_t i=0; i!=currLen; ++i) {
       if (this._iters.length == 1) {
 	_solver.addUnrolled(_uwPreds[i]);
@@ -546,6 +560,44 @@ class CstPredicate: CstIterCallback
     // return _uwPreds[0..currLen];
   }
 
+  void doResolve() {
+    if (_iters.length == 0) {
+      _markResolve = true;
+      return;
+    }
+    else {
+      doUnroll();
+    }
+  }
+
+  void doUnroll() {
+      if (_unrollCycle == _solver._cycle) return;
+      // check if all the dependencies are resolved
+      foreach (dep; _deps) {
+	if (! dep.solved()) {
+	  return;
+	}
+      }
+      CstIteratorBase iter = _iters[0];
+      if (iter.getLenVec().solved()) {
+	this.unroll(iter);
+      }
+      _unrollCycle = _solver._cycle;
+  }
+  
+  final bool isResolved(bool force=false) {
+    if (_markResolve || force) {
+      _markResolve = false;
+      foreach (dep; _deps) {
+	if (! dep.solved()) {
+	  return false;
+	}
+      }
+      return true;
+    }
+    return false;
+  }
+  
   // CstPredicate[] unrollIter(CstIteratorBase iter) {
   //   assert (iter is _expr.getIterator());
 
@@ -602,6 +654,10 @@ class CstPredicate: CstIterCallback
     return this._iters.length > 0;
   }
   
+  final bool hasDeps() {
+    return this._deps.length > 0;
+  }
+
   final bool solvable() {
     return _deps.length == 0 && _iters.length == 0;
   }
@@ -616,14 +672,29 @@ class CstPredicate: CstIterCallback
     //   import std.stdio;
     //   stderr.writeln("Found Iterator: ", varIter.name());
     // }
-    
+    // if (_iters.length > 0) {
+    //   _len = _iters[0].getLenVec();
+    // }
     foreach (var; _vars) var.registerVarPred(this);
     foreach (val; _vals) val.registerValPred(this);
+
+    // Since parent _deps were already resolved when the parent
+    // unrolled
+    if (_parent !is null) {
+      CstDomain[] _foundDeps = _deps;
+      _deps = _foundDeps.filter!(dep => (! canFind(_parent._deps, dep))).array;
+    }
+    
     foreach (dep; _deps) dep.registerDepPred(this);
 
     // take only the parsed iterators that are found in the expression
     // as well
-    _iters = pasredIters.filter!(itr => canFind(varIters, itr)).array;
+    // _iters = pasredIters.filter!(itr =>
+    // 				 canFind(varIters, itr)).array;
+    _iters = pasredIters.filter!(itr =>
+    				 canFind!((CstIteratorBase a, CstIteratorBase b) => a == b)
+    				 (varIters, itr)).array;
+    
     
     if (_iters.length != 0) _iters[0].registerRolled(this);
   }

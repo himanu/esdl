@@ -194,6 +194,8 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
   override ref BddVec bddvec(Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
+      assert(_domIndex != uint.max,
+	     "BDD Domain not yet created for: " ~ name());
       return buddy.getVec(_domIndex);
       // return _domvec;
     }
@@ -376,6 +378,10 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     // _arrVar._arrLen.iterVar(this);
   }
 
+  final override CstDomain getLenVec() {
+    return _arrVar.arrLen();
+  }
+  
   override CstIteratorBase[] iterVars() {
     return _arrVar.iterVars() ~ this;
   }
@@ -417,6 +423,15 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   override string name() {
     string n = _arrVar.arrLen.name();
     return n[0..$-3] ~ "iter";
+  }
+
+  // while an iterator is a singleton wrt to an array, the array
+  // itself could have multiple object instances in case it is not
+  // concrete -- eg foo[foo.iter].iter
+  override bool opEquals(Object other) {
+    auto rhs = cast(typeof(this)) other;
+    if (rhs is null) return false;
+    else return (_arrVar == rhs._arrVar);
   }
 
   override CstVecExpr unroll(CstIteratorBase iter, uint n) {
@@ -471,7 +486,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   }
 
   override long evaluate() {
-    assert(false, "Can not evaluate a Iter Variable without unrolling");
+    assert(false, "Can not evaluate an Iterator: " ~ this.name());
   }
 
   override void setBddContext(CstPredicate pred,
@@ -513,6 +528,11 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _name = name;
     _parent = parent;
     _iterVar = new CstIterator!RV(_parent);
+    static if (HAS_RAND_ATTRIB) {
+      if (_parent.isConcrete()) {
+	_parent.getSolverRoot().addDomain(this);
+      }
+    }
   }
 
   ~this() {
@@ -740,14 +760,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     assert(word == 0);
     // import std.stdio;
     // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
-    // import std.stdio;
-    // writeln("Setting length for array: ", _parent.name(), " to ", v);
     _parent.setLen(cast(size_t) v);
-    // writeln("Getting length for array: ", _parent.name(), " as ", _parent.getLen());
-    
   }
 
-  CstVecLen!RV unroll(CstIteratorBase iter, uint n) {
+  CstVecExpr unroll(CstIteratorBase iter, uint n) {
     return _parent.unroll(iter,n).arrLen();
   }
 
@@ -791,6 +807,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     if (listed is false) {
       vars ~= this;
     }
+    _parent.setBddContext(pred, vars, vals, iters, deps);
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
@@ -1997,7 +2014,7 @@ class CstNopBddExpr: CstBddTerm
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
 		     ref CstDomain[] deps) {
-    // nothing for CstNopBddExpr
+    _vec.setBddContext(pred, vars, vals, iters, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {

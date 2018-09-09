@@ -1420,6 +1420,9 @@ struct CstParser {
       fill(")");
     }
 
+    // no parent CstPredicate
+    fill(", null");
+
     if (iterators.length != 0) {
       foreach (iterator; iterators) {
 	fill(", " ~ iterator);

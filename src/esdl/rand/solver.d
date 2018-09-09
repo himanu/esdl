@@ -212,7 +212,8 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
 
     foreach(indx; unresolvedIndxs) {
-      _esdl__cstExprs ~= new CstPredicate(this, indx.getNopBddExpr());
+      _esdl__cstExprs ~=
+	new CstPredicate(this, indx.getNopBddExpr(), null);
     }
     
     foreach (pred; _esdl__cstExprs._preds) {
@@ -222,7 +223,8 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   
   void solve() {
     assert(_root is this);
-
+    this._cycle += 1;
+    
     int stageIndx=0;
 
     if (_esdl__cstExprs.isEmpty || _esdl__cstWithChanged is true) {
@@ -242,6 +244,9 @@ abstract class _esdl__SolverRoot: _esdl__Solver
       if (pred.isRolled()) {
 	_rolledPreds ~= pred;
       }
+      else if (pred.hasDeps()) {
+	_unresolvedPreds ~= pred;
+      }
       else {
 	_resolvedPreds ~= pred;
       }
@@ -255,22 +260,29 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 	addCstStage(pred);
       }
 
-      foreach(n, stage; _solveStages) {
+      foreach(stage; _solveStages) {
 	if(stage !is null) {
 	  solveStage(stage, stageIndx);
 	}
       }
-      _solveStages.length = 0;
+      _solveStages.reset();
+      foreach (pred; _unresolvedPreds) {
+	if (pred.isResolved()) {
+	  _resolvedPreds ~= pred;
+	}
+	else {
+	  _toUnresolvedPreds ~= pred;
+	}
+      }
+      _unresolvedPreds.reset();
+      _unresolvedPreds.swop(_toUnresolvedPreds);
     }
   }
 
   void solveStage(CstStage stage, ref int stageIndx) {
-    // import std.stdio;
-    
     import std.conv;
     CstPredicate[] allPreds = stage._predicates;
     CstPredicate[] preds;
-    // writeln("Here in solveStage: ", stageIndx);
 
     foreach (pred; allPreds) {
       if (! pred.getExpr().cstExprIsNop()) {
@@ -410,6 +422,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   void addCstStage(CstPredicate pred) {
     // uint stage = cast(uint) _solveStages.length;
     auto vecs = pred.getExpr().getRndDomains(true);
+    // auto vecs = pred._vars;
     // import std.stdio;
     // foreach (vec; vecs) writeln(vec.name());
     CstStage stage;
