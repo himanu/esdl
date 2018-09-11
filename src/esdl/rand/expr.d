@@ -285,10 +285,6 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     }
   }
 
-  override CstBddExpr getNopBddExpr() {
-    return new CstNopBddExpr(this);
-  }
-  
 }
 
 interface CstBddTerm: CstBddExpr
@@ -298,12 +294,6 @@ interface CstBddTerm: CstBddExpr
   CstBddTerm opBinary(string op)(CstBddTerm other)
   {
     static if(op == "&") {
-      if (this.cstExprIsNop()) {
-	return other;
-      }
-      if (other.cstExprIsNop()) {
-	return this;
-      }
       return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
     }
     static if(op == "|") {
@@ -343,20 +333,11 @@ interface CstBddTerm: CstBddExpr
 
   final CstBddTerm logicAnd(CstBddTerm other)
   {
-    if (this.cstExprIsNop()) {
-      return other;
-    }
-    if (other.cstExprIsNop()) {
-      return this;
-    }
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
   final CstBddTerm logicAnd(CstVecTerm other)
   {
-    if (this.cstExprIsNop()) {
-      return other.toBdd();
-    }
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
 
@@ -758,8 +739,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override void collate(ulong v, int word = 0) {
     assert(word == 0);
-    // import std.stdio;
-    // writeln("Setting value for arrlen for ", _parent.name, " to ", v);
     _parent.setLen(cast(size_t) v);
   }
 
@@ -1935,94 +1914,6 @@ class CstIteBddExpr: CstBddTerm
 
 }
 
-class CstNopBddExpr: CstBddTerm
-{
-  CstVecExpr _vec;
-
-  CstIteratorBase[] iterVars() {
-    return _vec.iterVars();
-  }
-
-  CstIteratorBase getIterator() {
-    return _vec.getIterator();
-  }
-  
-  this(CstVecExpr vec) {
-    _vec = vec;
-  }
-
-  bool cstExprIsNop() {
-    return true;
-  }
-
-  string name() {
-    return "( NOP: " ~ _vec.name ~ " )";
-  }
-
-  bool refresh(CstStage stage, Buddy buddy) {
-    return _vec.refresh(stage, buddy);
-  }
-  
-  CstVecPrim[] preReqs() {
-    return _vec.preReqs();
-  }
-    
-  CstDomain[] getRndDomains(bool resolved) {
-    return _vec.getRndDomains(resolved);
-  }
-
-  BDD getBDD(CstStage stage, Buddy buddy) {
-    return buddy.one();
-  }
-
-  override CstNopBddExpr unroll(CstIteratorBase iter, uint n) {
-    bool shouldUnroll = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	shouldUnroll = true;
-	break;
-      }
-    }
-    if(! shouldUnroll) return this;
-    else {
-      return new CstNopBddExpr(_vec.unroll(iter, n));
-    }
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return _vec.unresolvedIndxs();
-  }
-
-  bool hasUnresolvedIndx() {
-    return _vec.hasUnresolvedIndx();
-  }
-
-  uint resolveLap() {
-    return _vec.resolveLap();
-  }
-  
-  void resolveLap(uint lap) {
-    _vec.resolveLap(lap);
-  }
-
-  bool getIntRangeSet(T)(ref IntRangeSet rset) {
-    return true;
-  }
-
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] deps) {
-    _vec.setBddContext(pred, vars, vals, iters, deps);
-  }
-
-  bool getIntRange(ref IntRangeSet!long rangeSet) {
-    return true;
-  }
-
-}
-
 class CstVec2BddExpr: CstBddTerm
 {
   import std.conv;
@@ -2185,9 +2076,6 @@ class CstVec2BddExpr: CstBddTerm
     return true;
   }
 
-  bool cstExprIsNop() {
-    return false;
-  }
 }
 
 class CstBddConst: CstBddTerm
@@ -2257,9 +2145,6 @@ class CstBddConst: CstBddTerm
     return true;
   }
 
-  bool cstExprIsNop() {
-    return false;
-  }
 }
 
 class CstNotBddExpr: CstBddTerm
@@ -2345,9 +2230,6 @@ class CstNotBddExpr: CstBddTerm
     return true;
   }
 
-  bool cstExprIsNop() {
-    return false;
-  }
 }
 
 // CstBdd2BddExpr logicOr(CstVecExpr other)

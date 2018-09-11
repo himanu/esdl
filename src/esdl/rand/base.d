@@ -296,7 +296,6 @@ abstract class CstDomain
   abstract uint bitcount();
   abstract void reset();
   abstract BDD getPrimBdd(Buddy buddy);
-  abstract CstBddExpr getNopBddExpr();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   final bool solved() {
@@ -453,7 +452,6 @@ interface CstBddExpr
 
   abstract BDD getBDD(CstStage stage, Buddy buddy);
 
-  abstract bool cstExprIsNop();
 }
 
 class CstPredicate: CstIterCallback, CstDepCallback
@@ -470,8 +468,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool _markResolve;
   uint _unrollCycle;
 
-  CstIteratorBase _uwIter;
-  Array!CstPredicate _uwPreds;
+  Bin!CstPredicate _uwPreds;
   
   this(_esdl__Solver solver, CstBddExpr expr, CstPredicate parent, CstIteratorBase[] iters ...) {
     assert(solver !is null);
@@ -529,17 +526,13 @@ class CstPredicate: CstIterCallback, CstDepCallback
     assert (iter is _expr.getIterator());
 
     if(! iter.isUnrollable()) {
-      assert(false, "CstIteratorBase is not unrollabe yet");
+      assert(false, "CstIteratorBase is not unrollabe yet: "
+	     ~ this.describe());
     }
     auto currLen = iter.maxVal();
     // import std.stdio;
     // writeln("maxVal is ", currLen);
 
-    if (_uwIter !is iter) {
-      _uwIter = iter;
-      _uwPreds.length = 0;
-    }
-    
     if (currLen > _uwPreds.length) {
       // import std.stdio;
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
@@ -598,33 +591,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return false;
   }
   
-  // CstPredicate[] unrollIter(CstIteratorBase iter) {
-  //   assert (iter is _expr.getIterator());
-
-  //   if(! iter.isUnrollable()) {
-  //     assert(false, "CstIteratorBase is not unrollabe yet");
-  //   }
-  //   auto currLen = iter.maxVal();
-  //   // import std.stdio;
-  //   // writeln("maxVal is ", currLen);
-
-  //   if (_uwIter !is iter) {
-  //     _uwIter = iter;
-  //     _uwPreds.length = 0;
-  //   }
-    
-  //   if (currLen > _uwPreds.length) {
-  //     // import std.stdio;
-  //     // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
-  //     for (uint i = cast(uint) _uwPreds.length;
-  // 	   i != currLen; ++i) {
-  // 	_uwPreds ~= new CstPredicate(_expr.unroll(iter, i));
-  //     }
-  //   }
-    
-  //   return _uwPreds[0..currLen];
-  // }
-
   CstDomain[] _vars;
   CstDomain[] _vals;
   CstDomain[] _deps;

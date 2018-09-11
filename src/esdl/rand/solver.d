@@ -211,11 +211,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
       unresolvedIndxs ~= pred._expr.unresolvedIndxs();
     }
 
-    foreach(indx; unresolvedIndxs) {
-      _esdl__cstExprs ~=
-	new CstPredicate(this, indx.getNopBddExpr(), null);
-    }
-    
     foreach (pred; _esdl__cstExprs._preds) {
       _allPreds ~= pred;
     }
@@ -281,14 +276,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
   void solveStage(CstStage stage, ref int stageIndx) {
     import std.conv;
-    CstPredicate[] allPreds = stage._predicates;
-    CstPredicate[] preds;
-
-    foreach (pred; allPreds) {
-      if (! pred.getExpr().cstExprIsNop()) {
-	preds ~= pred;
-      }
-    }
+    CstPredicate[] preds = stage._predicates;
 
     if (preds.length == 0) {
       // import std.stdio;
