@@ -530,6 +530,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.iterVars();
   }
 
+  override _esdl__Solver getSolverRoot() {
+    return _parent.getSolverRoot();
+  }
+
   CstIteratorBase getIterator() {
     return _parent.getIterator();
   }

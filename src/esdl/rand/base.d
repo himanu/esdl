@@ -65,15 +65,6 @@ abstract class _esdl__Solver
     return _root;
   }
 
-  _esdl__Solver _getSolverRoot() {
-    if (_parent is null || _parent is this) {
-      return this;
-    }
-    else {
-      return _parent._getSolverRoot();
-    }
-  }
-	
   CstVecPrim[] _esdl__randsList;
   _esdl__RandGen _esdl__rGen;
 
@@ -126,7 +117,7 @@ abstract class _esdl__Solver
     }
     else {
       _parent = parent;
-      _root = _parent._getSolverRoot();
+      _root = _parent.getSolverRoot();
     }
   }
 
@@ -206,8 +197,34 @@ class CstStage {
 //   abstract void markIndex();
 // }
 
-class CstAnnotatedDomain
+abstract class CstDomain
 {
+  abstract string name();
+  abstract ref BddVec bddvec(Buddy buddy);
+  // abstract void bddvec(BddVec b);
+  abstract void collate(ulong v, int word=0);
+  abstract CstStage stage();
+  abstract void stage(CstStage s);
+  abstract uint domIndex();
+  abstract void domIndex(uint s);
+  abstract bool signed();
+  abstract bool isRand();
+  abstract uint bitcount();
+  abstract void reset();
+  abstract _esdl__Solver getSolverRoot();
+  abstract BDD getPrimBdd(Buddy buddy);
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
+  final bool solved() {
+    if(isRand()) {
+      return stage() !is null && stage().solved();
+    }
+    else {
+      return true;
+    }
+  }
+
+  // Callbacks
   CstDepCallback[] _depCbs;
   CstPredicate[] _varPreds;
   CstPredicate[] _valPreds;
@@ -256,21 +273,6 @@ class CstAnnotatedDomain
       pred.markAsUnresolved(lap);
     }
   }
-  
-}
-
-abstract class CstDomain
-{
-  CstAnnotatedDomain _annotation;
-
-  CstAnnotatedDomain annotation() {
-    if (_annotation is null) {
-      _annotation = new CstAnnotatedDomain();
-    }
-    return _annotation;
-  }
-
-  alias annotation this;
 
   void execCbs() {
     execIterCbs();
@@ -281,29 +283,6 @@ abstract class CstDomain
   void execDepCbs() {
     foreach (cb; _depCbs) {
       cb.doResolve();
-    }
-  }
-  abstract string name();
-  abstract ref BddVec bddvec(Buddy buddy);
-  // abstract void bddvec(BddVec b);
-  abstract void collate(ulong v, int word=0);
-  abstract CstStage stage();
-  abstract void stage(CstStage s);
-  abstract uint domIndex();
-  abstract void domIndex(uint s);
-  abstract bool signed();
-  abstract bool isRand();
-  abstract uint bitcount();
-  abstract void reset();
-  abstract BDD getPrimBdd(Buddy buddy);
-  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
-  abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
-  final bool solved() {
-    if(isRand()) {
-      return stage() !is null && stage().solved();
-    }
-    else {
-      return true;
     }
   }
 }

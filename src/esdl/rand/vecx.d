@@ -210,7 +210,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	super(name);
 	_var = &var;
 	_parent = parent;
-	_root = getSolverRoot();
+	_root = _parent.getSolverRoot();
 	static if (HAS_RAND_ATTRIB) {
 	  _root.addDomain(this);
 	}
@@ -224,11 +224,11 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
       
-      _esdl__Solver getSolverRoot() {
-	assert(_parent !is null);
-	return _parent.getSolverRoot();
+      override _esdl__Solver getSolverRoot() {
+	assert(_root !is null);
+	return _root;
       }
-	
+
       CstVecPrim[] preReqs() {
 	static if (HAS_RAND_ATTRIB) {
 	  return _preReqs;
@@ -442,7 +442,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	super(name);
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_root = getSolverRoot();
+	_root = _parent.getSolverRoot();
 	// only concrete elements need be added
 	// getSolverRoot().addDomain(this);
       }
@@ -455,7 +455,7 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_parent = parent;
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
-	_root = getSolverRoot();
+	_root = _parent.getSolverRoot();
 	if (this.isConcrete()) {
 	  _root.addDomain(this);
 	}
@@ -471,11 +471,11 @@ class CstVec(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return (_indexExpr is null && _parent.isConcrete());
       }
 
-      _esdl__Solver getSolverRoot() {
-	assert(_parent !is null);
-	return _parent.getSolverRoot();
+      override _esdl__Solver getSolverRoot() {
+	assert(_root !is null);
+	return _root;
       }
-	
+
       CstVecPrim[] preReqs() {
 	if(_indexExpr) {
 	  static if (HAS_RAND_ATTRIB) {
@@ -919,9 +919,9 @@ class CstVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_var = &var;
 	_parent = parent;
+	_root = _parent.getSolverRoot();
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
 	_relatedIndxs ~= _arrLen;
-	_root = getSolverRoot();
       }
 
       bool isConcrete() {
@@ -929,10 +929,10 @@ class CstVecArr(V, alias R, int N=0) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       _esdl__Solver getSolverRoot() {
-	assert(_parent !is null);
-	return _parent.getSolverRoot();
+	assert(_root !is null);
+	return _root;
       }
-	
+
       CstVecPrim[] preReqs() {
 	static if (HAS_RAND_ATTRIB) {
 	  return _preReqs;		// N = 0 -- no _parent
@@ -1253,9 +1253,9 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
+	_root = _parent.getSolverRoot();
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
 	_relatedIndxs ~= _arrLen;
-	_root = getSolverRoot();
       }
 
       this(string name, P parent, uint index) {
@@ -1266,9 +1266,9 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_parent = parent;
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
+	_root = _parent.getSolverRoot();
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
 	_relatedIndxs ~= _arrLen;
-	_root = getSolverRoot();
       }
 
       override bool opEquals(Object other) {
@@ -1282,10 +1282,10 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
 
       _esdl__Solver getSolverRoot() {
-	assert(_parent !is null);
-	return _parent.getSolverRoot();
+	assert(_root !is null);
+	return _root;
       }
-	
+
       CstVecPrim[] preReqs() {
 	CstVecPrim[] req;
 	static if (HAS_RAND_ATTRIB) {
