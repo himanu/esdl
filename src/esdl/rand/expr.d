@@ -2,7 +2,7 @@ module esdl.rand.expr;
 
 import esdl.rand.intr;
 import esdl.rand.obdd;
-import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
+import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned, Unconst;
 import esdl.rand.base;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
@@ -173,8 +173,11 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
   BddVec _valvec;
+  _esdl__Solver _root;
 
   alias RANGET = IntRangeType!T;
+
+  Unconst!T _refreshedVal;
 
   IntRangeSet!RANGET _rangeSet;
 
@@ -184,6 +187,8 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     CstStage     _stage = null;
     uint         _resolveLap = 0;
   }
+
+  Unconst!T _value;
   
   ~this() {
     // static if (HAS_RAND_ATTRIB) {
@@ -285,6 +290,112 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     }
   }
 
+  abstract T* getRef();
+  
+  override void collate(ulong v, int word = 0) {
+    static if (HAS_RAND_ATTRIB) {
+      T* var = getRef();
+      static if(isIntegral!T) {
+	if(word == 0) {
+	  *var = cast(T) v;
+	}
+	else {
+	  assert(false, "word has to be 0 for integrals");
+	}
+      }
+      else {
+	(*var)._setNthWord(v, word);
+      }
+    }
+    else {
+      assert(false);
+    }
+  }
+
+  override void setVal(ulong[] value) {
+    static if (HAS_RAND_ATTRIB) {
+      Unconst!T newVal;
+      foreach (i, v; value) {
+	static if(isIntegral!T) {
+	  if (i == 0) {
+	    newVal = cast(T) v;
+	  }
+	  else {
+	    assert(false, "word has to be 0 for integrals");
+	  }
+	}
+	else {
+	  newVal._setNthWord(v, i);
+	}
+      }
+      if (newVal != *(getRef())) {
+	_valueChanged = true;
+      }
+      *(getRef()) = newVal;
+      markSolved();
+    }
+    else {
+      assert(false);
+    }
+  }
+
+  override void _esdl__doRandomize(_esdl__RandGen randGen) {
+    static if (HAS_RAND_ATTRIB) {
+      if (! solved()) {
+	Unconst!T newVal;
+	randGen.gen(newVal);
+	if (newVal != *(getRef())) {
+	  _valueChanged = true;
+	  *(getRef()) = newVal;
+	}
+	markSolved();
+	execCbs();
+      }
+    }
+    else {
+      assert(false);
+    }
+  }
+
+  override void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
+    static if (HAS_RAND_ATTRIB) {
+      assert(stage is s);
+      _esdl__doRandomize(randGen);
+    }
+    else {
+      assert(false);
+    }
+  }
+
+  override bool isRand() {
+    static if (HAS_RAND_ATTRIB) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  bool _valueChanged = true;
+
+  override bool hasChanged() {
+    return _valueChanged;
+  }
+  
+  override void updateVal() {
+    assert(isRand() !is true);
+    Unconst!T newVal;
+    if (_solvedCycle != _root._cycle) {
+      newVal = *(getRef());
+      _solvedCycle = _root._cycle;
+      if (_valvec.isNull ||
+	  newVal != _value) {
+	_value = newVal;
+	_valueChanged = true;
+	_valvec.buildVec(_root._esdl__buddy, _value);
+      }
+    }
+  }
 }
 
 interface CstBddTerm: CstBddExpr
@@ -474,6 +585,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase[] iters,
+			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps) {
     iters ~= this;
   }
@@ -481,6 +593,10 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   override bool getIntMods(ref IntRangeModSet modSet) {
     assert (false,
 	    "getIntMods should not be called when an iterator is still not resolved");
+  }
+
+  override bool solved() {
+    return _arrVar._arrLen.solved();
   }
 }
 
@@ -509,10 +625,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _name = name;
     _parent = parent;
     _iterVar = new CstIterator!RV(_parent);
-    static if (HAS_RAND_ATTRIB) {
-      if (_parent.isConcrete()) {
-	_parent.getSolverRoot().addDomain(this);
-      }
+    if (_parent.isConcrete()) {
+      _parent.getSolverRoot().addDomain(this, HAS_RAND_ATTRIB);
     }
   }
 
@@ -548,6 +662,14 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.parentLenIsUnresolved();
   }
       
+  override bool resolve() {	// no dependency
+    return true;
+  }
+
+  override CstVecLen!RV getResolved() { // always self
+    return this;
+  }
+
   CstDomain[] getRndDomains(bool resolved) {
     return _parent.getDomainLens(resolved);
   }
@@ -642,14 +764,14 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   long evaluate() {
     static if (HAS_RAND_ATTRIB) {
-      assert(stage() !is null);
-      if(! this.isRand || stage().solved()) {
-	return value();
+      // assert(stage() !is null);
+      if(! this.isRand || this.solved()) {
+    	return value();
       }
       else {
-	import std.conv;
-	assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
-	       stage()._id.to!string);
+    	import std.conv;
+    	assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
+    	       stage()._id.to!string);
       }
     }
     else {
@@ -662,12 +784,16 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
   
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
-    assert(false);
+    // this function will only be called when array lenght is
+    // unconstrainted
+    _parent.buildElements();
+    markSolved();
+    execCbs();
   }
   
   override void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
     assert(s is stage);
-    _parent.buildElements();
+    _esdl__doRandomize(randGen);
   }
   
   override bool isRand() {
@@ -741,6 +867,11 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.getLen();
   }
 
+  override void setVal(ulong[] v) {
+    assert(v.length == 1);
+    _parent.setLen(cast(size_t) v[0]);
+  }
+
   override void collate(ulong v, int word = 0) {
     assert(word == 0);
     _parent.setLen(cast(size_t) v);
@@ -776,10 +907,11 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] deps) {
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
+		     ref CstDomain[] deps) {
     bool listed;
     foreach (var; vars) {
       if (var is this) {
@@ -790,7 +922,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     if (listed is false) {
       vars ~= this;
     }
-    _parent.setBddContext(pred, vars, vals, iters, deps);
+    _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
@@ -801,6 +933,11 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     assert(_iterVar !is null);
     _iterVar.unrollCbs();
   }
+
+  override uint* getRef() {
+    assert(false);
+  }
+
 }
 
 abstract class CstValBase: CstVecTerm
@@ -837,13 +974,6 @@ abstract class CstValBase: CstVecTerm
 
   override CstVecExpr unroll(CstIteratorBase l, uint n) {
     return this;
-  }
-
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] deps) {
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
@@ -970,6 +1100,22 @@ class CstVal(T = int): CstValBase
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
+
+  bool solved() {
+    return true;
+  }
+
+  void setBddContext(CstPredicate pred,
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
+		     ref CstDomain[] deps) {
+    if (_valvec.isNull()) {
+      _valvec.buildVec(pred.getSolver().getBuddy(), _val);
+    }
+  }
+
 }
 
 // All the operations that produce a BddVec
@@ -1265,9 +1411,14 @@ class CstVec2VecExpr: CstVecTerm
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
-    _lhs.setBddContext(pred, vars, vals, iters, deps);
-    _rhs.setBddContext(pred, vars, vals, iters, deps);
+    _lhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+  }
+
+  override bool solved() {
+    return _lhs.solved() && _rhs.solved();
   }
 
 }
@@ -1449,20 +1600,31 @@ class CstVecSliceExpr: CstVecTerm
   }
 
   void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] deps) {
-    _vec.setBddContext(pred, vars, vals, iters, deps);
-    _lhs.setBddContext(pred, deps, vals, iters, deps);
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
+		     ref CstDomain[] deps) {
+    _vec.setBddContext(pred, vars, vals, iters, idxs, deps);
+    _lhs.setBddContext(pred, deps, vals, iters, idxs, deps);
     if (_rhs !is null) {
-      _rhs.setBddContext(pred, deps, vals, iters, deps);
+      _rhs.setBddContext(pred, deps, vals, iters, idxs, deps);
     }
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
     return false;
   }
+
+  override bool solved() {
+    if (_rhs is null) {
+      return _lhs.solved() && _vec.solved();
+    }
+    else {
+      return _lhs.solved() && _rhs.solved() && _vec.solved();
+    }
+  }
+  
 }
 
 class CstNotVecExpr: CstVecTerm
@@ -1561,15 +1723,20 @@ class CstNotVecExpr: CstVecTerm
   }
 
   void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] deps) {
-    _expr.setBddContext(pred, vars, vals, iters, deps);
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
+		     ref CstDomain[] deps) {
+    _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
     return false;
+  }
+
+  override bool solved() {
+    return _expr.solved();
   }
 }
 
@@ -1673,13 +1840,18 @@ class CstNegVecExpr: CstVecTerm
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
-    _expr.setBddContext(pred, vars, vals, iters, deps);
+    _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntMods(ref IntRangeModSet modSet) {
     modSet ~= IntRangeMod(0, IntRangeModOp.SUBD);
     return _expr.getIntMods(modSet);    
+  }
+
+  override bool solved() {
+    return _expr.solved();
   }
 }
 
@@ -1824,12 +1996,13 @@ class CstBdd2BddExpr: CstBddTerm
   }
 
   void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] deps) {
-    _lhs.setBddContext(pred, vars, vals, iters, deps);
-    _rhs.setBddContext(pred, vars, vals, iters, deps);
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
+		     ref CstDomain[] deps) {
+    _lhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {
@@ -1838,6 +2011,10 @@ class CstBdd2BddExpr: CstBddTerm
 
   bool cstExprIsNop() {
     return false;
+  }
+
+  override bool solved() {
+    return _lhs.solved && _rhs.solved();
   }
 }
 
@@ -1878,6 +2055,7 @@ class CstIteBddExpr: CstBddTerm
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
     assert(false, "TBD");
   }
@@ -1916,6 +2094,9 @@ class CstIteBddExpr: CstBddTerm
     assert(false, "TBD");
   }
 
+  override bool solved() {
+    assert(false, "TBD");
+  }
 }
 
 class CstVec2BddExpr: CstBddTerm
@@ -2071,15 +2252,19 @@ class CstVec2BddExpr: CstBddTerm
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
-    _lhs.setBddContext(pred, vars, vals, iters, deps);
-    _rhs.setBddContext(pred, vars, vals, iters, deps);
+    _lhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
   }
 
+  override bool solved() {
+    return _lhs.solved && _rhs.solved();
+  }
 }
 
 class CstBddConst: CstBddTerm
@@ -2138,10 +2323,11 @@ class CstBddConst: CstBddTerm
   void resolveLap(uint lap) {}
 
   void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] deps) {
+		     ref CstDomain[] vars,
+		     ref CstDomain[] vals,
+		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
+		     ref CstDomain[] deps) {
     // nothing for CstBddConst
   }
 
@@ -2149,6 +2335,9 @@ class CstBddConst: CstBddTerm
     return true;
   }
 
+  override bool solved() {
+    return true;
+  }
 }
 
 class CstNotBddExpr: CstBddTerm
@@ -2226,14 +2415,18 @@ class CstNotBddExpr: CstBddTerm
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
+		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
-    _expr.setBddContext(pred, vars, vals, iters, deps);
+    _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntRangeSet!long rangeSet) {
     return true;
   }
 
+  override bool solved() {
+    return _expr.solved();
+  }
 }
 
 // CstBdd2BddExpr logicOr(CstVecExpr other)

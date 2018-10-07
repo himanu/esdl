@@ -258,6 +258,25 @@ class _esdl__RandGen
     }
   }
 
+  @property void gen(T)(T* t) {
+    static if (isBoolean!T) {
+      *t = cast(T) flip();
+    }
+    else static if (is (T == enum)) {
+      static immutable T[EnumMembers!T.length] vals = [EnumMembers!T];
+      *t = vals[uniform(0, cast(uint) vals.length, _gen)];
+    }
+    else static if(isIntegral!T) {
+      *t = uniform!(T)(_gen);
+    }
+    else static if(isBitVector!T) {
+      t.randomize(_gen);
+    }
+    else {
+      static assert(false);
+    }
+  }
+
   @property void gen(T)(ref T t) {
     static if (isBoolean!T) {
       t = cast(T) flip();
@@ -285,5 +304,10 @@ class _esdl__RandGen
   @property void gen(T, T1, T2)(ref T t, T1 a, T2 b)
     if(isIntegral!T1 && isIntegral!T2) {
       t = uniform(a, b, _gen);
+    }
+
+  @property void gen(T, T1, T2)(T* t, T1 a, T2 b)
+    if(isIntegral!T1 && isIntegral!T2) {
+      *t = uniform(a, b, _gen);
     }
 }

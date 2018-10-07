@@ -16,7 +16,8 @@ abstract class _esdl__Solver
 
   Array!uint _domains;		// indexes of domains
 
-  CstDomain[] _cstDomains;
+  CstDomain[] _cstRndDomains;
+  CstDomain[] _cstValDomains;
 
   uint _domIndex = 0;
   
@@ -52,15 +53,29 @@ abstract class _esdl__Solver
   //    vec/vec-array for the indicated randomization cycle
   uint _cycle;
 
-  void addDomain(CstDomain domain) {
-    // import std.stdio;
-    // writeln("Adding domain: ", domain.name());
-    _root._cstDomains ~= domain;
-    useBuddy(_root._esdl__buddy);
-    domain.domIndex = _root._domIndex++;
-    _root._domains ~= _esdl__buddy.extDomVec(domain.bitcount);
+  Buddy getBuddy() {
+    assert(_esdl__buddy !is null);
+    return _esdl__buddy;
   }
 
+  void addDomain(CstDomain domain, bool isRand) {
+    if (isRand) {
+      _root._cstRndDomains ~= domain;
+      useBuddy(_root._esdl__buddy);
+      domain.domIndex = _root._domIndex++;
+      _root._domains ~= _esdl__buddy.extDomVec(domain.bitcount);
+    }
+    else {
+      _root._cstValDomains ~= domain;
+    }
+  }
+
+  void solveValDomains() {
+    foreach (dom; _cstValDomains) {
+      dom.updateVal();
+    }
+  }
+  
   _esdl__Solver getSolverRoot() {
     return _root;
   }
@@ -203,6 +218,7 @@ abstract class CstDomain
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
   abstract void collate(ulong v, int word=0);
+  abstract void setVal(ulong[] v);
   abstract CstStage stage();
   abstract void stage(CstStage s);
   abstract uint domIndex();
@@ -215,9 +231,36 @@ abstract class CstDomain
   abstract BDD getPrimBdd(Buddy buddy);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
+  abstract bool resolve();
+  abstract CstDomain getResolved();
+  abstract void updateVal();
+  abstract bool hasChanged();
+
+  final void _esdl__doRandomize() {
+    this._esdl__doRandomize(getSolverRoot()._esdl__getRandGen());
+  }
+
+  final void randIfNoCst() {
+    if (_varPreds.length == 0) {
+      _esdl__doRandomize();
+    }
+  }
+
+  final void markSolved() {
+    _solvedCycle = getSolverRoot()._cycle;
+  }
+
   final bool solved() {
     if(isRand()) {
-      return stage() !is null && stage().solved();
+      if (_solvedCycle == getSolverRoot()._cycle) {
+	return true;
+      }
+      else if (stage() is null) {
+	return false;
+      }
+      else {
+	return stage().solved();
+      }
     }
     else {
       return true;
@@ -226,8 +269,13 @@ abstract class CstDomain
 
   // Callbacks
   CstDepCallback[] _depCbs;
+
   CstPredicate[] _varPreds;
   CstPredicate[] _valPreds;
+
+  // init value has to be different from solver._cycle init value
+  uint _solvedCycle = -1;   // cycle for which _arrLen has been solved
+  uint _unresolveLap;
 
   void registerVarPred(CstPredicate varPred) {
     bool flag;
@@ -269,8 +317,11 @@ abstract class CstDomain
   }
 
   void markAsUnresolved(uint lap) {
-    foreach (pred; _varPreds) {
-      pred.markAsUnresolved(lap);
+    if (_unresolveLap != lap) {
+      _unresolveLap = lap;
+      foreach (pred; _varPreds) {
+	pred.markAsUnresolved(lap);
+      }
     }
   }
 
@@ -373,9 +424,12 @@ interface CstVecExpr
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase[] iters,
+			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps);
 
   abstract bool getIntMods(ref IntRangeModSet modSet);
+
+  abstract bool solved();
 }
 
 
@@ -419,6 +473,7 @@ interface CstBddExpr
 			      ref CstDomain[] vars,
 			      ref CstDomain[] vals,
 			      ref CstIteratorBase[] iters,
+			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps);
 
   abstract bool getIntRange(ref IntRangeSet!long rangeSet);
@@ -431,6 +486,7 @@ interface CstBddExpr
 
   abstract BDD getBDD(CstStage stage, Buddy buddy);
 
+  abstract bool solved();
 }
 
 class CstPredicate: CstIterCallback, CstDepCallback
@@ -449,7 +505,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   Bin!CstPredicate _uwPreds;
   
-  this(_esdl__Solver solver, CstBddExpr expr, CstPredicate parent, CstIteratorBase[] iters ...) {
+  this(_esdl__Solver solver, CstBddExpr expr,
+       CstPredicate parent, CstIteratorBase[] iters ...) {
     assert(solver !is null);
     _solver = solver;
     _expr = expr;
@@ -460,6 +517,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
       import std.stdio;
       stderr.writeln(this.describe());
     }
+  }
+
+  _esdl__Solver getSolver() {
+    assert(_solver !is null);
+    return _solver;
   }
 
   // unroll recursively untill no unrolling is possible
@@ -501,6 +563,34 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return null;
   }
 
+
+  void doResolve() {
+    if (_iters.length == 0) {
+      _markResolve = true;
+      return;
+    }
+    else {
+      doUnroll();
+    }
+  }
+
+  void doUnroll() {
+    if (_unrollCycle == _solver._cycle) { // already executed
+      return;
+    }
+    // check if all the dependencies are resolved
+    foreach (dep; _deps) {
+      if (! dep.solved()) {
+	return;
+      }
+    }
+    CstIteratorBase iter = _iters[0];
+    if (iter.getLenVec().solved()) {
+      this.unroll(iter);
+      _unrollCycle = _solver._cycle;
+    }
+  }
+  
   void unroll(CstIteratorBase iter) {
     assert (iter is _expr.getIterator());
 
@@ -522,9 +612,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
       }
     }
 
-    // Do not use foreach here since we may have more elements than current
-    for (size_t i=0; i!=currLen; ++i) {
-      if (this._iters.length == 1) {
+    // Do not use foreach here since we may have more elements in the
+    // array than the current value of currLen
+    if (this._iters.length == 1) {
+      for (size_t i=0; i!=currLen; ++i) {
 	_solver.addUnrolled(_uwPreds[i]);
       }
     }
@@ -532,31 +623,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // return _uwPreds[0..currLen];
   }
 
-  void doResolve() {
-    if (_iters.length == 0) {
-      _markResolve = true;
-      return;
-    }
-    else {
-      doUnroll();
-    }
-  }
-
-  void doUnroll() {
-      if (_unrollCycle == _solver._cycle) return;
-      // check if all the dependencies are resolved
-      foreach (dep; _deps) {
-	if (! dep.solved()) {
-	  return;
-	}
-      }
-      CstIteratorBase iter = _iters[0];
-      if (iter.getLenVec().solved()) {
-	this.unroll(iter);
-      }
-      _unrollCycle = _solver._cycle;
-  }
-  
   final bool isResolved(bool force=false) {
     if (_markResolve || force) {
       _markResolve = false;
@@ -573,18 +639,28 @@ class CstPredicate: CstIterCallback, CstDepCallback
   CstDomain[] _vars;
   CstDomain[] _vals;
   CstDomain[] _deps;
+  CstDomain[] _idxs;
   CstIteratorBase _iter;
   CstIteratorBase[] _iters;
 
-  int _lap;
+  uint _unresolveLap;
 
   final void markAsUnresolved(uint lap) {
-    if (_lap != lap) {	 // already marked -- avoid infinite recursion
-      _lap = lap;
+    if (_unresolveLap != lap) {	 // already marked -- avoid infinite recursion
+      _unresolveLap = lap;
       foreach (var; _vars) {
 	var.markAsUnresolved(lap);
       }
     }
+  }
+
+  final bool isMarkedUnresolved(uint lap) {
+    if (_parent !is null) {
+      if (_parent.isMarkedUnresolved(lap)) {
+	return true;
+      }
+    }
+    return (_unresolveLap == lap);
   }
 
   final bool markIfUnresolved(uint lap) {
@@ -596,7 +672,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   final bool isRolled() {
-    return this._iters.length > 0;
+    if (this._iters.length > 0 &&
+	_unrollCycle != _solver._cycle) {
+      return true;
+    }
+    return false;
   }
   
   final bool hasDeps() {
@@ -611,7 +691,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     CstIteratorBase[] varIters;
     CstIteratorBase[] pasredIters = _iters;
     
-    _expr.setBddContext(this, _vars, _vals, varIters, _deps);
+    _expr.setBddContext(this, _vars, _vals, varIters, _idxs, _deps);
 
     // foreach (varIter; varIters) {
     //   import std.stdio;
@@ -626,7 +706,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // Since parent _deps were already resolved when the parent
     // unrolled
     if (_parent !is null) {
-      CstDomain[] _foundDeps = _deps;
+      CstDomain[] _foundDeps = _deps ~ _idxs;
       _deps = _foundDeps.filter!(dep => (! canFind(_parent._deps, dep))).array;
     }
     
@@ -655,6 +735,29 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return _rangeSet;
   }
 
+  void randomizeDeps() {
+    foreach (dep; _deps ~ _idxs) {
+      dep.randIfNoCst();
+    }
+  }
+
+  bool hasUpdate() {
+    foreach(val; _vals) {
+      if (val.hasChanged()) {
+	return true;
+      }
+    }
+    foreach(idx; _idxs) {
+      if (idx.hasChanged()) {
+	return true;
+      }
+    }
+    if (_solver._cycle == 1) {
+      return true;
+    }
+    return false;
+  }
+
   string describe() {
     string description = name() ~ "\n";
     if (_iters.length > 0) {
@@ -673,6 +776,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
       description ~= "    values: \n";
       foreach (val; _vals) {
 	description ~= "\t" ~ val.name() ~ "\n";
+      }
+    }
+    if (_idxs.length > 0) {
+      description ~= "    indexes: \n";
+      foreach (idx; _idxs) {
+	description ~= "\t" ~ idx.name() ~ "\n";
       }
     }
     if (_deps.length > 0) {
