@@ -504,7 +504,8 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   }
 
   override bool isUnrollable() {
-    return _arrVar.isUnrollable();
+    return getLenVec().solved();
+    // return _arrVar.isUnrollable();
   }
 
   // get all the primary bdd vectors that constitute a given bdd expression
@@ -770,8 +771,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
       }
       else {
     	import std.conv;
-    	assert(false, "Rand variable " ~ _name ~ " evaluation in wrong stage: " ~
-    	       stage()._id.to!string);
+    	assert(false, "Error evaluating " ~ _name);
       }
     }
     else {

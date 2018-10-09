@@ -26,6 +26,8 @@ abstract class _esdl__Solver
   _esdl__Solver _root;
 
   Bin!CstPredicate _rolledPreds;
+  Bin!CstPredicate _unrolledPreds;
+  Bin!CstPredicate _toUnrolledPreds;
   Bin!CstPredicate _resolvedPreds;
   Bin!CstPredicate _toResolvedPreds;
   Bin!CstPredicate _toSolvePreds;
@@ -143,6 +145,10 @@ abstract class _esdl__Solver
     else {
       _unresolvedPreds ~= pred;
     }
+  }
+  
+  void addToUnrolled(CstPredicate pred) {
+    _toUnrolledPreds ~= pred;
   }
   
 }
@@ -276,6 +282,8 @@ abstract class CstDomain
   // init value has to be different from solver._cycle init value
   uint _solvedCycle = -1;   // cycle for which _arrLen has been solved
   uint _unresolveLap;
+
+  bool _monoDomain = true;
 
   void registerVarPred(CstPredicate varPred) {
     bool flag;
@@ -504,6 +512,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _unrollCycle;
 
   Bin!CstPredicate _uwPreds;
+  size_t _uwLength;
   
   this(_esdl__Solver solver, CstBddExpr expr,
        CstPredicate parent, CstIteratorBase[] iters ...) {
@@ -594,6 +603,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   void unroll(CstIteratorBase iter) {
     assert (iter is _expr.getIterator());
 
+    _solver.addToUnrolled(this);
+
     if(! iter.isUnrollable()) {
       assert(false, "CstIteratorBase is not unrollabe yet: "
 	     ~ this.describe());
@@ -619,7 +630,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	_solver.addUnrolled(_uwPreds[i]);
       }
     }
-    
+
+    _uwLength = currLen;
     // return _uwPreds[0..currLen];
   }
 
@@ -645,6 +657,23 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   uint _unresolveLap;
 
+  final void randomizeDepsRolled() {
+    for (size_t i=0; i!=_uwLength; ++i) {
+      _uwPreds[i].randomizeDeps();
+    }
+  }
+
+  final void markAsUnresolvedRolled(uint lap) {
+    if (this.isRolled()) {
+      this.markAsUnresolved(lap);
+    }
+    else {
+      for (size_t i=0; i!=_uwLength; ++i) {
+	_uwPreds[i].markAsUnresolvedRolled(lap);
+      }
+    }
+  }
+  
   final void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {	 // already marked -- avoid infinite recursion
       _unresolveLap = lap;

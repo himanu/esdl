@@ -230,6 +230,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
     // reset all bins
     _rolledPreds.reset();
+    _unrolledPreds.reset();
     _resolvedPreds.reset();
     _toResolvedPreds.reset();
     _toSolvePreds.reset();
@@ -240,6 +241,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     foreach (pred; _allPreds) {
       if (pred.isRolled()) {
 	_rolledPreds ~= pred;
+	pred.randomizeDeps();
       }
       else if (pred.hasDeps()) {
 	_unresolvedPreds ~= pred;
@@ -257,10 +259,16 @@ abstract class _esdl__SolverRoot: _esdl__Solver
       // this is to avoid default values
       _lap += 1;
 
+      _toUnrolledPreds.swop(_unrolledPreds);
+      _toUnrolledPreds.reset();
+      foreach (pred; _unrolledPreds) {
+	pred.randomizeDepsRolled();
+      }
+      
+      _unrolledPreds.reset();
+
       foreach (pred; _rolledPreds) {
-	if (pred.isRolled()) {
-	  pred.markAsUnresolved(_lap);
-	}
+	pred.markAsUnresolvedRolled(_lap);
       }
 
       foreach (pred; _unresolvedPreds) {
