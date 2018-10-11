@@ -786,8 +786,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
     // this function will only be called when array lenght is
     // unconstrainted
-    _parent.buildElements();
     markSolved();
+    _parent.buildElements();
     execCbs();
   }
   
@@ -869,6 +869,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override void setVal(ulong[] v) {
     assert(v.length == 1);
+    markSolved();
     _parent.setLen(cast(size_t) v[0]);
   }
 

@@ -731,7 +731,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 // 					   getRandAttr!(T, I), N);
 // }
 
-abstract class CstVecArrBase(V, alias R, int N=0)
+abstract class CstVecArrBase(V, alias R, int N)
   if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -1002,9 +1002,23 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	    }
 	  }
 
+	size_t _forcedLength;
 	void buildElements(size_t v=size_t.max) {
 	  if (v == size_t.max) {
 	    v = getLen();
+	  }
+	  if (! _arrLen.solved()) {
+	    if (v > _forcedLength) {
+	      _forcedLength = v;
+	    }
+	  }
+	  else {
+	    if (v < _forcedLength) {
+	      import std.string: format;
+	      assert(false,
+		     format("Trying to set length %d, while it should be a minimum %d",
+			    v, _forcedLength));
+	    }
 	  }
 	  size_t currLen = _elems.length;
 	  // import std.stdio;
@@ -1062,27 +1076,41 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	_relatedIndxs ~= domain;
       }
       
-      EV opIndex(CstVecExpr indx) {
-	foreach (domain; indx.getRndDomains(false)) {
-	  addRelatedIndx(domain);
-	}
-	if(indx.isConst() && _arrLen.solved()) {
+      EV opIndex(CstVecExpr indexExpr) {
+	if (indexExpr.isConst()) {
+	  size_t index = cast(size_t) indexExpr.evaluate();
+	  if (_arrLen.solved()) {
+	    if (_arrLen.evaluate() <= index) {
+	      assert (false, "Index Out of Range");
+	    }
+	  }
+	  else {
+	    buildElements(index+1);
+	  }
 	  // resolve only if the length has been resolved yet
 	  // And when the length is resolved, we must make sure that
 	  // unrolling of iterator takes care of such elements as
 	  // well which are not explicitly onvoking iterators
-	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
-		 " have not been built");
-	  return _elems[cast(size_t) indx.evaluate()];
+	  // assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
+	  // 	 " have not been built");
+	  return _elems[index];
 	}
 	else {
-	  return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
+	  return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
 	}
       }
 
-      EV opIndex(size_t indx) {
-	assert(_elems[indx]._indexExpr is null);
-	return _elems[indx];
+      EV opIndex(size_t index) {
+	assert(_elems[index]._indexExpr is null);
+	if (_arrLen.solved()) {
+	  if (_arrLen.evaluate() <= index) {
+	    assert (false, "Index Out of Range");
+	  }
+	}
+	else {
+	  buildElements(index+1);
+	}
+	return _elems[index];
       }
 
       void _esdl__doRandomize(_esdl__RandGen randGen) {
@@ -1169,7 +1197,7 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
       }
     }
 
-class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
   CstVecArrBase!(V, R, N)
     {
       import std.traits;
@@ -1468,9 +1496,23 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	    }
 	  }
 
+	size_t _forcedLength;
 	void buildElements(size_t v=size_t.max) {
 	  if (v == size_t.max) {
 	    v = getLen();
+	  }
+	  if (! _arrLen.solved()) {
+	    if (v > _forcedLength) {
+	      _forcedLength = v;
+	    }
+	  }
+	  else {
+	    if (v < _forcedLength) {
+	      import std.string: format;
+	      assert(false,
+		     format("Trying to set length %d, while it should be a minimum %d",
+			    v, _forcedLength));
+	    }
 	  }
 	  size_t currLen = _elems.length;
 	  // import std.stdio;
@@ -1532,39 +1574,45 @@ class CstVecArr(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_relatedIndxs ~= domain;
       }
       
-      EV opIndex(CstVecExpr indx) {
-	foreach (domain; indx.getRndDomains(false)) {
-	  addRelatedIndx(domain);
-	}
-	if(indx.isConst()) {
-	  assert(_elems.length > 0, "_elems for expr " ~ this.name() ~
-		 " have not been built");
-	  // if(indx.evaluate() >= _elems.length || indx.evaluate() < 0 || _elems is null) {
-	  // 	import std.stdio;
-	  // 	writeln(this.name(), ":", indx.evaluate());
-	  // }
-	  // import std.stdio;
-	  // writeln(indx.evaluate());
-	  return _elems[cast(size_t) indx.evaluate()];
+      EV opIndex(CstVecExpr indexExpr) {
+	if (indexExpr.isConst()) {
+	  size_t index = cast(size_t) indexExpr.evaluate();
+	  if (_arrLen.solved()) {
+	    if (_arrLen.evaluate() <= index) {
+	      assert (false, "Index Out of Range");
+	    }
+	  }
+	  else {
+	    buildElements(index+1);
+	  }
+	  return _elems[index];
 	}
 	else {
 	  // static if(isStaticArray!E) {
 	  //   // static array
-	  return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
+	  return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
 	  // }
 	  // else static if(isDynamicArray!E) {
 	  //   // dynamic array
-	  //   return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
+	  //   return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
 	  // }
 	  // else {
-	  //   return new EV(name ~ "[" ~ indx.name() ~ "]", this, indx);
+	  //   return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
 	  // }
 	}
       }
 
-      EV opIndex(size_t indx) {
-	assert(_elems[indx]._indexExpr is null);
-	return _elems[indx];
+      EV opIndex(size_t index) {
+	assert(_elems[index]._indexExpr is null);
+	if (_arrLen.solved()) {
+	  if (_arrLen.evaluate() <= index) {
+	    assert (false, "Index Out of Range");
+	  }
+	}
+	else {
+	  buildElements(index+1);
+	}
+	return _elems[index];
       }
 
       void _esdl__doRandomize(_esdl__RandGen randGen) {

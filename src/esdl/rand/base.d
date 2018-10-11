@@ -286,42 +286,30 @@ abstract class CstDomain
   bool _monoDomain = true;
 
   void registerVarPred(CstPredicate varPred) {
-    bool flag;
     foreach (pred; _varPreds) {
       if (pred is varPred) {
-	flag = true;
-	break;
+	return;
       }
     }
-    if (! flag) {
-      _varPreds ~= varPred;
-    }
+    _varPreds ~= varPred;
   }
   
   void registerValPred(CstPredicate valPred) {
-    bool flag;
     foreach (pred; _valPreds) {
       if (pred is valPred) {
-	flag = true;
-	break;
+	return;
       }
     }
-    if (! flag) {
-      _valPreds ~= valPred;
-    }
+    _valPreds ~= valPred;
   }
   
   void registerDepPred(CstDepCallback depCb) {
-    bool flag;
     foreach (cb; _depCbs) {
       if (cb is depCb) {
-	flag = true;
-	break;
+	return;
       }
     }
-    if (! flag) {
-      _depCbs ~= depCb;
-    }
+    _depCbs ~= depCb;
   }
 
   void markAsUnresolved(uint lap) {
@@ -343,6 +331,17 @@ abstract class CstDomain
     foreach (cb; _depCbs) {
       cb.doResolve();
     }
+  }
+
+  string describe() {
+    string desc = "CstDomain: " ~ name();
+    desc ~= "\n	isMono: " ~ (_monoDomain ? "true" : "false");
+    desc ~= "\n	Preds:";
+    foreach (pred; _varPreds) {
+      desc ~= "\n		" ~ pred.name();
+    }
+    desc ~= "\n";
+    return desc;
   }
 }
 
@@ -731,6 +730,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // }
     foreach (var; _vars) var.registerVarPred(this);
     foreach (val; _vals) val.registerValPred(this);
+
+    if (_vars.length > 1) {
+      foreach (var; _vars) {
+	var._monoDomain = false;
+      }
+    }
 
     // Since parent _deps were already resolved when the parent
     // unrolled
