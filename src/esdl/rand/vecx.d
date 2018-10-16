@@ -7,8 +7,9 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 import esdl.rand.obdd;
 import esdl.rand.misc;
 import esdl.rand.intr;
-import esdl.rand.base: CstVecPrim, CstVecExpr, CstIteratorBase,
-  CstStage, CstDomain, CstBddExpr, CstPredicate, _esdl__Solver; // CstValAllocator,
+import esdl.rand.base: CstVecPrim, CstVecExpr,
+  CstIteratorBase, DomType, CstStage, CstDomain,
+  CstBddExpr, CstPredicate, _esdl__Solver; // CstValAllocator,
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm;
 
@@ -211,7 +212,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_root.addDomain(this, HAS_RAND_ATTRIB);
       }
 
-      bool isConcrete() {
+      final override bool isActualDomain() {
 	return true;		// N == 0
       }
 
@@ -341,6 +342,10 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;
       }
 
+      bool isIterator() {
+	return false;
+      }
+
       bool isOrderingExpr() {
 	return false;		// only CstVecOrderingExpr return true
       }
@@ -355,12 +360,31 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  addToDomains(this, vals);
 	}
 	else {
+	  // markAbstractDomains(false);
 	  addToDomains(this, vars);
 	}
       }
 
       bool getIntMods(ref IntRangeModSet modSet) {
 	return true;
+      }
+
+      override void markAsUnresolved(uint lap) {
+	if (_unresolveLap != lap) {
+	  _unresolveLap = lap;
+	  foreach (pred; _varPreds) {
+	    pred.markAsUnresolved(lap);
+	  }
+	}
+      }
+      
+      override bool hasAbstractDomains() {
+	return false;
+      }
+
+      override void markAbstractDomains(bool len) {
+	assert(len is false);
+	return;
       }
     }
 
@@ -403,7 +427,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_pindex = index;
 	_root = _parent.getSolverRoot();
 	
-	if (this.isConcrete()) {
+	if (this.isActualDomain()) {
 	  _root.addDomain(this, HAS_RAND_ATTRIB);
 	}
       }
@@ -414,8 +438,11 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
       }
       
-      bool isConcrete() {
-	return (_indexExpr is null && _parent.isConcrete());
+      final override bool isActualDomain() {
+	return ((_indexExpr is null ||
+		 _indexExpr.isIterator ||
+		 _indexExpr.isConst) &&
+		_parent.isActualDomain());
       }
 
       override _esdl__Solver getSolverRoot() {
@@ -686,6 +713,10 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;
       }
 
+      bool isIterator() {
+	return false;
+      }
+
       bool isOrderingExpr() {
 	return false;		// only CstVecOrderingExpr return true
       }
@@ -700,9 +731,10 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  addToDomains(this, vals);
 	}
 	else {
+	  markAbstractDomains(false);
 	  addToDomains(this, vars);
 	}
-	if (_parent.isConcrete()) {
+	if (_parent.isActualDomain()) {
 	  deps ~= _parent._arrLen;
 	}
 	_parent.setBddContext(pred, vars, vals, iters, idxs, deps);
@@ -721,6 +753,41 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 
       bool getIntMods(ref IntRangeModSet modSet) {
 	return true;
+      }
+
+      override void markAsUnresolved(uint lap) {
+	if (isActualDomain()) {
+	  if (_unresolveLap != lap) {
+	    _unresolveLap = lap;
+	    foreach (pred; _varPreds) {
+	      pred.markAsUnresolved(lap);
+	    }
+	  }
+	}
+	else {
+	  _parent.markAsUnresolved(lap);
+	}
+      }
+
+      override bool hasAbstractDomains() {
+	return _parent.hasAbstractDomains();
+      }
+
+      override void markAbstractDomains(bool len) {
+	assert(len is false);
+	if (this.isActualDomain()) {
+	  return;
+	}
+	else {
+	  _parent.markAbstractDomains(len);
+	}
+      }
+
+      void labelAbstractDomains(bool len) {
+	assert(len is false);
+	if (this._type !is DomType.MULTI) {
+	  this._type = DomType.MAYBEMONO;
+	}
       }
     }
 
@@ -749,6 +816,10 @@ abstract class CstVecArrBase(V, alias R, int N)
   EV[] _elems;
 
   string _name;
+
+  bool _hasAbstractVecDomains;
+  bool _hasAbstractLenDomains;
+
   override string name() {
     return _name;
   }
@@ -854,10 +925,13 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	_parent = parent;
 	_root = _parent.getSolverRoot();
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
+	if (_hasAbstractLenDomains) {
+	  _arrLen.labelAbstractDomains(true);
+	}
 	_relatedIndxs ~= _arrLen;
       }
 
-      bool isConcrete() {
+      final bool isActualDomain() {
 	return true; 		// N == 0
       }
 
@@ -894,7 +968,7 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
       static if (HAS_RAND_ATTRIB) {
 	EV[] getDomainElems(long indx) {
 	  if (indx < 0) {
-	    if (_arrLen.isResolved()) return _elems[0..(cast(size_t) _arrLen.evaluate())];
+	    if (_arrLen.solved()) return _elems[0..(cast(size_t) _arrLen.evaluate())];
 	    else return _elems;
 	  }
 	  else return [_elems[cast(size_t) indx]];
@@ -1029,6 +1103,9 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	      import std.conv: to;
 	      _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
 				 this, cast(uint) i);
+	      if (_hasAbstractVecDomains) {
+		_elems[i].labelAbstractDomains(false);
+	      }
 	    }
 	  }
 	}
@@ -1195,6 +1272,40 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 
 	// no parent
       }
+
+      void markAsUnresolved(uint lap) {
+	foreach(elem; _elems) {
+	  elem.markAsUnresolved(lap);
+	}
+      }
+
+      bool hasAbstractDomains() {
+	return _hasAbstractVecDomains;
+      }
+
+      void markAbstractDomains(bool len) {
+	labelAbstractDomains(len);
+      }
+
+      void labelAbstractDomains(bool len) {
+	if (len is true) {
+	  if (_hasAbstractLenDomains is false) {
+	    _hasAbstractLenDomains = true;
+	    _arrLen.labelAbstractDomains(len);
+	    foreach(elem; _elems) {
+	      elem.labelAbstractDomains(len);
+	    }
+	  }
+	}
+	else {
+	  if (_hasAbstractVecDomains is false) {
+	    _hasAbstractVecDomains = true;
+	    foreach(elem; _elems) {
+	      elem.labelAbstractDomains(len);
+	    }
+	  }
+	}
+      }
     }
 
 class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
@@ -1226,6 +1337,9 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_indexExpr = indexExpr;
 	_root = _parent.getSolverRoot();
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
+	if (_hasAbstractLenDomains) {
+	  _arrLen.labelAbstractDomains(true);
+	}
 	_relatedIndxs ~= _arrLen;
       }
 
@@ -1239,6 +1353,9 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	_pindex = index;
 	_root = _parent.getSolverRoot();
 	_arrLen = new CstVecLen!RV(name ~ ".len", this);
+	if (_hasAbstractLenDomains) {
+	  _arrLen.labelAbstractDomains(true);
+	}
 	_relatedIndxs ~= _arrLen;
       }
 
@@ -1248,8 +1365,10 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
       }
       
-      bool isConcrete() {
-	return (_indexExpr is null && _parent.isConcrete());
+      final bool isActualDomain() {
+	return ((_indexExpr is null  ||
+		 _indexExpr.isIterator ||
+		 _indexExpr.isConst) && _parent.isActualDomain());
       }
 
       _esdl__Solver getSolverRoot() {
@@ -1369,7 +1488,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  if(_indexExpr) {
 	    foreach(pp; _parent.getDomainElems(-1)) {
 	      if(indx < 0) {
-		if (pp._arrLen.isResolved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
+		if (pp._arrLen.solved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
 		else elems ~= pp._elems;
 	      }
 	      else elems ~= pp._elems[indx];
@@ -1378,7 +1497,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  else {
 	    foreach(pp; _parent.getDomainElems(_pindex)) {
 	      if(indx < 0) {
-		if (pp._arrLen.isResolved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
+		if (pp._arrLen.solved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
 		else elems ~= pp._elems;
 	      }
 	      else elems ~= pp._elems[indx];
@@ -1523,6 +1642,9 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	      import std.conv: to;
 	      _elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
 				 this, cast(uint) i);
+	      if (_hasAbstractVecDomains) {
+		_elems[i].labelAbstractDomains(false);
+	      }
 	    }
 	  }
 	}
@@ -1693,12 +1815,56 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  
 	// auto iter = arrLen.makeIterVar();
 	// iters ~= iter;
-	if (_parent.isConcrete()) {
+	if (_parent.isActualDomain()) {
 	  deps ~= _parent._arrLen;
 	}
 	_parent.setBddContext(pred, vals, vals, iters, idxs, deps);
 	if (_indexExpr !is null) {
 	  _indexExpr.setBddContext(pred, idxs, vals, iters, idxs, deps);
+	}
+      }
+
+      void markAsUnresolved(uint lap) {
+	if (isActualDomain()) {
+	  foreach(elem; _elems) {
+	    elem.markAsUnresolved(lap);
+	  }
+	}
+	else {
+	  _parent.markAsUnresolved(lap);
+	}
+      }
+
+      bool hasAbstractDomains() {
+	return _hasAbstractVecDomains;
+      }
+
+      void markAbstractDomains(bool len) {
+	if (this.isActualDomain()) {
+	  labelAbstractDomains(len);
+	}
+	else {
+	  _parent.markAbstractDomains(len);
+	}
+      }
+
+      void labelAbstractDomains(bool len) {
+	if (len is true) {
+	  if (_hasAbstractLenDomains is false) {
+	    _hasAbstractLenDomains = true;
+	    _arrLen.labelAbstractDomains(len);
+	    foreach(elem; _elems) {
+	      elem.labelAbstractDomains(len);
+	    }
+	  }
+	}
+	else {
+	  if (_hasAbstractVecDomains is false) {
+	    _hasAbstractVecDomains = true;
+	    foreach(elem; _elems) {
+	      elem.labelAbstractDomains(len);
+	    }
+	  }
 	}
       }
     }

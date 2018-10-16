@@ -10,6 +10,8 @@ import std.array;
 import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
+enum DomType: ubyte {MONO = 1, LAZYMONO = 2, MAYBEMONO = 3, MULTI = 4}
+
 abstract class _esdl__Solver
 {
   Buddy _esdl__buddy;
@@ -63,7 +65,7 @@ abstract class _esdl__Solver
   void addDomain(CstDomain domain, bool isRand) {
     if (isRand) {
       _root._cstRndDomains ~= domain;
-      useBuddy(_root._esdl__buddy);
+      useBuddy(_esdl__buddy);
       domain.domIndex = _root._domIndex++;
       _root._domains ~= _esdl__buddy.extDomVec(domain.bitcount);
     }
@@ -135,12 +137,23 @@ abstract class _esdl__Solver
     else {
       _parent = parent;
       _root = _parent.getSolverRoot();
+      _esdl__buddy = _root._esdl__buddy;
     }
+  }
+
+  void procResolved(CstPredicate pred) {
+    foreach (var; pred._vars) {
+      if (! var.isActualDomain()) {
+	auto dom = var.getResolved();
+	dom._tempPreds ~= pred;
+      }
+    }
+    _resolvedPreds ~= pred;
   }
 
   void addUnrolled(CstPredicate pred) {
     if (pred.isResolved(true)) {
-      _resolvedPreds ~= pred;
+      procResolved(pred);
     }
     else {
       _unresolvedPreds ~= pred;
@@ -241,18 +254,28 @@ abstract class CstDomain
   abstract CstDomain getResolved();
   abstract void updateVal();
   abstract bool hasChanged();
+  abstract bool hasAbstractDomains();
+  abstract void markAbstractDomains(bool len);
+  abstract bool isActualDomain();
 
   final void _esdl__doRandomize() {
     this._esdl__doRandomize(getSolverRoot()._esdl__getRandGen());
   }
 
   final void randIfNoCst() {
-    if (_varPreds.length == 0) {
-      _esdl__doRandomize();
+    if (! solved()) {
+      if (_varPreds.length == 0) {
+	_esdl__doRandomize();
+      }
     }
   }
 
   final void markSolved() {
+    debug(CSTDOMAINS) {
+      import std.stdio;
+      stderr.writeln(this.describe());
+    }
+    _tempPreds.reset();
     _solvedCycle = getSolverRoot()._cycle;
   }
 
@@ -279,11 +302,13 @@ abstract class CstDomain
   CstPredicate[] _varPreds;
   CstPredicate[] _valPreds;
 
+  Bin!CstPredicate _tempPreds;
+
   // init value has to be different from solver._cycle init value
   uint _solvedCycle = -1;   // cycle for which _arrLen has been solved
   uint _unresolveLap;
 
-  bool _monoDomain = true;
+  DomType _type = DomType.MONO;
 
   void registerVarPred(CstPredicate varPred) {
     foreach (pred; _varPreds) {
@@ -312,6 +337,15 @@ abstract class CstDomain
     _depCbs ~= depCb;
   }
 
+  void registerIdxPred(CstDepCallback idxCb) {
+    foreach (cb; _depCbs) {
+      if (cb is idxCb) {
+	return;
+      }
+    }
+    _depCbs ~= idxCb; // use same callbacks as deps for now
+  }
+
   void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {
       _unresolveLap = lap;
@@ -334,13 +368,23 @@ abstract class CstDomain
   }
 
   string describe() {
+    import std.conv: to;
     string desc = "CstDomain: " ~ name();
-    desc ~= "\n	isMono: " ~ (_monoDomain ? "true" : "false");
-    desc ~= "\n	Preds:";
-    foreach (pred; _varPreds) {
-      desc ~= "\n		" ~ pred.name();
+    desc ~= "\n	DomType: " ~ _type.to!string();
+    if (_varPreds.length > 0) {
+      desc ~= "\n	Preds:";
+      foreach (pred; _varPreds) {
+	desc ~= "\n		" ~ pred.name();
+      }
+      desc ~= "\n";
     }
-    desc ~= "\n";
+    if (_tempPreds.length > 0) {
+      desc ~= "\n	Temporary Preds:";
+      foreach (pred; _tempPreds) {
+	desc ~= "\n		" ~ pred.name();
+      }
+      desc ~= "\n";
+    }
     return desc;
   }
 }
@@ -402,6 +446,8 @@ interface CstVecExpr
   //   return false;
   // }
 
+  abstract bool isIterator();
+  
   // get all the primary bdd vectors that constitute a given bdd
   // expression
   // The idea here is that we need to solve all the bdd vectors of a
@@ -642,6 +688,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	  return false;
 	}
       }
+      foreach (idx; _idxs) {
+	if (! idx.solved()) {
+	  return false;
+	}
+      }
       return true;
     }
     return false;
@@ -691,13 +742,13 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return (_unresolveLap == lap);
   }
 
-  final bool markIfUnresolved(uint lap) {
-    if (_deps.length > 0 || _iter !is null) {
-      this.markAsUnresolved(lap);
-      return true;
-    }
-    return false;
-  }
+  // final bool markIfUnresolved(uint lap) {
+  //   if (_deps.length > 0 || _iter !is null) {
+  //     this.markAsUnresolved(lap);
+  //     return true;
+  //   }
+  //   return false;
+  // }
 
   final bool isRolled() {
     if (this._iters.length > 0 &&
@@ -731,9 +782,18 @@ class CstPredicate: CstIterCallback, CstDepCallback
     foreach (var; _vars) var.registerVarPred(this);
     foreach (val; _vals) val.registerValPred(this);
 
+    assert(_vars.length != 0);
     if (_vars.length > 1) {
       foreach (var; _vars) {
-	var._monoDomain = false;
+	var._type = DomType.MULTI;
+      }
+    }
+    else {
+      auto var = _vars[0];
+      if (var._type == DomType.MONO) {
+	if (_vals.length > 0) {
+	  var._type = DomType.LAZYMONO;
+	}
       }
     }
 
@@ -745,6 +805,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     
     foreach (dep; _deps) dep.registerDepPred(this);
+    foreach (idx; _idxs) idx.registerIdxPred(this);
 
     // take only the parsed iterators that are found in the expression
     // as well

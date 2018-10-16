@@ -551,6 +551,10 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     return false;
   }
 
+  override bool isIterator() {
+    return true;
+  }
+
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
@@ -626,7 +630,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _name = name;
     _parent = parent;
     _iterVar = new CstIterator!RV(_parent);
-    if (_parent.isConcrete()) {
+    if (_parent.isActualDomain()) {
       _parent.getSolverRoot().addDomain(this, HAS_RAND_ATTRIB);
     }
   }
@@ -779,9 +783,9 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
 
-  bool isResolved() {
-    return stage().solved();
-  }
+  // bool isResolved() {
+  //   return stage().solved();
+  // }
   
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
     // this function will only be called when array lenght is
@@ -903,6 +907,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return false;
   }
   
+  bool isIterator() {
+    return false;
+  }
+  
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
@@ -923,6 +931,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     if (listed is false) {
       vars ~= this;
     }
+    markAbstractDomains(true);
     _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
@@ -939,6 +948,24 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     assert(false);
   }
 
+  final override bool isActualDomain() {
+    return _parent.isActualDomain();
+  }
+
+  override bool hasAbstractDomains() {
+    return _parent.hasAbstractDomains();
+  }
+
+  override void markAbstractDomains(bool len) {
+    _parent.markAbstractDomains(len);
+  }
+
+  void labelAbstractDomains(bool len) {
+    assert(len is true);
+    if (this._type !is DomType.MULTI) {
+      this._type = DomType.MAYBEMONO;
+    }
+  }
 }
 
 abstract class CstValBase: CstVecTerm
@@ -967,6 +994,10 @@ abstract class CstValBase: CstVecTerm
       
   bool isConst() {
     return true;
+  }
+
+  bool isIterator() {
+    return false;
   }
 
   CstDomain[] getRndDomains(bool resolved) {
@@ -1404,6 +1435,10 @@ class CstVec2VecExpr: CstVecTerm
     return false;
   }
 
+  bool isIterator() {
+    return false;
+  }
+
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
@@ -1596,6 +1631,10 @@ class CstVecSliceExpr: CstVecTerm
     return false;
   }
 
+  bool isIterator() {
+    return false;
+  }
+
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
@@ -1719,6 +1758,10 @@ class CstNotVecExpr: CstVecTerm
     return false;
   }
 
+  bool isIterator() {
+    return false;
+  }
+
   bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
@@ -1830,6 +1873,10 @@ class CstNegVecExpr: CstVecTerm
   }
   
   bool isConst() {
+    return false;
+  }
+
+  bool isIterator() {
     return false;
   }
 

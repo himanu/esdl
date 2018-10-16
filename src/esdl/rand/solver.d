@@ -257,13 +257,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 	   _unresolvedPreds.length > 0) {
       // _lap, like _cycle starts with 1
       // this is to avoid default values
-      debug(CSTDOMAINS) {
-	foreach (dom; _cstRndDomains) {
-	  import std.stdio;
-	  stderr.writeln(dom.describe());
-	}
-      }
-      
       _lap += 1;
 
       _toUnrolledPreds.swop(_unrolledPreds);
@@ -281,9 +274,11 @@ abstract class _esdl__SolverRoot: _esdl__Solver
       foreach (pred; _unresolvedPreds) {
 	pred.randomizeDeps();
 	if (pred.isResolved()) {
-	  _resolvedPreds ~= pred;
+	  procResolved(pred);
 	}
 	else {
+	  // import std.stdio;
+	  // writeln("unresolvedPred: ", pred.describe());
 	  _toUnresolvedPreds ~= pred;
 	  pred.markAsUnresolved(_lap);
 	}
@@ -296,6 +291,8 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 	  _resolvedPreds ~= pred;
 	}
 	else {
+	  // import std.stdio;
+	  // writeln("Sending predicate to BDD solver: " ~ pred.name());
 	  addCstStage(pred);
 	}
       }
