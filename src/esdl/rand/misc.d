@@ -311,3 +311,35 @@ class _esdl__RandGen
       *t = uniform(a, b, _gen);
     }
 }
+
+// All the operations that produce a BddVec
+enum CstBinVecOp: byte
+  {   AND,
+      OR ,
+      XOR,
+      ADD,
+      SUB,
+      MUL,
+      DIV,
+      REM,
+      LSH,
+      RSH,
+      BITINDEX,
+      }
+
+// All the operations that produce a Bdd
+enum CstBinBddOp: byte
+  {   LTH,
+      LTE,
+      GTH,
+      GTE,
+      EQU,
+      NEQ,
+      }
+
+
+enum CstBddOp: byte
+  {   LOGICAND,
+      LOGICOR ,
+      LOGICIMP,
+      }

@@ -3,6 +3,8 @@ module esdl.rand.expr;
 import esdl.rand.intr;
 import esdl.rand.obdd;
 import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned, Unconst;
+import esdl.rand.misc: CstBinVecOp, CstBinBddOp, CstBddOp;
+
 import esdl.rand.base;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
@@ -1150,37 +1152,6 @@ class CstVal(T = int): CstValBase
 
 }
 
-// All the operations that produce a BddVec
-enum CstBinVecOp: byte
-  {   AND,
-      OR ,
-      XOR,
-      ADD,
-      SUB,
-      MUL,
-      DIV,
-      REM,
-      LSH,
-      RSH,
-      BITINDEX,
-      }
-
-// All the operations that produce a Bdd
-enum CstBinBddOp: byte
-  {   LTH,
-      LTE,
-      GTH,
-      GTE,
-      EQU,
-      NEQ,
-      }
-
-
-enum CstBddOp: byte
-  {   LOGICAND,
-      LOGICOR ,
-      LOGICIMP,
-      }
 
 // This class would hold two(bin) vector nodes and produces a vector
 // only after processing those two nodes
