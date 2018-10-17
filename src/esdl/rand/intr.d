@@ -4,6 +4,7 @@ import std.traits: isIntegral, isSigned;
 import std.container.array;
 import std.traits: Unsigned;
 import esdl.data.bvec;
+import esdl.rand.misc: CstBinVecOp, CstBinBddOp, CstBddOp;
 
 T larger(T) (T a, T b) {
   if (a > b) return a;
@@ -30,33 +31,109 @@ struct IntRange(T) if (isIntegral!T) {
   
   Unsigned!T _count;
   
-  bool opOpAssign(string op)(IntRange other) {
-    static if (op == "|") {
-      if (this._max == T.min) {
-	if (other._max == T.min || other._max >= this._min) {
-	  this._min = smaller(this._min, other._min);
-	  return true;
-	}
-	else return false;
-      }
-      if (other._max == T.min) {
-	if (this._max == T.min || this._max >= other._min) {
-	  this._max = T.min;
-	  this._min = smaller(this._min, other._min);
-	  return true;
-	}
-	else return false;
-      }
-      if (other._min > this._max || this._min > other._max) {
-	return false;
-      }
-      else {
-	this._min = smaller(this._min, other._min);
-	this._max = larger(this._max, other._max);
-	return true;
+  this(CstBinBddOp op, T val, bool revrse=false) {
+    if (! revrse) {
+      final switch(op) {
+      case CstBinBddOp.LTH: _min = T.min; _max = val; break;
+      case CstBinBddOp.GTH: _min = ++val; _max = T.max; break;
+      case CstBinBddOp.LTE: _min = T.min; _max = ++val; break;
+      case CstBinBddOp.GTE: _min = val; _max = T.max; break;
+      case CstBinBddOp.EQU: _min = val; _max = ++val; break;
+      case CstBinBddOp.NEQ: _min = ++val; _max = val; break;
       }
     }
+    else {
+      final switch(op) {
+      case CstBinBddOp.GTH: _min = T.min; _max = val; break;
+      case CstBinBddOp.LTH: _min = ++val; _max = T.max; break;
+      case CstBinBddOp.GTE: _min = T.min; _max = ++val; break;
+      case CstBinBddOp.LTE: _min = val; _max = T.max; break;
+      case CstBinBddOp.EQU: _min = val; _max = ++val; break;
+      case CstBinBddOp.NEQ: _min = ++val; _max = val; break;
+      }
+    }
+  }
+
+  bool opOpAssign(string op)(IntRange other) {
+    static if (op == "|") {
+      import std.stdio;
+      writeln("Oring: ", this, " ,", other);
+      bool result = false;
+      if (this._max == this._min) {
+	result = true;
+      }
+      else if (other._max == other._min) {
+	this._min = other._min;
+	this._max = other._max;
+	result = true;
+      }
+
+      // both ranges normal
+      else if (this._min < this._max && other._min < other._max) {
+	if (this._max < other._min || this._min > other._min) {
+	  result = false;
+	}
+	else {
+	  this._min = smaller(this._min, other._min);
+	  this._max = larger(this._max, other._max);
+	  result = true;
+	}
+      }
+      else if (this._min > this._max && other._min < other._max) {
+	// [33, 64) ,[64, 33)
+	if (this._max >= other._min && this._min <= other._max) {
+	  this = this.init;
+	  result = true;
+	}
+	// [60, 0), [-16, 32)
+	else if (this._max >= other._min) {
+	  this._max = other._max;
+	  result = true;
+	}
+	// [60, 0), [16, 64)
+	else if (this._min <= other._max) {
+	  this._min = other._min;
+	  result = true;
+	}
+	else {
+	  result = false;
+	}
+      }
+      else if (other._min > other._max && this._min < this._max) {
+	// [33, 64) ,[64, 33)
+	if (other._max >= this._min && other._min <= this._max) {
+	  this = this.init;
+	  result = true;
+	}
+	// [60, 0), [32, 64)
+	else if (other._max >= this._min) {
+	  this._min = other._min;
+	  result = true;
+	}
+	// [32, 64) ,[60, 0)
+	else if (other._min <= this._max) {
+	  this._max = other._max;
+	  result = true;
+	}
+	else {
+	  result = false;
+	}
+      }
+      else if (this._min > this._max && other._min > other._max) {
+	this._min = smaller(this._min, other._min);
+	this._max = larger(this._max, other._max);
+	result = true;
+      }
+      if (result) {
+	writeln("Result: ", this);
+      }
+      else {
+	writeln("Result: ", this, ", ", other);
+      }
+      return result;
+    }
     static if (op == "&") {
+      if (this._max <= this._min)
       if (this._max == T.min) {
 	if (other._max == T.min || other._max > this._min) {
 	  this._min = larger(this._min, other._min);
@@ -94,7 +171,7 @@ struct IntRange(T) if (isIntegral!T) {
   }
 
   Unsigned!T count() {
-    if (this == typeof(this).init) {
+    if (this._min == this._max) {
       assert(false, "Too big to count");
     }
     else {
@@ -107,7 +184,333 @@ struct IntRange(T) if (isIntegral!T) {
   }
 }
 
-struct IntRangeSet(T)
+unittest {
+  import std.stdio;
+  import esdl.data.bvec;
+
+  alias irange = IntRange!int;
+  
+  // if (this._max == this._min) {
+  IntRange!int test1_r1 = IntRange!int(32, 32);
+  IntRange!int test1_r2 = IntRange!int(0, 32);
+
+  test1_r1 |= test1_r2;
+
+  assert (test1_r1 == IntRange!int(32, 32));
+  writeln("Test 1 Passed");
+
+  // else if (other._max == other._min) {
+  IntRange!int test2_r1 = IntRange!int(0, 32);
+  IntRange!int test2_r2 = IntRange!int(32, 32);
+
+  test2_r1 |= test2_r2;
+
+  assert (test2_r1 == IntRange!int(32, 32));
+  writeln("Test 2 Passed");
+
+
+  // else if (this._min < this._max && other._min < other._max) {
+  irange test3_r1 = irange(0, 32);
+  irange test3_r2 = irange(32, 64);
+
+  assert(test3_r1 |= test3_r2);
+  assert (test3_r1 == irange(0, 64));
+  writeln("Test 3a Passed");
+
+  test3_r1 = irange(0, 32);
+  test3_r2 = irange(33, 64);
+
+  if (! (test3_r1 |= test3_r2)) {
+    writeln("Test 3b Passed");
+  }
+
+  test3_r1 = irange(33, 64);
+  test3_r2 = irange(0, 32);
+
+  if (! (test3_r1 |= test3_r2)) {
+    writeln("Test 3c Passed");
+  }
+
+  test3_r1 = irange(-5, 16);
+  test3_r2 = irange(14, 38);
+
+  assert(test3_r1 |= test3_r2);
+  assert (test3_r1 == irange(-5, 38));
+  writeln("Test 3d Passed");
+
+  // else if (other._min > other._max && this._min < this._max) {
+
+  irange test4_r1 = irange(32, 64);
+  irange test4_r2 = irange(64, 32);
+
+  assert(test4_r1 |= test4_r2);
+  assert(test4_r1 == irange.init);
+  writeln("Test 4a Passed");
+
+  test4_r1 = irange(32, 64);
+  test4_r2 = irange(60, 0);
+
+  assert(test4_r1 |= test4_r2);
+  assert(test4_r1 == irange(32,0));
+  writeln("Test 4b Passed");
+
+  test4_r1 = irange(32, 64);
+  test4_r2 = irange(96, 0);
+
+  assert(! (test4_r1 |= test4_r2));
+  writeln("Test 4c Passed");
+  // 	      else if (this._min > this._max && other._min < other._max) {
+
+  irange test5_r1 = irange(60, 0);
+  irange test5_r2 = irange(16, 64);
+  assert(test5_r1 |= test5_r2);
+  assert(test5_r1 == irange(16, 0));
+  writeln("Test 5a Passed");
+
+  test5_r1 = irange(60, 0);
+  test5_r2 = irange(-16, 32);
+  assert(test5_r1 |= test5_r2);
+  assert(test5_r1 == irange(60, 32));
+  writeln("Test 5b Passed");
+  
+  // [33, 64) ,[64, 33)
+  test5_r1 = irange(33, 64);
+  test5_r2 = irange(64, 33);
+  assert(test5_r1 |= test5_r2);
+  assert(test5_r1 == irange.init);
+  writeln("Test 5c Passed");
+  
+
+  // else if (this._min > this._max && other._min > other._max) {
+  irange test6_r1 = irange(64, -64);
+  irange test6_r2 = irange(32, -32);
+  assert(test6_r1 |= test6_r2);
+  assert(test6_r1 == irange(32, -32));
+  writeln("Test 6a Passed");
+		
+  test6_r1 = irange(64, -32);
+  test6_r2 = irange(32, -64);
+  assert(test6_r1 |= test6_r2);
+  assert(test6_r1 == irange(32, -32));
+  writeln("Test 6b Passed");
+		
+
+}
+
+unittest {
+  import std.stdio;
+  import esdl.data.bvec;
+
+  alias irange = IntRange!int;
+  
+  // if (this._max == this._min) {
+  IntRange!int test1_r1 = IntRange!int(32, 32);
+  IntRange!int test1_r2 = IntRange!int(0, 32);
+
+  assert(rangeAnd(test1_r1, test1_r2) == 1);
+  assert(test1_r1 == irange(0, 32));
+  writeln("AND Test 1 Passed");
+
+  // else if (other._max == other._min) {
+  IntRange!int test2_r1 = IntRange!int(0, 32);
+  IntRange!int test2_r2 = IntRange!int(32, 32);
+
+  assert(rangeAnd(test2_r1, test2_r2) == 1);
+  assert(test2_r1 == irange(0, 32));
+  writeln("AND Test 2 Passed");
+
+
+  // else if (this._min < this._max && other._min < other._max) {
+  irange test3_r1 = irange(0, 32);
+  irange test3_r2 = irange(32, 64);
+
+  assert(rangeAnd(test3_r1, test3_r2) == 0);
+  writeln("AND Test 3a Passed");
+
+  test3_r1 = irange(0, 32);
+  test3_r2 = irange(33, 64);
+
+  assert(rangeAnd(test3_r1, test3_r2) == 0);
+  writeln("AND Test 3b Passed");
+
+  test3_r1 = irange(33, 64);
+  test3_r2 = irange(0, 32);
+
+  assert(rangeAnd(test3_r1, test3_r2) == 0);
+  writeln("AND Test 3c Passed");
+
+  test3_r1 = irange(-5, 16);
+  test3_r2 = irange(14, 38);
+
+  assert(rangeAnd(test3_r1, test3_r2) == 1);
+  assert (test3_r1 == irange(14, 16));
+  writeln("AND Test 3d Passed");
+
+  // else if (other._min > other._max && this._min < this._max) {
+
+  irange test4_r1 = irange(32, 64);
+  irange test4_r2 = irange(64, 32);
+
+  assert(rangeAnd(test4_r1, test4_r2) == 0);
+  writeln("AND Test 4a Passed");
+
+  test4_r1 = irange(32, 64);
+  test4_r2 = irange(60, 0);
+
+  assert(rangeAnd(test4_r1, test4_r2) == 1);
+  assert(test4_r1 == irange(60, 64));
+  writeln("AND Test 4b Passed");
+
+  test4_r1 = irange(32, 64);
+  test4_r2 = irange(96, 0);
+
+  assert(rangeAnd(test4_r1, test4_r2) == 0);
+  writeln("AND Test 4c Passed");
+  // 	      else if (this._min > this._max && other._min < other._max) {
+
+  irange test5_r1 = irange(60, 0);
+  irange test5_r2 = irange(16, 64);
+
+  assert(rangeAnd(test5_r1, test5_r2) == 1);
+  assert(test5_r1 == irange(60, 64));
+  writeln("AND Test 5a Passed");
+
+  test5_r1 = irange(60, 0);
+  test5_r2 = irange(-16, 32);
+  assert(rangeAnd(test5_r1, test5_r2) == 1);
+  assert(test5_r1 == irange(-16, 0));
+  writeln("AND Test 5b Passed");
+  
+  // [33, 64) ,[64, 33)
+  test5_r1 = irange(33, 64);
+  test5_r2 = irange(64, 33);
+  assert(rangeAnd(test5_r1, test5_r2) == 0);
+  writeln("AND Test 5c Passed");
+  
+
+  // else if (this._min > this._max && other._min > other._max) {
+  irange test6_r1 = irange(64, -64);
+  irange test6_r2 = irange(32, -32);
+  assert(rangeAnd(test6_r1, test6_r2) == 1);
+  assert(test6_r1 == irange(64, -64));
+  writeln("AND Test 6a Passed");
+		
+  test6_r1 = irange(64, -32);
+  test6_r2 = irange(32, -64);
+  assert(rangeAnd(test6_r1, test6_r2) == 1);
+  assert(test6_r1 == irange(64, -64));
+  writeln("AND Test 6b Passed");
+		
+  // Double overlap
+  irange test7_r1 = irange(32, -32);
+  irange test7_r2 = irange(-64, 64);
+  assert(rangeAnd(test7_r1, test7_r2) == 2);
+  assert(test7_r1 == irange(-64, -32));
+  assert(test7_r2 == irange(32, 64));
+  writeln("AND Test 7 Passed");
+}
+
+int rangeAnd(T)(ref IntRange!T r1, ref IntRange!T r2) {
+  import std.stdio;
+  writeln("Anding: ", r1, " ,", r2);
+  int rcount;
+  if (r1._min == r1._max) {
+    r1 = r2;
+    rcount = 1;
+  }
+  if (r2._min == r2._max) {
+    rcount = 1;
+  }
+  // both ranges normal
+  if (r1._min < r1._max && r2._min < r2._max) {
+    if (r1._max <= r2._min || r2._max <= r1._min) {
+      rcount = 0;
+    }
+    else {
+      r1._min = larger(r1._min, r2._min);
+      r1._max = smaller(r1._max, r2._max);
+      rcount = 1;
+    }
+  }
+  if (r1._min > r1._max && r2._min < r2._max) {
+    IntRange!T s1;
+    IntRange!T s2;
+    int count;
+    if (r2._min < r1._max) {
+      s1._min = r2._min;
+      s1._max = smaller(r2._max, r1._max);
+      count += 1;
+    }
+    if (r2._max > r1._min) {
+      if (count == 0) {
+	s1._max = r2._max;
+	s1._min = larger(r2._min, r1._min);
+	count += 1;
+      }
+      else if (count == 1) {
+	s2._max = r2._max;
+	s2._min = larger(r2._min, r1._min);
+	count += 1;
+      }
+    }
+    if (count == 1) {
+      r1 = s1;
+    }
+    if (count == 2) {
+      r1 = s1;
+      r2 = s2;
+    }
+    rcount = count;
+  }
+  //  [96, 512) ,[256, 32)
+  if (r2._min > r2._max && r1._min < r1._max) {
+    IntRange!T s1;
+    IntRange!T s2;
+    int count;
+    if (r1._min < r2._max) {
+      s1._min = r1._min;
+      s1._max = smaller(r1._max, r2._max);
+      count += 1;
+    }
+    if (r1._max > r2._min) {
+      if (count == 0) {
+	s1._max = r1._max;
+	s1._min = larger(r1._min, r2._min);
+	count += 1;
+      }
+      else if (count == 1) {
+	s2._max = r1._max;
+	s2._min = larger(r1._min, r2._min);
+	count += 1;
+      }
+    }
+    if (count == 1) {
+      r1 = s1;
+    }
+    if (count == 2) {
+      r1 = s1;
+      r2 = s2;
+    }
+    rcount = count;
+  }
+  if (r1._min > r1._max && r2._min > r2._max) {
+    r1._min = larger(r1._min, r2._min);
+    r1._max = smaller(r1._max, r2._max);
+    rcount = 1;
+  }
+  if (rcount == 0) {
+    writeln("NULL");
+  }
+  if (rcount == 1) {
+    writeln("Result: ", r1);
+  }
+  if (rcount == 2) {
+    writeln("Result: ", r1, ", ", r2);
+  }
+  return rcount;
+}
+
+class IntRangeSet(T)
 {
   import std.random: uniform, rndGen, Random;
   Array!(IntRange!T) ranges;
@@ -150,8 +553,15 @@ struct IntRangeSet(T)
       Array!(IntRange!T) newRanges;
       foreach (oRange; other.ranges) {
 	foreach (tRange; this.ranges) {
-	  if (tRange &= oRange) {
-	    newRanges ~= tRange;
+	  // rangeAnd is destructive
+	  auto or = oRange;
+	  auto tr = tRange;
+	  int c = rangeAnd(or, tr);
+	  if (c >= 1) {
+	    newRanges ~= or;
+	  }
+	  if (c == 2) {
+	    newRanges ~= tr;
 	  }
 	}
       }
@@ -199,7 +609,13 @@ struct IntRangeSet(T)
   Unsigned!T count() {
     Unsigned!T cou;
     foreach(r; ranges) {
-      cou += r.count();
+      auto c = r.unsafeCount();
+      if (c == 0) {
+	return 0;
+      }
+      else {
+	cou += c;
+      }
     }
     return cou;
   }
@@ -209,7 +625,13 @@ struct IntRangeSet(T)
       return uniform!T(gen);
     }
     else {
-      auto rn = uniform(0, _count, gen);
+      Unsigned!T rn;
+      if (_count == 0) {
+	rn = uniform!(Unsigned!T)(gen);
+      }
+      else {
+	rn = uniform(0, _count, gen);
+      }
 
       foreach (r; ranges) {
 	auto cou = r.unsafeCount();
@@ -264,31 +686,31 @@ template IntRangeType(V)
 
 enum IntRangeModOp: byte {ADD, SUB, SUBD, MULT, DIV, DIVD}
 
-struct IntRangeMod
+struct IntRangeMod(T)
 {
-  long _arg;
+  this(IntRangeModOp op, T arg) {
+    _op = op;
+    _arg = arg;
+  }
+
+  T _arg;
   IntRangeModOp _op;
-  void apply(ref IntRange!long) {
-  }
-}
-
-struct IntRangeModSet
-{
-  Array!(IntRangeMod) _mods;
-
-  void opOpAssign(string op)(IntRangeMod mod) {
-    static if (op == "~") {
-      _mods ~= mod;
+  void apply(ref IntRange!T ir) {
+    switch(_op) {
+    case IntRangeModOp.ADD:
+      ir._min -= _arg;
+      ir._max -= _arg;
+      break;
+    case IntRangeModOp.SUB:
+      ir._min += _arg;
+      ir._max += _arg;
+      break;
+    case IntRangeModOp.SUBD:
+      T tmp = ir._min;
+      ir._min = cast(T) (_arg - ir._max + 1);
+      ir._max = cast(T) (_arg - tmp + 1);
+      break;
+    default: assert(false);
     }
-    else {
-      static assert (false);
-    }
-  }
-
-  IntRange!long apply(ref IntRange!long range) {
-    foreach (mod; _mods) {
-      mod.apply(range);
-    }
-    return range;
   }
 }
