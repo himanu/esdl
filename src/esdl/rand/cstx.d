@@ -591,7 +591,7 @@ struct CstParser {
       // Look for long/short specifier
       while(srcCursor < CST.length) {
 	char c = CST[srcCursor];
-	if(c == 'L' || c == 'S' ||  c == 'U') {
+	if(c == 'L' || c == 'u' ||  c == 'U') {
 	  ++srcCursor;
 	}
 	else {
