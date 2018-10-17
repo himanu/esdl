@@ -480,8 +480,6 @@ interface CstVecExpr
 			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps);
 
-  abstract bool getIntMods(ref IntRangeModSet modSet);
-
   abstract bool solved();
 }
 

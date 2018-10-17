@@ -597,11 +597,6 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     iters ~= this;
   }
 
-  override bool getIntMods(ref IntRangeModSet modSet) {
-    assert (false,
-	    "getIntMods should not be called when an iterator is still not resolved");
-  }
-
   override bool solved() {
     return _arrVar._arrLen.solved();
   }
@@ -937,10 +932,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
-  bool getIntMods(ref IntRangeModSet modSet) {
-    return true;
-  }
-
   override void execIterCbs() {
     assert(_iterVar !is null);
     _iterVar.unrollCbs();
@@ -1010,9 +1001,6 @@ abstract class CstValBase: CstVecTerm
     return this;
   }
 
-  bool getIntMods(ref IntRangeModSet modSet) {
-    return false;
-  }
 }
 
 auto _esdl__cstVal(T)(T val) {
@@ -1163,7 +1151,6 @@ class CstVec2VecExpr: CstVecTerm
   CstVecExpr _rhs;
   CstBinVecOp _op;
 
-  IntRangeModSet _modSet;
   // CstDomain[] _preReqs;
   CstVecPrim[] preReqs() {
     return _lhs.preReqs() ~ _rhs.preReqs();
@@ -1255,54 +1242,6 @@ class CstVec2VecExpr: CstVecTerm
       return _lhs.getBDD(stage, buddy) >> _rhs.getBDD(stage, buddy);
     case CstBinVecOp.BITINDEX:
       assert(false, "BITINDEX is not implemented yet!");
-    }
-  }
-
-  bool getIntMods(ref IntRangeModSet modSet) {
-    long lval;
-    long rval;
-    if (_lhs.getVal(lval)) {	// left side is a value
-      final switch(_op) {
-      case CstBinVecOp.AND: return false;
-      case CstBinVecOp.OR:  return false;
-      case CstBinVecOp.XOR: return false;
-      case CstBinVecOp.ADD: modSet ~= IntRangeMod(lval, IntRangeModOp.ADD);
-	return _rhs.getIntMods(modSet);
-      case CstBinVecOp.SUB: modSet ~= IntRangeMod(lval, IntRangeModOp.SUBD);
-	return _rhs.getIntMods(modSet);
-      case CstBinVecOp.MUL: modSet ~= IntRangeMod(lval, IntRangeModOp.MULT);
-	return _rhs.getIntMods(modSet);
-      case CstBinVecOp.DIV: modSet ~= IntRangeMod(lval, IntRangeModOp.DIVD);
-	return _rhs.getIntMods(modSet);
-      case CstBinVecOp.REM: return false;
-      case CstBinVecOp.LSH: return false;
-      case CstBinVecOp.RSH: return false;
-      case CstBinVecOp.BITINDEX:
-	assert(false, "BITINDEX is not implemented yet!");
-      }
-    }
-    else if (_rhs.getVal(rval)) {	// left side is a value
-      final switch(_op) {
-      case CstBinVecOp.AND: return false;
-      case CstBinVecOp.OR:  return false;
-      case CstBinVecOp.XOR: return false;
-      case CstBinVecOp.ADD: modSet ~= IntRangeMod(rval, IntRangeModOp.ADD);
-	return _lhs.getIntMods(modSet);
-      case CstBinVecOp.SUB: modSet ~= IntRangeMod(rval, IntRangeModOp.SUB);
-	return _lhs.getIntMods(modSet);
-      case CstBinVecOp.MUL: modSet ~= IntRangeMod(rval, IntRangeModOp.MULT);
-	return _lhs.getIntMods(modSet);
-      case CstBinVecOp.DIV: modSet ~= IntRangeMod(rval, IntRangeModOp.DIV);
-	return _lhs.getIntMods(modSet);
-      case CstBinVecOp.REM: return false;
-      case CstBinVecOp.LSH: return false;
-      case CstBinVecOp.RSH: return false;
-      case CstBinVecOp.BITINDEX:
-	assert(false, "BITINDEX is not implemented yet!");
-      }
-    }
-    else {
-      return false;
     }
   }
 
@@ -1623,10 +1562,6 @@ class CstVecSliceExpr: CstVecTerm
     }
   }
 
-  bool getIntMods(ref IntRangeModSet modSet) {
-    return false;
-  }
-
   override bool solved() {
     if (_rhs is null) {
       return _lhs.solved() && _vec.solved();
@@ -1746,10 +1681,6 @@ class CstNotVecExpr: CstVecTerm
     _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
-  bool getIntMods(ref IntRangeModSet modSet) {
-    return false;
-  }
-
   override bool solved() {
     return _expr.solved();
   }
@@ -1761,7 +1692,6 @@ class CstNegVecExpr: CstVecTerm
 
   CstVecExpr _expr;
 
-  IntRangeModSet _modSet;
   // CstDomain[] _preReqs;
   CstVecPrim[] preReqs() {
     return _expr.preReqs();
@@ -1862,11 +1792,6 @@ class CstNegVecExpr: CstVecTerm
 		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
     _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
-  }
-
-  bool getIntMods(ref IntRangeModSet modSet) {
-    modSet ~= IntRangeMod(0, IntRangeModOp.SUBD);
-    return _expr.getIntMods(modSet);    
   }
 
   override bool solved() {

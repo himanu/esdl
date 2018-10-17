@@ -365,10 +365,6 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      bool getIntMods(ref IntRangeModSet modSet) {
-	return true;
-      }
-
       override void markAsUnresolved(uint lap) {
 	if (_unresolveLap != lap) {
 	  _unresolveLap = lap;
@@ -749,10 +745,6 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  // the pred that it can go ahead
 	  _indexExpr.setBddContext(pred, idxs, vals, iters, idxs, deps);
 	}
-      }
-
-      bool getIntMods(ref IntRangeModSet modSet) {
-	return true;
       }
 
       override void markAsUnresolved(uint lap) {

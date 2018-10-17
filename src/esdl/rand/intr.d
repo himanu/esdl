@@ -601,7 +601,7 @@ class IntRangeSet(T)
 	    ranges[0] == IntRange!T.init);
   }
 
-  string toString() {
+  override string toString() {
     import std.conv;
     return ranges[].to!string();
   }
