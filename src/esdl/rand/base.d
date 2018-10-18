@@ -10,7 +10,8 @@ import std.array;
 import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-enum DomType: ubyte {MONO = 1, LAZYMONO = 2, MAYBEMONO = 3, MULTI = 4}
+enum DomType: ubyte {MONO = 1, LAZYMONO = 2, MAYBEMONO = 3,
+                     INDEXEDMONO = 4, MULTI = 5}
 
 abstract class _esdl__Solver
 {
@@ -37,6 +38,7 @@ abstract class _esdl__Solver
   Bin!CstPredicate _toUnresolvedPreds;
 
   Bin!CstPredicate _resolvedMonoPreds;
+  Bin!CstPredicate _solveMonoPreds;
 
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
@@ -142,7 +144,7 @@ abstract class _esdl__Solver
     }
   }
 
-  void procMonoDomain(CstPredicate pred) {
+  bool procMonoDomain(CstPredicate pred) {
     assert (pred._vars.length > 0);
     auto dom = pred._vars[0];
     if (! dom.solved()) {
@@ -150,22 +152,68 @@ abstract class _esdl__Solver
 	dom.setVal(dom._rangeSet.uniform());
       }
       else if (dom._type == DomType.LAZYMONO) {
-	auto rns = dom._rangeSet.dup();
-	foreach (vp; dom._varPreds) {
-	  if (vp._vals.length > 0) {
-	    IntRS tmprns;
-	    vp.getExpr().getIntRangeSet(tmprns);
-	    rns &= tmprns;
-	  }
-	}
-	dom.setVal(rns.uniform());
+    	auto rns = dom._rangeSet.dup();
+    	foreach (vp; dom._varPreds) {
+    	  if (vp._vals.length > 0) {
+    	    IntRS tmprns;
+    	    if (! vp.getExpr().getIntRangeSet(tmprns)) {
+    	      return false;
+    	    }
+    	    rns &= tmprns;
+    	  }
+    	}
+    	dom.setVal(rns.uniform());
+      }
+      else {
+    	assert(false);
       }
     }
+    return true;
     // foreach (vr; dom._varPreds) {
     //   if (vr !is pred) {
     // 	vr._markSolved = true;
     //   }
     // }
+  }
+
+  bool procMaybeMonoDomain(CstPredicate pred) {
+    assert (pred._vars.length > 0);
+    if (pred._vars.length > 1) {
+      return false;
+    }
+    auto dom = pred._vars[0];
+    if (! dom.isActualDomain()) {
+      dom = dom.getResolved();
+    }
+    if (! dom.solved()) {
+      if (dom._type == DomType.MAYBEMONO) {
+	auto rns = dom._rangeSet.dup();
+	foreach (vp; dom._varPreds) {
+	  if (vp._vals.length > 0) {
+	    IntRS tmprns;
+	    if (! vp.getExpr().getIntRangeSet(tmprns)) {
+	      return false;
+	    }
+	    rns &= tmprns;
+	  }
+	}
+	foreach (vp; dom._tempPreds) {
+	  IntRS tmprns;
+	  if (! vp.getExpr().getIntRangeSet(tmprns)) {
+	    return false;
+	  }
+	  rns &= tmprns;
+	}
+    	dom.setVal(rns.uniform());
+      }
+      else if (dom._type == DomType.INDEXEDMONO) {
+	assert(false);
+      }
+      else {
+	return false;
+      }
+    }
+    return true;
   }
 
   void procResolved(CstPredicate pred) {
@@ -270,7 +318,7 @@ abstract class CstDomain
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
-  abstract void collate(ulong v, int word=0);
+  // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
   abstract void setVal(ulong v);
   abstract CstStage stage();
@@ -840,10 +888,15 @@ class CstPredicate: CstIterCallback, CstDepCallback
       }
     }
     else {
+      assert(_vars.length == 1);
       auto var = _vars[0];
       if (var._type == DomType.MONO) {
 	if (_vals.length > 0) {
 	  var._type = DomType.LAZYMONO;
+	}
+	if (_idxs.length > 0) {
+	  assert(! var.isActualDomain());
+	  var._type = DomType.INDEXEDMONO;
 	}
       }
     }

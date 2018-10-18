@@ -307,25 +307,26 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
   abstract T* getRef();
   
-  override void collate(ulong v, int word = 0) {
-    static if (HAS_RAND_ATTRIB) {
-      T* var = getRef();
-      static if(isIntegral!T) {
-	if(word == 0) {
-	  *var = cast(T) v;
-	}
-	else {
-	  assert(false, "word has to be 0 for integrals");
-	}
-      }
-      else {
-	(*var)._setNthWord(v, word);
-      }
-    }
-    else {
-      assert(false);
-    }
-  }
+  // override void collate(ulong v, int word = 0) {
+  //   static if (HAS_RAND_ATTRIB) {
+  //     T* var = getRef();
+  //     static if(isIntegral!T) {
+  // 	if(word == 0) {
+  // 	  *var = cast(T) v;
+  // 	}
+  // 	else {
+  // 	  assert(false, "word has to be 0 for integrals");
+  // 	}
+  //     }
+  //     else {
+  // 	(*var)._setNthWord(v, word);
+  //     }
+  //     markSolved();
+  //   }
+  //   else {
+  //     assert(false);
+  //   }
+  // }
 
   override void setVal(ulong[] value) {
     static if (HAS_RAND_ATTRIB) {
@@ -348,6 +349,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       }
       *(getRef()) = newVal;
       markSolved();
+      execCbs();
     }
     else {
       assert(false);
@@ -372,6 +374,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       }
       *(getRef()) = newVal;
       markSolved();
+      execCbs();
     }
     else {
       assert(false);
@@ -909,16 +912,23 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.getLen();
   }
 
+  override void setVal(ulong value) {
+    markSolved();
+    _parent.setLen(cast(size_t) value);
+    execCbs();
+  }
+
   override void setVal(ulong[] v) {
     assert(v.length == 1);
     markSolved();
     _parent.setLen(cast(size_t) v[0]);
+    execCbs();
   }
 
-  override void collate(ulong v, int word = 0) {
-    assert(word == 0);
-    _parent.setLen(cast(size_t) v);
-  }
+  // override void collate(ulong v, int word = 0) {
+  //   assert(word == 0);
+  //   _parent.setLen(cast(size_t) v);
+  // }
 
   CstVecExpr unroll(CstIteratorBase iter, uint n) {
     return _parent.unroll(iter,n).arrLen();

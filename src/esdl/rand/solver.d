@@ -238,6 +238,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     _toUnresolvedPreds.reset();
 
     _resolvedMonoPreds.reset();
+    _solveMonoPreds.reset();
 
     foreach (pred; _allPreds) {
       if (pred.isRolled()) {
@@ -301,8 +302,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 	  procResolved(pred);
 	}
 	else {
-	  // import std.stdio;
-	  // writeln("MARKING _unresolvedPreds ", pred.name());
 	  _toUnresolvedPreds ~= pred;
 	  pred.markAsUnresolved(_lap);
 	}
@@ -312,8 +311,11 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
       foreach (pred; _toSolvePreds) {
 	// import std.stdio;
-	// writeln("Processing: ", pred.name());
-	procMonoDomain(pred);
+	// writeln("Mono: ", pred.name());
+	if (! procMonoDomain(pred)) {
+	  // writeln("Mono Unsolved: ", pred.name());
+	  _resolvedPreds ~= pred;
+	}
       }
       _toSolvePreds.reset();
       
@@ -324,9 +326,9 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 	  _resolvedPreds ~= pred;
 	}
 	else {
-	  // import std.stdio;
-	  // writeln("Sending predicate to BDD solver: " ~ pred.name());
-	  addCstStage(pred);
+	  if (! procMaybeMonoDomain(pred)) {
+	    addCstStage(pred);
+	  }
 	}
       }
 
@@ -347,18 +349,10 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     import std.conv;
     CstPredicate[] preds = stage._predicates;
 
-    // if (preds.length == 0) {
-    //   // import std.stdio;
-    //   // writeln("Only NOP expressions!");
-    //   foreach(vec; stage._domVars) {
-    // 	// writeln("Randomizing: ", vec.name());
-    // 	vec._esdl__doRandomize(this._esdl__rGen, stage);
-    //   }
-    //   stage.id(stageIndx);
-    //   stageIndx += 1;
-    //   return;
+    // foreach (pred; preds) {
+    //   import std.stdio;
+    //   writeln("Solver: ", pred.name());
     // }
-    // initialize the bdd vectors
     BDD solveBDD = _esdl__buddy.one();
     foreach(vec; stage._domVars) {
       if(vec.stage is stage) {
@@ -450,9 +444,9 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     }
     stage.id(stageIndx);
 
-    foreach (vec; stage._domVars) {
-      vec.execCbs();
-    }
+    // foreach (vec; stage._domVars) {
+    //   vec.execCbs();
+    // }
     
 
     // save for future reference

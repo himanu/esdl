@@ -846,9 +846,9 @@ abstract class CstVecArrBase(V, alias R, int N)
     assert(false, "isRand not implemented for CstVecArrBase");
   }
 
-  void collate(ulong v, int word = 0) {
-    assert(false, "value not implemented for CstVecArrBase");
-  }
+  // void collate(ulong v, int word = 0) {
+  //   assert(false, "value not implemented for CstVecArrBase");
+  // }
 
   uint domIndex() {
     assert(false, "domIndex not implemented for CstVecArrBase");
@@ -1088,8 +1088,8 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	    if (v < _forcedLength) {
 	      import std.string: format;
 	      assert(false,
-		     format("Trying to set length %d, while it should be a minimum %d",
-			    v, _forcedLength));
+		     format("%s: Trying to set length %d, while it should be a minimum %d",
+			    name(), v, _forcedLength));
 	    }
 	  }
 	  size_t currLen = _elems.length;
@@ -1632,8 +1632,6 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	    }
 	  }
 	  size_t currLen = _elems.length;
-	  // import std.stdio;
-	  // writeln("Length was ", currLen, " new ", v);
 	  if (currLen < v) {
 	    _elems.length = v;
 	    for (size_t i=currLen; i!=v; ++i) {

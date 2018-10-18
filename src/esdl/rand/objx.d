@@ -252,7 +252,7 @@ class CstObj(V, alias R, int N=0) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  assert (stage is s);
 	  E val;
 	  randGen.gen(val);
-	  collate(val);
+	  // collate(val);
 	}
 	else {
 	  assert(false, name());
