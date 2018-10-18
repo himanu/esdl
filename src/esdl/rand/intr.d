@@ -16,6 +16,8 @@ T smaller(T) (T a, T b) {
   else return b;
 }
 
+alias IntR = IntRange!int;
+alias IntRS = IntRangeSet!int;
 
 struct IntRange(T) if (isIntegral!T) {
   T _min = T.min;
@@ -30,9 +32,14 @@ struct IntRange(T) if (isIntegral!T) {
   }
   
   Unsigned!T _count;
-  
-  this(CstBinBddOp op, T val, bool revrse=false) {
-    if (! revrse) {
+
+  this(T min, T max) {
+    _min = min;
+    _max = max;
+  }
+
+  this(CstBinBddOp op, T val, bool reverse=false) {
+    if (! reverse) {
       final switch(op) {
       case CstBinBddOp.LTH: _min = T.min; _max = val; break;
       case CstBinBddOp.GTH: _min = ++val; _max = T.max; break;
@@ -56,8 +63,6 @@ struct IntRange(T) if (isIntegral!T) {
 
   bool opOpAssign(string op)(IntRange other) {
     static if (op == "|") {
-      import std.stdio;
-      writeln("Oring: ", this, " ,", other);
       bool result = false;
       if (this._max == this._min) {
 	result = true;
@@ -123,12 +128,6 @@ struct IntRange(T) if (isIntegral!T) {
 	this._min = smaller(this._min, other._min);
 	this._max = larger(this._max, other._max);
 	result = true;
-      }
-      if (result) {
-	writeln("Result: ", this);
-      }
-      else {
-	writeln("Result: ", this, ", ", other);
       }
       return result;
     }
@@ -411,8 +410,6 @@ unittest {
 }
 
 int rangeAnd(T)(ref IntRange!T r1, ref IntRange!T r2) {
-  import std.stdio;
-  writeln("Anding: ", r1, " ,", r2);
   int rcount;
   if (r1._min == r1._max) {
     r1 = r2;
@@ -498,30 +495,28 @@ int rangeAnd(T)(ref IntRange!T r1, ref IntRange!T r2) {
     r1._max = smaller(r1._max, r2._max);
     rcount = 1;
   }
-  if (rcount == 0) {
-    writeln("NULL");
-  }
-  if (rcount == 1) {
-    writeln("Result: ", r1);
-  }
-  if (rcount == 2) {
-    writeln("Result: ", r1, ", ", r2);
-  }
   return rcount;
 }
 
-class IntRangeSet(T)
+struct IntRangeSet(T)
 {
   import std.random: uniform, rndGen, Random;
-  Array!(IntRange!T) ranges;
+  Array!(IntRange!T) _ranges;
 
   Unsigned!T _count;
   
+  IntRangeSet!T dup() {
+    IntRangeSet!T rns;
+    rns._ranges = _ranges.dup();
+    rns._count = _count;
+    return rns;
+  }
+
   void optimize() {
     import std.algorithm.sorting;
     IntRange!T r;
     Array!(IntRange!T) optRanges;
-    auto sortedRanges = sort!((a, b) => a.min < b.min)(ranges[]);
+    auto sortedRanges = sort!((a, b) => a.min < b.min)(_ranges[]);
     bool first = true;
     foreach (ref sr; sortedRanges) {
       if (first) {
@@ -536,7 +531,7 @@ class IntRangeSet(T)
       }
     }
     optRanges ~= r;
-    this.ranges = optRanges;
+    this._ranges = optRanges;
     if (! this.isFull()) {
       _count = count();
     }
@@ -544,15 +539,15 @@ class IntRangeSet(T)
 
   void opOpAssign(string op)(IntRangeSet!T other) {
     static if (op == "|") {
-      ranges ~= other.ranges;
+      _ranges ~= other._ranges;
       optimize();
     }
     static if (op == "&") {
       this.optimize();
       other.optimize();
       Array!(IntRange!T) newRanges;
-      foreach (oRange; other.ranges) {
-	foreach (tRange; this.ranges) {
+      foreach (oRange; other._ranges) {
+	foreach (tRange; this._ranges) {
 	  // rangeAnd is destructive
 	  auto or = oRange;
 	  auto tr = tRange;
@@ -565,50 +560,50 @@ class IntRangeSet(T)
 	  }
 	}
       }
-      ranges = newRanges;
+      _ranges = newRanges;
       this.optimize();
     }
   }
 
   void opOpAssign(string op)(IntRange!T other) {
     static if (op == "~") {
-      ranges ~= other;
+      _ranges ~= other;
       this.optimize();
     }
     static if (op == "|") {
-      ranges ~= other;
+      _ranges ~= other;
       optimize();
     }
     static if (op == "&") {
       this.optimize();
       Array!(IntRange!T) newRanges;
-      foreach (tRange; this.ranges) {
+      foreach (tRange; this._ranges) {
 	if (tRange &= other) {
 	  newRanges ~= tRange;
 	}
       }
-      ranges = newRanges;
+      _ranges = newRanges;
       this.optimize();
     }
   }
 
   bool isEmpty() {
-    return (ranges.length == 0);
+    return (_ranges.length == 0);
   }
 
   bool isFull() {
-    return (ranges.length == 1 &&
-	    ranges[0] == IntRange!T.init);
+    return (_ranges.length == 1 &&
+	    _ranges[0] == IntRange!T.init);
   }
 
-  override string toString() {
+  string toString() {
     import std.conv;
-    return ranges[].to!string();
+    return _ranges[].to!string();
   }
 
   Unsigned!T count() {
     Unsigned!T cou;
-    foreach(r; ranges) {
+    foreach(r; _ranges) {
       auto c = r.unsafeCount();
       if (c == 0) {
 	return 0;
@@ -633,7 +628,7 @@ class IntRangeSet(T)
 	rn = uniform(0, _count, gen);
       }
 
-      foreach (r; ranges) {
+      foreach (r; _ranges) {
 	auto cou = r.unsafeCount();
 	if (cou > rn) {
 	  return cast(T) (r.min + rn);

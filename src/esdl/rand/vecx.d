@@ -365,7 +365,11 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override void markAsUnresolved(uint lap) {
+      bool getIntRange(ref IntR rng) {
+	return true;
+      }
+
+      final override void markAsUnresolved(uint lap) {
 	if (_unresolveLap != lap) {
 	  _unresolveLap = lap;
 	  foreach (pred; _varPreds) {
@@ -747,6 +751,10 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
+      bool getIntRange(ref IntR rng) {
+	return true;
+      }
+
       override void markAsUnresolved(uint lap) {
 	if (isActualDomain()) {
 	  if (_unresolveLap != lap) {
@@ -910,8 +918,6 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
       }
       
       this(string name, ref V var, _esdl__Solver parent) {
-	// import std.stdio;
-	// writeln("New ", name);
 	_name = name;
 	_var = &var;
 	_parent = parent;

@@ -232,32 +232,53 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     _rolledPreds.reset();
     _unrolledPreds.reset();
     _resolvedPreds.reset();
-    _toResolvedPreds.reset();
     _toSolvePreds.reset();
     _solvePreds.reset();
     _unresolvedPreds.reset();
     _toUnresolvedPreds.reset();
 
+    _resolvedMonoPreds.reset();
+
     foreach (pred; _allPreds) {
       if (pred.isRolled()) {
 	_rolledPreds ~= pred;
-	pred.randomizeDeps();
       }
       else if (pred.hasDeps()) {
 	_unresolvedPreds ~= pred;
       }
       else {
-	_resolvedPreds ~= pred;
+	procResolved(pred);
+	// _resolvedPreds ~= pred;
       }
+    }
+
+    foreach (pred; _rolledPreds) {
+      pred.randomizeDeps();
     }
 
     solveValDomains();
     
-    while (_resolvedPreds.length > 0 ||
+    while (_resolvedMonoPreds.length > 0 ||
+	   _resolvedPreds.length > 0 ||
 	   _unresolvedPreds.length > 0) {
+      // import std.stdio;
+
+      // if (_resolvedMonoPreds.length > 0) {
+      // 	writeln("Here for _resolvedMonoPreds: ", _resolvedMonoPreds.length);
+      // }
+      // if (_resolvedPreds.length > 0) {
+      // 	writeln("Here for _resolvedPreds: ", _resolvedPreds.length);
+      // }
+      // if (_unresolvedPreds.length > 0) {
+      // 	writeln("Here for _unresolvedPreds: ", _unresolvedPreds.length);
+      // }
+      // if (_unrolledPreds.length > 0) {
+      // 	writeln("Here for _unrolledPreds: ", _unrolledPreds.length);
+      // }
       // _lap, like _cycle starts with 1
       // this is to avoid default values
       _lap += 1;
+      // writeln("Lap: ", _lap);
 
       _toUnrolledPreds.swop(_unrolledPreds);
       _toUnrolledPreds.reset();
@@ -273,17 +294,29 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
       foreach (pred; _unresolvedPreds) {
 	pred.randomizeDeps();
+      }
+
+      foreach (pred; _unresolvedPreds) {
 	if (pred.isResolved()) {
 	  procResolved(pred);
 	}
 	else {
 	  // import std.stdio;
-	  // writeln("unresolvedPred: ", pred.describe());
+	  // writeln("MARKING _unresolvedPreds ", pred.name());
 	  _toUnresolvedPreds ~= pred;
 	  pred.markAsUnresolved(_lap);
 	}
       }
 
+      _resolvedMonoPreds.swop(_toSolvePreds);
+
+      foreach (pred; _toSolvePreds) {
+	// import std.stdio;
+	// writeln("Processing: ", pred.name());
+	procMonoDomain(pred);
+      }
+      _toSolvePreds.reset();
+      
       _resolvedPreds.swop(_toSolvePreds);
 
       foreach (pred; _toSolvePreds) {

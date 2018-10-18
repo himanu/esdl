@@ -31,11 +31,12 @@ abstract class _esdl__Solver
   Bin!CstPredicate _unrolledPreds;
   Bin!CstPredicate _toUnrolledPreds;
   Bin!CstPredicate _resolvedPreds;
-  Bin!CstPredicate _toResolvedPreds;
   Bin!CstPredicate _toSolvePreds;
   Bin!CstPredicate _solvePreds;
   Bin!CstPredicate _unresolvedPreds;
   Bin!CstPredicate _toUnresolvedPreds;
+
+  Bin!CstPredicate _resolvedMonoPreds;
 
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
@@ -141,14 +142,47 @@ abstract class _esdl__Solver
     }
   }
 
-  void procResolved(CstPredicate pred) {
-    foreach (var; pred._vars) {
-      if (! var.isActualDomain()) {
-	auto dom = var.getResolved();
-	dom._tempPreds ~= pred;
+  void procMonoDomain(CstPredicate pred) {
+    assert (pred._vars.length > 0);
+    auto dom = pred._vars[0];
+    if (! dom.solved()) {
+      if (dom._type == DomType.MONO) {
+	dom.setVal(dom._rangeSet.uniform());
+      }
+      else if (dom._type == DomType.LAZYMONO) {
+	auto rns = dom._rangeSet.dup();
+	foreach (vp; dom._varPreds) {
+	  if (vp._vals.length > 0) {
+	    IntRS tmprns;
+	    vp.getExpr().getIntRangeSet(tmprns);
+	    rns &= tmprns;
+	  }
+	}
+	dom.setVal(rns.uniform());
       }
     }
-    _resolvedPreds ~= pred;
+    // foreach (vr; dom._varPreds) {
+    //   if (vr !is pred) {
+    // 	vr._markSolved = true;
+    //   }
+    // }
+  }
+
+  void procResolved(CstPredicate pred) {
+    assert (pred._vars.length > 0);
+    if (pred._vars[0]._type <= DomType.LAZYMONO) {
+      _resolvedMonoPreds ~= pred;
+      // procMonoDomain(pred._vars[0], pred);
+    }
+    else {
+      foreach (var; pred._vars) {
+	if (! var.isActualDomain()) {
+	  auto dom = var.getResolved();
+	  dom._tempPreds ~= pred;
+	}
+      }
+      _resolvedPreds ~= pred;
+    }
   }
 
   void addUnrolled(CstPredicate pred) {
@@ -238,6 +272,7 @@ abstract class CstDomain
   // abstract void bddvec(BddVec b);
   abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
+  abstract void setVal(ulong v);
   abstract CstStage stage();
   abstract void stage(CstStage s);
   abstract uint domIndex();
@@ -302,6 +337,8 @@ abstract class CstDomain
   CstPredicate[] _varPreds;
   CstPredicate[] _valPreds;
 
+  IntRS _rangeSet;
+
   Bin!CstPredicate _tempPreds;
 
   // init value has to be different from solver._cycle init value
@@ -314,6 +351,17 @@ abstract class CstDomain
     foreach (pred; _varPreds) {
       if (pred is varPred) {
 	return;
+      }
+    }
+    if (_type !is DomType.MULTI) {
+      IntRS rs;
+      if (varPred._vals.length == 0) {
+	if (varPred.getExpr().getIntRangeSet(rs)) {
+	  _rangeSet &= rs;
+	}
+	else {
+	  _type = DomType.MULTI;
+	}
       }
     }
     _varPreds ~= varPred;
@@ -371,6 +419,9 @@ abstract class CstDomain
     import std.conv: to;
     string desc = "CstDomain: " ~ name();
     desc ~= "\n	DomType: " ~ _type.to!string();
+    if (_type !is DomType.MULTI) {
+      desc ~= "\nIntRS: " ~ _rangeSet.toString();
+    }
     if (_varPreds.length > 0) {
       desc ~= "\n	Preds:";
       foreach (pred; _varPreds) {
@@ -480,6 +531,8 @@ interface CstVecExpr
 			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps);
 
+  abstract bool getIntRange(ref IntR iRange);
+
   abstract bool solved();
 }
 
@@ -527,7 +580,7 @@ interface CstBddExpr
 			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps);
 
-  abstract bool getIntRange(ref IntRangeSet!long rangeSet);
+  abstract bool getIntRangeSet(ref IntRS iRangeSet);
 
   abstract CstBddExpr unroll(CstIteratorBase iter, uint n);
 
@@ -715,7 +768,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (this.isRolled()) {
       this.markAsUnresolved(lap);
     }
-    else {
+    else if (_iters.length > 1) {
       for (size_t i=0; i!=_uwLength; ++i) {
 	_uwPreds[i].markAsUnresolvedRolled(lap);
       }
@@ -819,13 +872,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   CstBddExpr getExpr() {
     return _expr;
-  }
-
-  IntRangeSet!long _rangeSet;
-
-  ref IntRangeSet!long getIntRange() {
-    _expr.getIntRange(_rangeSet);
-    return _rangeSet;
   }
 
   void randomizeDeps() {

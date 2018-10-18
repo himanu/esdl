@@ -181,8 +181,6 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
   Unconst!T _refreshedVal;
 
-  IntRangeSet!RANGET _rangeSet;
-
   static if (HAS_RAND_ATTRIB) {
     // BddVec       _domvec;
     uint         _domIndex = uint.max;
@@ -191,13 +189,28 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
   }
 
   Unconst!T _value;
-  
+
+  this() {
+    fixRangeSet();
+  }
+
   ~this() {
     // static if (HAS_RAND_ATTRIB) {
     //   _domvec.reset();
     // }
     _valvec.reset();
   }    
+
+  void fixRangeSet() {
+    static if (isIntegral!T) {
+      IntR rn = IntR(cast(int) T.min, cast(int) T.max);
+      _rangeSet &= rn;
+    }
+    static if (isBitVector!T && T.SIZE <= 32) {
+      IntR rn = IntR(cast(int) T.min, cast(int) T.max);
+      _rangeSet &= rn;
+    }
+  }
 
   override ref BddVec bddvec(Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
@@ -330,6 +343,30 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 	  newVal._setNthWord(v, i);
 	}
       }
+      if (newVal != *(getRef())) {
+	_valueChanged = true;
+      }
+      *(getRef()) = newVal;
+      markSolved();
+    }
+    else {
+      assert(false);
+    }
+  }
+
+  override void setVal(ulong value) {
+    static if (isBitVector!T) {
+      assert (T.SIZE <= 64);
+    }
+    static if (HAS_RAND_ATTRIB) {
+      Unconst!T newVal;
+      static if(isIntegral!T) {
+	newVal = cast(T) value;
+      }
+      else {
+	newVal._setNthWord(value, 0);
+      }
+
       if (newVal != *(getRef())) {
 	_valueChanged = true;
       }
@@ -595,6 +632,10 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
 			      ref CstDomain[] idxs,
 			      ref CstDomain[] deps) {
     iters ~= this;
+  }
+
+  override bool getIntRange(ref IntR rng) {
+    return false;
   }
 
   override bool solved() {
@@ -932,6 +973,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
+  bool getIntRange(ref IntR rng) {
+    return true;
+  }
+
   override void execIterCbs() {
     assert(_iterVar !is null);
     _iterVar.unrollCbs();
@@ -1136,6 +1181,10 @@ class CstVal(T = int): CstValBase
     if (_valvec.isNull()) {
       _valvec.buildVec(pred.getSolver().getBuddy(), _val);
     }
+  }
+
+   bool getIntRange(ref IntR rng) {
+     assert(false, "getIntRange should never be called for a CstVal");
   }
 
 }
@@ -1363,6 +1412,44 @@ class CstVec2VecExpr: CstVecTerm
     _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
+  bool getIntRange(ref IntR rng) {
+    if (_rhs.solved()) {
+      assert(! _lhs.solved());
+      auto rhs = cast(int) _rhs.evaluate();
+      switch(_op) {
+      case CstBinVecOp.ADD:
+	IntRangeMod!int(IntRangeModOp.ADD, rhs).apply(rng);
+	return _lhs.getIntRange(rng);
+	break;
+      case CstBinVecOp.SUB: 
+	IntRangeMod!int(IntRangeModOp.SUB, rhs).apply(rng);
+	return _lhs.getIntRange(rng);
+	break;
+      default:
+	return false;
+      }
+    }
+    else if (_lhs.solved()) {
+      assert(! _rhs.solved());
+      auto lhs = cast(int) _lhs.evaluate();
+      switch(_op) {
+      case CstBinVecOp.ADD:
+	IntRangeMod!int(IntRangeModOp.ADD, lhs).apply(rng);
+	return _rhs.getIntRange(rng);
+	break;
+      case CstBinVecOp.SUB: 
+	IntRangeMod!int(IntRangeModOp.SUBD, lhs).apply(rng);
+	return _rhs.getIntRange(rng);
+	break;
+      default:
+	return false;
+      }
+    }
+    else {
+      return false;
+    }
+  }
+
   override bool solved() {
     return _lhs.solved() && _rhs.solved();
   }
@@ -1562,6 +1649,10 @@ class CstVecSliceExpr: CstVecTerm
     }
   }
 
+  bool getIntRange(ref IntR rng) {
+     return false;
+  }
+
   override bool solved() {
     if (_rhs is null) {
       return _lhs.solved() && _vec.solved();
@@ -1681,6 +1772,10 @@ class CstNotVecExpr: CstVecTerm
     _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
+  bool getIntRange(ref IntR rng) {
+     return false;
+  }
+
   override bool solved() {
     return _expr.solved();
   }
@@ -1792,6 +1887,10 @@ class CstNegVecExpr: CstVecTerm
 		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
     _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
+  }
+
+  bool getIntRange(ref IntR rng) {
+     return false;
   }
 
   override bool solved() {
@@ -1929,16 +2028,6 @@ class CstBdd2BddExpr: CstBddTerm
     _rhs.resolveLap(lap);
   }
 
-  bool getIntRangeSet(T)(ref IntRangeSet rset) {
-    if (op == CstBddOp.LOGICAND) {
-      return false;
-    }
-    if (op == CstBddOp.LOGICOR) {
-      return false;
-    }
-    else return false;
-  }
-
   void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
@@ -1949,7 +2038,22 @@ class CstBdd2BddExpr: CstBddTerm
     _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
-  bool getIntRange(ref IntRangeSet!long rangeSet) {
+  override bool getIntRangeSet(ref IntRS rs) {
+    assert(! _lhs.solved());
+    assert(! _rhs.solved());
+
+    IntRS lhs;
+    IntRS rhs;
+
+    if (_lhs.getIntRangeSet(lhs) is false) return false;
+    if (_rhs.getIntRangeSet(rhs) is false) return false;
+
+    final switch(_op) {
+    case CstBddOp.LOGICAND: lhs &= rhs; break;
+    case CstBddOp.LOGICOR:  lhs |= rhs; break;
+    case CstBddOp.LOGICIMP: return false;
+    }
+
     return true;
   }
 
@@ -1991,10 +2095,6 @@ class CstIteBddExpr: CstBddTerm
     assert(false);
   }
 
-  bool getIntRangeSet(T)(ref IntRangeSet rset) {
-    return false;
-  }
-
   void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
@@ -2004,8 +2104,8 @@ class CstIteBddExpr: CstBddTerm
     assert(false, "TBD");
   }
 
-  bool getIntRange(ref IntRangeSet!long rangeSet) {
-    return true;
+  override bool getIntRangeSet(ref IntRS rng) {
+     return false;
   }
 
   bool cstExprIsNop() {
@@ -2183,15 +2283,6 @@ class CstVec2BddExpr: CstBddTerm
   }
 
 
-  bool getIntRangeSet(T)(ref IntRangeSet rset) {
-    auto lrnd = _lhs.getRndDomains(true);
-    auto rrnd = _rhs.getRndDomains(true);
-
-    if (rrnd.length == 0) {
-      
-    }
-  }
-
   void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
@@ -2202,8 +2293,26 @@ class CstVec2BddExpr: CstBddTerm
     _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
-  bool getIntRange(ref IntRangeSet!long rangeSet) {
-    return true;
+  override bool getIntRangeSet(ref IntRS rs) {
+    if (_rhs.solved()) {
+      assert(! _lhs.solved(), "Expression: " ~ _lhs.name());
+      auto rhs = cast(int) _rhs.evaluate();
+      IntR rn = IntR(_op, rhs);
+      bool valid = _lhs.getIntRange(rn);
+      rs ~= rn;
+      return valid;
+    }
+    else if (_lhs.solved()) {
+      assert(! _rhs.solved(), "Expression: " ~ _rhs.name());
+      auto lhs = cast(int) _lhs.evaluate();
+      IntR rn = IntR(_op, lhs, true);
+      bool valid = _rhs.getIntRange(rn);
+      rs ~= rn;
+      return valid;
+    }
+    else {
+      return false;
+    }
   }
 
   override bool solved() {
@@ -2275,8 +2384,8 @@ class CstBddConst: CstBddTerm
     // nothing for CstBddConst
   }
 
-  bool getIntRange(ref IntRangeSet!long rangeSet) {
-    return true;
+  override bool getIntRangeSet(ref IntRS rng) {
+     return false;
   }
 
   override bool solved() {
@@ -2364,8 +2473,8 @@ class CstNotBddExpr: CstBddTerm
     _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
-  bool getIntRange(ref IntRangeSet!long rangeSet) {
-    return true;
+  override bool getIntRangeSet(ref IntRS rng) {
+     return false;
   }
 
   override bool solved() {
