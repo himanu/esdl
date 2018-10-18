@@ -22,7 +22,6 @@ class Foo
   Constraint!q{
     foo.length == 4;
     foo[0].length == 2;
-    // bar.length == 3;
     foreach(i, ff; foo) {
       // if (i == 0) ff.length == 2;
       // foo[i].length > 4;

@@ -13,23 +13,27 @@ int FFFF = 20;
 class Foo
 {
   mixin Randomization;
-  @rand!(4,4) byte[][] foo;
+  @rand byte[][] foo;
   @rand int bar;
   void display() {
     import std.stdio;
     writeln(foo);
   }
   Constraint!q{
-    foo.length == 4;
+    foo.length <= 4;
+    foo.length >= 2;
+    foo.length > 0;
     foo[0].length == 2;
     // bar.length == 3;
     foreach(i, ff; foo) {
       // if (i == 0) ff.length == 2;
       // foo[i].length > 4;
-      // ff.length > 4;
+      ff.length <= 4;
+      ff.length > 0;
       foreach(j, f; ff) {
-	f == j + 2;
+	// f == j + 2;
 	f < 20;
+	f > 0;
       }
     }
   } aconst;
