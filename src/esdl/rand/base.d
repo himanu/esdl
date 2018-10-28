@@ -4,7 +4,7 @@ import esdl.rand.obdd;
 import esdl.rand.intr;
 import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
 import esdl.data.bvec: isBitVector;
-import esdl.data.bin;
+import esdl.data.folder;
 import std.algorithm;
 import std.array;
 import std.container.array;
@@ -28,17 +28,17 @@ abstract class _esdl__Solver
   _esdl__Solver _parent;
   _esdl__Solver _root;
 
-  Bin!CstPredicate _rolledPreds;
-  Bin!CstPredicate _unrolledPreds;
-  Bin!CstPredicate _toUnrolledPreds;
-  Bin!CstPredicate _resolvedPreds;
-  Bin!CstPredicate _toSolvePreds;
-  Bin!CstPredicate _solvePreds;
-  Bin!CstPredicate _unresolvedPreds;
-  Bin!CstPredicate _toUnresolvedPreds;
+  Folder!CstPredicate _rolledPreds;
+  Folder!CstPredicate _unrolledPreds;
+  Folder!CstPredicate _toUnrolledPreds;
+  Folder!CstPredicate _resolvedPreds;
+  Folder!CstPredicate _toSolvePreds;
+  Folder!CstPredicate _solvePreds;
+  Folder!CstPredicate _unresolvedPreds;
+  Folder!CstPredicate _toUnresolvedPreds;
 
-  Bin!CstPredicate _resolvedMonoPreds;
-  Bin!CstPredicate _solveMonoPreds;
+  Folder!CstPredicate _resolvedMonoPreds;
+  Folder!CstPredicate _solveMonoPreds;
 
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
@@ -148,32 +148,11 @@ abstract class _esdl__Solver
     assert (pred._vars.length > 0);
     auto dom = pred._vars[0];
     if (! dom.solved()) {
-      if (dom._type == DomType.MONO) {
-	dom.setVal(dom._rangeSet.uniform());
-      }
-      else if (dom._type == DomType.LAZYMONO) {
-    	auto rns = dom._rangeSet.dup();
-    	foreach (vp; dom._varPreds) {
-    	  if (vp._vals.length > 0) {
-    	    IntRS tmprns;
-    	    if (! vp.getExpr().getIntRangeSet(tmprns)) {
-    	      return false;
-    	    }
-    	    rns &= tmprns;
-    	  }
-    	}
-    	dom.setVal(rns.uniform());
-      }
-      else {
-    	assert(false);
-      }
+      return dom.solveRange();
     }
-    return true;
-    // foreach (vr; dom._varPreds) {
-    //   if (vr !is pred) {
-    // 	vr._markSolved = true;
-    //   }
-    // }
+    else {
+      return true;
+    }
   }
 
   bool procMaybeMonoDomain(CstPredicate pred) {
@@ -186,34 +165,11 @@ abstract class _esdl__Solver
       dom = dom.getResolved();
     }
     if (! dom.solved()) {
-      if (dom._type == DomType.MAYBEMONO) {
-	auto rns = dom._rangeSet.dup();
-	foreach (vp; dom._varPreds) {
-	  if (vp._vals.length > 0) {
-	    IntRS tmprns;
-	    if (! vp.getExpr().getIntRangeSet(tmprns)) {
-	      return false;
-	    }
-	    rns &= tmprns;
-	  }
-	}
-	foreach (vp; dom._tempPreds) {
-	  IntRS tmprns;
-	  if (! vp.getExpr().getIntRangeSet(tmprns)) {
-	    return false;
-	  }
-	  rns &= tmprns;
-	}
-    	dom.setVal(rns.uniform());
-      }
-      else if (dom._type == DomType.INDEXEDMONO) {
-	assert(false);
-      }
-      else {
-	return false;
-      }
+      return dom.solveRange();
     }
-    return true;
+    else {
+      return true;
+    }
   }
 
   void procResolved(CstPredicate pred) {
@@ -321,6 +277,7 @@ abstract class CstDomain
   // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
   abstract void setVal(ulong v);
+  abstract bool solveRange();
   abstract CstStage stage();
   abstract void stage(CstStage s);
   abstract uint domIndex();
@@ -340,6 +297,11 @@ abstract class CstDomain
   abstract bool hasAbstractDomains();
   abstract void markAbstractDomains(bool len);
   abstract bool isActualDomain();
+  abstract void registerVarPred(CstPredicate varPred);  
+  abstract void registerValPred(CstPredicate valPred);  
+  abstract void registerDepPred(CstDepCallback depCb);
+  abstract void registerIdxPred(CstDepCallback idxCb);
+
 
   final void _esdl__doRandomize() {
     this._esdl__doRandomize(getSolverRoot()._esdl__getRandGen());
@@ -387,60 +349,13 @@ abstract class CstDomain
 
   IntRS _rangeSet;
 
-  Bin!CstPredicate _tempPreds;
+  Folder!CstPredicate _tempPreds;
 
   // init value has to be different from solver._cycle init value
   uint _solvedCycle = -1;   // cycle for which _arrLen has been solved
   uint _unresolveLap;
 
   DomType _type = DomType.MONO;
-
-  void registerVarPred(CstPredicate varPred) {
-    foreach (pred; _varPreds) {
-      if (pred is varPred) {
-	return;
-      }
-    }
-    if (_type !is DomType.MULTI) {
-      IntRS rs;
-      if (varPred._vals.length == 0) {
-	if (varPred.getExpr().getIntRangeSet(rs)) {
-	  _rangeSet &= rs;
-	}
-	else {
-	  _type = DomType.MULTI;
-	}
-      }
-    }
-    _varPreds ~= varPred;
-  }
-  
-  void registerValPred(CstPredicate valPred) {
-    foreach (pred; _valPreds) {
-      if (pred is valPred) {
-	return;
-      }
-    }
-    _valPreds ~= valPred;
-  }
-  
-  void registerDepPred(CstDepCallback depCb) {
-    foreach (cb; _depCbs) {
-      if (cb is depCb) {
-	return;
-      }
-    }
-    _depCbs ~= depCb;
-  }
-
-  void registerIdxPred(CstDepCallback idxCb) {
-    foreach (cb; _depCbs) {
-      if (cb is idxCb) {
-	return;
-      }
-    }
-    _depCbs ~= idxCb; // use same callbacks as deps for now
-  }
 
   void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {
@@ -463,29 +378,7 @@ abstract class CstDomain
     }
   }
 
-  string describe() {
-    import std.conv: to;
-    string desc = "CstDomain: " ~ name();
-    desc ~= "\n	DomType: " ~ _type.to!string();
-    if (_type !is DomType.MULTI) {
-      desc ~= "\nIntRS: " ~ _rangeSet.toString();
-    }
-    if (_varPreds.length > 0) {
-      desc ~= "\n	Preds:";
-      foreach (pred; _varPreds) {
-	desc ~= "\n		" ~ pred.name();
-      }
-      desc ~= "\n";
-    }
-    if (_tempPreds.length > 0) {
-      desc ~= "\n	Temporary Preds:";
-      foreach (pred; _tempPreds) {
-	desc ~= "\n		" ~ pred.name();
-      }
-      desc ~= "\n";
-    }
-    return desc;
-  }
+  abstract string describe();
 }
 
 // The client keeps a list of agents that when resolved makes the client happy
@@ -580,6 +473,10 @@ interface CstVecExpr
 			      ref CstDomain[] deps);
 
   abstract bool getIntRange(ref IntR iRange);
+  abstract bool getUniRange(ref UniRange rs);
+
+  // get the number of bits and the sign information of an expression
+  abstract bool getIntType(ref INTTYPE iType);
 
   abstract bool solved();
 }
@@ -630,6 +527,11 @@ interface CstBddExpr
 
   abstract bool getIntRangeSet(ref IntRS iRangeSet);
 
+  abstract bool getUniRangeSet(ref IntRS rs);
+  abstract bool getUniRangeSet(ref UIntRS rs);
+  abstract bool getUniRangeSet(ref LongRS rs);
+  abstract bool getUniRangeSet(ref ULongRS rs);
+
   abstract CstBddExpr unroll(CstIteratorBase iter, uint n);
 
   abstract CstDomain[] getRndDomains(bool resolved);
@@ -655,7 +557,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool _markResolve;
   uint _unrollCycle;
 
-  Bin!CstPredicate _uwPreds;
+  Folder!CstPredicate _uwPreds;
   size_t _uwLength;
   
   this(_esdl__Solver solver, CstBddExpr expr,

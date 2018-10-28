@@ -177,9 +177,9 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
   BddVec _valvec;
   _esdl__Solver _root;
 
-  alias RANGET = IntRangeType!T;
-
   Unconst!T _refreshedVal;
+
+
 
   static if (HAS_RAND_ATTRIB) {
     // BddVec       _domvec;
@@ -203,12 +203,24 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
   void fixRangeSet() {
     static if (isIntegral!T) {
-      IntR rn = IntR(cast(int) T.min, cast(int) T.max);
-      _rangeSet &= rn;
+      static if (RangeT.sizeof == T.sizeof) {
+	IntRange!RangeT fixR = IntRange!RangeT(true);
+      }
+      else {
+	IntRange!RangeT fixR =
+	  IntRange!RangeT(cast(int) T.min, cast(int) T.max + 1);
+      }
+      _rs &= fixR;
     }
     static if (isBitVector!T && T.SIZE <= 32) {
-      IntR rn = IntR(cast(int) T.min, cast(int) T.max);
-      _rangeSet &= rn;
+      static if (int.sizeof*8 == T.SIZE) {
+	IntRange!RangeT fixR = IntRange!RangeT(true);
+      }
+      else {
+	IntRange!RangeT fixR =
+	  IntRange!RangeT(cast(int) T.min, cast(int) T.max + 1);
+      }
+      _rs &= fixR;
     }
   }
 
@@ -438,6 +450,199 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       }
     }
   }
+
+  static if (isIntegral!T) {
+    import std.traits;
+    static if (isSigned!T) {
+      enum bool tSigned = true;
+    }
+    else {
+      enum bool tSigned = false;
+    }
+    enum size_t tSize = T.sizeof * 8;
+    enum bool IS_RANGE = true;
+  }
+  else static if (isBitVector!T) {
+    static if (T.ISSIGNED) {
+      enum bool tSigned = true;
+    }
+    else {
+      enum bool tSigned = false;
+    }
+    static if (T.SIZE <= 64) {
+      enum size_t tSize = T.SIZE;
+      enum bool IS_RANGE = true;
+    }
+    else {
+      enum bool IS_RANGE = false;
+    }
+  }
+  else {			// boolean
+    enum bool IS_RANGE = false;
+  }
+
+  static if (IS_RANGE) {
+    static if (tSigned) {
+      static if (tSize <= 32) {
+	alias RangeT = int;
+      }
+      else static if (tSize <= 64) {
+	alias RangeT = long;
+      }
+    }
+    else {
+      static if (tSize <= 32) {
+	alias RangeT = uint;
+      }
+      else {
+	alias RangeT = ulong;
+      }
+    }
+    IntRangeSet!RangeT _rs;
+    // pragma(msg, typeof(_rs).stringof);
+  }
+
+  override bool solveRange() {
+    final switch(this._type) {
+    case DomType.MONO:
+      if (this._rs.isEmpty()) {
+	assert(false, "Constraints on domain " ~ this.name() ~
+	       " do not converge");
+      }
+      this.setVal(this._rs.uniform());
+      break;
+    case DomType.LAZYMONO:
+      auto rns = this._rs.dup();
+      foreach (vp; this._varPreds) {
+	if (vp._vals.length > 0) {
+	  IntRangeSet!RangeT tmprns;
+	  if (! vp.getExpr().getUniRangeSet(tmprns)) {
+	    return false;
+	  }
+	  rns &= tmprns;
+	}
+      }
+      if (rns.isEmpty()) {
+	assert(false, "Constraints on domain " ~ this.name() ~
+	       " do not converge");
+      }
+      this.setVal(rns.uniform());
+      break;
+    case DomType.MAYBEMONO:
+      auto rns = this._rs.dup();
+      foreach (vp; this._varPreds) {
+	if (vp._vals.length > 0) {
+	  IntRangeSet!RangeT tmprns;
+	  if (! vp.getExpr().getUniRangeSet(tmprns)) {
+	    return false;
+	  }
+	  rns &= tmprns;
+	}
+      }
+      foreach (vp; this._tempPreds) {
+	IntRangeSet!RangeT tmprns;
+	if (! vp.getExpr().getUniRangeSet(tmprns)) {
+	  return false;
+	}
+	rns &= tmprns;
+      }
+      if (rns.isEmpty()) {
+	assert(false, "Constraints on domain " ~ this.name() ~
+	       " do not converge");
+      }
+      this.setVal(rns.uniform());
+      break;
+    case DomType.INDEXEDMONO:
+      assert(false);
+      break;
+    case DomType.MULTI:
+      return false;
+      break;
+    // default:
+    //   assert(false);
+    //   break;
+    }
+    return true;
+  }
+
+  override void registerVarPred(CstPredicate varPred) {
+    static if(IS_RANGE) {
+      foreach (pred; _varPreds) {
+	if (pred is varPred) {
+	  return;
+	}
+      }
+      if (_type !is DomType.MULTI) {
+
+	IntRangeSet!RangeT rs;
+	if (varPred._vals.length == 0) {
+	  if (varPred.getExpr().getUniRangeSet(rs)) {
+	    _rs &= rs;
+	  }
+	  else {
+	    _type = DomType.MULTI;
+	  }
+	  // import std.stdio;
+	  // writeln(this.name());
+	  // writeln(_rs);
+	}
+
+      }
+      _varPreds ~= varPred;
+    }
+  }
+  
+  override void registerValPred(CstPredicate valPred) {
+    foreach (pred; _valPreds) {
+      if (pred is valPred) {
+	return;
+      }
+    }
+    _valPreds ~= valPred;
+  }
+  
+  override void registerDepPred(CstDepCallback depCb) {
+    foreach (cb; _depCbs) {
+      if (cb is depCb) {
+	return;
+      }
+    }
+    _depCbs ~= depCb;
+  }
+
+  override void registerIdxPred(CstDepCallback idxCb) {
+    foreach (cb; _depCbs) {
+      if (cb is idxCb) {
+	return;
+      }
+    }
+    _depCbs ~= idxCb; // use same callbacks as deps for now
+  }
+
+
+  final override string describe() {
+    import std.conv: to;
+    string desc = "CstDomain: " ~ name();
+    desc ~= "\n	DomType: " ~ _type.to!string();
+    if (_type !is DomType.MULTI) {
+      desc ~= "\nIntRS: " ~ _rs.toString();
+    }
+    if (_varPreds.length > 0) {
+      desc ~= "\n	Preds:";
+      foreach (pred; _varPreds) {
+	desc ~= "\n		" ~ pred.name();
+      }
+      desc ~= "\n";
+    }
+    if (_tempPreds.length > 0) {
+      desc ~= "\n	Temporary Preds:";
+      foreach (pred; _tempPreds) {
+	desc ~= "\n		" ~ pred.name();
+      }
+      desc ~= "\n";
+    }
+    return desc;
+  }
 }
 
 interface CstBddTerm: CstBddExpr
@@ -638,6 +843,14 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   }
 
   override bool getIntRange(ref IntR rng) {
+    return false;
+  }
+
+  override bool getUniRange(ref UniRange rng) {
+    return false;
+  }
+
+  override bool getIntType(ref INTTYPE iType) {
     return false;
   }
 
@@ -987,6 +1200,22 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return true;
   }
 
+  bool getUniRange(ref UniRange rng) {
+    INTTYPE iType;
+    if (this.getIntType(iType)) {
+      rng.map(iType);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    // INTTYPE defaults to UINT
+    return true;
+  }
+
   override void execIterCbs() {
     assert(_iterVar !is null);
     _iterVar.unrollCbs();
@@ -1197,6 +1426,40 @@ class CstVal(T = int): CstValBase
      assert(false, "getIntRange should never be called for a CstVal");
   }
 
+   bool getUniRange(ref UniRange rng) {
+     assert(false, "UniRange should never be called for a CstVal");
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    static if (isIntegral!T) {
+      import std.traits;
+      enum bool signed = isSigned!T;
+      enum uint bits = T.sizeof * 8;
+    }
+    else static if (isBitVector!T) {
+      enum bool signed = T.ISSIGNED;
+      enum uint bits = T.SIZE;
+    }
+    static if (bits <= 64) {
+      final switch (iType) {
+      case INTTYPE.UINT: iType = bits <= 32 ?
+	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
+	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
+	break;
+      case INTTYPE.INT: iType = bits <= 32 ?
+	  INTTYPE.INT : INTTYPE.LONG;
+	break;
+      case INTTYPE.ULONG: iType = signed ?
+	  INTTYPE.LONG : INTTYPE.ULONG;
+	break;
+      case INTTYPE.LONG: break;
+      }
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
 }
 
 
@@ -1422,6 +1685,51 @@ class CstVec2VecExpr: CstVecTerm
     _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
+  bool getUniRange(ref UniRange rng) {
+    INTTYPE iType;
+    if (this.getIntType(iType)) {
+      rng.map(iType);
+      if (_rhs.solved()) {
+	assert(! _lhs.solved());
+	long rhs = _rhs.evaluate();
+	switch(_op) {
+	case CstBinVecOp.ADD:
+	  UniRangeMod(IntRangeModOp.ADD, rhs).apply(rng);
+	  return _lhs.getUniRange(rng);
+	  break;
+	case CstBinVecOp.SUB: 
+	  UniRangeMod(IntRangeModOp.SUB, rhs).apply(rng);
+	  return _lhs.getUniRange(rng);
+	  break;
+	default:
+	  return false;
+	}
+      }
+      else if (_lhs.solved()) {
+	assert(! _rhs.solved());
+	long lhs = _lhs.evaluate();
+	switch(_op) {
+	case CstBinVecOp.ADD:
+	  UniRangeMod(IntRangeModOp.ADD, lhs).apply(rng);
+	  return _rhs.getUniRange(rng);
+	  break;
+	case CstBinVecOp.SUB: 
+	  UniRangeMod(IntRangeModOp.SUBD, lhs).apply(rng);
+	  return _rhs.getUniRange(rng);
+	  break;
+	default:
+	  return false;
+	}
+      }
+      else {
+	return false;
+      }
+    }
+    else {
+      return false;
+    }
+  }
+
   bool getIntRange(ref IntR rng) {
     if (_rhs.solved()) {
       assert(! _lhs.solved());
@@ -1454,6 +1762,47 @@ class CstVec2VecExpr: CstVecTerm
       default:
 	return false;
       }
+    }
+    else {
+      return false;
+    }
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    bool lvalid, rvalid;
+    INTTYPE lType, rType;
+    
+    lvalid = _lhs.getIntType(lType);
+    rvalid = _rhs.getIntType(rType);
+
+    if (lvalid && rvalid) {
+      if (lType == INTTYPE.LONG ||
+	  rType == INTTYPE.LONG ||
+	  iType == INTTYPE.LONG) {
+	iType = INTTYPE.LONG;
+      }
+      else if ((lType == INTTYPE.ULONG ||
+		rType == INTTYPE.ULONG ||
+		iType == INTTYPE.ULONG) &&
+	       (lType == INTTYPE.INT ||
+		rType == INTTYPE.INT ||
+		iType == INTTYPE.INT))	       {
+	iType = INTTYPE.LONG;
+      }
+      else if (lType == INTTYPE.ULONG ||
+	       rType == INTTYPE.ULONG ||
+	       iType == INTTYPE.ULONG) {
+	iType = INTTYPE.ULONG;
+      }
+      else if (lType == INTTYPE.INT ||
+	       rType == INTTYPE.INT ||
+	       iType == INTTYPE.INT) {
+	iType = INTTYPE.INT;
+      }
+      else {
+	iType = INTTYPE.UINT;
+      }
+      return true;
     }
     else {
       return false;
@@ -1663,6 +2012,14 @@ class CstVecSliceExpr: CstVecTerm
      return false;
   }
 
+  bool getUniRange(ref UniRange rng) {
+     return false;
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    return false;
+  }
+  
   override bool solved() {
     if (_rhs is null) {
       return _lhs.solved() && _vec.solved();
@@ -1786,6 +2143,14 @@ class CstNotVecExpr: CstVecTerm
      return false;
   }
 
+  bool getUniRange(ref UniRange rng) {
+     return false;
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    return false;
+  }
+
   override bool solved() {
     return _expr.solved();
   }
@@ -1903,7 +2268,15 @@ class CstNegVecExpr: CstVecTerm
      return false;
   }
 
-  override bool solved() {
+  bool getUniRange(ref UniRange rng) {
+     return false;
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    return false;
+  }
+
+override bool solved() {
     return _expr.solved();
   }
 }
@@ -2048,6 +2421,42 @@ class CstBdd2BddExpr: CstBddTerm
     _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
+  override bool getUniRangeSet(ref IntRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  override bool getUniRangeSet(ref UIntRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  override bool getUniRangeSet(ref LongRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  override bool getUniRangeSet(ref ULongRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  bool getUniRangeSetImpl(T)(ref T rs) {
+    assert(! _lhs.solved());
+    assert(! _rhs.solved());
+
+    T lhs;
+    T rhs;
+
+    if (_lhs.getUniRangeSet(lhs) is false) return false;
+    if (_rhs.getUniRangeSet(rhs) is false) return false;
+
+    final switch(_op) {
+    case CstBddOp.LOGICAND: lhs &= rhs; break;
+    case CstBddOp.LOGICOR:  lhs |= rhs; break;
+    case CstBddOp.LOGICIMP: return false;
+    }
+
+    rs = lhs;
+    return true;
+  }
+
   override bool getIntRangeSet(ref IntRS rs) {
     assert(! _lhs.solved());
     assert(! _rhs.solved());
@@ -2064,6 +2473,7 @@ class CstBdd2BddExpr: CstBddTerm
     case CstBddOp.LOGICIMP: return false;
     }
 
+    rs = lhs;
     return true;
   }
 
@@ -2114,7 +2524,23 @@ class CstIteBddExpr: CstBddTerm
     assert(false, "TBD");
   }
 
-  override bool getIntRangeSet(ref IntRS rng) {
+  override bool getUniRangeSet(ref IntRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref UIntRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref LongRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref ULongRS rs) {
+     return false;
+  }
+
+  override bool getIntRangeSet(ref IntRS rs) {
      return false;
   }
 
@@ -2303,6 +2729,97 @@ class CstVec2BddExpr: CstBddTerm
     _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
+  bool getIntType(ref INTTYPE iType) {
+    bool lvalid, rvalid;
+    INTTYPE lType, rType;
+
+    assert(iType == INTTYPE.UINT);
+
+    lvalid = _lhs.getIntType(lType);
+    rvalid = _rhs.getIntType(rType);
+
+    if (lvalid && rvalid) {
+      if (lType == INTTYPE.ULONG ||
+	  rType == INTTYPE.ULONG) {
+	iType = INTTYPE.ULONG;
+      }
+      else if ((lType == INTTYPE.LONG ||
+		rType == INTTYPE.LONG) &&
+	       (lType == INTTYPE.UINT ||
+		rType == INTTYPE.UINT))	       {
+	iType = INTTYPE.ULONG;
+      }
+      else if (lType == INTTYPE.LONG ||
+	       rType == INTTYPE.LONG) {
+	iType = INTTYPE.LONG;
+      }
+      else if (lType == INTTYPE.UINT ||
+	       rType == INTTYPE.UINT) {
+	iType = INTTYPE.UINT;
+      }
+      else {
+	iType = INTTYPE.INT;
+      }
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  
+  override bool getUniRangeSet(ref IntRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  override bool getUniRangeSet(ref UIntRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  override bool getUniRangeSet(ref LongRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  override bool getUniRangeSet(ref ULongRS rs) {
+    return getUniRangeSetImpl(rs);
+  }
+    
+  bool getUniRangeSetImpl(RS)(ref RS rs) {
+    static if (is (RS == IntRangeSet!T, T)) {
+      if (_rhs.solved()) {
+	INTTYPE iType;
+	assert(! _lhs.solved(), "Expression: " ~ _lhs.name());
+	bool valid = this.getIntType(iType);
+	if (valid) {
+	  ulong rhs = cast(int) _rhs.evaluate();
+	  UniRange rn = UniRange(_op, iType, rhs);
+	  valid = _lhs.getUniRange(rn);
+	  auto irn = IntRange!T(rn);
+	  rs ~= irn;
+	}
+	return valid;
+      }
+      else if (_lhs.solved()) {
+	INTTYPE iType;
+	assert(! _rhs.solved(), "Expression: " ~ _rhs.name());
+	bool valid = this.getIntType(iType);
+	if (valid) {
+	  ulong lhs = cast(int) _lhs.evaluate();
+	  UniRange rn = UniRange(_op, iType, lhs);
+	  valid = _rhs.getUniRange(rn);
+	  auto irn = IntRange!T(rn);
+	  rs ~= irn;
+	}
+	return valid;
+      }
+      else {
+	return false;
+      }
+    }
+    else {
+      static assert(false);
+    }
+  }
+
   override bool getIntRangeSet(ref IntRS rs) {
     if (_rhs.solved()) {
       assert(! _lhs.solved(), "Expression: " ~ _lhs.name());
@@ -2394,6 +2911,22 @@ class CstBddConst: CstBddTerm
     // nothing for CstBddConst
   }
 
+  override bool getUniRangeSet(ref IntRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref UIntRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref LongRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref ULongRS rs) {
+     return false;
+  }
+
   override bool getIntRangeSet(ref IntRS rng) {
      return false;
   }
@@ -2481,6 +3014,22 @@ class CstNotBddExpr: CstBddTerm
 		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
     _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
+  }
+
+  override bool getUniRangeSet(ref IntRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref UIntRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref LongRS rs) {
+     return false;
+  }
+
+  override bool getUniRangeSet(ref ULongRS rs) {
+     return false;
   }
 
   override bool getIntRangeSet(ref IntRS rng) {

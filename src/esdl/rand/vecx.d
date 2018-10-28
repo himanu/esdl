@@ -196,7 +196,6 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       import std.range;
       import esdl.data.bvec;
 
-      alias E = ElementTypeN!(V, N);
       alias RV = typeof(this);
 
       V* _var;
@@ -367,6 +366,48 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 
       bool getIntRange(ref IntR rng) {
 	return true;
+      }
+
+      bool getUniRange(ref UniRange rng) {
+	INTTYPE iType;
+	if (this.getIntType(iType)) {
+	  rng.map(iType);
+	  return true;
+	}
+	else {
+	  return false;
+	}
+      }
+
+      bool getIntType(ref INTTYPE iType) {
+	static if (isIntegral!E) {
+	  import std.traits;
+	  enum bool signed = isSigned!E;
+	  enum uint bits = E.sizeof * 8;
+	}
+	else static if (isBitVector!E) {
+	  enum bool signed = E.ISSIGNED;
+	  enum uint bits = E.SIZE;
+	}
+	static if (bits <= 64) {
+	  final switch (iType) {
+	  case INTTYPE.UINT: iType = bits <= 32 ?
+	      (signed ? INTTYPE.INT : INTTYPE.UINT) :
+	    (signed ? INTTYPE.LONG : INTTYPE.ULONG);
+	    break;
+	  case INTTYPE.INT: iType = bits <= 32 ?
+	      INTTYPE.INT : INTTYPE.LONG;
+	    break;
+	  case INTTYPE.ULONG: iType = signed ?
+	      INTTYPE.LONG : INTTYPE.ULONG;
+	    break;
+	  case INTTYPE.LONG: break;
+	  }
+	  return true;
+	}
+	else {
+	  return false;
+	}
       }
 
       final override void markAsUnresolved(uint lap) {
@@ -753,6 +794,48 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 
       bool getIntRange(ref IntR rng) {
 	return true;
+      }
+
+      bool getUniRange(ref UniRange rng) {
+	INTTYPE iType;
+	if (this.getIntType(iType)) {
+	  rng.map(iType);
+	  return true;
+	}
+	else {
+	  return false;
+	}
+      }
+
+      bool getIntType(ref INTTYPE iType) {
+	static if (isIntegral!E) {
+	  import std.traits;
+	  enum bool signed = isSigned!E;
+	  enum uint bits = E.sizeof * 8;
+	}
+	else static if (isBitVector!E) {
+	  enum bool signed = E.ISSIGNED;
+	  enum uint bits = E.SIZE;
+	}
+	static if (bits <= 64) {
+	  final switch (iType) {
+	  case INTTYPE.UINT: iType = bits <= 32 ?
+	      (signed ? INTTYPE.INT : INTTYPE.UINT) :
+	    (signed ? INTTYPE.LONG : INTTYPE.ULONG);
+	    break;
+	  case INTTYPE.INT: iType = bits <= 32 ?
+	      INTTYPE.INT : INTTYPE.LONG;
+	    break;
+	  case INTTYPE.ULONG: iType = signed ?
+	      INTTYPE.LONG : INTTYPE.ULONG;
+	    break;
+	  case INTTYPE.LONG: break;
+	  }
+	  return true;
+	}
+	else {
+	  return false;
+	}
       }
 
       override void markAsUnresolved(uint lap) {

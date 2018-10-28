@@ -4,7 +4,7 @@ import esdl.rand.obdd;
 import esdl.rand.base: CstVecPrim, CstStage, CstBddExpr,
   CstDomain, CstPredicate, CstBlock, _esdl__Solver;
 import esdl.rand.misc;
-import esdl.data.bin;
+import esdl.data.folder;
 import std.container: Array;
 import std.array;
 
@@ -190,9 +190,9 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   //   }
   // }
 
-  Bin!CstPredicate _allPreds;
+  Folder!CstPredicate _allPreds;
 
-  Bin!CstStage _solveStages;
+  Folder!CstStage _solveStages;
 
   void initPreds() {
     assert(_root is this);
