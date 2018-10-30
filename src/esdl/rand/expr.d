@@ -188,7 +188,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     uint         _resolveLap = 0;
   }
 
-  Unconst!T _value;
+  Unconst!T _shadowValue;
 
   this() {
     fixRangeSet();
@@ -359,6 +359,9 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       if (newVal != *(getRef())) {
 	_valueChanged = true;
       }
+      else {
+	_valueChanged = false;
+      }
       *(getRef()) = newVal;
       markSolved();
       execCbs();
@@ -384,6 +387,9 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       if (newVal != *(getRef())) {
 	_valueChanged = true;
       }
+      else {
+	_valueChanged = false;
+      }
       *(getRef()) = newVal;
       markSolved();
       execCbs();
@@ -401,6 +407,9 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 	if (newVal != *(getRef())) {
 	  _valueChanged = true;
 	  *(getRef()) = newVal;
+	}
+	else {
+	  _valueChanged = false;
 	}
 	markSolved();
 	execCbs();
@@ -443,10 +452,13 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       newVal = *(getRef());
       _solvedCycle = _root._cycle;
       if (_valvec.isNull ||
-	  newVal != _value) {
-	_value = newVal;
+	  newVal != _shadowValue) {
+	_shadowValue = newVal;
 	_valueChanged = true;
-	_valvec.buildVec(_root._esdl__buddy, _value);
+	_valvec.buildVec(_root._esdl__buddy, _shadowValue);
+      }
+      else {
+	_valueChanged = false;
       }
     }
   }

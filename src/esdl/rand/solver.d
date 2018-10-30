@@ -351,7 +351,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
     // foreach (pred; preds) {
     //   import std.stdio;
-    //   writeln("Solver: ", pred.name());
+    //   writeln("Solver: ", pred.name(), " update: ", pred.hasUpdate());
     // }
     BDD solveBDD = _esdl__buddy.one();
     foreach(vec; stage._domVars) {
