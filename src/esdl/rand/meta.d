@@ -629,7 +629,7 @@ mixin template _esdl__SolverMixin()
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
     CstBlock _esdl__cst_block;
-    debug(CONSTRAINTS) {
+    debug(CSTPARSER) {
       pragma(msg, "// constraintXlate! STARTS\n");
       pragma(msg, constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
       pragma(msg, "// constraintXlate! ENDS\n");
@@ -651,7 +651,7 @@ mixin template _esdl__SolverMixin()
       mixin("return this.outer._esdl__cst_func_" ~ NAME ~ "();");
     }
 	
-    // debug(CONSTRAINTS) {
+    // debug(CSTPARSER) {
     //   pragma(msg, "// constraintXlate! STARTS\n");
     //   pragma(msg, constraintXlate(_esdl__CstString, FILE, LINE));
     //   pragma(msg, "// constraintXlate! ENDS\n");
@@ -690,7 +690,7 @@ mixin template _esdl__SolverMixin()
     // constraint string at compile time
     CstBlock _esdl__cst_block;
     mixin(constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
-    debug(CONSTRAINTS) {
+    debug(CSTPARSER) {
       pragma(msg, "// randomizeWith! STARTS\n");
       pragma(msg, constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
       pragma(msg, "// randomizeWith! ENDS\n");
@@ -749,7 +749,7 @@ mixin template _esdl__SolverMixin()
     }
   }
   
-  debug(CONSTRAINTS) {
+  debug(CSTPARSER) {
     pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ " STARTS \n");
     pragma(msg, _esdl__randsMixin!_esdl__T);
     pragma(msg, "// _esdl__randsMixin!" ~ _esdl__T.stringof ~ " ENDS \n");
