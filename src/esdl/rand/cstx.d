@@ -973,6 +973,9 @@ struct CstParser {
     x.xLatBase = arrayBase;
     varMap ~= x;
 
+    // start of foreach
+    // fill("    // Start of Foreach: " ~ array ~ ".iterator() \n");
+    fill("    " ~ _solver ~ ".pushScope(" ~ array ~ ".iterator());\n");
     if(CST[srcCursor] is '{') {
       ++srcCursor;
       procBlock();
@@ -981,6 +984,9 @@ struct CstParser {
       procStmt();
     }
 
+    fill("    " ~ _solver ~ ".popScope();\n");
+    // fill("    // End of Foreach \n");
+    
     iterators = iterators[0..$-1];
 
     if(index.length != 0) {

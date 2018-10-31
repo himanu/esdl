@@ -142,6 +142,9 @@ abstract class _esdl__Solver
       _root = _parent.getSolverRoot();
       _esdl__buddy = _root._esdl__buddy;
     }
+    // scopes for constraint parsing
+    _rootScope = new CstScope(null, null);
+    _currentScope = _rootScope;
   }
 
   bool procMonoDomain(CstPredicate pred) {
@@ -202,6 +205,57 @@ abstract class _esdl__Solver
     _toUnrolledPreds ~= pred;
   }
   
+  // Scope for foreach
+  CstScope _rootScope;
+  CstScope _currentScope;
+
+  void pushScope(CstIteratorBase iter) {
+    assert (_currentScope !is null);
+    _currentScope = _currentScope.push(iter);
+  }
+
+  void popScope() {
+    assert (_currentScope !is null);
+    assert (_currentScope !is _rootScope);
+    _currentScope = _currentScope.pop();
+  }
+
+  CstScope currentScope() {
+    assert (_currentScope !is null);
+    return _currentScope;
+  }
+}
+
+class CstScope {
+  this(CstScope parent, CstIteratorBase iter) {
+    _parent = parent;
+    _iter = iter;
+    if (_parent !is null) {
+      parent._children ~= this;
+    }
+  }
+
+  CstScope pop() {
+    return _parent;
+  }
+
+  CstScope push(CstIteratorBase iter) {
+    CstScope childScope;
+    foreach (child; _children) {
+      if (child._iter is iter) {
+	childScope = child;
+	break;
+      }
+    }
+    if (childScope is null) {
+      childScope = new CstScope(this, iter);
+    }
+    return childScope;
+  }
+
+  CstScope _parent;
+  CstScope[] _children;
+  CstIteratorBase _iter;
 }
 
 class CstStage {
