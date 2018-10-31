@@ -795,7 +795,7 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     }
   }
 
-  override CstIteratorBase unrollIter(CstIteratorBase iter, uint n) {
+  override CstIteratorBase unrollIterator(CstIteratorBase iter, uint n) {
     assert(this !is iter);
     return _arrVar.unroll(iter,n).arrLen().makeIterVar();
   }

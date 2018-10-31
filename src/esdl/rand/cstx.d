@@ -1427,13 +1427,13 @@ struct CstParser {
     }
 
     // no parent CstPredicate
-    fill(", null");
+    // fill(", null, null, 0");
 
-    if (iterators.length != 0) {
-      foreach (iterator; iterators) {
-	fill(", " ~ iterator);
-      }
-    }
+    // if (iterators.length != 0) {
+    //   foreach (iterator; iterators) {
+    // 	fill(", " ~ iterator);
+    //   }
+    // }
 
     fill(");\n");
   }

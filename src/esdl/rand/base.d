@@ -230,9 +230,9 @@ class CstScope {
   this(CstScope parent, CstIteratorBase iter) {
     _parent = parent;
     _iter = iter;
-    if (_parent !is null) {
-      parent._children ~= this;
-    }
+    if (_parent !is null) parent._children ~= this;
+    if (_parent is null) _level = 0;
+    else _level = _parent.getLevel() + 1;
   }
 
   CstScope pop() {
@@ -253,9 +253,32 @@ class CstScope {
     return childScope;
   }
 
+  uint getLevel() {
+    return _level;
+  }
+
+  void getIterators(ref CstIteratorBase[] iters, uint level) {
+    if (_level == level) return;
+    else {
+      assert (_iter !is null);
+      assert (_parent !is null);
+      _parent.getIterators(iters, level);
+      iters ~= _iter;
+    }
+  }
+
   CstScope _parent;
   CstScope[] _children;
   CstIteratorBase _iter;
+  uint _level;
+
+  string describe() {
+    import std.string: format;
+    string description = format("Scope:\n\tLevel: %s\n\tIter: %s\n",
+				_level, (_iter is null) ?
+				"NONE" : _iter.name());
+    return description;
+  }
 }
 
 class CstStage {
@@ -551,7 +574,7 @@ abstract class CstIteratorBase
   abstract uint maxVal();
   abstract bool isUnrollable();
   abstract string name();
-  abstract CstIteratorBase unrollIter(CstIteratorBase iter, uint n);
+  abstract CstIteratorBase unrollIterator(CstIteratorBase iter, uint n);
   abstract CstDomain getLenVec();
 }
 
@@ -606,6 +629,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   // alias _expr this;
 
   _esdl__Solver _solver;
+  CstScope _scope;
+  uint _level;
   CstBddExpr _expr;
   CstPredicate _parent;
   bool _markResolve;
@@ -615,12 +640,35 @@ class CstPredicate: CstIterCallback, CstDepCallback
   size_t _uwLength;
   
   this(_esdl__Solver solver, CstBddExpr expr,
-       CstPredicate parent, CstIteratorBase[] iters ...) {
+       CstPredicate parent=null, CstIteratorBase unrollIter=null, uint unrollIterVal=0// ,
+       // CstIteratorBase[] iters ...
+       ) {
     assert(solver !is null);
     _solver = solver;
+    if (parent is null) {
+      _scope = _solver.currentScope();
+      _level = 0;
+    }
+    else {
+      _scope = parent._scope;
+      _level = parent._level + 1;
+    }
+    assert(_scope !is null);
     _expr = expr;
-    _parsedIters = iters;
+
+
     _parent = parent;
+    
+    if (_parent is null) {
+      _scope.getIterators(_parsedIters, _level);
+    }
+    else {
+      _parsedIters =
+	_parent._iters[1..$].
+	  map!(tr => tr.unrollIterator(unrollIter,
+				       unrollIterVal)).array;
+    }
+      
     this.setBddContext();
     debug(CSTPREDS) {
       import std.stdio;
@@ -644,7 +692,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
       unrolled ~= this;
     }
     // else {
-    //   unrolled = this.unrollIter(iter);
+    //   unrolled = this.unrollIterator(iter);
     // }
 
     if (_expr.hasUnresolvedIndx()) {
@@ -718,8 +766,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
       for (uint i = cast(uint) _uwPreds.length;
 	   i != currLen; ++i) {
-	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i), this,
-				     _iters[1..$].map!(tr => tr.unrollIter(iter, i)).array);
+	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i), this, iter, i// ,
+				     // _iters[1..$].map!(tr => tr.unrollIterator(iter, i)).array
+				     );
       }
     }
 
@@ -757,9 +806,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
   CstDomain[] _vals;
   CstDomain[] _deps;
   CstDomain[] _idxs;
-  CstIteratorBase _iter;
   CstIteratorBase[] _iters;
   CstIteratorBase[] _parsedIters;
+
+  CstIteratorBase _unrollIter;
+  uint _unrollIterVal;
 
   uint _unresolveLap;
 
@@ -875,7 +926,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
 				  canFind!((CstIteratorBase a, CstIteratorBase b) => a == b)
 				  (varIters, itr)).array;
     
-    
     if (_iters.length != 0) _iters[0].registerRolled(this);
   }
 
@@ -907,33 +957,36 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   string describe() {
-    string description = name() ~ "\n";
+    import std.string:format;
+    string description = name() ~ "\n    ";
+    description ~= _scope.describe();
+    description ~= format("    Level: %s\n", _level);
     if (_iters.length > 0) {
-      description ~= "    iterators: \n";
+      description ~= "    Iterators: \n";
       foreach (iter; _iters) {
 	description ~= "\t" ~ iter.name() ~ "\n";
       }
     }
     if (_vars.length > 0) {
-      description ~= "    variables: \n";
+      description ~= "    Variables: \n";
       foreach (var; _vars) {
 	description ~= "\t" ~ var.name() ~ "\n";
       }
     }
     if (_vals.length > 0) {
-      description ~= "    values: \n";
+      description ~= "    Values: \n";
       foreach (val; _vals) {
 	description ~= "\t" ~ val.name() ~ "\n";
       }
     }
     if (_idxs.length > 0) {
-      description ~= "    indexes: \n";
+      description ~= "    Indexes: \n";
       foreach (idx; _idxs) {
 	description ~= "\t" ~ idx.name() ~ "\n";
       }
     }
     if (_deps.length > 0) {
-      description ~= "    depends: \n";
+      description ~= "    Depends: \n";
       foreach (dep; _deps) {
 	description ~= "\t" ~ dep.name() ~ "\n";
       }
