@@ -565,7 +565,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     assert(solver !is null);
     _solver = solver;
     _expr = expr;
-    _iters = iters;
+    _parsedIters = iters;
     _parent = parent;
     this.setBddContext();
     debug(CSTPREDS) {
@@ -705,6 +705,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   CstDomain[] _idxs;
   CstIteratorBase _iter;
   CstIteratorBase[] _iters;
+  CstIteratorBase[] _parsedIters;
 
   uint _unresolveLap;
 
@@ -769,7 +770,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
   
   final void setBddContext() {
     CstIteratorBase[] varIters;
-    CstIteratorBase[] pasredIters = _iters;
     
     _expr.setBddContext(this, _vars, _vals, varIters, _idxs, _deps);
 
@@ -817,9 +817,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // as well
     // _iters = pasredIters.filter!(itr =>
     // 				 canFind(varIters, itr)).array;
-    _iters = pasredIters.filter!(itr =>
-    				 canFind!((CstIteratorBase a, CstIteratorBase b) => a == b)
-    				 (varIters, itr)).array;
+    _iters = _parsedIters.filter!(itr =>
+				  canFind!((CstIteratorBase a, CstIteratorBase b) => a == b)
+				  (varIters, itr)).array;
     
     
     if (_iters.length != 0) _iters[0].registerRolled(this);
