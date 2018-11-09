@@ -389,6 +389,10 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  enum bool signed = E.ISSIGNED;
 	  enum uint bits = E.SIZE;
 	}
+	else {			// bool
+	  enum signed = false;
+	  enum bits = 1;
+	}
 	static if (bits <= 64) {
 	  final switch (iType) {
 	  case INTTYPE.UINT: iType = bits <= 32 ?
@@ -551,7 +555,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  auto parent = _parent.getResolved();
 	  if (_indexExpr) {
 	    if (_indexExpr.solved()) {
-	      _resolvedVec = parent[_indexExpr.evaluate()];
+	      _resolvedVec = parent[cast(size_t) _indexExpr.evaluate()];
 	      _resolvedCycle = getSolverRoot()._cycle;
 	      return true;
 	    }
@@ -574,7 +578,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	if (_resolvedCycle != getSolverRoot()._cycle) {
 	  auto parent = _parent.getResolved();
 	  if (_indexExpr) {
-	    _resolvedVec = parent[_indexExpr.evaluate()];
+	    _resolvedVec = parent[cast(size_t) _indexExpr.evaluate()];
 	  }
 	  else {
 	    _resolvedVec = parent[_pindex];
@@ -603,7 +607,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	      // foreach(pp; _parent.getDomainElems(cast(size_t) _indexExpr.evaluate())) {
 	      // 	domains ~= pp;
 	      // }
-	      domains ~= _parent[_indexExpr.evaluate()];
+	      domains ~= _parent[cast(size_t) _indexExpr.evaluate()];
 	    }
 	    else {
 	      // FIXME -- if the expression has been solved

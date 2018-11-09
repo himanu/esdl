@@ -344,7 +344,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     static if (HAS_RAND_ATTRIB) {
       Unconst!T newVal;
       foreach (i, v; value) {
-	static if(isIntegral!T) {
+	static if(isIntegral!T || isBoolean!T) {
 	  if (i == 0) {
 	    newVal = cast(T) v;
 	  }
@@ -377,7 +377,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     }
     static if (HAS_RAND_ATTRIB) {
       Unconst!T newVal;
-      static if(isIntegral!T) {
+      static if(isIntegral!T || isBoolean!T) {
 	newVal = cast(T) value;
       }
       else {
@@ -474,6 +474,12 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     enum size_t tSize = T.sizeof * 8;
     enum bool IS_RANGE = true;
   }
+  else static if (isBoolean!T) {
+    import std.traits;
+    enum bool tSigned = false;
+    enum size_t tSize = 1;
+    enum bool IS_RANGE = true;
+  }
   else static if (isBitVector!T) {
     static if (T.ISSIGNED) {
       enum bool tSigned = true;
@@ -566,10 +572,8 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
       break;
     case DomType.INDEXEDMONO:
       assert(false);
-      break;
     case DomType.MULTI:
       return false;
-      break;
     // default:
     //   assert(false);
     //   break;
@@ -1708,11 +1712,9 @@ class CstVec2VecExpr: CstVecTerm
 	case CstBinVecOp.ADD:
 	  UniRangeMod(IntRangeModOp.ADD, rhs).apply(rng);
 	  return _lhs.getUniRange(rng);
-	  break;
 	case CstBinVecOp.SUB: 
 	  UniRangeMod(IntRangeModOp.SUB, rhs).apply(rng);
 	  return _lhs.getUniRange(rng);
-	  break;
 	default:
 	  return false;
 	}
@@ -1724,11 +1726,9 @@ class CstVec2VecExpr: CstVecTerm
 	case CstBinVecOp.ADD:
 	  UniRangeMod(IntRangeModOp.ADD, lhs).apply(rng);
 	  return _rhs.getUniRange(rng);
-	  break;
 	case CstBinVecOp.SUB: 
 	  UniRangeMod(IntRangeModOp.SUBD, lhs).apply(rng);
 	  return _rhs.getUniRange(rng);
-	  break;
 	default:
 	  return false;
 	}
@@ -1750,11 +1750,9 @@ class CstVec2VecExpr: CstVecTerm
       case CstBinVecOp.ADD:
 	IntRangeMod!int(IntRangeModOp.ADD, rhs).apply(rng);
 	return _lhs.getIntRange(rng);
-	break;
       case CstBinVecOp.SUB: 
 	IntRangeMod!int(IntRangeModOp.SUB, rhs).apply(rng);
 	return _lhs.getIntRange(rng);
-	break;
       default:
 	return false;
       }
@@ -1766,11 +1764,9 @@ class CstVec2VecExpr: CstVecTerm
       case CstBinVecOp.ADD:
 	IntRangeMod!int(IntRangeModOp.ADD, lhs).apply(rng);
 	return _rhs.getIntRange(rng);
-	break;
       case CstBinVecOp.SUB: 
 	IntRangeMod!int(IntRangeModOp.SUBD, lhs).apply(rng);
 	return _rhs.getIntRange(rng);
-	break;
       default:
 	return false;
       }
