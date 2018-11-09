@@ -193,19 +193,15 @@ struct UniRange
     case INTTYPE.UINT:
       UIntR iRange = UIntR(this);
       return iRange.toString();
-      break;
     case INTTYPE.INT:
       IntR iRange = IntR(this);
       return iRange.toString();
-      break;
     case INTTYPE.ULONG:
       ULongR iRange = ULongR(this);
       return iRange.toString();
-      break;
     case INTTYPE.LONG:
       LongR iRange = LongR(this);
       return iRange.toString();
-      break;
     }
   }
 
@@ -214,19 +210,15 @@ struct UniRange
     case INTTYPE.UINT:
       UIntR iRange = UIntR(this);
       return iRange.count();
-      break;
     case INTTYPE.INT:
       IntR iRange = IntR(this);
       return iRange.count();
-      break;
     case INTTYPE.ULONG:
       ULongR iRange = ULongR(this);
       return iRange.count();
-      break;
     case INTTYPE.LONG:
       LongR iRange = LongR(this);
       return iRange.count();
-      break;
     }
   }
 
@@ -271,11 +263,17 @@ struct IntRange(T) if (isIntegral!T) {
   }
 
   this(UniRange uRange) {
-    final switch (uRange._type) {
-    case INTTYPE.UINT: assert (is (T == uint)); break;
-    case INTTYPE.INT: assert (is (T == int)); break;
-    case INTTYPE.ULONG: assert (is (T == ulong)); break;
-    case INTTYPE.LONG: assert (is (T == long)); break;
+    if (uRange._type == INTTYPE.UINT) {
+      assert (is (T == uint));
+    }
+    else if (uRange._type == INTTYPE.INT) {
+      assert (is (T == int));
+    }
+    else if (uRange._type == INTTYPE.ULONG) {
+      assert (is (T == ulong));
+    }
+    else if (uRange._type == INTTYPE.LONG) {
+      assert (is (T == long));
     }
     _min = cast(T) uRange._min;
     assert (_min == uRange._min);
@@ -315,13 +313,13 @@ struct IntRange(T) if (isIntegral!T) {
 	casted._max = cast(U) this._max;
 	return casted;
       }
-      static if (isSigned!T && isUnsigned!U) {
+      else static if (isSigned!T && isUnsigned!U) {
 	return cast(G) (cast(IntRange!(Unsigned!T)) this);
       }
-      static if (isUnsigned!T && isSigned!U) {
+      else static if (isUnsigned!T && isSigned!U) {
 	return cast(G) (cast(IntRange!(Signed!T)) this);
       }
-      static if (is (U: T)) {
+      else static if (is (U: T)) {
 	if ((this._full is true) ||
 	    (this._min <= U.min && this._max > U.max) ||
 	    (this._max < this._min && this._min <= U.min) ||
@@ -436,11 +434,11 @@ struct IntRange(T) if (isIntegral!T) {
       }
       else if (this._min == this._max) {
 	assert(false);
-	rcount = 0;
+	// rcount = 0;
       }
       else if (other._min == other._max) {
 	assert(false);
-	rcount = 0;
+	// rcount = 0;
       }
       // both ranges normal
       else if (this._min < this._max && other._min < other._max) {
