@@ -53,10 +53,10 @@ template _esdl__RandProxyType(T, int I)
   static if(isArray!L && (isBitVector!E ||
 			  isIntegral!E ||
 			  isBoolean!E)) {
-    alias _esdl__RandProxyType = CstVecArr!(L, RAND, 0);
+    alias _esdl__RandProxyType = CstVecArr!(L, E, RAND, 0);
   }
   else static if(isBitVector!L || isIntegral!L || isBoolean!L) {
-    alias _esdl__RandProxyType = CstVec!(L, RAND, 0);
+    alias _esdl__RandProxyType = CstVec!(L, L, RAND, 0);
   }
   else static if(is(L == class) || is(L == struct)) {
     alias _esdl__RandProxyType = _esdl__SolverResolve!L;
@@ -708,12 +708,13 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
+      return new CstVec!(L, L, _esdl__norand, 0)(name, l, this);
     }
     else static if (isArray!L) {
+      alias E = LeafElementType!L;
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
+      return new CstVec!(L, E, _esdl__norand, 0)(name, l, this);
     }
     else {
       return l;
@@ -725,12 +726,13 @@ mixin template _esdl__SolverMixin()
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
+      return new CstVec!(L, L, _esdl__norand, 0)(name, l, this);
     }
     else static if (isArray!L) {
+      alias E = LeafElementType!L;
       // import std.stdio;
       // writeln("Creating VarVecArr, ", name);
-      return new CstVec!(L, _esdl__norand, 0)(name, l, this);
+      return new CstVec!(L, E, _esdl__norand, 0)(name, l, this);
     }
     else {
       return l;

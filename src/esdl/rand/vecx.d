@@ -34,12 +34,10 @@ void addToDomains(CstDomain d, ref CstDomain[] domains) {
   }
 }
 
-abstract class CstVecBase(V, alias R, int N)
-  if(_esdl__ArrOrder!(V, N) == 0): CstVecDomain!(ElementTypeN!(V, N), R), CstVecPrim
+abstract class CstVecBase(V, LEAF, alias R, int N)
+  if(_esdl__ArrOrder!(V, N) == 0): CstVecDomain!(LEAF, R), CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
-
-  alias E = ElementTypeN!(V, N);
 
   string _name;
 
@@ -51,12 +49,12 @@ abstract class CstVecBase(V, alias R, int N)
     _name = name;
   }
 
-  static if(HAS_RAND_ATTRIB && is(E == enum)) {
+  static if(HAS_RAND_ATTRIB && is(LEAF == enum)) {
     BDD _primBdd;
     override BDD getPrimBdd(Buddy buddy) {
       import std.traits;
       if(_primBdd.isZero()) {
-	foreach(e; EnumMembers!E) {
+	foreach(e; EnumMembers!LEAF) {
 	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
 	}
       }
@@ -125,14 +123,14 @@ abstract class CstVecBase(V, alias R, int N)
   }
 
   override uint bitcount() {
-    static if(isBoolean!E)         return 1;
-    else static if(isIntegral!E)   return E.sizeof * 8;
-    else static if(isBitVector!E)  return E.SIZE;
-    else static assert(false, "bitcount can not operate on: " ~ E.stringof);
+    static if(isBoolean!LEAF)         return 1;
+    else static if(isIntegral!LEAF)   return LEAF.sizeof * 8;
+    else static if(isBitVector!LEAF)  return LEAF.SIZE;
+    else static assert(false, "bitcount can not operate on: " ~ LEAF.stringof);
   }
 
   override bool signed() {
-    static if(isVecSigned!E) {
+    static if(isVecSigned!LEAF) {
       return true;
     }
     else  {
@@ -185,12 +183,12 @@ abstract class CstVecBase(V, alias R, int N)
 // for the elements this CstVec represents
 template CstVec(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias CstVec = CstVec!(typeof(T.tupleof[I]),
+  alias CstVec = CstVec!(typeof(T.tupleof[I]), typeof(T.tupleof[I]),
 			 getRandAttr!(T, I), N);
 }
 
-class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecBase!(V, R, N)
+class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecBase!(V, LEAF, R, N)
     {
       import std.traits;
       import std.range;
@@ -277,7 +275,7 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return this;
       }
 
-      override E* getRef() {
+      override LEAF* getRef() {
 	return _var;
       }
 
@@ -380,14 +378,14 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       bool getIntType(ref INTTYPE iType) {
-	static if (isIntegral!E) {
+	static if (isIntegral!LEAF) {
 	  import std.traits;
-	  enum bool signed = isSigned!E;
-	  enum uint bits = E.sizeof * 8;
+	  enum bool signed = isSigned!LEAF;
+	  enum uint bits = LEAF.sizeof * 8;
 	}
-	else static if (isBitVector!E) {
-	  enum bool signed = E.ISSIGNED;
-	  enum uint bits = E.SIZE;
+	else static if (isBitVector!LEAF) {
+	  enum bool signed = LEAF.ISSIGNED;
+	  enum uint bits = LEAF.SIZE;
 	}
 	else {			// bool
 	  enum signed = false;
@@ -433,15 +431,15 @@ class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
     }
 
-class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecBase!(V, R, N)
+class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecBase!(V, LEAF, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
       alias RV = typeof(this);
-      alias P = CstVecArr!(V, R, N-1);
+      alias P = CstVecArr!(V, LEAF, R, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -664,7 +662,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
       
-      override E* getRef() {
+      override LEAF* getRef() {
 	if(_indexExpr) {
 	  return _parent.getRef(cast(size_t) _indexExpr.evaluate());
 	}
@@ -812,14 +810,14 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       bool getIntType(ref INTTYPE iType) {
-	static if (isIntegral!E) {
+	static if (isIntegral!LEAF) {
 	  import std.traits;
-	  enum bool signed = isSigned!E;
-	  enum uint bits = E.sizeof * 8;
+	  enum bool signed = isSigned!LEAF;
+	  enum uint bits = LEAF.sizeof * 8;
 	}
-	else static if (isBitVector!E) {
-	  enum bool signed = E.ISSIGNED;
-	  enum uint bits = E.SIZE;
+	else static if (isBitVector!LEAF) {
+	  enum bool signed = LEAF.ISSIGNED;
+	  enum uint bits = LEAF.SIZE;
 	}
 	static if (bits <= 64) {
 	  final switch (iType) {
@@ -885,7 +883,7 @@ class CstVec(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 // 					   getRandAttr!(T, I), N);
 // }
 
-abstract class CstVecArrBase(V, alias R, int N)
+abstract class CstVecArrBase(V, LEAF, alias R, int N)
   if(_esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
@@ -894,10 +892,10 @@ abstract class CstVecArrBase(V, alias R, int N)
   alias E = ElementTypeN!(V, N+1);
 
   static if (_esdl__ArrOrder!(V, N+1) == 0) {
-    alias EV = CstVec!(V, R, N+1);
+    alias EV = CstVec!(V, LEAF, R, N+1);
   }
   else {
-    alias EV = CstVecArr!(V, R, N+1);
+    alias EV = CstVecArr!(V, LEAF, R, N+1);
   }
 
   EV[] _elems;
@@ -983,13 +981,13 @@ abstract class CstVecArrBase(V, alias R, int N)
 
 template CstVecArr(T, int I, int N=0)
   if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias CstVecArr = CstVecArr!(typeof(T.tupleof[I]),
+  alias CstVecArr = CstVecArr!(typeof(T.tupleof[I]), LeafElementType!(T.tupleof[I]),
 			       getRandAttr!(T, I), N);
 }
 
 // Arrays (Multidimensional arrays as well)
-class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstVecArrBase!(V, R, N)
+class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstVecArrBase!(V, LEAF, R, N)
     {
       alias RV = typeof(this);
       CstVecLen!RV _arrLen;
@@ -1393,13 +1391,13 @@ class CstVecArr(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
       }
     }
 
-class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstVecArrBase!(V, R, N)
+class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstVecArrBase!(V, LEAF, R, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
-      alias P = CstVecArr!(V, R, N-1);
+      alias P = CstVecArr!(V, LEAF, R, N-1);
       P _parent;
       _esdl__Solver _root;
       CstVecExpr _indexExpr = null;
