@@ -1058,16 +1058,6 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     // 	this._from(other);
     //   }
 
-    // public this(V)(V other)
-    //   if(is(V == SimTime)) {
-    // 	this._from(other);
-    //   }
-
-    // public this(V)(V other)
-    //   if(is(V == SimTime)) {
-    // 	this._from(other);
-    //   }
-
     public this(V)(V ba) if(is(V == barray)) {
       this = ba;
     }
@@ -1309,47 +1299,6 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	  }
 	}
       }
-
-    // public void opAssign(V)(V other)
-    //   if(isFloatingPoint!V &&
-    // 	 SIZE >= V.sizeof*8) {
-    // 	this._from(other);
-    //   }
-
-    // public void opAssign(V)(V other)
-    //   if(is(V == SimTime) &&
-    // 	 SIZE >= 72) {
-    // 	this._from(other);
-    //   }
-
-    // public void opAssign(V)(V other)
-    //   if(is(V == SimTime) &&
-    // 	 SIZE >= 64) {
-    // 	this._from(other);
-    //   }
-
-    // private void _from(V)(V other)
-    //   if(is(V == SimTime) &&
-    // 	 SIZE >= 72) {
-    // 	for(size_t i=0; i!=STORESIZE; ++i) {
-    // 	  _aval[i] = 0;
-    // 	  static if(L) _bval[i] = 0;
-    // 	}
-
-    // 	this._aval[0] = other._value;
-    // 	this._aval[1] = other._unit;
-    //   }
-
-    // private void _from(V)(V other)
-    //   if(is(V == SimTime) &&
-    // 	 SIZE >= 64) {
-    // 	for(size_t i=0; i!=STORESIZE; ++i) {
-    // 	  _aval[i] = 0;
-    // 	  static if(L) _bval[i] = 0;
-    // 	}
-
-    // 	this._aval[0] = other.getVal();
-    //   }
 
     private void _from(V)(V other)
       if(isBitVector!V ||
@@ -2013,51 +1962,50 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       return value;
     }
 
-    // public V opCast(V)()
-    //   if(is(V == SimTime) &&
-    // 	 SIZE >= 72) {
-    // 	SimTime retval;
-    // 	retval._value = _aval[0];
-    // 	retval._unit  = cast(TimeUnit) _aval[1];
-    // 	return retval;
-    //   }
+    public V opCast(V)()
+      if(is(V == SimTime) &&
+    	 SIZE >= 64) {
+    	SimTime retval = _aval[0];
+    	return retval;
+      }
 
-    // public V opCast(V)()
-    //   if(is(V == SimTime) &&
-    // 	 SIZE >= 64) {
-    // 	SimTime retval = _aval[0];
-    // 	return retval;
-    //   }
+    public V opCast(V)() if(isFloatingPoint!V) {
+      static if(is(V == real)) {
+	enum N =(V.sizeof+3)/4;
+	alias ftype = uint;
+	static if (N == 4) {
+	  enum M = 3;
+	  static assert(80 <= SIZE);
+	}
+	else {
+	  enum M = N;
+	  static assert(V.sizeof*8 <= SIZE);
+	}
+      }
+      static if(is(V == double)) {
+	enum M = 2;
+	alias ftype = uint;
+	static assert(V.sizeof*8 <= SIZE);
+      }
+      static if(is(V == float)) {
+	enum M = 1;
+	alias ftype = uint;
+	static assert(V.sizeof*8 <= SIZE);
+      }
 
-    // public V opCast(V)()
-    //   if(isFloatingPoint!V &&
-    // 	 V.sizeof*8 <= SIZE) {
-    // 	static if(is(V == real)) {
-    // 	  enum WSIZE =(V.sizeof+7)/8;
-    // 	  alias ulong ftype;
-    // 	}
-    // 	static if(is(V == double)) {
-    // 	  enum WSIZE = 1;
-    // 	  alias ulong ftype;
-    // 	}
-    // 	static if(is(V == float)) {
-    // 	  enum WSIZE = 1;
-    // 	  alias uint ftype;
-    // 	}
+      union utype {
+	ftype[M] b;
+	V f;
+      }
 
-    // 	union utype {
-    // 	  ftype[WSIZE] b;
-    // 	  V f;
-    // 	}
+      utype u;
 
-    // 	utype u;
+      for (size_t i=0; i!=M; ++i) {
+	u.b[i] = _aval[i];
+      }
 
-    // 	for(size_t i=0; i!=WSIZE; ++i) {
-    // 	  u.b[i] = cast(ftype) _aval[i];
-    // 	}
-
-    // 	return	u.f;
-    //   }
+      return	u.f;
+    }
 
     public auto opCast(V)() const
       if(isBitVector!V) {
@@ -2783,6 +2731,40 @@ public B toBitVec(B, T)(T t) if(isIntegral!T) {
   R tmp = t;
   B res = cast(B) tmp;
   return res;
+ }
+
+public auto toBitVec(T)(T t) if(isFloatingPoint!T) {
+  enum N = T.sizeof * 8;
+
+  static if (N == 128) enum M = 80;
+  else enum M = N;
+  
+  union utype {
+    Bit!M b;
+    T f;
+  }
+
+  utype u;
+
+  u.f = t;
+  return u.b;
+ }
+
+public auto toUBitVec(T)(T t) if(isFloatingPoint!T) {
+  enum N = T.sizeof * 8;
+
+  static if (N == 128) enum M = 80;
+  else enum M = N;
+  
+  union utype {
+    UBit!M b;
+    T f;
+  }
+
+  utype u;
+
+  u.f = t;
+  return u.b;
  }
 
 public auto toBit(size_t N, T)(T t) if(isIntegral!T) {
