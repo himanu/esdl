@@ -426,9 +426,9 @@ abstract class _esdl__SolverRoot: _esdl__Solver
       if (_solveValue.length < NUMWORDS) {
 	_solveValue.length = NUMWORDS;
       }
-      foreach (uint i, ref j; bitvals) {
-	uint pos = i % WORDSIZE;
-	uint word = i / WORDSIZE;
+      foreach (i, ref j; bitvals) {
+	uint pos = (cast(uint) i) % WORDSIZE;
+	uint word = (cast(uint) i) / WORDSIZE;
 	if (bits.length == 0 || bits[j] == -1) {
 	  v = v + ((cast(size_t) _esdl__rGen.flip()) << pos);
 	}

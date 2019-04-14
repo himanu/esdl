@@ -4,7 +4,7 @@ import std.traits: isIntegral, isSigned;
 import std.container.array;
 import std.traits: Unsigned, Signed, isUnsigned, isSigned;
 import esdl.data.bvec;
-import esdl.rand.misc: CstBinVecOp, CstBinBddOp, CstBddOp;
+import esdl.rand.misc: CstBinVecOp, CstBinBddOp, CstBddOp, _esdl__RandGen;
 
 T larger(T) (T a, T b) {
   if (a > b) return a;
@@ -983,6 +983,32 @@ struct IntRangeSet(T)
       assert(_count != 0);
 
       rn = uniform(0, _count, gen);
+      foreach (r; _ranges) {
+	auto cou = r.count();
+	if (cou > rn) {
+	  return cast(T) (r.min + rn);
+	}
+	else {
+	  rn -= cou;
+	}
+      }
+      assert(false, "Random number generated is outside scope");
+    }
+  }
+
+  T uniform(_esdl__RandGen rgen) {
+    assert (! isEmpty());
+
+    if (this.isFull()) {
+      return rgen.gen!T;
+    }
+    else {
+      Unsigned!T rn;
+
+      if (_count == 0) count();
+      assert(_count != 0);
+
+      rn = rgen.gen(0, _count);
       foreach (r; _ranges) {
 	auto cou = r.count();
 	if (cou > rn) {

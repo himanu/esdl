@@ -151,7 +151,7 @@ abstract class _esdl__Solver
     assert (pred._vars.length > 0);
     auto dom = pred._vars[0];
     if (! dom.solved()) {
-      return dom.solveRange();
+      return dom.solveRange(_esdl__getRandGen());
     }
     else {
       return true;
@@ -168,7 +168,7 @@ abstract class _esdl__Solver
       dom = dom.getResolved();
     }
     if (! dom.solved()) {
-      return dom.solveRange();
+      return dom.solveRange(_esdl__getRandGen());
     }
     else {
       return true;
@@ -354,7 +354,7 @@ abstract class CstDomain
   // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
   abstract void setVal(ulong v);
-  abstract bool solveRange();
+  abstract bool solveRange(_esdl__RandGen randGen);
   abstract CstStage stage();
   abstract void stage(CstStage s);
   abstract uint domIndex();
@@ -371,8 +371,8 @@ abstract class CstDomain
   abstract CstDomain getResolved();
   abstract void updateVal();
   abstract bool hasChanged();
-  abstract bool hasAbstractDomains();
-  abstract void markAbstractDomains(bool len);
+  abstract bool hasAbstractVecDomains();
+  abstract void markAbstractVecDomains(bool len);
   abstract bool isActualDomain();
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerValPred(CstPredicate valPred);  

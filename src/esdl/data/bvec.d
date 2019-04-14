@@ -25,6 +25,7 @@ import std.range;
 import core.bitop;
 import core.exception;
 import esdl.base.comm;
+import esdl.base.core: SimTime;
 
 static import std.algorithm; 	// required for min, max
 
@@ -462,11 +463,11 @@ template _vecCmpT(T, U)	// return true if T >= U
 }
 
 template _bvec(T, U, string OP)
-  if((isBitVector!T || isIntegral!T) &&
-     (isBitVector!U || isIntegral!U)) {
-  static if (isIntegral!U) alias UU = _bvec!U;
+  if((isBitVector!T || isIntegral!T || isSomeChar!T) &&
+     (isBitVector!U || isIntegral!U || isSomeChar!U)) {
+  static if (isIntegral!U || isSomeChar!U) alias UU = _bvec!U;
   else alias UU = U;
-  static if (isIntegral!T) alias TT = _bvec!U;
+  static if (isIntegral!T || isSomeChar!T) alias TT = _bvec!T;
   else alias TT = T;
   static if(TT.ISSIGNED && UU.ISSIGNED) {enum bool S = true;}
   else                                {enum bool S = false;}
@@ -729,6 +730,10 @@ template _bvec(T) if(isIntegral!T) {
   alias _bvec = _bvec!(isSigned!T, false, T.sizeof*8);
 }
 
+template _bvec(T) if(isSomeChar!T) {
+  alias _bvec = _bvec!(false, false, T.sizeof*8);
+}
+
 template _bvec(T) if(isBitVector!T) {
   alias _bvec = T;
 }
@@ -778,6 +783,9 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
     template isAssignableBitVec(Q) {
       static if (isIntegral!Q && Q.sizeof*8 <= SIZE) {
+	enum bool isAssignableBitVec = true;
+      }
+      else static if (isSomeChar!Q && Q.sizeof*8 <= SIZE) {
 	enum bool isAssignableBitVec = true;
       }
       else static if (isBitVector!Q && Q.SIZE <= SIZE) {
@@ -921,6 +929,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     public void setAval(V)(V t)
       if(isBoolean!V ||
 	 (isIntegral!V && V.sizeof*8 <= SIZE) ||
+	 (isSomeChar!V && V.sizeof*8 <= SIZE) ||
 	 (isBitVector!V && V.SIZE <= SIZE && (! V.IS4STATE))) {
 	static if(isBoolean!V) enum bool _S = false;
 	else static if(isBitVector!V) enum bool _S = V.ISSIGNED;
@@ -935,6 +944,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       public void setBval(V)(V t)
 	if(isBoolean!V ||
 	   (isIntegral!V && V.sizeof*8 <= SIZE) ||
+	   (isSomeChar!V && V.sizeof*8 <= SIZE) ||
 	   (isBitVector!V && V.SIZE <= SIZE && (! V.IS4STATE))) {
 	  static if(isBoolean!V) enum bool _S = false;
 	  else static if(isBitVector!V) enum bool _S = V.ISSIGNED;
@@ -1011,16 +1021,17 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
 
     public void opAssign(V)(V other)
-      if(isIntegral!V && (NO_CHECK_SIZE || SIZE >= V.sizeof*8)) {
+      if((isIntegral!V || isSomeChar!V) &&
+	 (NO_CHECK_SIZE || SIZE >= V.sizeof*8)) {
 	this._from(other);
       }
 
     public void opAssign(V)(V other)
       if((isBitVector!V ||
 	  is(V == _bvec!(_S, _L, _VAL, _RADIX),
-	     bool _S, bool _L, string _VAL, size_t _RADIX))
-	 && (NO_CHECK_SIZE || SIZE >= V.SIZE)
-	 &&(IS4STATE || !V.IS4STATE)) {
+	     bool _S, bool _L, string _VAL, size_t _RADIX)) &&
+	 (NO_CHECK_SIZE || SIZE >= V.SIZE) &&
+	 (IS4STATE || !V.IS4STATE)) {
 	this._from(other);
       }
 
@@ -1044,7 +1055,8 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     public  this(V)(V other)
-      if(isIntegral!V && (NO_CHECK_SIZE || SIZE >= V.sizeof*8)) {
+      if((isIntegral!V || isSomeChar!V) &&
+	 (NO_CHECK_SIZE || SIZE >= V.sizeof*8)) {
 	this._from(other);
       }
 
@@ -1259,7 +1271,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
 
     private void _from(V)(V other)
-      if(isIntegral!V) {
+      if(isIntegral!V || isSomeChar!V) {
 	static if(isSigned!V) long rhs = other;
 	else                  ulong rhs = other;
 	_aval[0] = cast(store_t) rhs;
@@ -1947,7 +1959,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       return ba;
     }
 
-    public V opCast(V)() const if(isIntegral!V || isBoolean!V) {
+    public V opCast(V)() const if(isIntegral!V || isBoolean!V || isSomeChar!V) {
       static if(L) {
 	static if (store_t.sizeof >= 4) {
 	  V value = cast(V)(this._aval[0] & ~this._bval[0]);
@@ -1969,7 +1981,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     	return retval;
       }
 
-    public V opCast(V)() if(isFloatingPoint!V) {
+    public V mapBitsTo(V)() if(isFloatingPoint!V) {
       static if(is(V == real)) {
 	enum N =(V.sizeof+3)/4;
 	alias ftype = uint;
@@ -2733,7 +2745,7 @@ public B toBitVec(B, T)(T t) if(isIntegral!T) {
   return res;
  }
 
-public auto toBitVec(T)(T t) if(isFloatingPoint!T) {
+public auto mapToBits(T)(T t) if(isFloatingPoint!T) {
   enum N = T.sizeof * 8;
 
   static if (N == 128) enum M = 80;
@@ -2750,7 +2762,7 @@ public auto toBitVec(T)(T t) if(isFloatingPoint!T) {
   return u.b;
  }
 
-public auto toUBitVec(T)(T t) if(isFloatingPoint!T) {
+public auto mapToUBits(T)(T t) if(isFloatingPoint!T) {
   enum N = T.sizeof * 8;
 
   static if (N == 128) enum M = 80;

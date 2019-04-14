@@ -520,14 +520,14 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
     // pragma(msg, typeof(_rs).stringof);
   }
 
-  override bool solveRange() {
+  override bool solveRange(_esdl__RandGen randGen) {
     final switch(this._type) {
     case DomType.MONO:
       if (this._rs.isEmpty()) {
 	assert(false, "Constraints on domain " ~ this.name() ~
 	       " do not converge");
       }
-      this.setVal(this._rs.uniform());
+      this.setVal(this._rs.uniform(randGen));
       break;
     case DomType.LAZYMONO:
       auto rns = this._rs.dup();
@@ -544,7 +544,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 	assert(false, "Constraints on domain " ~ this.name() ~
 	       " do not converge");
       }
-      this.setVal(rns.uniform());
+      this.setVal(rns.uniform(randGen));
       break;
     case DomType.MAYBEMONO:
       auto rns = this._rs.dup();
@@ -568,7 +568,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 	assert(false, "Constraints on domain " ~ this.name() ~
 	       " do not converge");
       }
-      this.setVal(rns.uniform());
+      this.setVal(rns.uniform(randGen));
       break;
     case DomType.INDEXEDMONO:
       assert(false);
@@ -1208,7 +1208,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     if (listed is false) {
       vars ~= this;
     }
-    markAbstractDomains(true);
+    markAbstractVecDomains(true);
     _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
@@ -1245,15 +1245,15 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.isActualDomain();
   }
 
-  override bool hasAbstractDomains() {
-    return _parent.hasAbstractDomains();
+  override bool hasAbstractVecDomains() {
+    return _parent.hasAbstractVecDomains();
   }
 
-  override void markAbstractDomains(bool len) {
-    _parent.markAbstractDomains(len);
+  override void markAbstractVecDomains(bool len) {
+    _parent.markAbstractVecDomains(len);
   }
 
-  void labelAbstractDomains(bool len) {
+  void labelAbstractVecDomains(bool len) {
     assert(len is true);
     if (this._type !is DomType.MULTI) {
       this._type = DomType.MAYBEMONO;

@@ -822,8 +822,8 @@ struct CstParser {
   }
 
   int idMatch(string id) {
-    foreach(int i, var; varMap) {
-      if(var.varName == id) return i;
+    foreach(i, var; varMap) {
+      if(var.varName == id) return cast(int) i;
     }
     return -1;
   }

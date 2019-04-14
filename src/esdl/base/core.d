@@ -308,8 +308,8 @@ struct _esdl__Multicore
     uint[] threadPool;
     threadPool.length = rCfg._threadPool.length;
 
-    foreach (uint i, ref index; threadPool) {
-      index = i;
+    foreach (i, ref index; threadPool) {
+      index = cast(uint) i;
     }
     cfg._threadPool = threadPool;
     return cfg;
