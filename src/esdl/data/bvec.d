@@ -2191,6 +2191,25 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       return retval;
     }
 
+    static if (SIZE % 8 == 0) {
+      public auto byteReverse() {
+	typeof(this) retval;
+	ubyte* aptr = cast (ubyte*) _aval;
+	ubyte* raptr = cast (ubyte*) (retval._aval);
+	for (size_t i=0; i!=SIZE/8; ++i) {
+	  raptr[i] = aptr[SIZE/8-(i+1)];
+	}
+	static if (this.IS4STATE) {
+	  ubyte* bptr = cast (ubyte*) _bval;
+	  ubyte* rbptr = cast (ubyte*) (retval._bval);
+	  for (size_t i=0; i!=SIZE/8; ++i) {
+	    rbptr[i] = bptr[SIZE/8-(i+1)];
+	  }
+	}
+	return retval;
+      }
+    }
+
     private void reportX(string file = __FILE__,
 			 size_t line = __LINE__, V)(const V other) const
       if(isBitVector!V) {
