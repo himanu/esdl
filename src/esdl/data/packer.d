@@ -41,7 +41,7 @@ struct Packer
 
   alias _packIter opDollar;
 
-  ulong* ptr;
+  size_t* ptr;
 
   enum bitsPerSizeT = ulong.sizeof * 8;
 
@@ -324,7 +324,7 @@ struct Packer
       {
 	static if (isBoolean!T)
 	  {
-	    UBit!64 iter = (_unpackIter << 32) + _packIter;
+	    UBit!64 iter = (cast(ulong) _unpackIter << 32) + _packIter;
 	    stream.length = _packIter + 64;
 	    for (size_t i=0; i != stream.length; ++i) {
 	      if (i < 64)
@@ -336,7 +336,7 @@ struct Packer
 	else static if (isIntegral!T)
 	  {
 	    enum BC = BitCount!T;
-	    ulong iter = (_unpackIter << 32) + _packIter;
+	    ulong iter = (cast(ulong) _unpackIter << 32) + _packIter;
 	    stream.length = (64 + _packIter + BC - 1)/BC;
 	    for (size_t i=0; i != stream.length; ++i) {
 	      if (i < 64/BC)
@@ -348,7 +348,7 @@ struct Packer
 	else
 	  {
 	    enum BC = BitCount!T;
-	    ulong iter = (_unpackIter << 32) + _packIter;
+	    ulong iter = (cast(ulong) _unpackIter << 32) + _packIter;
 	    stream.length = (64 + _packIter + BC - 1)/BC;
 	    for (size_t i=0; i != stream.length; ++i) {
 	      if (i < 64/BC)
@@ -379,8 +379,8 @@ struct Packer
 	      assert(false);
 	    if (stream.length < (64 + packIter))
 	      assert(false);
-	    length = packIter;
-	    _unpackIter = unpackIter;
+	    length = cast(size_t) packIter;
+	    _unpackIter = cast(size_t) unpackIter;
 	    for (size_t i=0; i != _packIter; ++i)
 	      opIndexAssign(stream[i+64], i);
 	  }
@@ -398,8 +398,8 @@ struct Packer
 	      assert(false);
 	    if (stream.length < (64 + packIter)/BC)
 	      assert(false);
-	    length = packIter;
-	    _unpackIter = unpackIter;
+	    length = cast(size_t) packIter;
+	    _unpackIter = cast(size_t) unpackIter;
 	    for (size_t i=0; i != (_packIter + BC - 1)/BC; ++i)
 	      ptr[(i*BC)/64] +=
 		(cast(ulong) stream[64/BC + i]) << ((i*BC)%64);
