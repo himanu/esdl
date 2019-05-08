@@ -288,7 +288,6 @@ class CstStage {
   // The Bdd expressions that apply to this stage
   CstPredicate[] _predicates;
   // These are the length variables that this stage will solve
-  // CstVecPrim[] _preReqs;
   
   BDD _solveBDD;
 
@@ -365,9 +364,9 @@ abstract class CstDomain
   abstract void reset();
   abstract _esdl__Solver getSolverRoot();
   abstract BDD getPrimBdd(Buddy buddy);
+  abstract void resetPrimeBdd();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
-  abstract bool resolve();
   abstract CstDomain getResolved();
   abstract void updateVal();
   abstract bool hasChanged();
@@ -478,15 +477,8 @@ interface CstVecPrim
   // abstract long value();
 
   abstract void _esdl__reset();
-  abstract bool isVarArr();
-  abstract CstDomain[] getDomainLens(bool resolved);
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);
-
-  // this method is used for getting implicit constraints that are required for
-  // dynamic arrays and for enums
-  abstract BDD getPrimBdd(Buddy buddy);
-  abstract void resetPrimeBdd();
 }
 
 
@@ -499,32 +491,17 @@ interface CstVecExpr
   
   // Array of indexes this expression has to resolve before it can be
   // converted into a BDD
-  abstract CstIteratorBase[] iterVars();
   // get the primary (outermost foreach) iterator CstVecExpr
-  abstract CstIteratorBase getIterator();
-  abstract bool hasUnresolvedIndx();
-  abstract CstDomain[] unresolvedIndxs();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
   
-  // List of Array Variables
-  abstract CstVecPrim[] preReqs();
-
   abstract bool isConst();//  {
   //   return false;
   // }
 
   abstract bool isIterator();
   
-  // get all the primary bdd vectors that constitute a given bdd
-  // expression
-  // The idea here is that we need to solve all the bdd vectors of a
-  // given constraint equation together. And so, given a constraint
-  // equation, we want to list out the elements that need to be
-  // grouped together.
-  abstract CstDomain[] getRndDomains(bool resolved);
-
   // get the list of stages this expression should be avaluated in
   // abstract CstStage[] getStages();
   abstract BddVec getBDD(CstStage stage, Buddy buddy);
@@ -534,7 +511,7 @@ interface CstVecExpr
 
   abstract long evaluate();
 
-  abstract bool getVal(ref long val);
+  // abstract bool getVal(ref long val);
   
   abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
 
@@ -572,10 +549,12 @@ abstract class CstIteratorBase
     }
   }
   abstract uint maxVal();
-  abstract bool isUnrollable();
   abstract string name();
   abstract CstIteratorBase unrollIterator(CstIteratorBase iter, uint n);
   abstract CstDomain getLenVec();
+  final bool isUnrollable() {
+    return getLenVec().solved();
+  }
 }
 
 interface CstBddExpr
@@ -584,14 +563,6 @@ interface CstBddExpr
 
   abstract bool refresh(CstStage stage, Buddy buddy);
   
-  abstract CstIteratorBase[] iterVars(); //  {
-  abstract CstIteratorBase getIterator(); //  {
-
-  abstract CstVecPrim[] preReqs();
-
-  abstract bool hasUnresolvedIndx();
-  abstract CstDomain[] unresolvedIndxs();
-
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
 
@@ -610,8 +581,6 @@ interface CstBddExpr
   abstract bool getUniRangeSet(ref ULongRS rs);
 
   abstract CstBddExpr unroll(CstIteratorBase iter, uint n);
-
-  abstract CstDomain[] getRndDomains(bool resolved);
 
   // abstract CstStage[] getStages();
 
@@ -681,46 +650,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return _solver;
   }
 
-  // unroll recursively untill no unrolling is possible
-  void unroll(uint lap,
-	      ref CstPredicate[] unrollable,
-	      ref CstPredicate[] unresolved,
-	      ref CstPredicate[] resolved) {
-    CstPredicate[] unrolled;
-    auto iter = this.unrollableIter();
-    if (iter is null) {
-      unrolled ~= this;
-    }
-    // else {
-    //   unrolled = this.unrollIterator(iter);
-    // }
-
-    if (_expr.hasUnresolvedIndx()) {
-      // TBD -- check that we may need to call resolveLap on each of the unrolled expression
-      foreach (expr; unrolled) {
-	_expr.resolveLap(lap);
-      }
-      
-      if (_expr.iterVars().length == 1) {
-	unresolved ~= unrolled;
-      }
-      else {
-	unresolved ~= unrolled;
-      }
-    }
-    else {
-      resolved ~= unrolled;
-    }
-  }
-
-  CstIteratorBase unrollableIter() {
-    foreach(iter; _expr.iterVars()) {
-      if(iter.isUnrollable()) return iter;
-    }
-    return null;
-  }
-
-
   void doResolve() {
     if (_iters.length == 0) {
       _markResolve = true;
@@ -749,7 +678,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
   
   void unroll(CstIteratorBase iter) {
-    assert (iter is _expr.getIterator());
+    assert (iter is _iters[0]);
 
     _solver.addToUnrolled(this);
 
@@ -813,6 +742,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _unrollIterVal;
 
   uint _unresolveLap;
+
+  final CstDomain[] getDomains() {
+    return _vars;
+  }
 
   final void randomizeDepsRolled() {
     for (size_t i=0; i!=_uwLength; ++i) {

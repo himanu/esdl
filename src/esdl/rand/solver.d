@@ -196,8 +196,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
   void initPreds() {
     assert(_root is this);
-    CstDomain[] unresolvedIndxs;
-
     _esdl__cstExprs._esdl__reset(); // start empty
 
     // take all the constraints -- even if disabled
@@ -207,10 +205,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
     if(_esdl__cstWith !is null) {
       _esdl__cstExprs ~= _esdl__cstWith.getCstExpr();
-    }
-
-    foreach (pred; _esdl__cstExprs._preds) {
-      unresolvedIndxs ~= pred._expr.unresolvedIndxs();
     }
 
     foreach (pred; _esdl__cstExprs._preds) {
@@ -474,7 +468,8 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
   void addCstStage(CstPredicate pred) {
     // uint stage = cast(uint) _solveStages.length;
-    auto vecs = pred.getExpr().getRndDomains(true);
+    // auto vecs = pred.getExpr().getRndDomains(true);
+    auto vecs = pred.getDomains();
     // auto vecs = pred._vars;
     // import std.stdio;
     // foreach (vec; vecs) writeln(vec.name());

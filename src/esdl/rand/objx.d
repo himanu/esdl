@@ -75,23 +75,23 @@ abstract class CstObjBase(V, LEAF, alias R, int N)
     return false;
   }
 
-  abstract long value();
+  // abstract long value();
   
-  bool getVal(ref long val) {
-    static if (HAS_RAND_ATTRIB) {
-      if(! this.isRand || stage().solved()) {
-	val = value();
-	return true;
-      }
-      else {
-	return false;
-      }
-    }
-    else {
-      val = value();
-      return true;
-    }
-  }
+  // bool getVal(ref long val) {
+  //   static if (HAS_RAND_ATTRIB) {
+  //     if(! this.isRand || stage().solved()) {
+  // 	val = value();
+  // 	return true;
+  //     }
+  //     else {
+  // 	return false;
+  //     }
+  //   }
+  //   else {
+  //     val = value();
+  //     return true;
+  //   }
+  // }
 
   long evaluate() {
     static if (HAS_RAND_ATTRIB) {
@@ -926,10 +926,6 @@ abstract class CstObjArrBase(V, LEAF, alias R, int N)
 
   void domIndex(uint s) {
     assert(false, "domIndex not implemented for CstVecArrBase");
-  }
-
-  uint bitcount() {
-    assert(false, "bitcount not implemented for CstVecArrBase");
   }
 
   bool signed() {

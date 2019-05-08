@@ -737,26 +737,8 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     return _arrVar.arrLen();
   }
   
-  override CstIteratorBase[] iterVars() {
-    return _arrVar.iterVars() ~ this;
-  }
-
-  override CstIteratorBase getIterator() {
-    CstIteratorBase piter = _arrVar.getIterator();
-    if (piter !is null) return piter;
-    else return this;
-  }
-
-  override bool hasUnresolvedIndx() {
-    return true;
-  }
-      
-  override CstDomain[] unresolvedIndxs() {
-    return [_arrVar.arrLen()];
-  }
-  
   override uint maxVal() {
-    if(! this.isUnrollable()) {
+    if(! getLenVec().solved()) {
       assert(false, "Can not find maxVal since the " ~
 	     "Iter Variable is unrollable");
     }
@@ -764,16 +746,6 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     // writeln("maxVal for arrVar: ", _arrVar.name(), " is ",
     // 	    _arrVar.arrLen.value);
     return cast(uint) _arrVar.arrLen.value;
-  }
-
-  override bool isUnrollable() {
-    return getLenVec().solved();
-    // return _arrVar.isUnrollable();
-  }
-
-  // get all the primary bdd vectors that constitute a given bdd expression
-  override CstDomain[] getRndDomains(bool resolved) {
-    return [_arrVar._arrLen]; // _arrVar.arrLen.getRndDomains(resolved);
   }
 
   override string name() {
@@ -822,12 +794,6 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  // this will not return the arrVar since the length variable is
-  // not getting constrained here
-  override CstVecPrim[] preReqs() {
-    return [];
-  }
-
   // get the list of stages this expression should be avaluated in
   // override CstStage[] getStages() {
   //   return arrVar.arrLen.getStages();
@@ -841,9 +807,9 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
     assert(false, "Can not getBDD for a Iter Variable without unrolling");
   }
 
-  override bool getVal(ref long val) {
-    return false;
-  }
+  // override bool getVal(ref long val) {
+  //   return false;
+  // }
 
   override long evaluate() {
     assert(false, "Can not evaluate an Iterator: " ~ this.name());
@@ -911,48 +877,14 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _primBdd.reset();
   }
 
-  CstVecPrim[] preReqs() {
-    return _preReqs ~ _parent.preReqs();
-  }
-
-  CstIteratorBase[] iterVars() {
-    return _parent.iterVars();
-  }
-
   override _esdl__Solver getSolverRoot() {
     return _parent.getSolverRoot();
-  }
-
-  CstIteratorBase getIterator() {
-    return _parent.getIterator();
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return _parent.parentUnresolvedIndxs();
-  }
-
-  bool hasUnresolvedIndx() {
-    // just must make sure that the
-    // array -- if it has a parent array -- is not an abstract element of the parent array
-    return _parent.parentLenIsUnresolved();
-  }
-      
-  override bool resolve() {	// no dependency
-    return true;
   }
 
   override CstVecLen!RV getResolved() { // always self
     return this;
   }
 
-  CstDomain[] getRndDomains(bool resolved) {
-    return _parent.getDomainLens(resolved);
-  }
-
-  CstDomain[] getDomainLens(bool resolved) {
-    return [this];
-  }
-  
   private bool refreshNoRand(Buddy buddy) {
     auto val = _parent.getLen();
     if (! _valvec.isNull()) {
@@ -1020,22 +952,22 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
 
-  bool getVal(ref long val) {
-    static if (HAS_RAND_ATTRIB) {
-      assert(stage() !is null);
-      if(! this.isRand || stage().solved()) {
-	val = value();
-	return true;
-      }
-      else {
-	return false;
-      }
-    }
-    else {
-      val = value();
-      return true;
-    }
-  }
+  // bool getVal(ref long val) {
+  //   static if (HAS_RAND_ATTRIB) {
+  //     assert(stage() !is null);
+  //     if(! this.isRand || stage().solved()) {
+  // 	val = value();
+  // 	return true;
+  //     }
+  //     else {
+  // 	return false;
+  //     }
+  //   }
+  //   else {
+  //     val = value();
+  //     return true;
+  //   }
+  // }
 
   long evaluate() {
     static if (HAS_RAND_ATTRIB) {
@@ -1103,7 +1035,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _primBdd;
   }
   
-  void resetPrimeBdd() {
+  override void resetPrimeBdd() {
     _primBdd.reset();
   }
 
@@ -1166,10 +1098,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   void _esdl__reset() {
     _stage = null;
     _resolveLap = 0;
-  }
-
-  bool isVarArr() {
-    return false;
   }
 
   void solveBefore(CstVecPrim other) {
@@ -1265,36 +1193,12 @@ abstract class CstValBase: CstVecTerm
 {
   CstBddExpr _cstExpr;
   
-  CstVecPrim[] preReqs() {
-    return [];
-  }
-
-  CstIteratorBase[] iterVars() {
-    return [];
-  }
-
-  CstIteratorBase getIterator() {
-    return null;
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return [];
-  }
-      
-  bool hasUnresolvedIndx() {
-    return false;
-  }
-      
   bool isConst() {
     return true;
   }
 
   bool isIterator() {
     return false;
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    return [];
   }
 
   override CstVecExpr unroll(CstIteratorBase l, uint n) {
@@ -1396,21 +1300,13 @@ class CstVal(T = int): CstValBase
     return &_val;
   }
 
-  bool getVal(ref long val) {
-    val = _val;
-    return true;
-  }
+  // bool getVal(ref long val) {
+  //   val = _val;
+  //   return true;
+  // }
 
   long evaluate() {
     return _val;
-  }
-
-  override CstDomain[] unresolvedIndxs() {
-    return [];
-  }
-
-  override bool hasUnresolvedIndx() {
-    return false;
   }
 
   uint resolveLap() {
@@ -1489,44 +1385,8 @@ class CstVec2VecExpr: CstVecTerm
   CstVecExpr _rhs;
   CstBinVecOp _op;
 
-  // CstDomain[] _preReqs;
-  CstVecPrim[] preReqs() {
-    return _lhs.preReqs() ~ _rhs.preReqs();
-  }
-
-  CstIteratorBase[] _iterVars;
-  CstIteratorBase[] iterVars() {
-    return _iterVars;
-  }
-
-  CstIteratorBase getIterator() {
-    auto liter = _lhs.getIterator();
-    auto riter = _rhs.getIterator();
-    if (liter !is null) {
-      assert (riter is null || riter is liter);
-      return liter;
-    }
-    else {
-      return riter;
-    }
-  }
-
-  CstDomain[] _unresolvedIndxs;
-  
-  CstDomain[] unresolvedIndxs() {
-    return _unresolvedIndxs;
-  }
-  
-  bool hasUnresolvedIndx() {
-    return _lhs.hasUnresolvedIndx() || _rhs.hasUnresolvedIndx();
-  }
-      
   string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
   }
 
   bool refresh(CstStage stage, Buddy buddy) {
@@ -1536,15 +1396,6 @@ class CstVec2VecExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.iterVars.length !is 0) {
-      assert(false,
-	     "CstVec2VecExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
-
-    // auto lvec = _lhs.getBDD(stage, buddy);
-    // auto rvec = _rhs.getBDD(stage, buddy);
-
     final switch(_op) {
     case CstBinVecOp.AND: return _lhs.getBDD(stage, buddy) &
 	_rhs.getBDD(stage, buddy);
@@ -1583,32 +1434,32 @@ class CstVec2VecExpr: CstVecTerm
     }
   }
 
-  bool getVal(ref long val) {
+  // bool getVal(ref long val) {
 
-    long lval;
-    long rval;
-    if (! _lhs.getVal(lval)) {
-      return false;
-    }
-    if (! _rhs.getVal(rval)) {
-      return false;
-    }
+  //   long lval;
+  //   long rval;
+  //   if (! _lhs.getVal(lval)) {
+  //     return false;
+  //   }
+  //   if (! _rhs.getVal(rval)) {
+  //     return false;
+  //   }
 
-    final switch(_op) {
-    case CstBinVecOp.AND: val = lval &  rval; return true;
-    case CstBinVecOp.OR:  val = lval |  rval; return true;
-    case CstBinVecOp.XOR: val = lval ^  rval; return true;
-    case CstBinVecOp.ADD: val = lval +  rval; return true;
-    case CstBinVecOp.SUB: val = lval -  rval; return true;
-    case CstBinVecOp.MUL: val = lval *  rval; return true;
-    case CstBinVecOp.DIV: val = lval /  rval; return true;
-    case CstBinVecOp.REM: val = lval %  rval; return true;
-    case CstBinVecOp.LSH: val = lval << rval; return true;
-    case CstBinVecOp.RSH: val = lval >> rval; return true;
-    case CstBinVecOp.BITINDEX:
-      assert(false, "BITINDEX is not implemented yet!");
-    }
-  }
+  //   final switch(_op) {
+  //   case CstBinVecOp.AND: val = lval &  rval; return true;
+  //   case CstBinVecOp.OR:  val = lval |  rval; return true;
+  //   case CstBinVecOp.XOR: val = lval ^  rval; return true;
+  //   case CstBinVecOp.ADD: val = lval +  rval; return true;
+  //   case CstBinVecOp.SUB: val = lval -  rval; return true;
+  //   case CstBinVecOp.MUL: val = lval *  rval; return true;
+  //   case CstBinVecOp.DIV: val = lval /  rval; return true;
+  //   case CstBinVecOp.REM: val = lval %  rval; return true;
+  //   case CstBinVecOp.LSH: val = lval << rval; return true;
+  //   case CstBinVecOp.RSH: val = lval >> rval; return true;
+  //   case CstBinVecOp.BITINDEX:
+  //     assert(false, "BITINDEX is not implemented yet!");
+  //   }
+  // }
 
   long evaluate() {
     auto lvec = _lhs.evaluate();
@@ -1631,40 +1482,13 @@ class CstVec2VecExpr: CstVecTerm
   }
 
   override CstVec2VecExpr unroll(CstIteratorBase iter, uint n) {
-    bool found = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	found = true;
-	break;
-      }
-    }
-    if(! found) return this;
-    else {
-      return new CstVec2VecExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
-    }
+    return new CstVec2VecExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
   }
 
   this(CstVecExpr lhs, CstVecExpr rhs, CstBinVecOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-    foreach (var; lhs.iterVars ~ rhs.iterVars) {
-      bool add = true;
-      foreach (l; _iterVars) {
-    	if (l is var) add = false;
-    	break;
-      }
-      if (add) _iterVars ~= var;
-    }
-
-    foreach (var; lhs.unresolvedIndxs ~ rhs.unresolvedIndxs) {
-      bool add = true;
-      foreach (l; _unresolvedIndxs) {
-    	if (l is var) add = false;
-    	break;
-      }
-      if (add) _unresolvedIndxs ~= var;
-    }
   }
 
   uint resolveLap() {
@@ -1829,68 +1653,8 @@ class CstVecSliceExpr: CstVecTerm
   CstVecExpr _lhs;
   CstVecExpr _rhs;
 
-  // CstDomain[] _preReqs;
-  CstVecPrim[] preReqs() {
-    // CstVecPrim[] reqs;
-    if(_rhs is null) {
-      return _vec.preReqs() ~ _lhs.preReqs();
-      // foreach(req; _vec.preReqs() ~ _lhs.preReqs()) {
-      // 	if(! req.solved()) {
-      // 	  reqs ~= req;
-      // 	}
-      // }
-    }
-    else {
-      return _vec.preReqs() ~ _lhs.preReqs() ~ _rhs.preReqs();
-      // foreach(req; _vec.preReqs() ~ _lhs.preReqs() ~ _rhs.preReqs()) {
-      // 	if(! req.solved()) {
-      // 	  reqs ~= req;
-      // 	}
-      // }
-    }
-    // return reqs;
-  }
-  
-  CstIteratorBase[] _iterVars;
-  CstIteratorBase[] iterVars() {
-    return _iterVars;
-  }
-
-  CstIteratorBase getIterator() {
-    auto liter = _lhs.getIterator();
-    auto riter = _rhs.getIterator();
-    if (liter !is null) {
-      assert (riter is null || riter is liter);
-      return liter;
-    }
-    else {
-      return riter;
-    }
-  }
-
-  CstDomain[] _unresolvedIndxs;
-  CstDomain[] unresolvedIndxs() {
-    return _unresolvedIndxs;
-  }
-
-  bool hasUnresolvedIndx() {
-    return
-      _lhs.hasUnresolvedIndx() ||
-      _rhs.hasUnresolvedIndx() ||
-      _vec.hasUnresolvedIndx();
-  }
-
   string name() {
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    if(_rhs is null) {
-      return _vec.getRndDomains(resolved) ~ _lhs.getRndDomains(resolved);
-    }
-    else {
-      return _vec.getRndDomains(resolved) ~ _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
-    }
   }
 
   bool refresh(CstStage stage, Buddy buddy) {
@@ -1900,12 +1664,6 @@ class CstVecSliceExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.iterVars.length !is 0) {
-      assert(false,
-	     "CstVecSliceExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
-
     auto vec  = _vec.getBDD(stage, buddy);
     size_t lvec = cast(size_t) _lhs.evaluate();
     size_t rvec = lvec;
@@ -1918,9 +1676,9 @@ class CstVecSliceExpr: CstVecTerm
     return vec[lvec..rvec];
   }
 
-  bool getVal(ref long val) {
-    return false;
-  }
+  // bool getVal(ref long val) {
+  //   return false;
+  // }
 
   long evaluate() {
     // auto vec  = _vec.evaluate();
@@ -1931,22 +1689,12 @@ class CstVecSliceExpr: CstVecTerm
   }
 
   override CstVecSliceExpr unroll(CstIteratorBase iter, uint n) {
-    bool found = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	found = true;
-	break;
-      }
+    if (_rhs is null) {
+      return new CstVecSliceExpr(_vec.unroll(iter, n), _lhs.unroll(iter, n));
     }
-    if(! found) return this;
     else {
-      if(_rhs is null) {
-	return new CstVecSliceExpr(_vec.unroll(iter, n), _lhs.unroll(iter, n));
-      }
-      else {
-	return new CstVecSliceExpr(_vec.unroll(iter, n),
-				   _lhs.unroll(iter, n), _rhs.unroll(iter, n));
-      }
+      return new CstVecSliceExpr(_vec.unroll(iter, n),
+				 _lhs.unroll(iter, n), _rhs.unroll(iter, n));
     }
   }
 
@@ -1954,33 +1702,6 @@ class CstVecSliceExpr: CstVecTerm
     _vec = vec;
     _lhs = lhs;
     _rhs = rhs;
-    auto iterVars = vec.iterVars ~ lhs.iterVars;
-    if(rhs !is null) {
-      iterVars ~= rhs.iterVars;
-    }
-    foreach(var; iterVars) {
-      bool add = true;
-      foreach(l; _iterVars) {
-	if(l is var) add = false;
-	break;
-      }
-      if(add) _iterVars ~= var;
-    }
-
-    auto unresolvedIndxs = vec.unresolvedIndxs() ~ lhs.unresolvedIndxs();
-    if(rhs !is null) {
-      unresolvedIndxs ~= rhs.unresolvedIndxs();
-    }
-
-    foreach(indx; unresolvedIndxs) {
-      bool add = true;
-      foreach(l; _unresolvedIndxs) {
-	if(l is indx) add = false;
-	break;
-      }
-      if(add) _unresolvedIndxs ~= indx;
-    }
-
   }
 
   uint resolveLap() {
@@ -2045,34 +1766,8 @@ class CstNotVecExpr: CstVecTerm
 
   CstVecExpr _expr;
 
-  // CstDomain[] _preReqs;
-  CstVecPrim[] preReqs() {
-    return _expr.preReqs();
-  }
-
-  CstIteratorBase[] _iterVars;
-  CstIteratorBase[] iterVars() {
-    return _iterVars;
-  }
-
-  CstIteratorBase getIterator() {
-    return _expr.getIterator();
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return _expr.unresolvedIndxs();
-  }
-
-  bool hasUnresolvedIndx() {
-    return _expr.hasUnresolvedIndx();
-  }
-      
   string name() {
     return "( ~ " ~ _expr.name ~ " )";
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    return _expr.getRndDomains(resolved);
   }
 
   bool refresh(CstStage stage, Buddy buddy) {
@@ -2080,42 +1775,25 @@ class CstNotVecExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.iterVars.length !is 0) {
-      assert(false,
-	     "CstNotVecExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
-
     return ~(_expr.getBDD(stage, buddy));
   }
 
-  bool getVal(ref long val) {
-    auto retval = _expr.getVal(val);
-    val = ~val;
-    return retval;
-  }
+  // bool getVal(ref long val) {
+  //   auto retval = _expr.getVal(val);
+  //   val = ~val;
+  //   return retval;
+  // }
 
   long evaluate() {
     return ~(_expr.evaluate());
   }
 
   override CstNotVecExpr unroll(CstIteratorBase iter, uint n) {
-    bool found = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	found = true;
-	break;
-      }
-    }
-    if(! found) return this;
-    else {
-      return new CstNotVecExpr(_expr.unroll(iter, n));
-    }
+    return new CstNotVecExpr(_expr.unroll(iter, n));
   }
 
   this(CstVecExpr expr) {
     _expr = expr;
-    _iterVars = _expr.iterVars;
   }
 
   uint resolveLap() {
@@ -2170,34 +1848,8 @@ class CstNegVecExpr: CstVecTerm
 
   CstVecExpr _expr;
 
-  // CstDomain[] _preReqs;
-  CstVecPrim[] preReqs() {
-    return _expr.preReqs();
-  }
-
-  CstIteratorBase[] _iterVars;
-  CstIteratorBase[] iterVars() {
-    return _iterVars;
-  }
-
-  CstIteratorBase getIterator() {
-    return _expr.getIterator();
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return _expr.unresolvedIndxs();
-  }
-
-  bool hasUnresolvedIndx() {
-    return _expr.hasUnresolvedIndx();
-  }
-      
   string name() {
     return "( - " ~ _expr.name ~ " )";
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    return _expr.getRndDomains(resolved);
   }
 
   bool refresh(CstStage stage, Buddy buddy) {
@@ -2205,42 +1857,25 @@ class CstNegVecExpr: CstVecTerm
   }
   
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    if(this.iterVars.length !is 0) {
-      assert(false,
-	     "CstNegVecExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
-
     return -(_expr.getBDD(stage, buddy));
   }
 
-  bool getVal(ref long val) {
-    auto retval = _expr.getVal(val);
-    val = -val;
-    return retval;
-  }
+  // bool getVal(ref long val) {
+  //   auto retval = _expr.getVal(val);
+  //   val = -val;
+  //   return retval;
+  // }
 
   long evaluate() {
     return -(_expr.evaluate());
   }
 
   override CstNegVecExpr unroll(CstIteratorBase iter, uint n) {
-    bool found = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	found = true;
-	break;
-      }
-    }
-    if(! found) return this;
-    else {
-      return new CstNegVecExpr(_expr.unroll(iter, n));
-    }
+    return new CstNegVecExpr(_expr.unroll(iter, n));
   }
 
   this(CstVecExpr expr) {
     _expr = expr;
-    _iterVars = _expr.iterVars;
   }
 
   uint resolveLap() {
@@ -2298,48 +1933,10 @@ class CstBdd2BddExpr: CstBddTerm
   CstBddExpr _rhs;
   CstBddOp _op;
 
-  CstIteratorBase[] _iterVars;
-
-  CstDomain[] _unresolvedIndxs;
-  
-  CstIteratorBase[] iterVars() {
-       return _iterVars;
-  }
-
-  CstIteratorBase getIterator() {
-    auto liter = _lhs.getIterator();
-    auto riter = _rhs.getIterator();
-    if (liter !is null) {
-      assert (riter is null || riter is liter);
-      return liter;
-    }
-    else {
-      return riter;
-    }
-  }
-
   this(CstBddExpr lhs, CstBddExpr rhs, CstBddOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-
-    foreach (var; lhs.iterVars ~ rhs.iterVars) {
-      bool add = true;
-      foreach (l; _iterVars) {
-	if (l is var) add = false;
-	break;
-      }
-      if (add) _iterVars ~= var;
-    }
-
-    foreach (var; lhs.unresolvedIndxs ~ rhs.unresolvedIndxs) {
-      bool add = true;
-      foreach (l; _unresolvedIndxs) {
-	if (l is var) add = false;
-	break;
-      }
-      if (add) _unresolvedIndxs ~= var;
-    }
   }
 
   bool refresh(CstStage stage, Buddy buddy) {
@@ -2348,40 +1945,11 @@ class CstBdd2BddExpr: CstBddTerm
     return r || l;
   }
   
-  CstDomain[] unresolvedIndxs() {
-    return _unresolvedIndxs;
-  }
-
-  bool hasUnresolvedIndx() {
-    return _lhs.hasUnresolvedIndx() || _rhs.hasUnresolvedIndx();
-  }
-
   string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
 
-  CstVecPrim[] preReqs() {
-    return _lhs.preReqs() ~ _rhs.preReqs();
-    // CstVecPrim[] reqs;
-    // foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
-    //   if(! req.solved()) {
-    // 	reqs ~= req;
-    //   }
-    // }
-    // return reqs;
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
-  }
-
-
   BDD getBDD(CstStage stage, Buddy buddy) {
-    if(this.iterVars.length !is 0) {
-      assert(false,
-	     "CstBdd2BddExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
 
@@ -2395,17 +1963,7 @@ class CstBdd2BddExpr: CstBddTerm
   }
 
   override CstBdd2BddExpr unroll(CstIteratorBase iter, uint n) {
-    bool found = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	found = true;
-	break;
-      }
-    }
-    if(! found) return this;
-    else {
-      return new CstBdd2BddExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
-    }
+    return new CstBdd2BddExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
   }
 
   uint resolveLap() {
@@ -2497,24 +2055,6 @@ class CstBdd2BddExpr: CstBddTerm
 // TBD
 class CstIteBddExpr: CstBddTerm
 {
-  CstIteratorBase[] _iterVars;
-
-  CstIteratorBase[] iterVars() {
-    assert(false, "TBD");
-  }
-
-  CstIteratorBase getIterator() {
-    assert(false, "TBD");
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    assert(false, "TBD");
-  }
-
-  bool hasUnresolvedIndx() {
-    assert(false, "TBD");
-  }
-
   string name() {
     return "CstIteBddExpr";
   }
@@ -2556,10 +2096,6 @@ class CstIteBddExpr: CstBddTerm
     return false;
   }
 
-  CstVecPrim[] preReqs() {
-    assert(false, "TBD");
-  }    
-
   uint resolveLap() {
     assert(false, "TBD");
   }    
@@ -2569,10 +2105,6 @@ class CstIteBddExpr: CstBddTerm
   }    
 
   CstBddTerm unroll(CstIteratorBase iter, uint n) {
-    assert(false, "TBD");
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
     assert(false, "TBD");
   }
 
@@ -2595,51 +2127,10 @@ class CstVec2BddExpr: CstBddTerm
   CstVecExpr _rhs;
   CstBinBddOp _op;
 
-  CstIteratorBase[] _iterVars;
-  CstDomain[] _unresolvedIndxs;
-
-  CstIteratorBase[] iterVars() {
-       return _iterVars;
-  }
-
-  CstIteratorBase getIterator() {
-    auto liter = _lhs.getIterator();
-    auto riter = _rhs.getIterator();
-    if (liter !is null) {
-      assert (riter is null || riter is liter);
-      return liter;
-    }
-    else {
-      return riter;
-    }
-  }
-
-  CstDomain[] unresolvedIndxs() {
-       return _unresolvedIndxs;
-  }
-
   this(CstVecExpr lhs, CstVecExpr rhs, CstBinBddOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
-
-    foreach (var; lhs.iterVars ~ rhs.iterVars) {
-      bool add = true;
-      foreach (l; _iterVars) {
-	if (l is var) add = false;
-	break;
-      }
-      if (add) _iterVars ~= var;
-    }
-
-    foreach (var; lhs.unresolvedIndxs ~ rhs.unresolvedIndxs) {
-      bool add = true;
-      foreach (l; _unresolvedIndxs) {
-	if (l is var) add = false;
-	break;
-      }
-      if (add) _unresolvedIndxs ~= var;
-    }
   }
 
   string name() {
@@ -2652,31 +2143,7 @@ class CstVec2BddExpr: CstBddTerm
     return r || l;
   }
   
-  CstVecPrim[] preReqs() {
-    return _lhs.preReqs() ~ _rhs.preReqs();
-    // CstVecPrim[] reqs;
-    // foreach(req; _lhs.preReqs() ~ _rhs.preReqs()) {
-    //   if(! req.solved()) {
-    // 	reqs ~= req;
-    //   }
-    // }
-    // return reqs;
-  }
-    
-  CstDomain[] getRndDomains(bool resolved) {
-    return _lhs.getRndDomains(resolved) ~ _rhs.getRndDomains(resolved);
-  }
-
   BDD getBDD(CstStage stage, Buddy buddy) {
-    if (this.iterVars.length !is 0) {
-      // foreach (iter; iterVars) {
-      // 	import std.stdio;
-      // 	writeln(name(), " : ", iter.name());
-      // }
-      assert(false,
-	     "CstVec2BddExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
 
@@ -2695,23 +2162,9 @@ class CstVec2BddExpr: CstBddTerm
   override CstVec2BddExpr unroll(CstIteratorBase iter, uint n) {
     // import std.stdio;
     // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unwound!");
-    bool found = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	found = true;
-	break;
-      }
-    }
-    if(! found) return this;
-    else {
-      // writeln("RHS: ", _rhs.unroll(iter, n).name());
-      // writeln("LHS: ", _lhs.unroll(iter, n).name());
-      return new CstVec2BddExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
-    }
-  }
-
-  bool hasUnresolvedIndx() {
-    return _lhs.hasUnresolvedIndx() || _rhs.hasUnresolvedIndx();
+    // writeln("RHS: ", _rhs.unroll(iter, n).name());
+    // writeln("LHS: ", _lhs.unroll(iter, n).name());
+    return new CstVec2BddExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
   }
 
   uint resolveLap() {
@@ -2859,14 +2312,6 @@ class CstBddConst: CstBddTerm
 {
   immutable bool _expr;
 
-  CstIteratorBase[] iterVars() {
-       return [];
-  }
-
-  CstIteratorBase getIterator() {
-    return null;
-  }
-  
   this(bool expr) {
     _expr = expr;
   }
@@ -2885,24 +2330,8 @@ class CstBddConst: CstBddTerm
     else return "FALSE";
   }
 
-  CstDomain[] getRndDomains(bool resolved) {
-    return [];
-  }
-
-  CstVecPrim[] preReqs() {
-    return [];
-  }
-
   override CstBddConst unroll(CstIteratorBase iter, uint n) {
     return this;
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return [];
-  }
-
-  bool hasUnresolvedIndx() {
-    return false;
   }
 
   uint resolveLap() {
@@ -2952,14 +2381,6 @@ class CstNotBddExpr: CstBddTerm
     _expr = expr;
   }
 
-  CstIteratorBase[] iterVars() {
-    return _expr.iterVars();
-  }
-
-  CstIteratorBase getIterator() {
-    return _expr.getIterator();
-  }
-
   string name() {
     return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
   }
@@ -2968,44 +2389,13 @@ class CstNotBddExpr: CstBddTerm
     return _expr.refresh(stage, buddy);
   }
   
-  CstVecPrim[] preReqs() {
-    return _expr.preReqs();
-  }
-
-  CstDomain[] getRndDomains(bool resolved) {
-    return _expr.getRndDomains(resolved);
-  }
-
   BDD getBDD(CstStage stage, Buddy buddy) {
-    if(this.iterVars.length !is 0) {
-      assert(false,
-	     "CstBdd2BddExpr: Need to unroll the iterVars" ~
-	     " before attempting to solve BDD");
-    }
     auto bdd = _expr.getBDD(stage, buddy);
     return (~ bdd);
   }
 
   override CstNotBddExpr unroll(CstIteratorBase iter, uint n) {
-    bool shouldUnroll = false;
-    foreach(var; iterVars()) {
-      if(iter is var) {
-	shouldUnroll = true;
-	break;
-      }
-    }
-    if(! shouldUnroll) return this;
-    else {
-      return new CstNotBddExpr(_expr.unroll(iter, n));
-    }
-  }
-
-  CstDomain[] unresolvedIndxs() {
-    return _expr.unresolvedIndxs();
-  }
-
-  bool hasUnresolvedIndx() {
-    return _expr.hasUnresolvedIndx();
+    return new CstNotBddExpr(_expr.unroll(iter, n));
   }
 
   uint resolveLap() {
@@ -3103,22 +2493,12 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
 }
 
 
-CstVec2BddExpr _esdl__lth(Q)(CstVecExpr left, Q q)
-  if(isBitVector!Q || isIntegral!Q) {
-    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-    return _esdl__lth(left, qq);
-  }
-
-CstVec2BddExpr _esdl__lth(CstVecExpr p, CstVecExpr q) {
-  return new CstVec2BddExpr(p, q, CstBinBddOp.LTH);
-}
-
 auto _esdl__lth(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__lth(p, q);
+    return _esdl__lth_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__gte(q, p);
+    return _esdl__gte_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3126,22 +2506,22 @@ auto _esdl__lth(P, Q)(P p, Q q) {
   }
 }
 
-CstVec2BddExpr _esdl__lte(Q)(CstVecExpr p, Q q)
+CstVec2BddExpr _esdl__lth_impl(Q)(CstVecExpr left, Q q)
   if(isBitVector!Q || isIntegral!Q) {
     auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-    return _esdl__lte(p, qq);
+    return _esdl__lth_impl(left, qq);
   }
 
-CstVec2BddExpr _esdl__lte(CstVecExpr p, CstVecExpr q) {
-  return new CstVec2BddExpr(p, q, CstBinBddOp.LTE);
+CstVec2BddExpr _esdl__lth_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstVec2BddExpr(p, q, CstBinBddOp.LTH);
 }
 
 auto _esdl__lte(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__lte(p, q);
+    return _esdl__lte_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__gth(q, p);
+    return _esdl__gth_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3149,22 +2529,22 @@ auto _esdl__lte(P, Q)(P p, Q q) {
   }
 }
 
-CstVec2BddExpr _esdl__gth(Q)(CstVecExpr p, Q q)
+CstVec2BddExpr _esdl__lte_impl(Q)(CstVecExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
     auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-    return _esdl__gth(p, qq);
+    return _esdl__lte_impl(p, qq);
   }
 
-CstVec2BddExpr _esdl__gth(CstVecExpr p, CstVecExpr q) {
-  return new CstVec2BddExpr(p, q, CstBinBddOp.GTH);
+CstVec2BddExpr _esdl__lte_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstVec2BddExpr(p, q, CstBinBddOp.LTE);
 }
 
 auto _esdl__gth(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__gth(p, q);
+    return _esdl__gth_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__lte(q, p);
+    return _esdl__lte_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3172,22 +2552,22 @@ auto _esdl__gth(P, Q)(P p, Q q) {
   }
 }
 
-CstVec2BddExpr _esdl__gte(Q)(CstVecExpr p, Q q)
+CstVec2BddExpr _esdl__gth_impl(Q)(CstVecExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
     auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-    return _esdl__gte(p, qq);
+    return _esdl__gth_impl(p, qq);
   }
 
-CstVec2BddExpr _esdl__gte(CstVecExpr p, CstVecExpr q) {
-  return new CstVec2BddExpr(p, q, CstBinBddOp.GTE);
+CstVec2BddExpr _esdl__gth_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstVec2BddExpr(p, q, CstBinBddOp.GTH);
 }
 
 auto _esdl__gte(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__gte(p, q);
+    return _esdl__gte_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__lth(q, p);
+    return _esdl__lth_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3195,22 +2575,22 @@ auto _esdl__gte(P, Q)(P p, Q q) {
   }
 }
 
-CstVec2BddExpr _esdl__equ(Q)(CstVecExpr p, Q q)
+CstVec2BddExpr _esdl__gte_impl(Q)(CstVecExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
     auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-    return _esdl__equ(p, qq);
+    return _esdl__gte_impl(p, qq);
   }
 
-CstVec2BddExpr _esdl__equ(CstVecExpr p, CstVecExpr q) {
-  return new CstVec2BddExpr(p, q, CstBinBddOp.EQU);
+CstVec2BddExpr _esdl__gte_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstVec2BddExpr(p, q, CstBinBddOp.GTE);
 }
 
 auto _esdl__equ(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__equ(p, q);
+    return _esdl__equ_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__equ(q, p);
+    return _esdl__equ_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3218,25 +2598,35 @@ auto _esdl__equ(P, Q)(P p, Q q) {
   }
 }
 
-CstVec2BddExpr _esdl__neq(Q)(CstVecExpr p, Q q)
+CstVec2BddExpr _esdl__equ_impl(Q)(CstVecExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
     auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
-    return _esdl__neq(p, qq);
+    return _esdl__equ_impl(p, qq);
   }
 
-CstVec2BddExpr _esdl__neq(CstVecExpr p, CstVecExpr q) {
-  return new CstVec2BddExpr(p, q, CstBinBddOp.NEQ);
+CstVec2BddExpr _esdl__equ_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstVec2BddExpr(p, q, CstBinBddOp.EQU);
 }
 
 auto _esdl__neq(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__neq(p, q);
+    return _esdl__neq_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__neq(q, p);
+    return _esdl__neq_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
     return new CstBddConst(p != q);
   }
 }
+CstVec2BddExpr _esdl__neq_impl(Q)(CstVecExpr p, Q q)
+  if(isBitVector!Q || isIntegral!Q) {
+    auto qq = new CstVal!Q(q); // CstVal!Q.allocate(q);
+    return _esdl__neq(p, qq);
+  }
+
+CstVec2BddExpr _esdl__neq_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstVec2BddExpr(p, q, CstBinBddOp.NEQ);
+}
+

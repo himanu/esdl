@@ -11,15 +11,9 @@ import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIteratorBase, DomType, CstStage, CstDomain,
   CstBddExpr, CstPredicate, _esdl__Solver; // CstValAllocator,
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm;
+  CstVecTerm, CstIterator;
 
 import esdl.rand.intr: IntRangeSet;
-
-// Consolidated Proxy Class
-// template CstVecBase(T, int I, int N=0) {
-//   alias CstVecBase = CstVecBase!(typeof(T.tupleof[I]),
-// 				     getRandAttr!(T, I), N);
-// }
 
 void addToDomains(CstDomain d, ref CstDomain[] domains) {
   bool listed;
@@ -34,78 +28,17 @@ void addToDomains(CstDomain d, ref CstDomain[] domains) {
   }
 }
 
-abstract class CstVecBase(V, LEAF, alias R, int N)
-  if(_esdl__ArrOrder!(V, N) == 0): CstVecDomain!(LEAF, R), CstVecPrim
-{
+mixin template CstVecMixin() {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
   string _name;
-
-  static if (HAS_RAND_ATTRIB) {
-    CstVecPrim[] _preReqs;
-  }
 
   this(string name) {
     _name = name;
   }
 
-  static if(HAS_RAND_ATTRIB && is(LEAF == enum)) {
-    BDD _primBdd;
-    override BDD getPrimBdd(Buddy buddy) {
-      import std.traits;
-      if(_primBdd.isZero()) {
-	foreach(e; EnumMembers!LEAF) {
-	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
-	}
-      }
-      return _primBdd;
-    }
-    void resetPrimeBdd() {
-      _primBdd.reset();
-    }
-  }
-  else {
-    override BDD getPrimBdd(Buddy buddy) {
-      return buddy.one();
-    }
-    void resetPrimeBdd() { }
-  }
-
-  ~this() {
-    resetPrimeBdd();
-  }
-
   override string name() {
     return _name;
-  }
-
-  void _esdl__reset() {
-    static if (HAS_RAND_ATTRIB) {
-      _stage = null;
-      _resolveLap = 0;
-    }
-  }
-
-  bool isVarArr() {
-    return false;
-  }
-
-  abstract long value();
-  
-  bool getVal(ref long val) {
-    static if (HAS_RAND_ATTRIB) {
-      if(! this.isRand || stage().solved()) {
-	val = value();
-	return true;
-      }
-      else {
-	return false;
-      }
-    }
-    else {
-      val = value();
-      return true;
-    }
   }
 
   long evaluate() {
@@ -119,22 +52,6 @@ abstract class CstVecBase(V, LEAF, alias R, int N)
     }
     else {
       return value();
-    }
-  }
-
-  override uint bitcount() {
-    static if(isBoolean!LEAF)         return 1;
-    else static if(isIntegral!LEAF)   return LEAF.sizeof * 8;
-    else static if(isBitVector!LEAF)  return LEAF.SIZE;
-    else static assert(false, "bitcount can not operate on: " ~ LEAF.stringof);
-  }
-
-  override bool signed() {
-    static if(isVecSigned!LEAF) {
-      return true;
-    }
-    else  {
-      return false;
     }
   }
 
@@ -158,6 +75,10 @@ abstract class CstVecBase(V, LEAF, alias R, int N)
     return this.to!string();
   }
 
+  static if (HAS_RAND_ATTRIB) {
+    CstVecPrim[] _preReqs;
+  }
+
   void solveBefore(CstVecPrim other) {
     static if (HAS_RAND_ATTRIB) {
       other.addPreRequisite(this);
@@ -176,23 +97,113 @@ abstract class CstVecBase(V, LEAF, alias R, int N)
     }
   }
 
+  // implementation of CstVecDomain API
+  static if (HAS_RAND_ATTRIB && is(LEAF == enum)) {
+    BDD _primBdd;
+    override BDD getPrimBdd(Buddy buddy) {
+      import std.traits;
+      if(_primBdd.isZero()) {
+	foreach(e; EnumMembers!LEAF) {
+	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
+	}
+      }
+      return _primBdd;
+    }
+    override void resetPrimeBdd() {
+      _primBdd.reset();
+    }
+  }
+  else {
+    override BDD getPrimBdd(Buddy buddy) {
+      return buddy.one();
+    }
+    override void resetPrimeBdd() { }
+  }
+
+  override uint bitcount() {
+    static if(isBoolean!LEAF)         return 1;
+    else static if(isIntegral!LEAF)   return LEAF.sizeof * 8;
+    else static if(isBitVector!LEAF)  return LEAF.SIZE;
+    else static assert(false, "bitcount can not operate on: " ~ LEAF.stringof);
+  }
+
+  override bool signed() {
+    static if(isVecSigned!LEAF) {
+      return true;
+    }
+    else  {
+      return false;
+    }
+  }
+
+  ~this() {
+    resetPrimeBdd();
+  }
+
+  bool getIntRange(ref IntR rng) {
+    return true;
+  }
+
+  bool getUniRange(ref UniRange rng) {
+    INTTYPE iType;
+    if (this.getIntType(iType)) {
+      rng.map(iType);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    static if (isIntegral!LEAF) {
+      import std.traits;
+      enum bool signed = isSigned!LEAF;
+      enum uint bits = LEAF.sizeof * 8;
+    }
+    else static if (isBitVector!LEAF) {
+      enum bool signed = LEAF.ISSIGNED;
+      enum uint bits = LEAF.SIZE;
+    }
+    else {			// bool
+      enum signed = false;
+      enum bits = 1;
+    }
+    static if (bits <= 64) {
+      final switch (iType) {
+      case INTTYPE.UINT: iType = bits <= 32 ?
+	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
+	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
+	break;
+      case INTTYPE.INT: iType = bits <= 32 ?
+	  INTTYPE.INT : INTTYPE.LONG;
+	break;
+      case INTTYPE.ULONG: iType = signed ?
+	  INTTYPE.LONG : INTTYPE.ULONG;
+	break;
+      case INTTYPE.LONG: break;
+      }
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
 }
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
-template CstVec(T, int I, int N=0)
-  if(_esdl__ArrOrder!(T, I, N) == 0) {
-  alias CstVec = CstVec!(typeof(T.tupleof[I]), typeof(T.tupleof[I]),
-			 getRandAttr!(T, I), N);
-}
 
 class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecBase!(V, LEAF, R, N)
+  CstVecDomain!(LEAF, R), CstVecPrim
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
+      
+      mixin CstVecMixin;
 
       alias RV = typeof(this);
 
@@ -202,7 +213,7 @@ class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
       this(string name, ref V var, _esdl__Solver parent) {
 	// import std.stdio;
 	// writeln("New vec ", name);
-	super(name);
+	super();
 	_var = &var;
 	_parent = parent;
 	_root = _parent.getSolverRoot();
@@ -222,56 +233,12 @@ class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _root;
       }
 
-      CstVecPrim[] preReqs() {
-	static if (HAS_RAND_ATTRIB) {
-	  return _preReqs;
-	}
-	else {
-	  return [];
-	}
-      }
-
-      CstIteratorBase[] iterVars() {
-	return [];
-      }
-
-      CstIteratorBase getIterator() {
-	return null;
-      }
-
-      CstDomain[] unresolvedIndxs() {
-	return [];
-      }
-
-      bool hasUnresolvedIndx() {
-	return false;
-      }
-      
-      override bool resolve() {
-	return true;
-      }
-
       override RV getResolved() {
 	return this;
       }
 
-      CstDomain[] getRndDomains(bool resolved) {
-	static if (HAS_RAND_ATTRIB) {
-	  if(isRand) return [this];
-	  else return [];
-	}
-	else {
-	  return [];
-	}
-      }
-
-      CstDomain[] getDomainLens(bool resolved) {
-	assert(false);
-      }
-
       // RV
       CstVecExpr unroll(CstIteratorBase iter, uint n) {
-	// iterVars is always empty
 	return this;
       }
 
@@ -279,7 +246,7 @@ class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _var;
       }
 
-      override long value() {
+      long value() {
 	return cast(long) (*_var);
       }
 
@@ -362,56 +329,6 @@ class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      bool getIntRange(ref IntR rng) {
-	return true;
-      }
-
-      bool getUniRange(ref UniRange rng) {
-	INTTYPE iType;
-	if (this.getIntType(iType)) {
-	  rng.map(iType);
-	  return true;
-	}
-	else {
-	  return false;
-	}
-      }
-
-      bool getIntType(ref INTTYPE iType) {
-	static if (isIntegral!LEAF) {
-	  import std.traits;
-	  enum bool signed = isSigned!LEAF;
-	  enum uint bits = LEAF.sizeof * 8;
-	}
-	else static if (isBitVector!LEAF) {
-	  enum bool signed = LEAF.ISSIGNED;
-	  enum uint bits = LEAF.SIZE;
-	}
-	else {			// bool
-	  enum signed = false;
-	  enum bits = 1;
-	}
-	static if (bits <= 64) {
-	  final switch (iType) {
-	  case INTTYPE.UINT: iType = bits <= 32 ?
-	      (signed ? INTTYPE.INT : INTTYPE.UINT) :
-	    (signed ? INTTYPE.LONG : INTTYPE.ULONG);
-	    break;
-	  case INTTYPE.INT: iType = bits <= 32 ?
-	      INTTYPE.INT : INTTYPE.LONG;
-	    break;
-	  case INTTYPE.ULONG: iType = signed ?
-	      INTTYPE.LONG : INTTYPE.ULONG;
-	    break;
-	  case INTTYPE.LONG: break;
-	  }
-	  return true;
-	}
-	else {
-	  return false;
-	}
-      }
-
       final override void markAsUnresolved(uint lap) {
 	if (_unresolveLap != lap) {
 	  _unresolveLap = lap;
@@ -429,15 +346,25 @@ class CstVec(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	assert(len is false);
 	return;
       }
+
+      void _esdl__reset() {
+	static if (HAS_RAND_ATTRIB) {
+	  _stage = null;
+	  _resolveLap = 0;
+	}
+      }
+
     }
 
 class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecBase!(V, LEAF, R, N)
+  CstVecDomain!(LEAF, R), CstVecPrim
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
+      mixin CstVecMixin;
+      
       alias RV = typeof(this);
       alias P = CstVecArr!(V, LEAF, R, N-1);
       P _parent;
@@ -452,7 +379,6 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	// import std.stdio;
 	// writeln("New ", name);
 	assert(parent !is null);
-	super(name);
 	_parent = parent;
 	_indexExpr = indexExpr;
 	_root = _parent.getSolverRoot();
@@ -464,7 +390,6 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	// import std.stdio;
 	// writeln("New ", name);
 	assert(parent !is null);
-	super(name);
 	_parent = parent;
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
@@ -493,85 +418,6 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _root;
       }
 
-      CstVecPrim[] preReqs() {
-	if(_indexExpr) {
-	  static if (HAS_RAND_ATTRIB) {
-	    return _preReqs ~ _parent.arrLen() ~
-	      _parent.preReqs() ~ _indexExpr.preReqs();
-	  }
-	  else {
-	    return _parent.preReqs() ~ _indexExpr.preReqs();
-	  }
-	}
-	else {
-	  static if (HAS_RAND_ATTRIB) {
-	    return _preReqs ~ _parent.arrLen() ~ _parent.preReqs();
-	  }
-	  else {
-	    return _parent.preReqs();
-	  }
-	}
-      }
-
-      CstIteratorBase[] iterVars() {
-	if (_indexExpr) {
-	  return _parent.iterVars() ~ _indexExpr.iterVars();
-	}
-	else {
-	  return _parent.iterVars();
-	}
-      }
-
-      CstIteratorBase getIterator() {
-	CstIteratorBase piter = _parent.getIterator();
-	if (_indexExpr) {
-	  if (piter !is null) return piter;
-	  else return _indexExpr.getIterator();
-	}
-	else {
-	  return piter;
-	}
-      }
-
-      CstDomain[] unresolvedIndxs() {
-	return _parent.unresolvedIndxs();
-      }
-
-      bool hasUnresolvedIndx() {
-	return _parent.hasUnresolvedIndx(); // no _relatedIndxs for this instance
-      }
-      
-      CstDomain[] getDomainLens(bool resolved) {
-	assert(false);
-      }
-
-      override bool resolve() {
-	if (_resolvedCycle == getSolverRoot()._cycle) {
-	  return true;
-	}
-	else if (_parent.resolve()) {
-	  auto parent = _parent.getResolved();
-	  if (_indexExpr) {
-	    if (_indexExpr.solved()) {
-	      _resolvedVec = parent[cast(size_t) _indexExpr.evaluate()];
-	      _resolvedCycle = getSolverRoot()._cycle;
-	      return true;
-	    }
-	    else {
-	      return false;
-	    }
-	  }
-	  else {
-	    _resolvedVec = parent[_pindex];
-	    _resolvedCycle = getSolverRoot()._cycle;
-	    return true;
-	  }
-	}
-	else {
-	  return false;
-	}
-      }
-
       override RV getResolved() {
 	if (_resolvedCycle != getSolverRoot()._cycle) {
 	  auto parent = _parent.getResolved();
@@ -586,75 +432,9 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _resolvedVec;
       }
 
-      // What is required here
-      // we could be dealing with an _pindex or an _indexExpr. Further
-      // the indexExpr could be either a solvable constraint expression
-      // or an array length iterator that iterates over the length of
-      // the given array. To add to the complexity here, we could have a
-      // case where the given element has a parent that too a
-      // non-elementary one (involving non-integer indexes). In such
-      // cases we need to list all the elements of the array that could
-      // finally represent the given element that we are currently
-      // dealing with.
-      CstDomain[] getRndDomains(bool resolved) {
-	CstDomain[] domains;
-	static if (HAS_RAND_ATTRIB) {
-	  if (_indexExpr) {
-	    if (_indexExpr.isConst() || resolved) {
-	      // domains = cast (CstDomain[]) _parent.getDomainElems(_indexExpr.evaluate());
-	      // foreach(pp; _parent.getDomainElems(cast(size_t) _indexExpr.evaluate())) {
-	      // 	domains ~= pp;
-	      // }
-	      domains ~= _parent[cast(size_t) _indexExpr.evaluate()];
-	    }
-	    else {
-	      // FIXME -- if the expression has been solved
-	      // return _parent.getRndDomainsAtIndx(_indexExpr.evaluate()) ;
-	      domains = _indexExpr.getRndDomains(resolved);
-	      foreach(pp; _parent.getDomainElems(-1)) {
-		domains ~= pp;
-	      }
-	      // domains ~= _parent.getDomainElems(-1);
-	    }
-	  }
-	  else {
-	    domains ~= _parent[_pindex];
-	    // foreach(pp; _parent.getDomainElems(_pindex)) {
-	    //   domains ~= pp;
-	    // }
-	    // domains =  cast (CstDomain[]) _parent.getDomainElems(_pindex);
-	  }
-	  return domains;
-	}
-	else {
-	  if(_indexExpr) {
-	    // FIXME -- if the expression has been solved
-	    // return _parent.getDomainElems(_indexExpr.evaluate()) ;
-	    domains = _indexExpr.getRndDomains(resolved) ~ _parent.getRndDomains(resolved);
-	  }
-	  else {
-	    // foreach(pp; _parent.getDomainElems(_pindex)) {
-	    //   domains ~= pp;
-	    // }
-	    domains = _parent.getRndDomains(resolved);
-	  }
-	  return domains;
-	}
-      }
-
       // RV
       CstVecExpr unroll(CstIteratorBase iter, uint n) {
-	bool found = false;
-	foreach(var; iterVars()) {
-	  if(iter is var) {
-	    found = true;
-	    break;
-	  }
-	}
-	if(! found) {		// iter is unrelated
-	  return this;
-	}
-	else if(_indexExpr) {
+	if(_indexExpr) {
 	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
 	else {
@@ -671,13 +451,13 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override long value() {
-	if(_indexExpr) {
-	  return *(_parent.getRef(_indexExpr.evaluate()));
-	}
-	else {
-	  return *(_parent.getRef(this._pindex));
-	}
+      long value() {
+      	if(_indexExpr) {
+      	  return *(_parent.getRef(_indexExpr.evaluate()));
+      	}
+      	else {
+      	  return *(_parent.getRef(this._pindex));
+      	}
       }
 
       RV flatten() {
@@ -794,52 +574,6 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      bool getIntRange(ref IntR rng) {
-	return true;
-      }
-
-      bool getUniRange(ref UniRange rng) {
-	INTTYPE iType;
-	if (this.getIntType(iType)) {
-	  rng.map(iType);
-	  return true;
-	}
-	else {
-	  return false;
-	}
-      }
-
-      bool getIntType(ref INTTYPE iType) {
-	static if (isIntegral!LEAF) {
-	  import std.traits;
-	  enum bool signed = isSigned!LEAF;
-	  enum uint bits = LEAF.sizeof * 8;
-	}
-	else static if (isBitVector!LEAF) {
-	  enum bool signed = LEAF.ISSIGNED;
-	  enum uint bits = LEAF.SIZE;
-	}
-	static if (bits <= 64) {
-	  final switch (iType) {
-	  case INTTYPE.UINT: iType = bits <= 32 ?
-	      (signed ? INTTYPE.INT : INTTYPE.UINT) :
-	    (signed ? INTTYPE.LONG : INTTYPE.ULONG);
-	    break;
-	  case INTTYPE.INT: iType = bits <= 32 ?
-	      INTTYPE.INT : INTTYPE.LONG;
-	    break;
-	  case INTTYPE.ULONG: iType = signed ?
-	      INTTYPE.LONG : INTTYPE.ULONG;
-	    break;
-	  case INTTYPE.LONG: break;
-	  }
-	  return true;
-	}
-	else {
-	  return false;
-	}
-      }
-
       override void markAsUnresolved(uint lap) {
 	if (isActualDomain()) {
 	  if (_unresolveLap != lap) {
@@ -874,6 +608,14 @@ class CstVec(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  this._type = DomType.MAYBEMONO;
 	}
       }
+
+      void _esdl__reset() {
+	static if (HAS_RAND_ATTRIB) {
+	  _stage = null;
+	  _resolveLap = 0;
+	}
+      }
+
     }
 
 // Arrays (Multidimensional arrays as well)
@@ -909,55 +651,13 @@ abstract class CstVecArrBase(V, LEAF, alias R, int N)
     return _name;
   }
 
-  static if (HAS_RAND_ATTRIB) {
-    CstVecPrim[] _preReqs;
-  }
-
-  bool isVarArr() {
-    return true;
-  }
-
-  BDD getPrimBdd(Buddy buddy) {
-    return buddy.one();
-  }
-
-  void resetPrimeBdd() { }
-
-  // override CstVec2VecExpr opIndex(CstVecExpr indx) {
-  //   return new CstVec2VecExpr(this, indx, CstBinVecOp.INDXINDEX);
-  // }
-
   bool isRand() {
     assert(false, "isRand not implemented for CstVecArrBase");
   }
 
-  // void collate(ulong v, int word = 0) {
-  //   assert(false, "value not implemented for CstVecArrBase");
-  // }
-
-  uint domIndex() {
-    assert(false, "domIndex not implemented for CstVecArrBase");
+  static if (HAS_RAND_ATTRIB) {
+    CstVecPrim[] _preReqs;
   }
-
-  void domIndex(uint s) {
-    assert(false, "domIndex not implemented for CstVecArrBase");
-  }
-
-  uint bitcount() {
-    assert(false, "bitcount not implemented for CstVecArrBase");
-  }
-
-  bool signed() {
-    assert(false, "signed not implemented for CstVecArrBase");
-  }
-
-  ref BddVec bddvec(Buddy buddy) {
-    assert(false, "bddvec not implemented for CstVecArrBase");
-  }
-
-  // void bddvec(BddVec b) {
-  //   assert(false, "bddvec not implemented for CstVecArrBase");
-  // }
 
   void solveBefore(CstVecPrim other) {
     static if (HAS_RAND_ATTRIB) {
@@ -979,11 +679,11 @@ abstract class CstVecArrBase(V, LEAF, alias R, int N)
 
 }
 
-template CstVecArr(T, int I, int N=0)
-  if(_esdl__ArrOrder!(T, I, N) != 0) {
-  alias CstVecArr = CstVecArr!(typeof(T.tupleof[I]), LeafElementType!(T.tupleof[I]),
-			       getRandAttr!(T, I), N);
-}
+// template CstVecArr(T, int I, int N=0)
+//   if(_esdl__ArrOrder!(T, I, N) != 0) {
+//   alias CstVecArr = CstVecArr!(typeof(T.tupleof[I]), LeafElementType!(T.tupleof[I]),
+// 			       getRandAttr!(T, I), N);
+// }
 
 // Arrays (Multidimensional arrays as well)
 class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 0):
@@ -1011,7 +711,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 
 	if (_hasAbstractLenDomains) {
 	  _arrLen.labelAbstractVecDomains(true);
 	}
-	_relatedIndxs ~= _arrLen;
       }
 
       final bool isActualDomain() {
@@ -1023,70 +722,10 @@ class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 
 	return _root;
       }
 
-      CstVecPrim[] preReqs() {
-	static if (HAS_RAND_ATTRIB) {
-	  return _preReqs;		// N = 0 -- no _parent
-	}
-	else {
-	  return [];
-	}
-      }
-
-      CstIteratorBase[] iterVars() {
-	return [];		// N = 0 -- no _parent
-      }
-
-      CstIteratorBase getIterator() {
-	return null;		// N = 0 -- no _parent
-      }
-
-      bool resolve() {
-	return true;
-      }
-
       RV getResolved() {
 	return this;
       }
 
-      static if (HAS_RAND_ATTRIB) {
-	EV[] getDomainElems(long indx) {
-	  if (indx < 0) {
-	    if (_arrLen.solved()) return _elems[0..(cast(size_t) _arrLen.evaluate())];
-	    else return _elems;
-	  }
-	  else return [_elems[cast(size_t) indx]];
-	}
-      }
-
-      // CstDomain[] getRndDomains(bool resolved) {
-      //   static if (false) {	// This function can only be there for leaf nodes
-      //     static if (HAS_RAND_ATTRIB) {
-      //       CstDomain[] domains;
-      //       foreach(elem; _elems) {
-      // 	domains ~= elem;
-      //       }
-      //       return domains;
-      //     }
-      //     else {
-      //       return [];
-      //     }
-      //   }
-      //   else {
-      //     assert(false);
-      //   }
-      // }
-
-      CstDomain[] getDomainLens(bool resolved) {
-	static if (HAS_RAND_ATTRIB) {
-	  CstDomain[] domains;
-	  if(_arrLen.isRand) domains ~= _arrLen;
-	  return domains;
-	}
-	else {
-	  return [];
-	}
-      }
-    
       RV unroll(CstIteratorBase iter, uint n) {
 	return this;
       }
@@ -1097,34 +736,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 
 
       bool parentLenIsUnresolved() {
 	return false;		// no parent
-      }
-
-      CstDomain[] unresolvedIndxs() {
-	CstDomain[] indxs;
-	foreach (indx; _relatedIndxs) {
-	  if (! indx.solved()) {
-	    bool add = true;
-	    foreach (l; indxs) {
-	      if (l is indx) add = false;
-	      break;
-	    }
-	    if (add) indxs ~= indx;
-	  }
-	}
-	return indxs;
-      }
-
-      bool hasUnresolvedIndx() {
-	foreach (domain; _relatedIndxs) {
-	  if (! domain.solved()) {
-	    return true;
-	  }
-	}
-	return false;		// N=0 -- no _parent
-      }
-      
-      CstDomain[] parentUnresolvedIndxs() {
-	return [];		// no parent
       }
 
       static private auto getRef(A, N...)(ref A arr, N indx)
@@ -1219,23 +830,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 
 	return getLen(*_var, indx);
       }
 
-      bool isUnrollable() {
-	foreach (var; _relatedIndxs) {
-	  if (! var.solved()) return false;
-	}
-	return true;
-      }
-
-      CstDomain[] _relatedIndxs;
-      void addRelatedIndx(CstDomain domain) {
-	foreach (var; _relatedIndxs) {
-	  if (domain is var) {
-	    return;
-	  }
-	}
-	_relatedIndxs ~= domain;
-      }
-      
       EV opIndex(CstVecExpr indexExpr) {
 	if (indexExpr.isConst()) {
 	  size_t index = cast(size_t) indexExpr.evaluate();
@@ -1299,13 +893,13 @@ class CstVecArr(V, LEAF, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) != 
 	}
       }
 
-      auto elements() {
-	auto iter = arrLen.makeIterVar();
+      EV elements() {
+	CstIterator!RV iter = arrLen.makeIterVar();
 	return this[iter];
       }
 
-      auto iterator() {
-	auto iter = arrLen.makeIterVar();
+      CstIterator!RV iterator() {
+	CstIterator!RV iter = arrLen.makeIterVar();
 	return iter;
       }
 
@@ -1423,7 +1017,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	if (_hasAbstractLenDomains) {
 	  _arrLen.labelAbstractVecDomains(true);
 	}
-	_relatedIndxs ~= _arrLen;
       }
 
       this(string name, P parent, uint index) {
@@ -1439,7 +1032,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	if (_hasAbstractLenDomains) {
 	  _arrLen.labelAbstractVecDomains(true);
 	}
-	_relatedIndxs ~= _arrLen;
       }
 
       override bool opEquals(Object other) {
@@ -1451,7 +1043,8 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
       final bool isActualDomain() {
 	return ((_indexExpr is null  ||
 		 _indexExpr.isIterator ||
-		 _indexExpr.isConst) && _parent.isActualDomain());
+		 _indexExpr.isConst) &&
+		_parent.isActualDomain());
       }
 
       _esdl__Solver getSolverRoot() {
@@ -1459,96 +1052,8 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	return _root;
       }
 
-      CstVecPrim[] preReqs() {
-	CstVecPrim[] req;
-	static if (HAS_RAND_ATTRIB) {
-	  req = _preReqs ~ _parent.arrLen();
-	}
-	if(_indexExpr) {
-	  return req ~ _indexExpr.preReqs() ~ _parent.preReqs();
-	}
-	else {
-	  return req ~ _parent.preReqs();
-	}
-      }
-
-      CstIteratorBase[] iterVars() {
-	if(_indexExpr) {
-	  return _parent.iterVars() ~ _indexExpr.iterVars(); // ~ _arrLen.makeIterVar();
-	}
-	else {
-	  return _parent.iterVars();
-	}
-      }
-
-      CstIteratorBase getIterator() {
-	auto piter = _parent.getIterator();
-	if (piter !is null) return piter;
-	else {
-	  if (_indexExpr) {
-	    return _indexExpr.getIterator();
-	  }
-	  else return null;
-	}
-      }
-
       bool parentLenIsUnresolved() {
 	return (! _parent._arrLen.solved());
-      }
-
-      CstDomain[] unresolvedIndxs() {
-	CstDomain[] indxs;
-	foreach (indx; _relatedIndxs) {
-	  if (! indx.solved()) {
-	    bool add = true;
-	    foreach (l; indxs) {
-	      if (l is indx) add = false;
-	      break;
-	    }
-	    if (add) indxs ~= indx;
-	  }
-	}
-	return indxs;
-      }
-
-      bool hasUnresolvedIndx() {
-	foreach (domain; _relatedIndxs) {
-	  if (! domain.solved()) {
-	    return true;
-	  }
-	}
-	return _parent.hasUnresolvedIndx();
-      }
-
-      CstDomain[] parentUnresolvedIndxs() {
-	return [_parent._arrLen];
-      }
-
-      bool resolve() {
-	if (_resolvedCycle == getSolverRoot()._cycle) {
-	  return true;
-	}
-	else if (_parent.resolve()) {
-	  auto parent = _parent.getResolved();
-	  if (_indexExpr) {
-	    if (_indexExpr.solved()) {
-	      _resolvedVec = parent[_indexExpr.evaluate()];
-	      _resolvedCycle = getSolverRoot()._cycle;
-	      return true;
-	    }
-	    else {
-	      return false;
-	    }
-	  }
-	  else {
-	    _resolvedVec = parent[_pindex];
-	    _resolvedCycle = getSolverRoot()._cycle;
-	    return true;
-	  }
-	}
-	else {
-	  return false;
-	}
       }
 
       RV getResolved() {
@@ -1565,84 +1070,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	return _resolvedVec;
       }
 
-      EV[] getDomainElems(size_t indx) {
-	EV[] elems;
-	static if (HAS_RAND_ATTRIB) {
-	  if(_indexExpr) {
-	    foreach(pp; _parent.getDomainElems(-1)) {
-	      if(indx < 0) {
-		if (pp._arrLen.solved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
-		else elems ~= pp._elems;
-	      }
-	      else elems ~= pp._elems[indx];
-	    }
-	  }
-	  else {
-	    foreach(pp; _parent.getDomainElems(_pindex)) {
-	      if(indx < 0) {
-		if (pp._arrLen.solved()) elems ~= pp._elems[0..cast(size_t)pp._arrLen.evaluate()];
-		else elems ~= pp._elems;
-	      }
-	      else elems ~= pp._elems[indx];
-	    }
-	  }
-	}
-	return elems;
-      }
-    
-      // This is slightly tricky in case we are pointing directly to
-      // just one element of the array, this function should return just
-      // that element. But it could be that the index or an upper
-      // hierarchy index is not a constant, but an iterator or a
-      // randomized epression. In that case, we shall have to return
-      // more primary elements
-      // CstDomain[] getRndDomains(bool resolved) {
-      // 	CstDomain[] domains;
-      // 	static if (HAS_RAND_ATTRIB) {
-      // 	  if(_indexExpr) {
-      // 	    domains = _indexExpr.getRndDomains(resolved);
-      // 	    foreach(pp; _parent.getDomainElems(-1)) {
-      // 	      domains ~= pp;
-      // 	    }
-      // 	  }
-      // 	  else {
-      // 	    foreach(pp; _parent.getDomainElems(_pindex)) {
-      // 	      domains ~= pp;
-      // 	    }
-      // 	  }
-      // 	}
-      // 	else {
-      // 	  domains ~= _parent.getDomainLens();
-      // 	  if(_indexExpr) {
-      // 	    domains ~= _indexExpr.getRndDomains(resolved) ~ _parent.getDomainLens(resolved);
-      // 	  }
-      // 	}
-      // 	return domains;
-      // }
-
-      CstDomain[] getDomainLens(bool resolved) {
-	// if(_pindex.iterVars.length is 0)
-	if(_indexExpr is null) {
-	  return [_parent[_pindex].arrLen()];
-	  // return domains ~ _parent[_pindex].getDomainLens(resolved);
-	}
-	if (_indexExpr.isConst() || resolved) {
-	  CstDomain[] domains;
-	  domains ~= _parent[cast(size_t) _indexExpr.evaluate()].getDomainLens(resolved);
-	  return domains;
-	}
-	else {
-	  CstDomain[] domains;
-	  // import std.stdio;
-	  // writeln(_parent.name(), " ", p.name());
-	  domains = _indexExpr.getRndDomains(resolved);
-	  foreach(pp; _parent.getDomainElems(-1)) {
-	    domains ~= pp.getDomainLens(resolved);
-	  }
-	  return domains;
-	}
-      }
-
       RV flatten() {
 	if (_indexExpr !is null) {
 	  return _parent.flatten()[cast(size_t)_indexExpr.evaluate()];
@@ -1653,17 +1080,7 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
       }
 
       RV unroll(CstIteratorBase iter, uint n) {
-	bool found = false;
-	foreach(var; iterVars()) {
-	  if(iter is var) {
-	    found = true;
-	    break;
-	  }
-	}
-	if(! found) {
-	  return this;
-	}
-	else if(_indexExpr) {
+	if(_indexExpr) {
 	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
 	else {
@@ -1760,23 +1177,6 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	}
       }
 
-      bool isUnrollable() {
-	foreach (var; _relatedIndxs) {
-	  if (! var.solved()) return false;
-	}
-	return true;
-      }
-
-      CstDomain[] _relatedIndxs;
-      void addRelatedIndx(CstDomain domain) {
-	foreach (var; _relatedIndxs) {
-	  if (domain is var) {
-	    return;
-	  }
-	}
-	_relatedIndxs ~= domain;
-      }
-      
       EV opIndex(CstVecExpr indexExpr) {
 	if (indexExpr.isConst()) {
 	  size_t index = cast(size_t) indexExpr.evaluate();
@@ -1791,17 +1191,7 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	  return _elems[index];
 	}
 	else {
-	  // static if(isStaticArray!E) {
-	  //   // static array
 	  return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
-	  // }
-	  // else static if(isDynamicArray!E) {
-	  //   // dynamic array
-	  //   return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
-	  // }
-	  // else {
-	  //   return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
-	  // }
 	}
       }
 
@@ -1843,13 +1233,13 @@ class CstVecArr(V, LEAF, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 
 	}
       }
 
-      auto elements() {
-	auto indx = arrLen.makeIterVar();
-	return this[indx];
+      EV elements() {
+	CstIterator!RV iter = arrLen.makeIterVar();
+	return this[iter];
       }
 
-      auto iterator() {
-	auto iter = arrLen.makeIterVar();
+      CstIterator!RV iterator() {
+	CstIterator!RV iter = arrLen.makeIterVar();
 	return iter;
       }
 
