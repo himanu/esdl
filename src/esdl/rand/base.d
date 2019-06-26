@@ -481,9 +481,6 @@ interface CstVecPrim
   abstract string name();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
-  abstract bool isRand();
-  // abstract long value();
-
   abstract void _esdl__reset();
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);

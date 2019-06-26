@@ -551,10 +551,6 @@ mixin template CstVecArrMixin()
     return _name;
   }
 
-  bool isRand() {
-    assert(false, "isRand not implemented for CstVecArrBase");
-  }
-
   static if (HAS_RAND_ATTRIB) {
     CstVecPrim[] _preReqs;
   }
