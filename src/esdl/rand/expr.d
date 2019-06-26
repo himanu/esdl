@@ -170,7 +170,7 @@ interface CstVecTerm: CstVecExpr
   }
 }
 
-abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
+class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
