@@ -190,7 +190,8 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
   Unconst!T _shadowValue;
 
-  this() {
+  this(_esdl__Solver root) {
+    _root = root;
     fixRangeSet();
   }
 
@@ -448,6 +449,7 @@ abstract class CstVecDomain(T, alias R): CstDomain, CstVecTerm
   override void updateVal() {
     assert(isRand() !is true);
     Unconst!T newVal;
+    assert (_root !is null);
     if (_solvedCycle != _root._cycle) {
       newVal = *(getRef());
       _solvedCycle = _root._cycle;
@@ -799,12 +801,8 @@ class CstIterator(RV): CstIteratorBase, CstVecTerm
   //   return arrVar.arrLen.getStages();
   // }
 
-  override bool refresh(CstStage s, Buddy buddy) {
-    assert(false, "Can not refresh for a Iter Variable without unrolling");
-  }
-  
   override BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(false, "Can not getBDD for a Iter Variable without unrolling");
+    assert (false, "Can not getBDD for a Iter Variable without unrolling");
   }
 
   // override bool getVal(ref long val) {
@@ -862,7 +860,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   this(string name, RV parent) {
-    assert(parent !is null);
+    assert (parent !is null);
+    super(parent.getSolverRoot());
     _name = name;
     _parent = parent;
     _iterVar = new CstIterator!RV(_parent);
@@ -885,67 +884,26 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return this;
   }
 
-  private bool refreshNoRand(Buddy buddy) {
-    auto val = _parent.getLen();
-    if (! _valvec.isNull()) {
-      return false;
-    }
-    else {
-      _valvec.buildVec(buddy, val);
-      return true;
-    }
-  }
-
-  // override CstStage[] getStages() {
-  //   CstStage[] stages;
-  //   if(isRand) stages = [this.stage()];
-  //   return stages;
-  // }
-  bool refresh(CstStage s, Buddy buddy) {
-    static if (HAS_RAND_ATTRIB) {
-      auto fparent = _parent.flatten();
-      if (fparent !is _parent) {
-	return _parent.flatten().arrLen.refresh(s, buddy);
-      }
-      else {
-	assert(stage() !is null, "stage null for: " ~ name());
-	if(this.isRand && stage() is s) {
-	  return false;
-	}
-	else if((! this.isRand) ||
-		this.isRand && stage().solved()) { // work with the value
-	  return refreshNoRand(buddy);
-	}
-	else {
-	  assert(false, "Constraint evaluation in wrong stage");
-	}
-      }
-    }
-    else {
-      return refreshNoRand(buddy);
-    }
-  }
-
   BddVec getBDD(CstStage s, Buddy buddy) {
     static if (HAS_RAND_ATTRIB) {
-      auto fparent = _parent.flatten();
-      if (fparent !is _parent) {
-	return _parent.flatten().arrLen.getBDD(s, buddy);
+      // auto fparent = _parent.flatten();
+      // if (fparent !is _parent) {
+      // 	return _parent.flatten().arrLen.getBDD(s, buddy);
+      // }
+      // else {
+      assert (stage() !is null, "stage null for: " ~ name());
+      if (this.isRand && stage() is s) {
+	return bddvec(buddy);
+	// return _domvec;
+      }
+      else if ((! this.isRand) ||
+	      this.isRand && stage().solved()) { // work with the value
+	return _valvec;
       }
       else {
-	assert(stage() !is null, "stage null for: " ~ name());
-	if(this.isRand && stage() is s) {
-	  return bddvec(buddy);
-	  // return _domvec;
-	}
-	else if((! this.isRand) ||
-		this.isRand && stage().solved()) { // work with the value
-	  return _valvec;
-	}
-	else {
-	  assert(false, "Constraint evaluation in wrong stage");
-	}
+	assert (false, "Constraint evaluation in wrong stage");
       }
+      // }
     }
     else {
       return _valvec;
@@ -993,12 +951,12 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     // this function will only be called when array lenght is
     // unconstrainted
     markSolved();
-    _parent.buildElements();
+    _parent.buildElements(_parent.getLen());
     execCbs();
   }
   
   override void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
-    assert(s is stage);
+    assert (s is stage);
     _esdl__doRandomize(randGen);
   }
   
@@ -1096,8 +1054,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   void _esdl__reset() {
-    _stage = null;
-    _resolveLap = 0;
+    static if (HAS_RAND_ATTRIB) {
+      _stage = null;
+      _resolveLap = 0;
+    }
   }
 
   void solveBefore(CstVecPrim other) {
@@ -1169,6 +1129,25 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     assert(false);
   }
 
+  override void updateVal() {
+    assert(isRand() !is true);
+    uint newVal;
+    assert(_root !is null);
+    if (_solvedCycle != _root._cycle) {
+      newVal = cast(uint)_parent.getLen();
+      _solvedCycle = _root._cycle;
+      if (_valvec.isNull ||
+	  newVal != _shadowValue) {
+	_shadowValue = cast(uint) newVal;
+	_valueChanged = true;
+	_valvec.buildVec(_root._esdl__buddy, _shadowValue);
+      }
+      else {
+	_valueChanged = false;
+      }
+    }
+  }
+  
   final override bool isActualDomain() {
     return _parent.isActualDomain();
   }
@@ -1282,16 +1261,6 @@ class CstVal(T = int): CstValBase
     _valvec.reset();
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    if (_valvec.isNull()) {
-      _valvec.buildVec(buddy, _val);
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-  
   BddVec getBDD(CstStage stage, Buddy buddy) {
     return _valvec;
   }
@@ -1389,12 +1358,6 @@ class CstVec2VecExpr: CstVecTerm
     return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    auto l = _lhs.refresh(stage, buddy);
-    auto r = _rhs.refresh(stage, buddy);
-    return r || l;
-  }
-  
   BddVec getBDD(CstStage stage, Buddy buddy) {
     final switch(_op) {
     case CstBinVecOp.AND: return _lhs.getBDD(stage, buddy) &
@@ -1657,12 +1620,6 @@ class CstVecSliceExpr: CstVecTerm
     return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    auto l = _lhs.refresh(stage, buddy);
-    auto r = _rhs.refresh(stage, buddy);
-    return r || l;
-  }
-  
   BddVec getBDD(CstStage stage, Buddy buddy) {
     auto vec  = _vec.getBDD(stage, buddy);
     size_t lvec = cast(size_t) _lhs.evaluate();
@@ -1770,10 +1727,6 @@ class CstNotVecExpr: CstVecTerm
     return "( ~ " ~ _expr.name ~ " )";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    return _expr.refresh(stage, buddy);
-  }
-  
   BddVec getBDD(CstStage stage, Buddy buddy) {
     return ~(_expr.getBDD(stage, buddy));
   }
@@ -1852,10 +1805,6 @@ class CstNegVecExpr: CstVecTerm
     return "( - " ~ _expr.name ~ " )";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    return _expr.refresh(stage, buddy);
-  }
-  
   BddVec getBDD(CstStage stage, Buddy buddy) {
     return -(_expr.getBDD(stage, buddy));
   }
@@ -1939,12 +1888,6 @@ class CstBdd2BddExpr: CstBddTerm
     _op = op;
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    auto l = _lhs.refresh(stage, buddy);
-    auto r = _rhs.refresh(stage, buddy);
-    return r || l;
-  }
-  
   string name() {
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
@@ -2059,10 +2002,6 @@ class CstIteBddExpr: CstBddTerm
     return "CstIteBddExpr";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    assert(false);
-  }
-
   void setBddContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
@@ -2137,12 +2076,6 @@ class CstVec2BddExpr: CstBddTerm
     return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    auto l = _lhs.refresh(stage, buddy);
-    auto r = _rhs.refresh(stage, buddy);
-    return r || l;
-  }
-  
   BDD getBDD(CstStage stage, Buddy buddy) {
     auto lvec = _lhs.getBDD(stage, buddy);
     auto rvec = _rhs.getBDD(stage, buddy);
@@ -2316,10 +2249,6 @@ class CstBddConst: CstBddTerm
     _expr = expr;
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    return false;
-  }
-  
   BDD getBDD(CstStage stage, Buddy buddy) {
     if(_expr) return buddy.one();
     else return buddy.zero();
@@ -2385,10 +2314,6 @@ class CstNotBddExpr: CstBddTerm
     return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
   }
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    return _expr.refresh(stage, buddy);
-  }
-  
   BDD getBDD(CstStage stage, Buddy buddy) {
     auto bdd = _expr.getBDD(stage, buddy);
     return (~ bdd);

@@ -27,7 +27,7 @@ abstract class _esdl__Solver
   // compositional parent -- not inheritance based
   _esdl__Solver _parent;
   _esdl__Solver _root;
-
+  
   Folder!CstPredicate _rolledPreds;
   Folder!CstPredicate _unrolledPreds;
   Folder!CstPredicate _toUnrolledPreds;
@@ -61,7 +61,7 @@ abstract class _esdl__Solver
   uint _cycle;
 
   Buddy getBuddy() {
-    assert(_esdl__buddy !is null);
+    assert (_esdl__buddy !is null);
     return _esdl__buddy;
   }
 
@@ -109,8 +109,7 @@ abstract class _esdl__Solver
     _esdl__rGen.seed(seed);    
   }
   
-  this(uint seed, bool isSeeded, string name,
-       _esdl__Solver parent) {
+  this(string name, _esdl__Solver parent, bool isSeeded, uint seed) {
     import std.random: Random, uniform;
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
@@ -223,6 +222,17 @@ abstract class _esdl__Solver
   CstScope currentScope() {
     assert (_currentScope !is null);
     return _currentScope;
+  }
+
+  CstVecPrim[void*] _cstVecPrimes;
+
+  CstVecPrim getVecPrime(void* ptr) {
+    CstVecPrim* p = ptr in _cstVecPrimes;
+    return (p !is null) ? *p : null;
+  }
+  
+  void addVecPrime(void* ptr, CstVecPrim p) {
+    _cstVecPrimes[ptr] = p;
   }
 }
 
@@ -370,8 +380,6 @@ abstract class CstDomain
   abstract CstDomain getResolved();
   abstract void updateVal();
   abstract bool hasChanged();
-  abstract bool hasAbstractVecDomains();
-  abstract void markAbstractVecDomains(bool len);
   abstract bool isActualDomain();
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerValPred(CstPredicate valPred);  
@@ -479,6 +487,9 @@ interface CstVecPrim
   abstract void _esdl__reset();
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);
+  abstract bool hasAbstractVecDomains();
+  abstract void markAbstractVecDomains(bool len);
+  abstract bool isActualDomain();
 }
 
 
@@ -505,9 +516,6 @@ interface CstVecExpr
   // get the list of stages this expression should be avaluated in
   // abstract CstStage[] getStages();
   abstract BddVec getBDD(CstStage stage, Buddy buddy);
-
-  // refresh the _valvec if the current value is not the same as previous value
-  abstract bool refresh(CstStage stage, Buddy buddy);
 
   abstract long evaluate();
 
@@ -561,8 +569,6 @@ interface CstBddExpr
 {
   string name();
 
-  abstract bool refresh(CstStage stage, Buddy buddy);
-  
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
 
@@ -934,14 +940,6 @@ class CstBlock
   CstPredicate[] _preds;
   bool[] _booleans;
 
-  bool refresh(CstStage stage, Buddy buddy) {
-    bool result = false;
-    foreach (pred; _preds) {
-      result |= pred._expr.refresh(stage, buddy);
-    }
-    return result;
-  }
-  
   string name() {
     string name_ = "";
     foreach(pred; _preds) {

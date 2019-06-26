@@ -411,8 +411,9 @@ struct CstParser {
 	    fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
 	  }
 	  else {
-	    indexTag ~= outCursor-1;
-	    fill("opIndex(");
+	    fill("_esdl__vecarr(this)");
+	    indexTag ~= outCursor;
+	    fill(".opIndex(");
 	    ++numIndex;
 	    procSubExpr(srcTag+idChain[2*i]+1);
 	    fill(")");
@@ -957,25 +958,25 @@ struct CstParser {
     }
 
     // add index
-    iterators ~= array ~ ".iterator()";
+    iterators ~= array ~ "._esdl__vecarr(this)._esdl__iter()";
     
     if(index.length != 0) {
       VarPair x;
       x.varName  = index;
-      x.xLat     = array ~ ".iterator()";
+      x.xLat     = array ~ "._esdl__vecarr(this)._esdl__iter()";
       x.xLatBase = arrayBase;
       varMap ~= x;
     }
 
     VarPair x;
     x.varName  = elem;
-    x.xLat     = array ~ ".elements()";
+    x.xLat     = array ~ "._esdl__vecarr(this)._esdl__elems()";
     x.xLatBase = arrayBase;
     varMap ~= x;
 
     // start of foreach
     // fill("    // Start of Foreach: " ~ array ~ ".iterator() \n");
-    fill("    " ~ _solver ~ ".pushScope(" ~ array ~ ".iterator());\n");
+    fill("    " ~ _solver ~ ".pushScope(" ~ array ~ "._esdl__vecarr(this)._esdl__iter());\n");
     if(CST[srcCursor] is '{') {
       ++srcCursor;
       procBlock();
@@ -1372,6 +1373,7 @@ struct CstParser {
 	fill(" >> ");
 	break;
       case OpToken.INDEX:
+	fill("._esdl__vecarr(this)");
 	indexTag ~= outCursor;
 	fill(".opIndex(");
 	++numIndex;

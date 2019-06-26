@@ -93,9 +93,8 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
   Array!ulong _solveValue;
   
-  this(uint seed, bool isSeeded, string name,
-       _esdl__SolverRoot parent) {
-    super(seed, isSeeded, name, parent);
+  this(string name, _esdl__SolverRoot parent, bool isSeeded, uint seed) {
+    super(name, parent, isSeeded, seed);
     if (parent is null) {
       _esdl__cstExprs = new CstBlock();
     }
