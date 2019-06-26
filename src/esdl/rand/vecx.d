@@ -191,7 +191,7 @@ mixin template CstVecMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
 
-class CstVec(V, alias R, int N) if(N == 0 && _esdl__ArrOrder!(V, N) == 0):
+class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
   CstVecDomain!(LeafElementType!V, R), CstVecPrim
     {
       import std.traits;

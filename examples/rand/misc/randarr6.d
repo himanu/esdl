@@ -46,7 +46,8 @@ class Foo
 
 void main() {
   Foo foo = new Foo;
-  for (size_t i=0; i!=10000; ++i) {
+  foo.seedRandom(0);
+  for (size_t i=0; i!=10; ++i) {
     foo.randomize();
     foo.display();
   }
