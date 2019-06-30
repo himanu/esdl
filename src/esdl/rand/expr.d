@@ -17,7 +17,7 @@ interface CstVecTerm: CstVecExpr
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
-  abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
+  // abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
 
   CstVec2VecExpr opBinary(string op)(CstVecTerm other)
   {
@@ -179,7 +179,11 @@ class CstVecDomain(T, alias R): CstDomain, CstVecTerm
 
   Unconst!T _refreshedVal;
 
+  string _name;
 
+  override string name() {
+    return _name;
+  }
 
   static if (HAS_RAND_ATTRIB) {
     // BddVec       _domvec;
@@ -196,12 +200,135 @@ class CstVecDomain(T, alias R): CstDomain, CstVecTerm
   }
 
   ~this() {
-    // static if (HAS_RAND_ATTRIB) {
-    //   _domvec.reset();
-    // }
+    static if (HAS_RAND_ATTRIB && is(T == enum)) {
+      _primBdd.reset();
+    }
     _valvec.reset();
   }    
 
+  abstract long value();
+  
+  long evaluate() {
+    static if (HAS_RAND_ATTRIB) {
+      if (! this.isRand || this.solved()) {
+	return value();
+      }
+      else {
+	assert (false, "Error evaluating " ~ _name);
+      }
+    }
+    else {
+      return value();
+    }
+  }
+
+  S to(S)()
+    if (is (S == string)) {
+      import std.conv;
+      static if (HAS_RAND_ATTRIB) {
+	if (isRand) {
+	  return "RAND#" ~ _name ~ ":" ~ value().to!string();
+	}
+	else {
+	  return "VAL#" ~ _name ~ ":" ~ value().to!string();
+	}
+      }
+      else {
+	return "VAR#" ~ _name ~ ":" ~ value().to!string();
+      }
+    }
+
+  override string toString() {
+    return this.to!string();
+  }
+
+  // implementation of CstVecDomain API
+  static if (HAS_RAND_ATTRIB && is(T == enum)) {
+    BDD _primBdd;
+    override BDD getPrimBdd(Buddy buddy) {
+      import std.traits;
+      if (_primBdd.isZero()) {
+	foreach(e; EnumMembers!T) {
+	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
+	}
+      }
+      return _primBdd;
+    }
+  }
+  else {
+    override BDD getPrimBdd(Buddy buddy) {
+      return buddy.one();
+    }
+  }
+
+  override uint bitcount() {
+    static if (isBoolean!T)         return 1;
+    else static if (isIntegral!T)   return T.sizeof * 8;
+    else static if (isBitVector!T)  return T.SIZE;
+    else static assert(false, "bitcount can not operate on: " ~ T.stringof);
+  }
+
+  override bool signed() {
+    static if (isVecSigned!T) {
+      return true;
+    }
+    else  {
+      return false;
+    }
+  }
+
+  bool getIntRange(ref IntR rng) {
+    return true;
+  }
+
+  bool getUniRange(ref UniRange rng) {
+    INTTYPE iType;
+    if (this.getIntType(iType)) {
+      rng.map(iType);
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    static if (isIntegral!T) {
+      import std.traits;
+      enum bool signed = isSigned!T;
+      enum uint bits = T.sizeof * 8;
+    }
+    else static if (isBitVector!T) {
+      enum bool signed = T.ISSIGNED;
+      enum uint bits = T.SIZE;
+    }
+    else {			// bool
+      enum signed = false;
+      enum bits = 1;
+    }
+    static if (bits <= 64) {
+      final switch (iType) {
+      case INTTYPE.UINT: iType = bits <= 32 ?
+	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
+	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
+	break;
+      case INTTYPE.INT: iType = bits <= 32 ?
+	  INTTYPE.INT : INTTYPE.LONG;
+	break;
+      case INTTYPE.ULONG: iType = signed ?
+	  INTTYPE.LONG : INTTYPE.ULONG;
+	break;
+      case INTTYPE.LONG: break;
+      }
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+
+  
   void fixRangeSet() {
     static if (isIntegral!T) {
       static if (RangeT.sizeof == T.sizeof) {
@@ -927,22 +1054,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   //   }
   // }
 
-  long evaluate() {
-    static if (HAS_RAND_ATTRIB) {
-      // assert(stage() !is null);
-      if(! this.isRand || this.solved()) {
-    	return value();
-      }
-      else {
-    	import std.conv;
-    	assert(false, "Error evaluating " ~ _name);
-      }
-    }
-    else {
-      return value();
-    }
-  }
-
   // bool isResolved() {
   //   return stage().solved();
   // }
@@ -993,10 +1104,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _primBdd;
   }
   
-  override void resetPrimeBdd() {
-    _primBdd.reset();
-  }
-
   void iterVar(CstIterator!RV var) {
     _iterVar = var;
   }
@@ -1027,7 +1134,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return false;
   }
 
-  long value() {
+  override long value() {
     return _parent.getLen();
   }
 
@@ -1100,22 +1207,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
   }
 
-  bool getIntRange(ref IntR rng) {
-    return true;
-  }
-
-  bool getUniRange(ref UniRange rng) {
-    INTTYPE iType;
-    if (this.getIntType(iType)) {
-      rng.map(iType);
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-  bool getIntType(ref INTTYPE iType) {
+  override bool getIntType(ref INTTYPE iType) {
     // INTTYPE defaults to UINT
     return true;
   }

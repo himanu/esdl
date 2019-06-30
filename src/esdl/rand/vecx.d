@@ -20,46 +20,6 @@ mixin template CstVecMixin() {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
   alias LEAF = LeafElementType!V;
 
-  string _name;
-
-  override string name() {
-    return _name;
-  }
-
-  long evaluate() {
-    static if (HAS_RAND_ATTRIB) {
-      if (! this.isRand || this.solved()) {
-	return value();
-      }
-      else {
-	assert (false, "Error evaluating " ~ _name);
-      }
-    }
-    else {
-      return value();
-    }
-  }
-
-  S to(S)()
-    if (is (S == string)) {
-      import std.conv;
-      static if (HAS_RAND_ATTRIB) {
-	if (isRand) {
-	  return "RAND#" ~ _name ~ ":" ~ value().to!string();
-	}
-	else {
-	  return "VAL#" ~ _name ~ ":" ~ value().to!string();
-	}
-      }
-      else {
-	return "VAR#" ~ _name ~ ":" ~ value().to!string();
-      }
-    }
-
-  override string toString() {
-    return this.to!string();
-  }
-
   static if (HAS_RAND_ATTRIB) {
     CstVecPrim[] _preReqs;
   }
@@ -78,100 +38,7 @@ mixin template CstVecMixin() {
       _preReqs ~= domain;
     }
     else {
-      assert(false);
-    }
-  }
-
-  // implementation of CstVecDomain API
-  static if (HAS_RAND_ATTRIB && is(LEAF == enum)) {
-    BDD _primBdd;
-    override BDD getPrimBdd(Buddy buddy) {
-      import std.traits;
-      if (_primBdd.isZero()) {
-	foreach(e; EnumMembers!LEAF) {
-	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
-	}
-      }
-      return _primBdd;
-    }
-    override void resetPrimeBdd() {
-      _primBdd.reset();
-    }
-  }
-  else {
-    override BDD getPrimBdd(Buddy buddy) {
-      return buddy.one();
-    }
-    override void resetPrimeBdd() { }
-  }
-
-  override uint bitcount() {
-    static if (isBoolean!LEAF)         return 1;
-    else static if (isIntegral!LEAF)   return LEAF.sizeof * 8;
-    else static if (isBitVector!LEAF)  return LEAF.SIZE;
-    else static assert(false, "bitcount can not operate on: " ~ LEAF.stringof);
-  }
-
-  override bool signed() {
-    static if (isVecSigned!LEAF) {
-      return true;
-    }
-    else  {
-      return false;
-    }
-  }
-
-  ~this() {
-    resetPrimeBdd();
-  }
-
-  bool getIntRange(ref IntR rng) {
-    return true;
-  }
-
-  bool getUniRange(ref UniRange rng) {
-    INTTYPE iType;
-    if (this.getIntType(iType)) {
-      rng.map(iType);
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-  bool getIntType(ref INTTYPE iType) {
-    static if (isIntegral!LEAF) {
-      import std.traits;
-      enum bool signed = isSigned!LEAF;
-      enum uint bits = LEAF.sizeof * 8;
-    }
-    else static if (isBitVector!LEAF) {
-      enum bool signed = LEAF.ISSIGNED;
-      enum uint bits = LEAF.SIZE;
-    }
-    else {			// bool
-      enum signed = false;
-      enum bits = 1;
-    }
-    static if (bits <= 64) {
-      final switch (iType) {
-      case INTTYPE.UINT: iType = bits <= 32 ?
-	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
-	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
-	break;
-      case INTTYPE.INT: iType = bits <= 32 ?
-	  INTTYPE.INT : INTTYPE.LONG;
-	break;
-      case INTTYPE.ULONG: iType = signed ?
-	  INTTYPE.LONG : INTTYPE.ULONG;
-	break;
-      case INTTYPE.LONG: break;
-      }
-      return true;
-    }
-    else {
-      return false;
+      assert (false);
     }
   }
 
@@ -241,7 +108,7 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _var;
       }
 
-      long value() {
+      override long value() {
 	return cast (long) (*_var);
       }
 
@@ -409,7 +276,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      long value() {
+      override long value() {
       	if (_indexExpr) {
       	  return *(_parent.getRef(_indexExpr.evaluate()));
       	}
@@ -1011,26 +878,5 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
 	elem.labelAbstractVecDomains(len);
       }
     }
-  }
-}
-
-auto _esdl__vecarr(V)(ref V v, _esdl__Solver s) if (isArray!V) {
-  alias L = LeafElementType!V;
-  static if (isBitVector!L || isIntegral!L || isBoolean!L) {
-    CstVecArr!(V, _esdl__norand, 0) vec;
-    CstVecPrim p = s.getVecPrime(cast (void*) &v);
-    if (p !is null) {
-      vec = cast(CstVecArr!(V, _esdl__norand, 0)) p;
-      if (vec is null) assert (false);
-      return vec;
-    }
-    else {
-      vec = new CstVecArr!(V, _esdl__norand, 0)("TMP", v, s);
-      s.addVecPrime(cast (void*) &v, vec);
-      return vec;
-    }
-  }
-  else {
-    static assert (false);
   }
 }

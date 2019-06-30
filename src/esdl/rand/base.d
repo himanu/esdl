@@ -374,7 +374,6 @@ abstract class CstDomain
   abstract void reset();
   abstract _esdl__Solver getSolverRoot();
   abstract BDD getPrimBdd(Buddy buddy);
-  abstract void resetPrimeBdd();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   abstract CstDomain getResolved();

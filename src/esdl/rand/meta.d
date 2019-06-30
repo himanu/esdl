@@ -18,7 +18,7 @@ import std.exception: enforce;
 import std.range: ElementType;
 
 import esdl.rand.misc;
-import esdl.rand.base: CstBlock;
+import esdl.rand.base: CstBlock, _esdl__Solver, CstVecPrim;
 import esdl.rand.vecx: CstVec, CstVecArr;
 import esdl.rand.solver;
 
@@ -869,4 +869,25 @@ template allIntengral(ARGS...) {
     enum bool allIntengral = allIntengral!(ARGS[1..$]);
   }
   else enum bool allIntengral = false;
+}
+
+auto _esdl__vecarr(V)(ref V v, _esdl__Solver s) if (isArray!V) {
+  alias L = LeafElementType!V;
+  static if (isBitVector!L || isIntegral!L || isBoolean!L) {
+    CstVecArr!(V, _esdl__norand, 0) vec;
+    CstVecPrim p = s.getVecPrime(cast (void*) &v);
+    if (p !is null) {
+      vec = cast(CstVecArr!(V, _esdl__norand, 0)) p;
+      if (vec is null) assert (false);
+      return vec;
+    }
+    else {
+      vec = new CstVecArr!(V, _esdl__norand, 0)("TMP", v, s);
+      s.addVecPrime(cast (void*) &v, vec);
+      return vec;
+    }
+  }
+  else {
+    static assert (false);
+  }
 }
