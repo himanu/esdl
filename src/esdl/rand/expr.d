@@ -1244,11 +1244,11 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.isActualDomain();
   }
 
-  override bool hasAbstractVecDomains() {
+  bool hasAbstractVecDomains() {
     return _parent.hasAbstractVecDomains();
   }
 
-  override void markAbstractVecDomains(bool len) {
+  void markAbstractVecDomains(bool len) {
     _parent.markAbstractVecDomains(len);
   }
 

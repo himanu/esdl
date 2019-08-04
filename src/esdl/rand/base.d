@@ -483,9 +483,6 @@ interface CstVecPrim
   abstract void _esdl__reset();
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);
-  abstract bool hasAbstractVecDomains();
-  abstract void markAbstractVecDomains(bool len);
-  abstract bool isActualDomain();
 }
 
 

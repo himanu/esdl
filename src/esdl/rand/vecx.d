@@ -82,7 +82,7 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_root.addDomain(this, HAS_RAND_ATTRIB);
       }
 
-      final override bool isActualDomain() {
+      final bool isActualDomain() {
 	return true;		// N == 0
       }
 
@@ -168,11 +168,11 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
       
-      override bool hasAbstractVecDomains() {
+      bool hasAbstractVecDomains() {
 	return false;
       }
 
-      override void markAbstractVecDomains(bool len) {
+      void markAbstractVecDomains(bool len) {
 	assert (len is false);
 	return;
       }
@@ -361,11 +361,11 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      override bool hasAbstractVecDomains() {
+      bool hasAbstractVecDomains() {
 	return _parent.hasAbstractVecDomains();
       }
 
-      override void markAbstractVecDomains(bool len) {
+      void markAbstractVecDomains(bool len) {
 	assert (len is false);
 	if (this.isActualDomain()) {
 	  return;
