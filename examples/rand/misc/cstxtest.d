@@ -29,6 +29,10 @@ void main()
       }, __FILE__, __LINE__));
   
   writeln(constraintXlate("solver", q{
+  	a.b.c.d == 4;
+      }, __FILE__, __LINE__));
+  
+  writeln(constraintXlate("solver", q{
   	foreach (i, x; a) {
   	  a[i].b == 0;
   	}

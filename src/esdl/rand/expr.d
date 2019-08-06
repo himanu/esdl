@@ -9,17 +9,17 @@ import esdl.rand.base;
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-interface CstVecTerm: CstVecExpr
+interface CstVecElem: CstVecExpr
 {
 
-  final CstBddTerm toBdd() {
+  final CstBddElem toBdd() {
     auto zero = new CstVal!int(0); // CstVal!int.allocate(0);
     return new CstVec2BddExpr(this, zero, CstBinBddOp.NEQ);
   }
 
   // abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
 
-  CstVec2VecExpr opBinary(string op)(CstVecTerm other)
+  CstVec2VecExpr opBinary(string op)(CstVecElem other)
   {
     static if(op == "&") {
       return new CstVec2VecExpr(this, other, CstBinVecOp.AND);
@@ -50,6 +50,9 @@ interface CstVecTerm: CstVecExpr
     }
     static if(op == ">>") {
       return new CstVec2VecExpr(this, other, CstBinVecOp.RSH);
+    }
+    static if(op == "~") {
+      return new CstVec2VecExpr(this, other, CstBinVecOp.RANGE);
     }
   }
 
@@ -87,6 +90,9 @@ interface CstVecTerm: CstVecExpr
   	static if(op == ">>") {
   	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RSH);
   	}
+  	static if(op == "~") {
+  	  return new CstVec2VecExpr(this, qq, CstBinVecOp.RANGE);
+  	}
       }
 
   CstVec2VecExpr opBinaryRight(string op, Q)(Q q)
@@ -123,27 +129,35 @@ interface CstVecTerm: CstVecExpr
 	static if(op == ">>") {
 	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RSH);
 	}
+	static if(op == "~") {
+	  return new CstVec2VecExpr(qq, this, CstBinVecOp.RANGE);
+	}
       }
 
-  final CstVecTerm opIndex(CstVecExpr index) {
+  final CstVecSliceExpr opIndex(CstVecElem index) {
     // assert(false, "Index operation defined only for Arrays");
-    return new CstVecSliceExpr(this, index);
+    CstVec2VecExpr range = cast(CstVec2VecExpr) index;
+    if (range is null || range._op !is CstBinVecOp.RANGE) {
+      range = index ~ (index + new CstVal!(int)(1));
+    }
+    return new CstVecSliceExpr(this, range);
   }
 
-  CstVecTerm opSlice(P)(P p)
-    if(isIntegral!P || isBitVector!P) {
-      return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
-    }
+  // CstVecElem opSlice(P)(P p)
+  //   if(isIntegral!P || isBitVector!P) {
+  //     return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
+  //   }
 
-  final CstVecTerm opSlice(CstVecExpr lhs, CstVecExpr rhs) {
-    return new CstVecSliceExpr(this, lhs, rhs);
-  }
+  // final CstVecElem opSlice(CstVecExpr lhs, CstVecExpr rhs) {
+  //   return new CstVecSliceExpr(this, lhs, rhs);
+  // }
 
-  CstVecTerm opSlice(P, Q)(P p, Q q)
-    if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
-      return new CstVecSliceExpr(this, new CstVal!P(p), // CstVal!P.allocate(p),
-				 new CstVal!Q(q)); // CstVal!Q.allocate(q));
-    }
+  // CstVecElem opSlice(P, Q)(P p, Q q)
+  //   if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
+  //     return new CstVecSliceExpr(this, new CstVal!P(p), // CstVal!P.allocate(p),
+  // 				 new CstVal!Q(q)); // CstVal!Q.allocate(q));
+  //   }
+
   CstNotBddExpr opUnary(string op)() if(op == "*") {
     // static if(op == "*") {	// "!" in cstx is translated as "*"
     return new CstNotBddExpr(this.toBdd());
@@ -170,7 +184,7 @@ interface CstVecTerm: CstVecExpr
   }
 }
 
-class CstVecDomain(T, alias R): CstDomain, CstVecTerm
+class CstVecDomain(T, alias R): CstDomain, CstVecElem
 {
   enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
 
@@ -790,11 +804,11 @@ class CstVecDomain(T, alias R): CstDomain, CstVecTerm
   }
 }
 
-interface CstBddTerm: CstBddExpr
+interface CstBddElem: CstBddExpr
 {
-  abstract override CstBddTerm unroll(CstIteratorBase iter, uint n);
+  abstract override CstBddElem unroll(CstIteratorBase iter, uint n);
 
-  CstBddTerm opBinary(string op)(CstBddTerm other)
+  CstBddElem opBinary(string op)(CstBddElem other)
   {
     static if(op == "&") {
       return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
@@ -807,46 +821,46 @@ interface CstBddTerm: CstBddExpr
     }
   }
 
-  CstBddTerm opUnary(string op)()
+  CstBddElem opUnary(string op)()
   {
     static if(op == "*") {	// "!" in cstx is translated as "*"
       return new CstNotBddExpr(this);
     }
   }
 
-  final CstBddTerm implies(CstBddTerm other)
+  final CstBddElem implies(CstBddElem other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
   }
 
-  final CstBddTerm implies(CstVecTerm other)
+  final CstBddElem implies(CstVecElem other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
   }
 
-  final CstBddTerm logicOr(CstBddTerm other)
+  final CstBddElem logicOr(CstBddElem other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
   }
 
-  final CstBddTerm logicOr(CstVecTerm other)
+  final CstBddElem logicOr(CstVecElem other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
   }
 
-  final CstBddTerm logicAnd(CstBddTerm other)
+  final CstBddElem logicAnd(CstBddElem other)
   {
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
-  final CstBddTerm logicAnd(CstVecTerm other)
+  final CstBddElem logicAnd(CstVecElem other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
 
 }
 
-class CstIterator(RV): CstIteratorBase, CstVecTerm
+class CstIterator(RV): CstIteratorBase, CstVecElem
 {
   RV _arrVar;
 
@@ -1260,7 +1274,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 }
 
-abstract class CstValBase: CstVecTerm
+abstract class CstValBase: CstVecElem
 {
   CstBddExpr _cstExpr;
   
@@ -1438,7 +1452,7 @@ class CstVal(T = int): CstValBase
 
 // This class would hold two(bin) vector nodes and produces a vector
 // only after processing those two nodes
-class CstVec2VecExpr: CstVecTerm
+class CstVec2VecExpr: CstVecElem
 {
   import std.conv;
 
@@ -1486,6 +1500,8 @@ class CstVec2VecExpr: CstVecTerm
       return _lhs.getBDD(stage, buddy) >> _rhs.getBDD(stage, buddy);
     case CstBinVecOp.BITINDEX:
       assert(false, "BITINDEX is not implemented yet!");
+    case CstBinVecOp.RANGE:
+      assert(false, "RANGE is used only in conjunction with Slice expressions!");
     }
   }
 
@@ -1532,7 +1548,9 @@ class CstVec2VecExpr: CstVecTerm
     case CstBinVecOp.LSH: return lvec << rvec;
     case CstBinVecOp.RSH: return lvec >> rvec;
     case CstBinVecOp.BITINDEX:
-      assert(false, "BITINDEX is not implemented yet!");
+      assert (false, "BITINDEX is not implemented yet!");
+    case CstBinVecOp.RANGE:
+      assert (false, "RANGE is used only in conjunction with Slice expressions!");
     }
   }
 
@@ -1702,25 +1720,24 @@ class CstVec2VecExpr: CstVecTerm
 
 }
 
-class CstVecSliceExpr: CstVecTerm
+class CstVecSliceExpr: CstVecElem
 {
   CstVecExpr _vec;
-  CstVecExpr _lhs;
-  CstVecExpr _rhs;
+  CstVec2VecExpr _range;
 
   string name() {
-    return _vec.name() ~ "[ " ~ _lhs.name() ~ " .. " ~ _rhs.name() ~ " ]";
+    return _vec.name() ~ "[ " ~ _range.name() ~ " ]";
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
     auto vec  = _vec.getBDD(stage, buddy);
-    size_t lvec = cast(size_t) _lhs.evaluate();
+    size_t lvec = cast(size_t) _range._lhs.evaluate();
     size_t rvec = lvec;
-    if(_rhs is null) {
+    if(_range._rhs is null) {
       rvec = lvec + 1;
     }
     else {
-      rvec = cast(size_t) _rhs.evaluate();
+      rvec = cast(size_t) _range._rhs.evaluate();
     }
     return vec[lvec..rvec];
   }
@@ -1732,25 +1749,30 @@ class CstVecSliceExpr: CstVecTerm
   long evaluate() {
     // auto vec  = _vec.evaluate();
     // auto lvec = _lhs.evaluate();
-    // auto rvec = _rhs.evaluate();
+    // auto rvec = _range._rhs.evaluate();
 
     assert(false, "Can not evaluate a CstVecSliceExpr!");
   }
 
   override CstVecSliceExpr unroll(CstIteratorBase iter, uint n) {
-    if (_rhs is null) {
-      return new CstVecSliceExpr(_vec.unroll(iter, n), _lhs.unroll(iter, n));
+    if (_range._rhs is null) {
+      return new CstVecSliceExpr(_vec.unroll(iter, n), _range._lhs.unroll(iter, n));
     }
     else {
       return new CstVecSliceExpr(_vec.unroll(iter, n),
-				 _lhs.unroll(iter, n), _rhs.unroll(iter, n));
+				 _range._lhs.unroll(iter, n), _range._rhs.unroll(iter, n));
     }
   }
 
   this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs=null) {
     _vec = vec;
-    _lhs = lhs;
-    _rhs = rhs;
+    _range = new CstVec2VecExpr(lhs, rhs, CstBinVecOp.RANGE);
+  }
+
+  this(CstVecExpr vec, CstVec2VecExpr range) {
+    assert (range._op is CstBinVecOp.RANGE);
+    _vec = vec;
+    _range = range;
   }
 
   uint resolveLap() {
@@ -1780,10 +1802,7 @@ class CstVecSliceExpr: CstVecTerm
 		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
     _vec.setBddContext(pred, vars, vals, iters, idxs, deps);
-    _lhs.setBddContext(pred, deps, vals, iters, idxs, deps);
-    if (_rhs !is null) {
-      _rhs.setBddContext(pred, deps, vals, iters, idxs, deps);
-    }
+    _range.setBddContext(pred, deps, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
@@ -1799,17 +1818,12 @@ class CstVecSliceExpr: CstVecTerm
   }
   
   override bool solved() {
-    if (_rhs is null) {
-      return _lhs.solved() && _vec.solved();
-    }
-    else {
-      return _lhs.solved() && _rhs.solved() && _vec.solved();
-    }
+    return _range.solved() && _vec.solved();
   }
   
 }
 
-class CstNotVecExpr: CstVecTerm
+class CstNotVecExpr: CstVecElem
 {
   import std.conv;
 
@@ -1887,7 +1901,7 @@ class CstNotVecExpr: CstVecTerm
   }
 }
 
-class CstNegVecExpr: CstVecTerm
+class CstNegVecExpr: CstVecElem
 {
   import std.conv;
 
@@ -1966,7 +1980,7 @@ override bool solved() {
 }
 
 
-class CstBdd2BddExpr: CstBddTerm
+class CstBdd2BddExpr: CstBddElem
 {
   import std.conv;
 
@@ -2088,7 +2102,7 @@ class CstBdd2BddExpr: CstBddTerm
 }
 
 // TBD
-class CstIteBddExpr: CstBddTerm
+class CstIteBddExpr: CstBddElem
 {
   string name() {
     return "CstIteBddExpr";
@@ -2135,7 +2149,7 @@ class CstIteBddExpr: CstBddTerm
     assert(false, "TBD");
   }    
 
-  CstBddTerm unroll(CstIteratorBase iter, uint n) {
+  CstBddElem unroll(CstIteratorBase iter, uint n) {
     assert(false, "TBD");
   }
 
@@ -2150,7 +2164,7 @@ class CstIteBddExpr: CstBddTerm
   }
 }
 
-class CstVec2BddExpr: CstBddTerm
+class CstVec2BddExpr: CstBddElem
 {
   import std.conv;
 
@@ -2333,7 +2347,7 @@ class CstVec2BddExpr: CstBddTerm
   }
 }
 
-class CstBddConst: CstBddTerm
+class CstBddConst: CstBddElem
 {
   immutable bool _expr;
 
@@ -2394,7 +2408,7 @@ class CstBddConst: CstBddTerm
   }
 }
 
-class CstNotBddExpr: CstBddTerm
+class CstNotBddExpr: CstBddElem
 {
   CstBddExpr _expr;
 
@@ -2462,8 +2476,8 @@ class CstNotBddExpr: CstBddTerm
 // }
 
 auto _esdl__logicOr(P, Q)(P p, Q q) {
-  CstBddTerm _p;
-  CstBddTerm _q;
+  CstBddElem _p;
+  CstBddElem _q;
   static if (is (P == bool)) {
     _p = new CstBddConst(p);
   }
@@ -2486,8 +2500,8 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
 }
 
 auto _esdl__logicAnd(P, Q)(P p, Q q) {
-  CstBddTerm _p;
-  CstBddTerm _q;
+  CstBddElem _p;
+  CstBddElem _q;
   static if(is(P == bool)) {
     _p = new CstBddConst(p);
   }

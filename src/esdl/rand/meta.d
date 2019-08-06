@@ -19,7 +19,7 @@ import std.range: ElementType;
 
 import esdl.rand.misc;
 import esdl.rand.base: CstBlock, _esdl__Solver, CstVecPrim;
-import esdl.rand.vecx: CstVec, CstVecArr;
+import esdl.rand.term: CstVec, CstVecArr;
 import esdl.rand.solver;
 
 /// C++ type static_cast for down-casting when you are sure
@@ -731,7 +731,7 @@ mixin template _esdl__SolverMixin()
     _esdl__cstWith = cstWith;
   }
 
-  auto ref _esdl__vec(L)(ref L l, string name="unnamed") {
+  auto ref _esdl__rand_proxy(L)(ref L l, string name="unnamed") {
     import std.traits: isIntegral, isBoolean, isArray;
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
@@ -748,7 +748,7 @@ mixin template _esdl__SolverMixin()
     }
    }
 
-  auto const ref _esdl__vec(L)(const ref L l, string name="unnamed") {
+  auto const ref _esdl__rand_proxy(L)(const ref L l, string name="unnamed") {
     import std.traits: isIntegral, isBoolean, isArray;
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
       // import std.stdio;
@@ -767,7 +767,7 @@ mixin template _esdl__SolverMixin()
   }
 
 
-  auto _esdl__vec(L)(L l, string name="unnamed") {
+  auto _esdl__rand_proxy(L)(L l, string name="unnamed") {
     import std.traits: isIntegral, isBoolean;
     import esdl.data.bvec: isBitVector;
     static if (isIntegral!L || isBitVector!L || isBoolean!L) {
@@ -871,7 +871,7 @@ template allIntengral(ARGS...) {
   else enum bool allIntengral = false;
 }
 
-auto _esdl__vecarr(V)(ref V v, _esdl__Solver s) if (isArray!V) {
+auto _esdl__rand_proxy_arr(V)(ref V v, _esdl__Solver s) if (isArray!V) {
   alias L = LeafElementType!V;
   static if (isBitVector!L || isIntegral!L || isBoolean!L) {
     CstVecArr!(V, _esdl__norand, 0) vec;
