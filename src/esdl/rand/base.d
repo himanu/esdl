@@ -95,28 +95,30 @@ abstract class _esdl__Solver
     return _root._esdl__rGen;
   }
 
-  bool _esdl__isSeeded = false;
   uint _esdl__seed;
+  bool _esdl__seeded = false;
 
   uint getRandomSeed() {
     assert(_root is this);
     return _esdl__seed;
   }
 
+  bool isRandomSeeded() {
+    assert(_root is this);
+    return _esdl__seeded;
+  }
+
   void seedRandom(uint seed) {
     assert(_root is this);
+    _esdl__seeded = true;
     _esdl__seed = seed;
     _esdl__rGen.seed(seed);    
   }
   
-  this(string name, _esdl__Solver parent, bool isSeeded, uint seed) {
+  this(string name, _esdl__Solver parent) {
     import std.random: Random, uniform;
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
-    }
-    _esdl__isSeeded = isSeeded;
-    if (isSeeded is true) {
-      _esdl__seed = seed;
     }
     else {
       import esdl.base.core: Procedure;

@@ -19,7 +19,7 @@ import std.range: ElementType;
 
 import esdl.rand.misc;
 import esdl.rand.base: CstBlock, _esdl__Solver, CstVecPrim;
-import esdl.rand.term: CstVec, CstVecArr;
+import esdl.rand.term: CstVec, CstVecArr, CstObj, CstObjArr;
 import esdl.rand.solver;
 
 /// C++ type static_cast for down-casting when you are sure
@@ -84,11 +84,13 @@ template _esdl__RandProxyType(T, int I)
   else static if(isBitVector!L || isIntegral!L || isBoolean!L) {
     alias _esdl__RandProxyType = CstVec!(L, RAND, 0);
   }
-  else static if(is(L == class) || is(L == struct)) {
-    alias _esdl__RandProxyType = _esdl__SolverResolve!L;
+  else static if(isArray!L && (is(E == class) || is(E == struct) ||
+			       (is(E == U*, U) && is(U == struct)))) {
+    alias _esdl__RandProxyType = CstObjArr!(L, RAND, 0);
   }
-  else static if(is(L == U*, U) && is(U == struct)) {
-    alias _esdl__RandProxyType = _esdl__SolverResolve!U;
+  else static if(is(L == class) || is(L == struct) ||
+		 (is(L == U*, U) && is(U == struct))) {
+    alias _esdl__RandProxyType = CstObj!(L, RAND, 0);
   }
 }
 
@@ -142,9 +144,7 @@ template _esdl__RandInits(T, int I=0)
 	  // " = this._esdl__outer.tupleof[" ~ II ~
 	  // "].new typeof(_esdl__" ~ NAME ~
 	  " = new typeof(_esdl__" ~ NAME ~ ")(\"" ~ NAME ~ "\",
-                         this._esdl__outer.tupleof[" ~ II ~ "],
-                         this._esdl__outer._esdl__randSeeded, " ~
-	                 "this._esdl__outer._esdl__randSeed, this);
+                         this._esdl__outer.tupleof[" ~ II ~ "], this);
           _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
       }
@@ -152,9 +152,7 @@ template _esdl__RandInits(T, int I=0)
 	enum _esdl__RandInits =
 	  "    _esdl__" ~ NAME ~
 	  " = new typeof(_esdl__" ~ NAME ~ ")(\"" ~ NAME ~ "\",
-                         this._esdl__outer.tupleof[" ~ II ~ "],
-                         this._esdl__outer._esdl__randSeeded, " ~
-	                 "this._esdl__outer._esdl__randSeed, this);
+                         this._esdl__outer.tupleof[" ~ II ~ "], this);
           _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
       }
@@ -164,9 +162,7 @@ template _esdl__RandInits(T, int I=0)
 	  "] !is null);\n" ~
 	  "    _esdl__" ~ NAME ~
 	  " = new typeof(_esdl__" ~ NAME ~ ")(\"" ~ NAME ~ "\",
-                         *(this._esdl__outer.tupleof[" ~ II ~ "]),
-                         this._esdl__outer._esdl__randSeeded, " ~
-	                 "this._esdl__outer._esdl__randSeed, this);
+                         *(this._esdl__outer.tupleof[" ~ II ~ "]), this);
           _esdl__randsList ~= _esdl__" ~ NAME ~
 	  "._esdl__randsList;\n" ~ _esdl__RandInits!(T, I+1);
       }
@@ -519,14 +515,14 @@ mixin template Randomization()
 	_esdl__setObjOuter(true);
       }
     }
-    this(string name, _esdl__T outer, bool isSeeded, uint seed,
-	 _esdl__SolverRoot parent=null) {
+    this(string name, _esdl__T outer,
+	 _esdl__Solver parent) {
       _esdl__outer = outer;
       static if(_esdl__baseHasRandomization!_esdl__T) {
-	super(name, outer, isSeeded, seed, parent);
+	super(name, outer, parent);
       }
       else {
-	super(name, parent, isSeeded, seed);
+	super(name, parent);
       }
       _esdl__initRands();
       _esdl__initCsts();
@@ -559,8 +555,8 @@ mixin template Randomization()
     override void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__SolverType(typeid(_esdl__Type).stringof[8..$-1], this,
-				_esdl__randSeeded, _esdl__randSeed);
+	  new _esdl__SolverType(typeid(_esdl__Type).stringof[8..$-1],
+				this, null);
 	static if(__traits(compiles, _esdl__setupSolver())) {
 	  _esdl__setupSolver();
 	}
@@ -572,8 +568,6 @@ mixin template Randomization()
   }
   else {
     @rand!false _esdl__SolverRoot _esdl__solverInst;
-    @rand!false uint _esdl__randSeed;
-    @rand!false bool _esdl__randSeeded;
     _esdl__SolverType _esdl__getSolver() {
       return _esdl__staticCast!_esdl__SolverType(_esdl__solverInst);
     }
@@ -585,29 +579,35 @@ mixin template Randomization()
       useBuddy(_esdl__solverInst._esdl__buddy);
     }
     void seedRandom(int seed) {
-      _esdl__randSeed = seed;
-      _esdl__randSeeded = true;
-      if (_esdl__solverInst !is null) {
+      if (_esdl__solverInst is null) {
+	_esdl__initSolver();
+      }
+      else {
 	_esdl__solverInst.seedRandom(seed);
       }
     }
     bool _esdl__isRandSeeded() {
-      return _esdl__randSeeded;
-    }
-    uint _esdl__getRandomSeed() {
-      if (_esdl__solverInst !is null) {
-	return _esdl__solverInst.getRandomSeed();
+      if (_esdl__solverInst is null) {
+	return false;
       }
       else {
-	return _esdl__randSeed;
+	return _esdl__solverInst.isRandomSeeded;
+      }
+    }
+    uint _esdl__getRandomSeed() {
+      if (_esdl__solverInst is null) {
+	return 0;
+      }
+      else {
+	return _esdl__solverInst.getRandomSeed();
       }
     }
     alias srandom = seedRandom;	// SV names the similar method srandom
     void _esdl__initSolver() {
       if (_esdl__solverInst is null) {
 	_esdl__solverInst =
-	  new _esdl__SolverType(typeid(_esdl__Type).stringof[8..$-1], this,
-				_esdl__randSeeded, _esdl__randSeed);
+	  new _esdl__SolverType(typeid(_esdl__Type).stringof[8..$-1],
+				this, null);
 	static if(__traits(compiles, _esdl__setupSolver())) {
 	  _esdl__setupSolver();
 	}
@@ -621,7 +621,32 @@ mixin template Randomization()
   // }
 }
 
-class _esdl__SolverNoRand(_esdl__T): _esdl__SolverBase!_esdl__T
+class _esdl__SolverNoRand(_esdl__T) if (is (_esdl__T == class)): _esdl__SolverBase!_esdl__T
+{
+  _esdl__T _esdl__outer;
+  void _esdl__setValRef()(_esdl__T outer) {
+    if (_esdl__outer !is outer) {
+      _esdl__outer = outer;
+      _esdl__setObjOuter(true);
+    }
+  }
+  this(string name, _esdl__T outer,
+       _esdl__SolverRoot parent) {
+    _esdl__outer = outer;
+    static if(_esdl__baseHasRandomization!_esdl__T) {
+      super(name, outer, parent);
+    }
+    else {
+      super(name, parent);
+    }
+    _esdl__initRands();
+    _esdl__initCsts();
+  }
+
+  mixin _esdl__SolverMixin;
+}
+
+class _esdl__SolverNoRand(_esdl__T) if (is (_esdl__T == struct)): _esdl__SolverBase!_esdl__T
 {
   _esdl__T* _esdl__outer;
   void _esdl__setValRef(ref _esdl__T outer) {
@@ -630,14 +655,14 @@ class _esdl__SolverNoRand(_esdl__T): _esdl__SolverBase!_esdl__T
       _esdl__setObjOuter(true);
     }
   }
-  this(string name, ref _esdl__T outer, bool isSeeded, uint seed,
-       _esdl__SolverRoot parent=null) {
+  this(string name, ref _esdl__T outer,
+       _esdl__SolverRoot parent) {
     _esdl__outer = &outer;
     static if(_esdl__baseHasRandomization!_esdl__T) {
-      super(name, outer, isSeeded, seed, parent);
+      super(name, outer, parent);
     }
     else {
-      super(name, parent, isSeeded, seed);
+      super(name, parent);
     }
     _esdl__initRands();
     _esdl__initCsts();
