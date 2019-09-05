@@ -118,6 +118,7 @@ class Bar: Foo
 void main()
 {
   auto foo = new Bar;
+  foo.seedRandom(100);
   for (size_t i=0; i!=40; ++i)
     {
       foo.randomize();

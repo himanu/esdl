@@ -68,6 +68,13 @@ mixin template CstObjMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstObj represents
 
+class CstObjIdx(V, alias R, int N, int IDX): CstObj!(V, R, N)
+{
+  this(string name, ref V var, _esdl__Solver parent) {
+    super(name, var, parent);
+  }
+}
+
 class CstObj(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
   _esdl__SolverResolve!V
     {
@@ -214,11 +221,11 @@ class CstObj(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0)
       else return (_parent == rhs._parent && _indexExpr == _indexExpr);
     }
       
-    final bool isActualDomain() {
+    final bool isPhysical() {
       return ((_indexExpr is null ||
 	       _indexExpr.isIterator ||
 	       _indexExpr.isConst) &&
-	      _parent.isActualDomain());
+	      _parent.isPhysical());
     }
 
     // _esdl__Solver getSolverRoot() {
@@ -272,7 +279,7 @@ class CstObj(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0)
 	markAbstractVecDomains(false);
 	if (! canFind(vars, this)) vars ~= this;
       }
-      if (_parent.isActualDomain()) {
+      if (_parent.isPhysical()) {
 	deps ~= _parent._arrLen;
       }
       _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
@@ -295,7 +302,7 @@ class CstObj(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0)
 
     void markAbstractVecDomains(bool len) {
       assert (len is false);
-      if (this.isActualDomain()) {
+      if (this.isPhysical()) {
 	return;
       }
       else {
@@ -484,6 +491,13 @@ mixin template CstObjArrMixin()
 // }
 
 // Arrays (Multidimensional arrays as well)
+class CstObjArrIdx(V, alias R, int N, int IDX): CstObjArr!(V, R, N)
+{
+  this(string name, ref V var, _esdl__Solver parent) {
+    super(name, var, parent);
+  }
+}
+
 class CstObjArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   mixin CstObjArrMixin;
@@ -515,7 +529,7 @@ class CstObjArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
     return _root;
   }
 
-  final bool isActualDomain() {
+  final bool isPhysical() {
     return true; 		// N == 0
   }
 
@@ -657,11 +671,11 @@ class CstObjArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     else return (_parent == rhs._parent && _indexExpr == _indexExpr);
   }
       
-  final bool isActualDomain() {
+  final bool isPhysical() {
     return ((_indexExpr is null  ||
 	     _indexExpr.isIterator ||
 	     _indexExpr.isConst) &&
-	    _parent.isActualDomain());
+	    _parent.isPhysical());
   }
 
   RV getResolved() {
@@ -734,7 +748,7 @@ class CstObjArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
 	  
     // auto iter = arrLen.makeIterVar();
     // iters ~= iter;
-    if (_parent.isActualDomain()) {
+    if (_parent.isPhysical()) {
       deps ~= _parent._arrLen;
     }
     _parent.setBddContext(pred, vals, vals, iters, idxs, deps);
@@ -744,7 +758,7 @@ class CstObjArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   void markAsUnresolved(uint lap) {
-    if (isActualDomain()) {
+    if (isPhysical()) {
       foreach (elem; _elems) {
 	elem.markAsUnresolved(lap);
       }
@@ -755,7 +769,7 @@ class CstObjArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   void markAbstractVecDomains(bool len) {
-    if (this.isActualDomain()) {
+    if (this.isPhysical()) {
       labelAbstractVecDomains(len);
     }
     else {

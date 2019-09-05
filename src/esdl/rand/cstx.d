@@ -407,7 +407,7 @@ struct CstParser {
       }
       fill(", \"");
       fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-      fill("\")");
+      fill("\", this.getSolver())");
       if (idChain[2] != -1) {
 	fill("._esdl__rand_term_chain!(");
       }
@@ -460,7 +460,7 @@ struct CstParser {
       }
       fill(", \"");
       fill(CST[start..srcCursor]);
-      fill("\")");
+      fill("\", this.getSolver())");
     }
     return start;
   }

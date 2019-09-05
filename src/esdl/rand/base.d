@@ -10,8 +10,13 @@ import std.array;
 import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-enum DomType: ubyte {MONO = 1, LAZYMONO = 2, MAYBEMONO = 3,
-                     INDEXEDMONO = 4, MULTI = 5}
+enum DomType: ubyte
+{   MONO = 1,
+    LAZYMONO = 2,		// like MONO with only some vals that need runtime eval
+    MAYBEMONO = 3,
+    INDEXEDMONO = 4,
+    MULTI = 5
+    }
 
 abstract class _esdl__Solver
 {
@@ -77,7 +82,7 @@ abstract class _esdl__Solver
     }
   }
 
-  void solveValDomains() {
+  void updateValDomains() {
     foreach (dom; _cstValDomains) {
       dom.updateVal();
     }
@@ -165,7 +170,7 @@ abstract class _esdl__Solver
       return false;
     }
     auto dom = pred._vars[0];
-    if (! dom.isActualDomain()) {
+    if (! dom.isPhysical()) {
       dom = dom.getResolved();
     }
     if (! dom.solved()) {
@@ -184,7 +189,7 @@ abstract class _esdl__Solver
     }
     else {
       foreach (var; pred._vars) {
-	if (! var.isActualDomain()) {
+	if (! var.isPhysical()) {
 	  auto dom = var.getResolved();
 	  dom._tempPreds ~= pred;
 	}
@@ -381,7 +386,7 @@ abstract class CstDomain
   abstract CstDomain getResolved();
   abstract void updateVal();
   abstract bool hasChanged();
-  abstract bool isActualDomain();
+  abstract bool isPhysical();
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerValPred(CstPredicate valPred);  
   abstract void registerDepPred(CstDepCallback depCb);
@@ -836,14 +841,13 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	  var._type = DomType.LAZYMONO;
 	}
 	if (_idxs.length > 0) {
-	  assert(! var.isActualDomain());
+	  assert(! var.isPhysical());
 	  var._type = DomType.INDEXEDMONO;
 	}
       }
     }
 
-    // Since parent _deps were already resolved when the parent
-    // unrolled
+    // When the parent unrolls, its dependencies would already be take care of
     if (_parent !is null) {
       CstDomain[] _foundDeps = _deps ~ _idxs;
       _deps = _foundDeps.filter!(dep => (! canFind(_parent._deps, dep))).array;
@@ -943,7 +947,7 @@ class CstBlock
     return name_;
   }
 
-  void _esdl__reset() {
+  void clear() {
     _preds.length = 0;
   }
 

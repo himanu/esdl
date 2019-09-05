@@ -28,10 +28,13 @@ interface _esdl__Norand { }
 // }
 enum norand;
 
-template rand(N...) {
-  static if(CheckRandParams!N) {
-    struct rand { }
-  }
+struct _esdl__rand(N...) { }
+
+template rand(N...) if (CheckRandParams!N) {
+  enum LENGTH = N.length;
+  // enum _esdl__isRandAttribute = true;
+  enum IDX(size_t I) = N[I];
+  alias RAND = _esdl__rand!(N);
 }
 
 template isVecSigned(L) {
@@ -143,49 +146,49 @@ template CheckRandParams(N...) {
 //   }
 // }
 
-template hasRandAttr(T, int I=0) {
-  enum hasRandAttr = hasRandInList!(__traits(getAttributes, T.tupleof[I]));
-}
+// template hasRandAttr(T, int I=0) {
+//   enum hasRandAttr = hasRandInList!(__traits(getAttributes, T.tupleof[I]));
+// }
 
-template hasRandInList(A...) {
-  static if(A.length == 0) {
-    enum bool hasRandInList = false;
-  }
-  else static if(__traits(isSame, A[0], rand) ||
-		 is(A[0] unused: rand!M, M...)) {
-      enum bool hasRandInList = true;
-    }
-    else {
-      enum bool hasRandInList = hasRandInList!(A[1..$]);
-    }
-}
+// template hasRandInList(A...) {
+//   static if(A.length == 0) {
+//     enum bool hasRandInList = false;
+//   }
+//   else static if(__traits(isSame, A[0], rand) ||
+// 		 is(A[0] unused: rand!M, M...)) {
+//       enum bool hasRandInList = true;
+//     }
+//     else {
+//       enum bool hasRandInList = hasRandInList!(A[1..$]);
+//     }
+// }
 
-template getRandAttr(T, string R) {
-  alias getRandAttr = scanRandAttr!(__traits(getAttributes,
-					     __traits(getMember, T, R)));
-}
+// template getRandAttr(T, string R) {
+//   alias getRandAttr = scanRandAttr!(__traits(getAttributes,
+// 					     __traits(getMember, T, R)));
+// }
 
 template getRandAttrN(alias R, int N) {
-  static if(is(R == rand!A, A...)) {
-    static assert(A.length > N);
-    enum int getRandAttrN = A[N];
+  static if (__traits(isSame, R, rand) ||
+	     __traits(isSame, R, rand!false)) {
+    enum int getRandAttrN = -1;
   }
   else {
-    // static assert(false);
-    enum int getRandAttrN = -1;
+    // pragma(msg, N.stringof ~ R.IDX!N.stringof);
+    enum getRandAttrN = R.IDX!N;
   }
 }
 
-template getRandAttr(T, int I, int N) {
-  alias Attr = getRandAttr!(T, I);
-  static if(is(Attr == rand!A, A...)) {
-    static assert(A.length > N);
-    enum int getRandAttr = A[N];
-  }
-  else {
-    static assert(false);
-  }
-}
+// template getRandAttr(T, int I, int N) {
+//   alias Attr = getRandAttr!(T, I);
+//   static if (is (Attr == _esdl__rand!A, A...)) {
+//     static assert(A.length > N);
+//     enum int getRandAttr = A[N];
+//   }
+//   else {
+//     static assert(false);
+//   }
+// }
 
 template getRandAttr(T, int I) {
   alias getRandAttr = scanRandAttr!(__traits(getAttributes, T.tupleof[I]));
@@ -196,17 +199,25 @@ template scanRandAttr(A...) {
     alias scanRandAttr = _esdl__norand;
   }
   else static if(__traits(isSame, A[0], norand)) {
-      static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
-      alias scanRandAttr = A[0];
+    static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
+    alias scanRandAttr = A[0];
   }
-  else static if(__traits(isSame, A[0], rand) ||
-		 is(A[0] unused: rand!M, M...)) {
-      static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
-      alias scanRandAttr = A[0];
-    }
-    else {
-      alias scanRandAttr = scanRandAttr!(A[1..$]);
-    }
+  else static if (__traits(isSame, A[0], rand)) {
+    static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
+    alias scanRandAttr = A[0];
+  }
+  else static if (
+		  // __traits(compiles, A[0]._esdl__isRandAttribute) ||
+		  // is (A[0] == rand!M, M...) ||
+		  (__traits(compiles, A[0].RAND) &&
+		   is (A[0].RAND == _esdl__rand!M, M...))) {
+    // pragma(msg, A[0].RAND.stringof);
+    static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
+    alias scanRandAttr = A[0];
+  }
+  else {
+    alias scanRandAttr = scanRandAttr!(A[1..$]);
+  }
 }
 
 class _esdl__RandGen

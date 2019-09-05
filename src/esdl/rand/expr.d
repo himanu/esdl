@@ -321,7 +321,8 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
       enum bits = 1;
     }
     static if (bits <= 64) {
-      final switch (iType) {
+      // final
+      switch (iType) {
       case INTTYPE.UINT: iType = bits <= 32 ?
 	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
 	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
@@ -333,6 +334,7 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
 	  INTTYPE.LONG : INTTYPE.ULONG;
 	break;
       case INTTYPE.LONG: break;
+      default: assert(false);
       }
       return true;
     }
@@ -664,7 +666,8 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
   }
 
   override bool solveRange(_esdl__RandGen randGen) {
-    final switch(this._type) {
+    // final
+    switch(this._type) {
     case DomType.MONO:
       if (this._rs.isEmpty()) {
 	assert(false, "Constraints on domain " ~ this.name() ~
@@ -717,9 +720,8 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
       assert(false);
     case DomType.MULTI:
       return false;
-    // default:
-    //   assert(false);
-    //   break;
+    default:
+      assert(false);
     }
     return true;
   }
@@ -1006,7 +1008,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _name = name;
     _parent = parent;
     _iterVar = new CstIterator!RV(_parent);
-    if (_parent.isActualDomain()) {
+    if (_parent.isPhysical()) {
       _parent.getSolverRoot().addDomain(this, HAS_RAND_ATTRIB);
     }
   }
@@ -1111,8 +1113,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return this.to!string();
   }
 
-  override BDD getPrimBdd(Buddy buddy) {
-    if(_primBdd.isZero()) {
+  final override BDD getPrimBdd(Buddy buddy) {
+    if (_primBdd.isZero()) {
       _primBdd = this.bddvec(buddy).lte(buddy.buildVec(_parent.maxArrLen));
     }
     return _primBdd;
@@ -1254,8 +1256,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
   }
   
-  final override bool isActualDomain() {
-    return _parent.isActualDomain();
+  final override bool isPhysical() {
+    return _parent.isPhysical();
   }
 
   bool hasAbstractVecDomains() {
@@ -1428,7 +1430,8 @@ class CstVal(T = int): CstValBase
       enum uint bits = T.SIZE;
     }
     static if (bits <= 64) {
-      final switch (iType) {
+      // final
+      switch (iType) {
       case INTTYPE.UINT: iType = bits <= 32 ?
 	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
 	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
@@ -1440,6 +1443,7 @@ class CstVal(T = int): CstValBase
 	  INTTYPE.LONG : INTTYPE.ULONG;
 	break;
       case INTTYPE.LONG: break;
+      default: assert(false);
       }
       return true;
     }

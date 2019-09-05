@@ -14,6 +14,7 @@ class Foo
 {
   mixin Randomization;
   @rand!(4,4,4,4,4,16) byte[][][][][][] foo;
+  // @rand byte[][][][][][] foo;
   void display() {
     import std.stdio;
     writeln(foo);
@@ -33,7 +34,7 @@ class Foo
 	    foreach(j, c; b) {
 	      foreach(i, d; c) // {
 		d == (j + 4) * i;
-		// d < 8;
+	      // d < 8;
 	      // }
 	      c.length >= 10;
 	    }

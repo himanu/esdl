@@ -57,6 +57,13 @@ mixin template CstVecMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
 
+class CstVecIdx(V, alias R, int N, int IDX): CstVec!(V, R, N)
+{
+  this(string name, ref V var, _esdl__Solver parent) {
+    super(name, var, parent);
+  }
+}
+
 class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
   CstVecDomain!(LeafElementType!V, R), CstVecPrim
     {
@@ -81,7 +88,7 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_root.addDomain(this, HAS_RAND_ATTRIB);
       }
 
-      final override bool isActualDomain() {
+      final override bool isPhysical() {
 	return true;		// N == 0
       }
 
@@ -231,7 +238,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	_pindex = index;
 	_root = _parent.getSolverRoot();
 	
-	if (this.isActualDomain()) {
+	if (this.isPhysical()) {
 	  _root.addDomain(this, HAS_RAND_ATTRIB);
 	}
       }
@@ -242,11 +249,11 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
       }
       
-      final override bool isActualDomain() {
+      final override bool isPhysical() {
 	return ((_indexExpr is null ||
 		 _indexExpr.isIterator ||
 		 _indexExpr.isConst) &&
-		_parent.isActualDomain());
+		_parent.isPhysical());
       }
 
       override _esdl__Solver getSolverRoot() {
@@ -255,6 +262,8 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       override RV getResolved() {
+	// domains do not resolve by themselves -- we only check if a
+	// domain has dependencies. If not, we make a call to getResolved()
 	if (_resolvedCycle != getSolverRoot()._cycle) {
 	  auto parent = _parent.getResolved();
 	  if (_indexExpr) {
@@ -341,7 +350,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  markAbstractVecDomains(false);
 	  if (! canFind(vars, this)) vars ~= this;
 	}
-	if (_parent.isActualDomain()) {
+	if (_parent.isPhysical()) {
 	  deps ~= _parent._arrLen;
 	}
 	_parent.setBddContext(pred, vars, vals, iters, idxs, deps);
@@ -359,7 +368,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       override void markAsUnresolved(uint lap) {
-	if (isActualDomain()) {
+	if (isPhysical()) {
 	  if (_unresolveLap != lap) {
 	    _unresolveLap = lap;
 	    foreach (pred; _varPreds) {
@@ -378,7 +387,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 
       void markAbstractVecDomains(bool len) {
 	assert (len is false);
-	if (this.isActualDomain()) {
+	if (this.isPhysical()) {
 	  return;
 	}
 	else {
@@ -616,6 +625,14 @@ mixin template CstVecArrMixin()
 // }
 
 // Arrays (Multidimensional arrays as well)
+
+class CstVecArrIdx(V, alias R, int N, int IDX): CstVecArr!(V, R, N)
+{
+  this(string name, ref V var, _esdl__Solver parent) {
+    super(name, var, parent);
+  }
+}
+
 class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim
 {
   mixin CstVecArrMixin;
@@ -642,7 +659,7 @@ class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
     }
   }
 
-  final bool isActualDomain() {
+  final bool isPhysical() {
     return true; 		// N == 0
   }
 
@@ -791,11 +808,11 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     else return (_parent == rhs._parent && _indexExpr == _indexExpr);
   }
       
-  final bool isActualDomain() {
+  final bool isPhysical() {
     return ((_indexExpr is null  ||
 	     _indexExpr.isIterator ||
 	     _indexExpr.isConst) &&
-	    _parent.isActualDomain());
+	    _parent.isPhysical());
   }
 
   RV getResolved() {
@@ -868,7 +885,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
 	  
     // auto iter = arrLen.makeIterVar();
     // iters ~= iter;
-    if (_parent.isActualDomain()) {
+    if (_parent.isPhysical()) {
       deps ~= _parent._arrLen;
     }
     _parent.setBddContext(pred, vals, vals, iters, idxs, deps);
@@ -878,7 +895,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   void markAsUnresolved(uint lap) {
-    if (isActualDomain()) {
+    if (isPhysical()) {
       foreach (elem; _elems) {
 	elem.markAsUnresolved(lap);
       }
@@ -889,7 +906,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   void markAbstractVecDomains(bool len) {
-    if (this.isActualDomain()) {
+    if (this.isPhysical()) {
       labelAbstractVecDomains(len);
     }
     else {

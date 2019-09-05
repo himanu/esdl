@@ -10,11 +10,11 @@ import std.array;
 
 abstract class _esdl__ConstraintBase: _esdl__Norand
 {
-  this(_esdl__SolverRoot eng, string name, string constraint, uint index) {
+  this(_esdl__SolverRoot eng, string name, string constraint, size_t index) {
     _cstEng = eng;
     _name = name;
     _constraint = constraint;
-    _index = index;
+    _index = cast(uint) index;
   }
   immutable @rand!false string _constraint;
   protected @rand!false bool _enabled = true;
@@ -35,13 +35,12 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
     _enabled = false;
   }
 
-  BDD getConstraintBDD() {
-    BDD retval = _cstEng._esdl__buddy.one();
-    return retval;
-  }
-
   string name() {
     return _name;
+  }
+
+  final _esdl__SolverRoot getSolver() {
+    return _cstEng;
   }
 
   abstract CstBlock getCstExpr();
@@ -57,7 +56,7 @@ static char[] constraintXlate(string SOLVER, string CST,
 abstract class Constraint(string CONSTRAINT, string FILE=__FILE__, size_t LINE=__LINE__)
   : _esdl__ConstraintBase
 {
-  this(_esdl__SolverRoot eng, string name, uint index) {
+  this(_esdl__SolverRoot eng, string name, size_t index) {
     super(eng, name, CONSTRAINT, index);
   }
 };
@@ -101,9 +100,11 @@ abstract class _esdl__SolverRoot: _esdl__Solver
   }
 
   // overridden by Randomization mixin -- see meta.d
-  void _esdl__initRands() {}
-  void _esdl__initCsts() {}
-  void _esdl__doRandomize(_esdl__RandGen randGen) {}
+  void _esdl__doInitRands() { }
+  void _esdl__doSetOuter(bool changed) { }
+  void _esdl__doInitCsts() { }
+  
+  void _esdl__doRandomize(_esdl__RandGen randGen) { }
 
   // void obsoleteSolve() { // (T)(T t) {
   //   // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
@@ -195,7 +196,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
   void initPreds() {
     assert(_root is this);
-    _esdl__cstExprs._esdl__reset(); // start empty
+    _esdl__cstExprs.clear(); // start empty
 
     // take all the constraints -- even if disabled
     foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
@@ -219,6 +220,12 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
     if (_esdl__cstExprs.isEmpty || _esdl__cstWithChanged is true) {
       initPreds();
+      // TODO -- have we collected the predicates from inside the
+      // @rand child objects ?  There could also be arrays of objects
+      // that may be with a fixed array length or without a constraint
+      // on the array length. In such cases the array length would not
+      // be randomized. All the constraints inside such objects should
+      // be included.
     }
 
     // reset all bins
@@ -232,6 +239,9 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
     _resolvedMonoPreds.reset();
     _solveMonoPreds.reset();
+
+
+    updateValDomains();
 
     foreach (pred; _allPreds) {
       if (pred.isRolled()) {
@@ -249,8 +259,6 @@ abstract class _esdl__SolverRoot: _esdl__Solver
     foreach (pred; _rolledPreds) {
       pred.randomizeDeps();
     }
-
-    solveValDomains();
     
     while (_resolvedMonoPreds.length > 0 ||
 	   _resolvedPreds.length > 0 ||
