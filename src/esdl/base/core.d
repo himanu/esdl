@@ -1354,7 +1354,7 @@ void _esdl__finish(T)(T t) {
 // separately(in the process/routine constructor)
 void _esdl__register(T, L)(T t, ref L l)
   if(is(T : NamedComp) && is(T == class)) {
-    static if((is(L : BaseWorker)) && (is(L == class))) {
+    static if((is(L : BaseWork)) && (is(L == class))) {
       // synchronized(l) {
       // Dynamic tasks get registered by the constructor --
       // static tasks get registered during Elaboration.
@@ -4257,10 +4257,10 @@ final class EventNotice
 	f = new EventNotice(t, event, PoolThread.self, delta);
       }
     }
-    else if (BaseWorker.self !is null) {
-      if (BaseWorker.self._thread._eventNoticeList !is null) {
-	f = BaseWorker.self._thread._eventNoticeList;
-	BaseWorker.self._thread._eventNoticeList = f.next;
+    else if (BaseWork.self !is null) {
+      if (BaseWork.self._thread._eventNoticeList !is null) {
+	f = BaseWork.self._thread._eventNoticeList;
+	BaseWork.self._thread._eventNoticeList = f.next;
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
@@ -4269,7 +4269,7 @@ final class EventNotice
 	}
       }
       else {
-	f = new EventNotice(t, event, BaseWorker.self._thread, delta);
+	f = new EventNotice(t, event, BaseWork.self._thread, delta);
       }
     }
     else if (BaseToiler.self !is null) {
@@ -4806,13 +4806,13 @@ private void _nextTriggerEvent(EventObj event) {
   Process.self.nextTrigger(event);
 }
 
-Process worker(DelegateThunk dg, int stage = 0, size_t sz = 0) {
-  Process f = new BaseWorker(getRootEntity(), dg, stage, sz);
+Process work(DelegateThunk dg, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWork(getRootEntity(), dg, stage, sz);
   return f;
 }
 
-Process worker(FunctionThunk fn, int stage = 0, size_t sz = 0) {
-  Process f = new BaseWorker(getRootEntity(), fn, stage, sz);
+Process work(FunctionThunk fn, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWork(getRootEntity(), fn, stage, sz);
   return f;
 }
 
@@ -5085,7 +5085,7 @@ void srandom(uint _seed) {
       }
 }
 
-class Worker(T, alias F, int R=0, size_t S=0): Worker!(F, R, S)
+class Work(T, alias F, int R=0, size_t S=0): Work!(F, R, S)
 {
   this(T t) {
     auto dg = recreateDelegate!F(t);
@@ -5225,25 +5225,25 @@ class Entity: EntityIntf
 
 
 
-template Worker(alias F, int R=0, size_t S=0)
+template Work(alias F, int R=0, size_t S=0)
 {
   static if(__traits(compiles, F())) {
     // pragma(msg, F.stringof);
-    class Worker: BaseWorker
+    class Work: BaseWork
     {
       alias F _FUNCTION;
       enum size_t _STACKSIZE = S;
 
       this() {
 	// import std.stdio;
-	// stderr.writeln("New Dynamic Worker");
+	// stderr.writeln("New Dynamic Work");
 	super(F, S);
       }
     }
   }
   else {
-    // Normally during elaboration of the workers, this branch would be taken
-    class Worker: BaseWorker
+    // Normally during elaboration of the works, this branch would be taken
+    class Work: BaseWork
     {
       alias F _FUNCTION;
       enum size_t _STACKSIZE = S;
@@ -5255,7 +5255,7 @@ template Worker(alias F, int R=0, size_t S=0)
       static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
       {
 	synchronized(t) {
-	  l = new Worker!(T, F, R, S)(t);
+	  l = new Work!(T, F, R, S)(t);
 	}
       }
 
@@ -5263,7 +5263,7 @@ template Worker(alias F, int R=0, size_t S=0)
 	(T t, ref L l, uint[] indices=null) {
 	debug(ELABORATE) {
 	  import std.stdio;
-	  stderr.writeln("** Worker: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+	  stderr.writeln("** Work: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
 			 typeof(l).stringof);
 	}
 	l._esdl__inst!I(t, l);
@@ -5534,7 +5534,7 @@ private auto recreateDelegate(alias F, T)(T _entity)
 
 // Alternative task definition using struct -- we are using
 
-// struct Worker(string THUNK, size_t STACKSIZE=0L)
+// struct Work(string THUNK, size_t STACKSIZE=0L)
 // {
 //   static immutable string _THUNK = THUNK;
 //   enum size_t _STACKSIZE = STACKSIZE;
@@ -5550,27 +5550,27 @@ private auto recreateDelegate(alias F, T)(T _entity)
 //   {
 //     synchronized {
 //       import std.exception: enforce;
-//       enforce(this._proc, "Uninitialized Worker");
+//       enforce(this._proc, "Uninitialized Work");
 //       return this._proc;
 //     }
 //   }
 
 //   alias _esdl__obj this;
 
-//   @disable void opAssign(Worker);
+//   @disable void opAssign(Work);
 //   // Allow assigning from module handle once
 //   void opAssign(Process task)
 //   {
 //     synchronized {
 //       // Allow it only once
 //       this._proc &&
-//	assert(false, "Worker re-initialization not allowed");
+//	assert(false, "Work re-initialization not allowed");
 
 //       this._proc = task;
 //     }
 //   }
 
-// PersistFlag object will always worker with a single thread and so no
+// PersistFlag object will always work with a single thread and so no
 // need for synchronisation guards.
 class PersistFlag
 {
@@ -5728,23 +5728,23 @@ class SimThread: EsdlThread
 // there are one or more raised flags, the simulator will pause and
 // wait for an external actor to activate the simulation again.
 
-class BaseWorker: Process
+class BaseWork: Process
 {
   SimThread _thread;
 
-  private static BaseWorker _self;
+  private static BaseWork _self;
 
-  static BaseWorker self() {
+  static BaseWork self() {
     return _self;
   }
 
   override void fn_wrap(void function() fn) {
-    BaseWorker._self = this;
+    BaseWork._self = this;
     super.fn_wrap(fn);
   }
 
   override void dg_wrap(void delegate() dg) {
-    BaseWorker._self = this;
+    BaseWork._self = this;
     super.dg_wrap(dg);
   }
 
@@ -5809,13 +5809,13 @@ class BaseWorker: Process
   override final bool isRunnableTask() {
     return false;
   }
-  override final bool isRunnableWorker() {
+  override final bool isRunnableWork() {
     return (_state < _DEFUNCT);
   }
   override final bool isTerminalTask() {
     return false;
   }
-  override final bool isTerminalWorker() {
+  override final bool isTerminalWork() {
     return (_state >= _KILLED);
   }
 }
@@ -5894,7 +5894,7 @@ class BaseToiler: Process
     return false;
   }
 
-  override final bool isRunnableWorker() {
+  override final bool isRunnableWork() {
     return false;
   }
 
@@ -5902,7 +5902,7 @@ class BaseToiler: Process
     return false;
   }
 
-  override final bool isTerminalWorker() {
+  override final bool isTerminalWork() {
     return false;
   }
 
@@ -5972,7 +5972,7 @@ class BaseTask: Process
     return (_state < _DEFUNCT);
   }
 
-  override final bool isRunnableWorker() {
+  override final bool isRunnableWork() {
     return false;
   }
 
@@ -5980,7 +5980,7 @@ class BaseTask: Process
     return (_state >= _KILLED);
   }
 
-  override final bool isTerminalWorker() {
+  override final bool isTerminalWork() {
     return false;
   }
 
@@ -6044,7 +6044,7 @@ class BaseRoutine: Process
     return (_state < _DEFUNCT);
   }
 
-  override final bool isRunnableWorker() {
+  override final bool isRunnableWork() {
     return false;
   }
 
@@ -6052,7 +6052,7 @@ class BaseRoutine: Process
     return (_state >= _KILLED);
   }
 
-  override final bool isTerminalWorker() {
+  override final bool isTerminalWork() {
     return false;
   }
 
@@ -6949,10 +6949,10 @@ abstract class Process: Procedure, HierComp, EventClient
   }
 
   bool isRunnableTask();
-  bool isRunnableWorker();
+  bool isRunnableWork();
 
   bool isTerminalTask();
-  bool isTerminalWorker();
+  bool isTerminalWork();
 
   final bool isRunnable() {
     synchronized(this) {
@@ -7610,7 +7610,7 @@ interface EsdlExecutorIf
   void reqUpdateProcess(Process task);
   void reqPurgeProcess(Process task);
   // ref Process[] getRunnableProcs();
-  size_t executableWorkersCount();
+  size_t executableWorksCount();
   size_t executableTasksCount();
   size_t executableThreadsCount();
   void processRegistered();
@@ -7623,7 +7623,7 @@ class EsdlExecutor: EsdlExecutorIf
   import core.sync.semaphore: Semaphore;
   import core.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
-  private Barrier _workerBarrier;
+  private Barrier _workBarrier;
   private Barrier _poolThreadExecBarrier;
   private Barrier _poolThreadDoneBarrier;
   private Barrier _poolThreadPostBarrier;
@@ -7639,24 +7639,24 @@ class EsdlExecutor: EsdlExecutorIf
       {
 	_simulator = simulator;
 	debug(BARRIER) {
-	  _workerBarrier = new DebugBarrier(1, "_workerBarrier");
+	  _workBarrier = new DebugBarrier(1, "_workBarrier");
 	}
 	else {
-	  _workerBarrier = new Barrier(1);
+	  _workBarrier = new Barrier(1);
 	}
 	_poolThreadGroup = new ThreadGroup;
 	_simThreadGroup = new ThreadGroup;
       }
   }
 
-  private Process[] _runnableWorkers;
-  private Process[] _terminalWorkers;
+  private Process[] _runnableWorks;
+  private Process[] _terminalWorks;
 
   private Process[] _executableTasks;
   private Process[][] _runnableTasksGroups;
   private Process[][] _terminalTasksGroups;
 
-  // Before adding them to _runnableWorkers, make a check whether
+  // Before adding them to _runnableWorks, make a check whether
   // these tasks are dontInit
   private Process[][] _registeredProcesses;
   private Process[] _updateProcs;
@@ -7729,14 +7729,14 @@ class EsdlExecutor: EsdlExecutorIf
 
 
   final size_t executableThreadsCount() {
-    return(_runnableWorkers.length +
-	   _terminalWorkers.length +
+    return(_runnableWorks.length +
+	   _terminalWorks.length +
 	   _executableTasks.length);
   }
 
-  final size_t executableWorkersCount() {
-    return(_runnableWorkers.length +
-	   _terminalWorkers.length);
+  final size_t executableWorksCount() {
+    return(_runnableWorks.length +
+	   _terminalWorks.length);
   }
 
   final size_t executableTasksCount() {
@@ -7754,8 +7754,8 @@ class EsdlExecutor: EsdlExecutorIf
 	  event.addClientProc(proc);
 	}
 	else {
-	  if(proc.isRunnableWorker) {
-	    this._runnableWorkers ~= proc;
+	  if(proc.isRunnableWork) {
+	    this._runnableWorks ~= proc;
 	  }
 	  if(proc.isRunnableTask) {
 	    this._executableTasks ~= proc;
@@ -7769,8 +7769,8 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   final void addRunnableProcess(Process p) {
-    if(p.isRunnableWorker) {
-      this._runnableWorkers ~= p;
+    if(p.isRunnableWork) {
+      this._runnableWorks ~= p;
     }
     if(p.isRunnableTask) {
       this._executableTasks ~= p;
@@ -7779,8 +7779,8 @@ class EsdlExecutor: EsdlExecutorIf
   }
 
   final void addTerminalProcess(Process p) {
-    if(p.isTerminalWorker) {
-      this._terminalWorkers ~= p;
+    if(p.isTerminalWork) {
+      this._terminalWorks ~= p;
     }
     if(p.isTerminalTask) {
       this._executableTasks ~= p;
@@ -7791,7 +7791,7 @@ class EsdlExecutor: EsdlExecutorIf
   final void executeProcs() {
     debug(SCHEDULER) {
       import std.stdio: stderr;
-      stderr.writeln(" > Executing Workers and Tasks: ");
+      stderr.writeln(" > Executing Works and Tasks: ");
     }
     // preExecute for tasks
     foreach(group; _runnableTasksGroups) {
@@ -7800,11 +7800,11 @@ class EsdlExecutor: EsdlExecutorIf
       }
     }
     Process[] runProcs;
-    if(executableWorkersCount > 0) {
-      runProcs = execWorkers();
+    if(executableWorksCount > 0) {
+      runProcs = execWorks();
       debug(SCHEDULER) {
 	import std.stdio: stderr;
-	stderr.writeln(" > Done executing workers");
+	stderr.writeln(" > Done executing works");
       }
     }
     if(executableTasksCount > 0) {
@@ -7815,7 +7815,7 @@ class EsdlExecutor: EsdlExecutorIf
       }
       _executableTasks.length = 0;
     }
-    // change the state of the Workers only after we are also
+    // change the state of the Works only after we are also
     // done with the tasks
     foreach(proc; runProcs) {
       proc.postExecute();
@@ -7828,7 +7828,7 @@ class EsdlExecutor: EsdlExecutorIf
     // Unlock stepSim
     debug(SCHEDULER) {
       import std.stdio: stderr;
-      stderr.writeln(" > Terminating Workers and Tasks: ");
+      stderr.writeln(" > Terminating Works and Tasks: ");
     }
     // preExecute for tasks
     foreach(group; _runnableTasksGroups) {
@@ -7839,11 +7839,11 @@ class EsdlExecutor: EsdlExecutorIf
 
     updateProcs();
 
-    if(executableWorkersCount > 0) {
-      terminateWorkers();
+    if(executableWorksCount > 0) {
+      terminateWorks();
       debug(SCHEDULER) {
 	import std.stdio: stderr;
-	stderr.writeln(" > Done terminating workers");
+	stderr.writeln(" > Done terminating works");
       }
     }
 
@@ -8160,127 +8160,127 @@ class EsdlExecutor: EsdlExecutorIf
     }
   }
 
-  void terminateWorkers() {
+  void terminateWorks() {
     Process[] runProcs;
 
-    foreach(ref worker; this._runnableWorkers) {
-      worker.preExecute();
-      if(worker._state == ProcState.RUNNING ||
-	 worker._state == ProcState.STARTING) {
-	runProcs ~= worker;
+    foreach(ref work; this._runnableWorks) {
+      work.preExecute();
+      if(work._state == ProcState.RUNNING ||
+	 work._state == ProcState.STARTING) {
+	runProcs ~= work;
       }
     }
 
     auto procs = runProcs;
-    this._runnableWorkers.length = 0;
+    this._runnableWorks.length = 0;
 
-    foreach(worker; this._terminalWorkers) {
+    foreach(work; this._terminalWorks) {
       debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to Terminate ",
 		       toiler.procID, " (ID) ", toiler.state, "(status)");
       }
-      if(worker._state >= _KILLED) {
-	runProcs ~= worker;
+      if(work._state >= _KILLED) {
+	runProcs ~= work;
       }
     }
 
-    this._terminalWorkers.length = 0;
+    this._terminalWorks.length = 0;
 
     debug(BARRIER) {
-      _workerBarrier = new DebugBarrier(cast(uint) runProcs.length + 1,
-				      "_workerBarrier");
+      _workBarrier = new DebugBarrier(cast(uint) runProcs.length + 1,
+				      "_workBarrier");
     }
     else {
-      _workerBarrier = new Barrier(cast(uint) runProcs.length + 1);
+      _workBarrier = new Barrier(cast(uint) runProcs.length + 1);
     }
-    // _workerBarrier.reset(cast(uint)runProcs.length + 1);
+    // _workBarrier.reset(cast(uint)runProcs.length + 1);
 
-    foreach(ref worker; runProcs) {
-      worker._execute();
+    foreach(ref work; runProcs) {
+      work._execute();
     }
 
     debug(EXECUTOR) {
       import std.stdio: stderr;
-      stderr.writeln("All workers teminating");
+      stderr.writeln("All works teminating");
     }
 
-    this._workerBarrier.wait();
+    this._workBarrier.wait();
 
     debug(EXECUTOR) {
       import std.stdio: stderr;
-      stderr.writeln("All workers done with executing");
+      stderr.writeln("All works done with executing");
     }
   }
 
-  final Process[] execWorkers() {
+  final Process[] execWorks() {
     Process[] runProcs;
     debug(EXECUTOR) {
       import std.stdio: stderr;
       stderr.writeln("Creating a barrier of size: ",
-		     _runnableWorkers.length);
+		     _runnableWorks.length);
     }
     debug(EXECUTOR) {
       import std.stdio: stderr;
       stderr.writeln("******* About to execute ",
-		     _runnableWorkers.length, " workers");
+		     _runnableWorks.length, " works");
     }
 
 
-    foreach(ref worker; this._runnableWorkers) {
+    foreach(ref work; this._runnableWorks) {
       debug(EXECUTOR) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to execute ",
-		       worker.procID, " (ID) ", worker.state, "(status)");
+		       work.procID, " (ID) ", work.state, "(status)");
       }
-      worker.preExecute();
-      if(worker._state == ProcState.RUNNING ||
-	 worker._state == ProcState.STARTING) {
-	runProcs ~= worker;
+      work.preExecute();
+      if(work._state == ProcState.RUNNING ||
+	 work._state == ProcState.STARTING) {
+	runProcs ~= work;
       }
     }
 
     auto procs = runProcs;
-    this._runnableWorkers.length = 0;
+    this._runnableWorks.length = 0;
 
-    foreach(worker; this._terminalWorkers) {
+    foreach(work; this._terminalWorks) {
       debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to Terminate ",
 		       toiler.procID, " (ID) ", toiler.state, "(status)");
       }
-      if(worker._state >= _KILLED) {
-	runProcs ~= worker;
+      if(work._state >= _KILLED) {
+	runProcs ~= work;
       }
     }
 
-    this._terminalWorkers.length = 0;
+    this._terminalWorks.length = 0;
 
     debug(BARRIER) {
-      _workerBarrier = new DebugBarrier(cast(uint) runProcs.length + 1,
-				      "_workerBarrier");
+      _workBarrier = new DebugBarrier(cast(uint) runProcs.length + 1,
+				      "_workBarrier");
     }
     else {
-      _workerBarrier = new Barrier(cast(uint) runProcs.length + 1);
+      _workBarrier = new Barrier(cast(uint) runProcs.length + 1);
     }
-    // _workerBarrier.reset(cast(uint)runProcs.length + 1);
+    // _workBarrier.reset(cast(uint)runProcs.length + 1);
 
     while(runProcs.length != 0) {
-      Process[] workers = runProcs;
+      Process[] works = runProcs;
       runProcs.length = 0;
-      foreach(ref worker; workers) {
+      foreach(ref work; works) {
 	this._procSemaphore.wait();
-	if(worker._esdl__parLock is null ||
-	   worker._esdl__parLock.tryWait) {
-	  worker._execute();
+	if(work._esdl__parLock is null ||
+	   work._esdl__parLock.tryWait) {
+	  work._execute();
 	}
 	else {			// postpone
-	  runProcs ~= worker;
+	  runProcs ~= work;
 	  this._procSemaphore.notify();
 	  debug(EXECUTOR) {
 	    import std.stdio: stderr;
 	    stderr.writeln("######## Could not get lock -- Postponing Process ",
-			   runProcs.length, " workers");
+			   runProcs.length, " works");
 	  }
 	}
       }
@@ -8288,14 +8288,14 @@ class EsdlExecutor: EsdlExecutorIf
 
     debug(EXECUTOR) {
       import std.stdio: stderr;
-      stderr.writeln("All workers executing");
+      stderr.writeln("All works executing");
     }
 
-    this._workerBarrier.wait();
+    this._workBarrier.wait();
 
     debug(EXECUTOR) {
       import std.stdio: stderr;
-      stderr.writeln("All workers done with executing");
+      stderr.writeln("All works done with executing");
     }
     return procs;
   }
@@ -8310,7 +8310,7 @@ class EsdlExecutor: EsdlExecutorIf
       stderr.writeln("******* About to terminate ",
 		     count(waitingProcs), " waiting procs");
     }
-    // _workerBarrier.reset(cast(uint)(count(waitingProcs) + 1));
+    // _workBarrier.reset(cast(uint)(count(waitingProcs) + 1));
     foreach(ref proc; waitingProcs) {
       proc.killProcess();
       debug(TERMINATE) {
@@ -8322,7 +8322,7 @@ class EsdlExecutor: EsdlExecutorIf
       import std.stdio: stderr;
       stderr.writeln("All processes terminating");
     }
-    // _workerBarrier.wait();
+    // _workBarrier.wait();
     debug(TERMINATE) {
       import std.stdio: stderr;
       stderr.writeln("All processes done with terminating");
@@ -8543,8 +8543,8 @@ abstract class EsdlScheduler
     }
     debug(SCHEDULER) {
       import std.stdio: stderr;
-      stderr.writeln(" > Got Delta workers: ",
-		     _simulator._executor.executableWorkersCount);
+      stderr.writeln(" > Got Delta works: ",
+		     _simulator._executor.executableWorksCount);
       stderr.writeln(" > Got Delta tasks: ",
 		     _simulator._executor.executableTasksCount);
     }
@@ -8599,8 +8599,8 @@ abstract class EsdlScheduler
     // tasks = _executor.getRunnableProcs();
     debug(SCHEDULER) {
       import std.stdio: stderr;
-      stderr.writeln(" > Got Immediate workers: ",
-		     _simulator._executor.executableWorkersCount);
+      stderr.writeln(" > Got Immediate works: ",
+		     _simulator._executor.executableWorksCount);
     }
     debug(SCHEDULER) {
       import std.stdio: stderr;
@@ -8973,7 +8973,7 @@ interface RootEntityIntf: EntityIntf
     // now if this thread is one of the tasks, it must stop
     Process self = Process.self();
     if(cast(BaseTask) self !is null) wait(0);
-    if(cast(BaseWorker) self !is null) wait(0);
+    if(cast(BaseWork) self !is null) wait(0);
   }
   final void terminate() {
     this.killTree();
@@ -8985,7 +8985,7 @@ interface RootEntityIntf: EntityIntf
     // now if this thread is one of the tasks, it must stop
     Process self = Process.self();
     if(cast(BaseTask) self !is null) wait(0);
-    if(cast(BaseWorker) self !is null) wait(0);
+    if(cast(BaseWork) self !is null) wait(0);
   }
 
   final SimPhase getSimPhase() {
@@ -9648,7 +9648,7 @@ class EsdlSimulator: EntityIntf
 	    case SimRunPhase.SIMULATE:
 	      debug(SCHEDULER) {
 		import std.stdio: stderr;
-		stderr.writeln(" > Got Timed workers: ", _executor.executableWorkersCount);
+		stderr.writeln(" > Got Timed works: ", _executor.executableWorksCount);
 		stderr.writeln(" > Got Timed tasks: ",   _executor.executableTasksCount);
 	      }
 	      break;
@@ -9794,7 +9794,7 @@ class EsdlSimulator: EntityIntf
       }
       this._executor._procSemaphore.notify();
     }
-    this._executor._workerBarrier.wait();
+    this._executor._workBarrier.wait();
   }
   // The class Executor is responsible for executing the runnable
   // tasks and routines
