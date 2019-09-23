@@ -816,7 +816,7 @@ class MutexObj: MutexIF, NamedComp
 	_mutexObj = new MutexObj(parent);
       }
       if(name !is null) {
-	_mutexObj._esdl__nomenclate(name);
+	_mutexObj._esdl__nomenclate_inst(name);
       }
     }
   }
