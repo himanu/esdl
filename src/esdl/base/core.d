@@ -4272,10 +4272,10 @@ final class EventNotice
 	f = new EventNotice(t, event, BaseWork.self._thread, delta);
       }
     }
-    else if (BaseToiler.self !is null) {
-      if (BaseToiler.self._thread._eventNoticeList !is null) {
-	f = BaseToiler.self._thread._eventNoticeList;
-	BaseToiler.self._thread._eventNoticeList = f.next;
+    else if (BaseWorker.self !is null) {
+      if (BaseWorker.self._thread._eventNoticeList !is null) {
+	f = BaseWorker.self._thread._eventNoticeList;
+	BaseWorker.self._thread._eventNoticeList = f.next;
 	synchronized(f) {
 	  f.time = t;
 	  f._event = event;
@@ -4284,7 +4284,7 @@ final class EventNotice
 	}
       }
       else {
-	f = new EventNotice(t, event, BaseToiler.self._thread, delta);
+	f = new EventNotice(t, event, BaseWorker.self._thread, delta);
       }
     }
     else if (RootThread.self !is null) {
@@ -4816,13 +4816,13 @@ Process work(FunctionThunk fn, int stage = 0, size_t sz = 0) {
   return f;
 }
 
-Process toiler(DelegateThunk dg, int stage = 0, size_t sz = 0) {
-  Process f = new BaseToiler(getRootEntity(), dg, stage, sz);
+Process worker(DelegateThunk dg, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWorker(getRootEntity(), dg, stage, sz);
   return f;
 }
 
-Process toiler(FunctionThunk fn, int stage = 0, size_t sz = 0) {
-  Process f = new BaseToiler(getRootEntity(), fn, stage, sz);
+Process worker(FunctionThunk fn, int stage = 0, size_t sz = 0) {
+  Process f = new BaseWorker(getRootEntity(), fn, stage, sz);
   return f;
 }
 
@@ -5096,7 +5096,7 @@ class Work(T, alias F, int R=0, size_t S=0): Work!(F, R, S)
 
 }
 
-class Toiler(T, alias F, int R=0, size_t S=0): Toiler!(F, R, S)
+class Worker(T, alias F, int R=0, size_t S=0): Worker!(F, R, S)
 {
   this(T t) {
     auto dg = recreateDelegate!F(t);
@@ -5287,25 +5287,25 @@ template Work(alias F, int R=0, size_t S=0)
   }
 }
 
-template Toiler(alias F, int R=0, size_t S=0)
+template Worker(alias F, int R=0, size_t S=0)
 {
   static if(__traits(compiles, F())) {
     // pragma(msg, F.stringof);
-    class Toiler: BaseToiler
+    class Worker: BaseWorker
     {
       alias F _FUNCTION;
       enum size_t _STACKSIZE = S;
 
       this() {
 	// import std.stdio;
-	// stderr.writeln("New Dynamic Toiler");
+	// stderr.writeln("New Dynamic Worker");
 	super(F, S);
       }
     }
   }
   else {
     // Normally during elaboration of the tasks, this branch would be taken
-    class Toiler: BaseToiler
+    class Worker: BaseWorker
     {
       alias F _FUNCTION;
       enum size_t _STACKSIZE = S;
@@ -5317,7 +5317,7 @@ template Toiler(alias F, int R=0, size_t S=0)
       static void _esdl__inst(size_t I=0, T, L)(T t, ref L l)
       {
 	synchronized(t) {
-	  l = new Toiler!(T, F, R, S)(t);
+	  l = new Worker!(T, F, R, S)(t);
 	}
       }
 
@@ -5325,7 +5325,7 @@ template Toiler(alias F, int R=0, size_t S=0)
 	(T t, ref L l, uint[] indices=null) {
 	debug(ELABORATE) {
 	  import std.stdio;
-	  stderr.writeln("** Toiler: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
+	  stderr.writeln("** Worker: Elaborating " ~ t.tupleof[I].stringof ~ ":" ~
 			 typeof(l).stringof);
 	}
 	l._esdl__inst!I(t, l);
@@ -5820,24 +5820,24 @@ class BaseWork: Process
   }
 }
 
-class BaseToiler: Process
+class BaseWorker: Process
 {
   SimThread _thread;
 
-  private static BaseToiler _self;
+  private static BaseWorker _self;
 
-  static BaseToiler self() {
+  static BaseWorker self() {
     return _self;
   }
 
 
   override void fn_wrap(void function() fn) {
-    BaseToiler._self = this;
+    BaseWorker._self = this;
     super.fn_wrap(fn);
   }
 
   override void dg_wrap(void delegate() dg) {
-    BaseToiler._self = this;
+    BaseWorker._self = this;
     super.dg_wrap(dg);
   }
 
@@ -8178,7 +8178,7 @@ class EsdlExecutor: EsdlExecutorIf
       debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to Terminate ",
-		       toiler.procID, " (ID) ", toiler.state, "(status)");
+		       worker.procID, " (ID) ", worker.state, "(status)");
       }
       if(work._state >= _KILLED) {
 	runProcs ~= work;
@@ -8247,7 +8247,7 @@ class EsdlExecutor: EsdlExecutorIf
       debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to Terminate ",
-		       toiler.procID, " (ID) ", toiler.state, "(status)");
+		       worker.procID, " (ID) ", worker.state, "(status)");
       }
       if(work._state >= _KILLED) {
 	runProcs ~= work;
