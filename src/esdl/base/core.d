@@ -96,6 +96,7 @@ struct _esdl__Multicore
   uint _threadIndex = uint.max;
   // Thread indexes for the hierarchy
   uint[] _threadPool;
+  uint[] _workerPool;
 
   bool validate() {		// return false if property is invalid
     // _threadIndex should not be defined if MulticorePolicy.MULTI
@@ -109,15 +110,13 @@ struct _esdl__Multicore
     return true;
   }
 
-  _esdl__Multicore merge(_esdl__Multicore other) { // return false is merger fails
+  _esdl__Multicore merge(_esdl__Multicore other) { // return false if merger fails
     if (_parallel is MulticorePolicy._UNDEFINED_) {
       _parallel = other._parallel;
     }
     else {
-      if (other._parallel is MulticorePolicy._UNDEFINED_ ||
-	  _parallel is other._parallel) {
-	return this;
-      }
+      if (other._parallel is MulticorePolicy._UNDEFINED_) return this;
+      if (_parallel is other._parallel) { /* do nothing */     }
       else {
 	assert(false, "Unable to merge");
       }
@@ -127,9 +126,7 @@ struct _esdl__Multicore
     }
     else {
       if (other._threadIndex is uint.max ||
-	  other._threadIndex is _threadIndex) {
-	return this;
-      }
+	  other._threadIndex is _threadIndex) { /* do nothing */ }
       else {
 	assert(false, "Unable to merge");
       }
@@ -138,11 +135,21 @@ struct _esdl__Multicore
       _threadPool = other._threadPool;
     }
     else {
-      if (other._threadPool.length is 0) {
-	return this;
-      }
+      if (other._threadPool.length is 0) { /* do nothing */ }
       else {
 	assert(false, "Unable to merge");
+      }
+    }
+    if (_workerPool.length is 0) {
+      _workerPool = other._workerPool;
+    }
+    else {
+      if (other._workerPool.length is 0) { /* do nothing */ }
+      else {
+	if (other._workerPool == _workerPool) {
+	  return this;
+	}
+	assert (false, "Unable to merge");
       }
     }
     return this;
@@ -190,13 +197,18 @@ struct _esdl__Multicore
   }
 
   // n, m
-  this(uint index, uint count) {
-    _parallel = MulticorePolicy.CONTEXT;
-    _threadPool.length = count;
-    for (int i=0; i!=_threadPool.length; ++i) {
-      _threadPool[i] = index + i;
-    }
-  }
+  // this(uint index, uint count, uint workerCount=0) {
+  //   // For now each worker must get its own core
+  //   _parallel = MulticorePolicy.CONTEXT;
+  //   _threadPool.length = count;
+  //   _workerPool.length = workerCount;
+  //   for (int i=0; i!=count; ++i) {
+  //     _threadPool[i] = (index + i) % CPU_COUNT;
+  //   }
+  //   for (int i=0; i!=workerCount; ++i) {
+  //     _workerPool[i] = (index + count + i) % CPU_COUNT;
+  //   }
+  // }
   // n
   this(uint index) {
     _parallel = MulticorePolicy.CONTEXT;
@@ -221,12 +233,17 @@ struct _esdl__Multicore
     _threadPool = pool;
   }
 
-  this(MulticorePolicy parallel, uint index, uint count) {
+  this(MulticorePolicy parallel, uint index, uint count, uint workerCount=0) {
+    // For now each worker must get its own core
     assert (parallel != MulticorePolicy.SINGLE);
     _parallel = parallel;
     _threadPool.length = count;
-    for (int i=0; i!=_threadPool.length; ++i) {
-      _threadPool[i] = index + i;
+    _workerPool.length = workerCount;
+    for (int i=0; i!=count; ++i) {
+      _threadPool[i] = (index + i); //  % CPU_COUNT;
+    }
+    for (int i=0; i!=workerCount; ++i) {
+      _workerPool[i] = (index + count + i); //  % CPU_COUNT;
     }
   }
 
@@ -362,8 +379,9 @@ void multicore(bool policy)(RootEntity t, uint[] pool) {
   t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.MULTI, pool));
 }
 
-void multicore(RootEntity t, int index, int count) {
-  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.CONTEXT, index, count));
+void multicore(RootEntity t, int index, int count, int workerCount) {
+  t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.CONTEXT, index,
+					    count, workerCount));
 }
 
 void multicore(RootEntity t, uint[] pool) {
@@ -400,6 +418,7 @@ class MulticoreConfig
   uint _threadIndex = uint.max;
   // Thread indexes for the hierarchy
   uint[] _threadPool;
+  uint[] _workerPool;
 
   void setThreadIndex(uint index) {
     _threadIndex = index;
@@ -3171,7 +3190,7 @@ alias AsyncEvent = EventWrapperStruct!(EventObj, true);
     synchronized {
       if(RootThread.self !is null && parent is null) {
 	assert(false, "Must provide parent for EventType object " ~
-	       "\"initialize\" during elaboration");
+	       "\"initialize\" during elaboration for " ~ RootThread.self.getName);
       }
       if(_eventObj is null) {
 	_eventObj = new EventType(parent, ASYNC);
@@ -3700,9 +3719,9 @@ private class AsyncTimedEvent: TimedEvent
     _waits = w;
   }
 
-  this(EventObj event) {
-    synchronized(this) {
-      super(event);
+  this (EventObj event) {
+    synchronized (this) {
+      super (event);
       _asyncWaitLock  = new AsyncLock(event.getRoot());
     }
   }
@@ -4427,9 +4446,9 @@ class AsyncLock: CoreSemaphore
     super.notify();
   }
 
-  this(RootEntityIntf root, int tokens=0) {
-    synchronized(this) {
-      super(tokens);
+  this (RootEntityIntf root, int tokens=0) {
+    synchronized (this) {
+      super (tokens);
       _root = root;
       _root.getSimulator().registerAsyncLock(this);
     }
@@ -5841,9 +5860,9 @@ class BaseWorker: Process
     super.dg_wrap(dg);
   }
 
-  this(RootEntity root, void function() fn,
+  this (RootEntity root, void function() fn,
        int stage = 0, size_t sz = 0 ) {
-    synchronized(this) {
+    synchronized (this) {
       import std.string: format;
       super(fn, stage);
       if(sz is 0) {
@@ -5858,12 +5877,12 @@ class BaseWorker: Process
     }
   }
 
-  this(RootEntity root, void delegate() dg,
+  this (RootEntity root, void delegate() dg,
        int stage = 0, size_t sz = 0 ) {
-    synchronized(this) {
+    synchronized (this) {
       import std.string: format;
       super(dg, stage);
-      if(sz is 0) {
+      if (sz is 0) {
 	_thread = new SimThread(format("%s(SimThread)", getName()),
 				root, () {dg_wrap(dg);});
       }
@@ -5876,7 +5895,7 @@ class BaseWorker: Process
   }
 
   protected final override void call() {
-    if(_thread._hasStarted) {
+    if (_thread._hasStarted) {
       _thread.call();
     }
     else {
@@ -5905,7 +5924,6 @@ class BaseWorker: Process
   override final bool isTerminalWork() {
     return false;
   }
-
 }
 
 
@@ -6270,7 +6288,7 @@ abstract class Process: Procedure, HierComp, EventClient
       import std.stdio: stderr;
       stderr.writeln("Aborting thread in state: ", state);
     }
-    if(_isRunnable()) {
+    if (_isRunnable()) {
       _state = ProcState.ABORTED;
       if(_state == ProcState.STARTING) {
 	freeLock(true);
@@ -6292,7 +6310,7 @@ abstract class Process: Procedure, HierComp, EventClient
       import std.stdio: stderr;
       stderr.writeln("Terminating thread in state: ", state);
     }
-    if(_isRunnable()) {
+    if (_isRunnable()) {
       _nextState = ProcState.KILLED;
       // if(_state == ProcState.STARTING) {
       // 	freeLock(true);
@@ -7073,8 +7091,8 @@ class Fork
   final void joinAll() {
     // wait for all tasks that are not terminated
     EventObj[] events;
-    foreach(task; _esdl__getChildProcs()) {
-      if(task.isRunnable) {
+    foreach (task; _esdl__getChildProcs()) {
+      if (task.isRunnable) {
 	events ~= task.getEndedEvent();
       }
     }
@@ -7086,10 +7104,10 @@ class Fork
     // wait for all tasks that are not terminated
     EventObj[] events;
     foreach(task; _esdl__getChildProcs()) {
-      if(task.isRunnable) {
+      if (task.isRunnable) {
 	events ~= task.getEndedEvent();
       }
-      if(task.isDefunct) {
+      if (task.isDefunct) {
 	return;
       }
     }
@@ -7101,8 +7119,8 @@ class Fork
   final void wait() {
     // wait for all tasks that are not terminated
     EventObj[] events;
-    foreach(task; _esdl__getChildProcs()) {
-      if(task.isRunnable) {
+    foreach (task; _esdl__getChildProcs()) {
+      if (task.isRunnable) {
 	events ~= task.getEndedEvent();
       }
     }
@@ -7112,13 +7130,13 @@ class Fork
   final void waitTree() {
     // wait for all tasks that are not terminated
     Process[] tasks;
-    foreach(task; _esdl__getChildProcs()) {
+    foreach (task; _esdl__getChildProcs()) {
       tasks ~= task;
       tasks ~= task._esdl__getChildProcsHier();
     }
     EventObj[] events;
-    foreach(task; tasks) {
-      if(task.isRunnable) {
+    foreach (task; tasks) {
+      if (task.isRunnable) {
 	events ~= task.getEndedEvent();
       }
     }
@@ -7412,7 +7430,7 @@ class PoolThread: SimThread
   private final void execTaskProcesses() {
     // First set affinity
     _esdl__root.simulator()._executor._poolThreadInitBarrier.wait();
-    stickToCpuCore((getRoot().getCoreList()[_poolIndex]) % CPU_COUNT());
+    stickToCpuCore((getRoot().getThreadCoreList()[_poolIndex]) % CPU_COUNT());
 
     while(true) {
       // wait for next cycle
@@ -7671,6 +7689,7 @@ class EsdlExecutor: EsdlExecutorIf
   private int _minStage = int.max;
   private int _stage;
   private int _stageIndex = -1; // basically _stage - _minStage
+
   final int stage() {
     synchronized(this) {
       return _stage;
@@ -7747,9 +7766,9 @@ class EsdlExecutor: EsdlExecutorIf
   // private size_t _processedRoutines = 0;
 
   final void processRegistered() {
-    foreach(ref proc; _registeredProcesses[_stageIndex]) {
-      synchronized(proc) {
-	if(proc.isDontInitialize()) {
+    foreach (ref proc; _registeredProcesses[_stageIndex]) {
+      synchronized (proc) {
+	if (proc.isDontInitialize()) {
 	  EventObj event = proc.sensitiveTo();
 	  event.addClientProc(proc);
 	}
@@ -7920,8 +7939,8 @@ class EsdlExecutor: EsdlExecutorIf
   final void updateProcs() {
     // expand the list by recursion
     Process[] expandedList;
-    foreach(proc; _purgeProcs) {
-      if(proc.isDynamic()) {
+    foreach (proc; _purgeProcs) {
+      if (proc.isDynamic()) {
 	proc.getParent.removeProcess(proc);
       }
       else {
@@ -7933,53 +7952,53 @@ class EsdlExecutor: EsdlExecutorIf
 
     _purgeProcs.length = 0;
 
-    foreach(proc; _updateProcs) {
+    foreach (proc; _updateProcs) {
       expandedList ~= proc;
-      if(proc._reqIsRec) {
+      if (proc._reqIsRec) {
 	auto childProcs = proc._esdl__getChildProcsHier();
-	foreach(p; childProcs) {
+	foreach (p; childProcs) {
 	  p._reqState = proc._reqState;
 	}
 	expandedList ~= childProcs;
       }
     }
 
-    debug(PROC) {
+    debug (PROC) {
       import std.stdio;
       stderr.writeln("Updating ", expandedList.length, " processes....");
-      foreach(proc; expandedList) {
+      foreach (proc; expandedList) {
 	stderr.writeln(proc._reqState, "/", proc.procID);
       }
     }
 
     // first create a list of tasks that require temination
-    foreach(proc; expandedList) {
-      final switch(proc.requestState) {
+    foreach (proc; expandedList) {
+      final switch (proc.requestState) {
       case ProcState.STARTING:
       case ProcState.RUNNING:
-	assert(false);
+	assert (false);
       case ProcState.RESUMED:
-	if(_stage == proc._stage && proc.requestResume()) {
+	if (_stage == proc._stage && proc.requestResume()) {
 	  addRunnableProcess(proc);
 	}
 	break;
       case ProcState.ENABLED:
-	if(_stage == proc._stage) {
+	if (_stage == proc._stage) {
 	  proc.requestEnable();
 	}
 	break;
       case ProcState.SUSPENDED:
-	if(_stage == proc._stage) {
+	if (_stage == proc._stage) {
 	  proc.requestSuspend();
 	}
 	break;
       case ProcState.DISABLED:
-	if(_stage == proc._stage) {
+	if (_stage == proc._stage) {
 	  proc.requestDisable();
 	}
 	break;
       case ProcState.ABORTED:
-	if(_stage == proc._stage) {
+	if (_stage == proc._stage) {
 	  proc.requestAbort(this);
 	}
 	break;
@@ -7990,13 +8009,13 @@ class EsdlExecutor: EsdlExecutorIf
       case ProcState.WAITING:
       case ProcState.FINISHED:
       case ProcState.EXCEPTION:
-	assert(false, "Illegal Process Requested State -- NONE");
+	assert (false, "Illegal Process Requested State -- NONE");
       }
 
       // If I uncomment the next line, I get a crash :-(
       // proc.requestState = ProcState.NONE;
     }
-    foreach(proc; expandedList) {
+    foreach (proc; expandedList) {
       proc.requestState(ProcState.NONE, false);
     }
     _updateProcs.length = 0;
@@ -8328,6 +8347,8 @@ class EsdlExecutor: EsdlExecutorIf
       stderr.writeln("All processes done with terminating");
     }
   }
+
+
 }
 
 abstract class EsdlScheduler
@@ -8892,7 +8913,8 @@ interface RootEntityIntf: EntityIntf
 
   uint getNumPoolThreads();
 
-  uint[] getCoreList();
+  uint[] getThreadCoreList();
+  uint[] getWorkerCoreList();
 
   void setTimePrecision(Time precision);
   Time getTimePrecision();
@@ -9212,8 +9234,12 @@ abstract class RootEntity: RootEntityIntf
     return cast(uint) _esdl__root.simulator()._executor._poolThreads.length;
   }
 
-  uint[] getCoreList() {
+  uint[] getThreadCoreList() {
     return _rootMulticoreConfig._threadPool;
+  }
+  
+  uint[] getWorkerCoreList() {
+    return _rootMulticoreConfig._workerPool;
   }
   
   int cpuCount() {
@@ -9231,6 +9257,7 @@ abstract class RootEntity: RootEntityIntf
 
     if (_esdl__multicore._threadPool.length != 0) {
       _rootMulticoreConfig._threadPool = _esdl__multicore._threadPool;
+      _rootMulticoreConfig._workerPool = _esdl__multicore._workerPool;
     }
     else {
       auto _cpuCount = cpuCount();
@@ -9839,7 +9866,7 @@ class EsdlSimulator: EntityIntf
   final void elabRootThread(T)(T t) {
     t.configureMultiCore();
     
-    auto count = getRoot.getCoreList().length;
+    auto count = getRoot.getThreadCoreList().length;
 
     this._executor = new EsdlExecutor(this);
 
@@ -9861,9 +9888,9 @@ class EsdlSimulator: EntityIntf
 	    throw(e);
 	  }
 	},
-	getRoot().getCoreList()[0]);
+	getRoot().getThreadCoreList()[0]);
       _rootThread._esdl__setParent(this);
-      _rootThread._esdl__setName("root");
+      _rootThread._esdl__setName("rootThread");
     }
     this.triggerElab();
   }
