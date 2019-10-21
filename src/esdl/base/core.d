@@ -420,12 +420,27 @@ class MulticoreConfig
   uint[] _threadPool;
   uint[] _workerPool;
 
+  uint _workerIndex = 0;
+  uint _lastWorkerCpu = 0;
+
   void setThreadIndex(uint index) {
     _threadIndex = index;
   }
 
   uint getPoolThreadIndex() {
     return _threadPool[_threadIndex];
+  }
+
+  uint nextWorkerCpu() {
+    if (_workerIndex < _workerPool.length) {
+      _lastWorkerCpu = _workerPool[_workerIndex];
+    }
+    else {
+      assert (false, "Not enough threads for workers");
+      // _lastWorkerCpu += 1;
+    }
+    _workerIndex += 1;
+    return _lastWorkerCpu % CPU_COUNT;
   }
 
   this(uint index=uint.max) {
@@ -1373,6 +1388,14 @@ void _esdl__finish(T)(T t) {
 // separately(in the process/routine constructor)
 void _esdl__register(T, L)(T t, ref L l)
   if(is(T : NamedComp) && is(T == class)) {
+    static if((is(L : BaseWorker)) && (is(L == class))) {
+      // synchronized(l) {
+      // Dynamic tasks get registered by the constructor --
+      // static tasks get registered during Elaboration.
+      t.getSimulator.reqRegisterProcess(l, l.stage);
+      // }
+    }
+
     static if((is(L : BaseWork)) && (is(L == class))) {
       // synchronized(l) {
       // Dynamic tasks get registered by the constructor --
@@ -4432,7 +4455,17 @@ class AsyncLock: CoreSemaphore
   
   override void wait() {
     if (! disabled()) {
+      
+      // auto worker = BaseWorker.self();
+      // if (worker !is null) {
+      // 	worker.setWait(this);
+      // }
+
       super.wait();
+
+      // if (worker !is null) {
+      // 	worker.resetWait();
+      // }
     }
     if (_root.isTerminated()) {
       throw (new SimTerminatedException());
@@ -5843,29 +5876,115 @@ class BaseWorker: Process
 {
   SimThread _thread;
 
+  AsyncLock _defunctLock; 		// lock to wait on at the end of thread
+
+  uint _cpuCore = 0;
+  
   private static BaseWorker _self;
 
   static BaseWorker self() {
     return _self;
   }
 
-
+  void setCpuCore(uint fcore) {
+    synchronized(this) {
+      _cpuCore = fcore;
+    }
+  }
+  
   override void fn_wrap(void function() fn) {
-    BaseWorker._self = this;
-    super.fn_wrap(fn);
+    try {
+      stickToCpuCore(_cpuCore);
+
+      BaseWorker._self = this;
+      super.fn_wrap(fn);
+      _defunctLock.wait();
+    }
+    catch (AsyncLockDisabledException e) {
+      // Process got terminated at end of simulation
+      debug (TERMINATE) {
+	import std.stdio: stderr;
+	stderr.writeln(this.getFullName, " AsyncLockDisabledException Thread terminated");
+      }
+    }
+    catch (SimTerminatedException e) {
+      // Process got terminated at end of simulation
+      debug (TERMINATE) {
+	import std.stdio: stderr;
+	stderr.writeln(this.getFullName, " SimTerminatedException Thread terminated");
+      }
+    }
+    catch (Throwable e) {
+      import std.stdio: stderr;
+      import core.stdc.stdlib : exit;
+      stderr.writefln("Thread threw exception %s:%s - %s",
+		      e.file, e.line, e.msg);
+      debug (PROC) {
+	stderr.writefln("Thread threw exception: %s", e);
+      }
+      // stderr.writeln(e);
+      debug (PROC) {
+	import std.stdio;
+	stderr.writeln("Process ending with exception   : ", Process.procID);
+      }
+      // freeLock();
+      exit(22);
+      this.caughtException();
+      throw(e);
+    }
+    this.cleanup();
   }
 
   override void dg_wrap(void delegate() dg) {
-    BaseWorker._self = this;
-    super.dg_wrap(dg);
+    try {
+      stickToCpuCore(_cpuCore);
+
+      BaseWorker._self = this;
+      super.dg_wrap(dg);
+      _defunctLock.wait();
+    }
+    catch (AsyncLockDisabledException e) {
+      // Process got terminated at end of simulation
+      debug (TERMINATE) {
+	import std.stdio: stderr;
+	stderr.writeln(this.getFullName, " AsyncLockDisabledException Thread terminated");
+      }
+    }
+    catch (SimTerminatedException e) {
+      // Process got terminated at end of simulation
+      debug (TERMINATE) {
+	import std.stdio: stderr;
+	stderr.writeln(this.getFullName, " SimTerminatedException Thread terminated");
+      }
+    }
+    catch (Throwable e) {
+      import std.stdio: stderr;
+      import core.stdc.stdlib : exit;
+      stderr.writefln("Thread threw exception %s:%s - %s",
+		      e.file, e.line, e.msg);
+      debug (PROC) {
+	stderr.writefln("Thread threw exception: %s", e);
+      }
+      // stderr.writeln(e);
+      debug (PROC) {
+	import std.stdio;
+	stderr.writeln("Process ending with exception   : ", Process.procID);
+      }
+      // freeLock();
+      exit(22);
+      this.caughtException();
+      throw (e);
+    }
+    this.cleanup();
   }
 
   this (RootEntity root, void function() fn,
        int stage = 0, size_t sz = 0 ) {
     synchronized (this) {
       import std.string: format;
-      super(fn, stage);
-      if(sz is 0) {
+      _defunctLock = new AsyncLock(root);
+      super (fn, stage);
+      if (sz is 0) {
 	_thread = new SimThread(format("%s(SimThread)", getName()),
 				root, () {fn_wrap(fn);});
       }
@@ -5873,7 +5992,7 @@ class BaseWorker: Process
 	_thread = new SimThread(format("%s(SimThread)", getName()),
 				root, () {fn_wrap(fn);}, sz);
       }
-      root._simulator._executor.addSimThread(_thread);
+      root._simulator._executor.addWorker(this);
     }
   }
 
@@ -5881,6 +6000,7 @@ class BaseWorker: Process
        int stage = 0, size_t sz = 0 ) {
     synchronized (this) {
       import std.string: format;
+      _defunctLock = new AsyncLock(root);
       super(dg, stage);
       if (sz is 0) {
 	_thread = new SimThread(format("%s(SimThread)", getName()),
@@ -5890,7 +6010,7 @@ class BaseWorker: Process
 	_thread = new SimThread(format("%s(SimThread)", getName()),
 				root, () {dg_wrap(dg);}, sz);
       }
-      root._simulator._executor.addSimThread(_thread);
+      root._simulator._executor.addWorker(this);
     }
   }
 
@@ -5901,6 +6021,12 @@ class BaseWorker: Process
     else {
       _thread.start();
     }
+  }
+
+  private void cleanup() {
+    auto executor = getRoot()._simulator._executor;
+    assert (executor !is null);
+    executor._workerBarrier.wait();
   }
 
   protected final override void yield() {
@@ -7642,6 +7768,7 @@ class EsdlExecutor: EsdlExecutorIf
   import core.sync.barrier: Barrier;
   private Semaphore _procSemaphore;
   private Barrier _workBarrier;
+  private Barrier _workerBarrier;
   private Barrier _poolThreadExecBarrier;
   private Barrier _poolThreadDoneBarrier;
   private Barrier _poolThreadPostBarrier;
@@ -7664,6 +7791,7 @@ class EsdlExecutor: EsdlExecutorIf
 	}
 	_poolThreadGroup = new ThreadGroup;
 	_simThreadGroup = new ThreadGroup;
+	_workerThreadGroup = new ThreadGroup;
       }
   }
 
@@ -7685,6 +7813,12 @@ class EsdlExecutor: EsdlExecutorIf
   ThreadGroup _poolThreadGroup;
   ThreadGroup _simThreadGroup;
   uint _simThreadCount = 0;
+
+  private BaseWorker[] _runningWorkers;
+  private BaseWorker[] _newWorkers;
+  ThreadGroup _workerThreadGroup;
+  
+
 
   private int _minStage = int.max;
   private int _stage;
@@ -7725,6 +7859,12 @@ class EsdlExecutor: EsdlExecutorIf
     }
   }
 
+  private final void addWorker(BaseWorker worker) {
+    synchronized(this) {
+      _newWorkers ~= worker;
+    }
+  }
+  
   private final void createPoolThreads(size_t numThreads,
 				       size_t stackSize) {
     _poolThreads.length = numThreads;
@@ -7749,13 +7889,15 @@ class EsdlExecutor: EsdlExecutorIf
 
   final size_t executableThreadsCount() {
     return(_runnableWorks.length +
+	   _newWorkers.length +
 	   _terminalWorks.length +
 	   _executableTasks.length);
   }
 
   final size_t executableWorksCount() {
     return(_runnableWorks.length +
-	   _terminalWorks.length);
+	   _terminalWorks.length +
+	   _newWorkers.length);
   }
 
   final size_t executableTasksCount() {
@@ -7773,10 +7915,10 @@ class EsdlExecutor: EsdlExecutorIf
 	  event.addClientProc(proc);
 	}
 	else {
-	  if(proc.isRunnableWork) {
+	  if (proc.isRunnableWork) {
 	    this._runnableWorks ~= proc;
 	  }
-	  if(proc.isRunnableTask) {
+	  if (proc.isRunnableTask) {
 	    this._executableTasks ~= proc;
 	    this._runnableTasksGroups[proc._esdl__multicoreConfig.getPoolThreadIndex()] ~= proc;
 	  }
@@ -7819,7 +7961,19 @@ class EsdlExecutor: EsdlExecutorIf
       }
     }
     Process[] runProcs;
-    if(executableWorksCount > 0) {
+    if (executableWorksCount > 0) {
+      // process workers
+      foreach (worker; _newWorkers) {
+	auto mcoreCfg = _simulator.getRoot()._rootMulticoreConfig;
+	worker.setCpuCore(mcoreCfg.nextWorkerCpu());
+	worker.call();
+	_runningWorkers ~= worker;
+	_workerThreadGroup.add(worker._thread);
+      }
+
+      _newWorkers.length = 0;
+
+      // process Works
       runProcs = execWorks();
       debug(SCHEDULER) {
 	import std.stdio: stderr;
@@ -7860,7 +8014,7 @@ class EsdlExecutor: EsdlExecutorIf
 
     if(executableWorksCount > 0) {
       terminateWorks();
-      debug(SCHEDULER) {
+      debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln(" > Done terminating works");
       }
@@ -7877,6 +8031,8 @@ class EsdlExecutor: EsdlExecutorIf
 
     joinPoolThreads();
 
+    terminateWorkers();
+    
     _simulator.notifyDone();
 
   }
@@ -8168,16 +8324,16 @@ class EsdlExecutor: EsdlExecutorIf
     _poolThreadExecBarrier.wait();
     // wait for all the threads in the pool to finish
     _poolThreadHaltBarrier.wait();
-    _poolThreadGroup.joinAll();
+    // _poolThreadGroup.joinAll();
   }
 
-  final void joinSimThreads() {
-    synchronized(this) {
-      if (_simThreadCount != 0) {
-	_simThreadGroup.joinAll();
-      }
-    }
-  }
+  // final void joinSimThreads() {
+  //   synchronized(this) {
+  //     if (_simThreadCount != 0) {
+  // 	_simThreadGroup.joinAll();
+  //     }
+  //   }
+  // }
 
   void terminateWorks() {
     Process[] runProcs;
@@ -8197,7 +8353,7 @@ class EsdlExecutor: EsdlExecutorIf
       debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to Terminate ",
-		       worker.procID, " (ID) ", worker.state, "(status)");
+		       work.procID, " (ID) ", work.state, "(status)");
       }
       if(work._state >= _KILLED) {
 	runProcs ~= work;
@@ -8266,7 +8422,7 @@ class EsdlExecutor: EsdlExecutorIf
       debug(TERMINATE) {
 	import std.stdio: stderr;
 	stderr.writeln("******* About to Terminate ",
-		       worker.procID, " (ID) ", worker.state, "(status)");
+		       work.procID, " (ID) ", work.state, "(status)");
       }
       if(work._state >= _KILLED) {
 	runProcs ~= work;
@@ -8319,6 +8475,29 @@ class EsdlExecutor: EsdlExecutorIf
     return procs;
   }
 
+
+  void terminateWorkers() {
+
+    debug(BARRIER) {
+      _workerBarrier = new DebugBarrier(cast(uint) _runningWorkers.length + 1,
+					"_workerBarrier");
+    }
+    else {
+      _workerBarrier = new Barrier(cast(uint) _runningWorkers.length + 1);
+    }
+
+    foreach (lock; _simulator._asyncLocks) {
+      lock.disable();
+    }
+
+    debug(EXECUTOR) {
+      import std.stdio: stderr;
+      stderr.writeln("Terminating All Workers");
+    }
+
+    _workerBarrier.wait();
+
+  }
 
   final void terminateProcs(Process[] procs) {
     import std.algorithm: filter, count;	// filter
@@ -9534,20 +9713,15 @@ class EsdlSimulator: EntityIntf
   
   final void finalize() {
     this._scheduler.finalize();
-    synchronized(this) {
-      foreach (lock; _asyncLocks) {
-	lock.disable();
-      }
-    }
   }
 
   final void notifyDone() {
     simStepLock.notify();
+    finalize();
     getRoot.message("Shutting down all the active Tasks");
     // this._executor.terminateProcs(getRoot().getChildProcsHier());
     // this._executor.joinSimThreads();
     getRoot.message("Simulation Complete");
-    finalize();
     RootEntity.delRoot(getRoot());
     getRoot._esdl__finish();
     simTermLock.notify();
