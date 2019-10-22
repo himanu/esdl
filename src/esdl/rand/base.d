@@ -527,12 +527,12 @@ interface CstVecExpr
   //   return false;		// only CstVecOrderingExpr return true
   // }
 
-  abstract void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] idxs,
-			      ref CstDomain[] deps);
+  abstract void setSolverContext(CstPredicate pred,
+				 ref CstDomain[] vars,
+				 ref CstDomain[] vals,
+				 ref CstIteratorBase[] iters,
+				 ref CstDomain[] idxs,
+				 ref CstDomain[] deps);
 
   abstract bool getIntRange(ref IntR iRange);
   abstract bool getUniRange(ref UniRange rs);
@@ -572,12 +572,12 @@ interface CstBddExpr
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
 
-  abstract void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] idxs,
-			      ref CstDomain[] deps);
+  abstract void setSolverContext(CstPredicate pred,
+				 ref CstDomain[] vars,
+				 ref CstDomain[] vals,
+				 ref CstIteratorBase[] iters,
+				 ref CstDomain[] idxs,
+				 ref CstDomain[] deps);
 
   abstract bool getIntRangeSet(ref IntRS iRangeSet);
 
@@ -640,11 +640,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
     else {
       _parsedIters =
 	_parent._iters[1..$].
-	  map!(tr => tr.unrollIterator(unrollIter,
-				       unrollIterVal)).array;
+	map!(tr => tr.unrollIterator(unrollIter,
+				     unrollIterVal)).array;
     }
       
-    this.setBddContext();
+    this.setSolverContext();
     debug(CSTPREDS) {
       import std.stdio;
       stderr.writeln(this.describe());
@@ -812,10 +812,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return _deps.length == 0 && _iters.length == 0;
   }
   
-  final void setBddContext() {
+  final void setSolverContext() {
     CstIteratorBase[] varIters;
     
-    _expr.setBddContext(this, _vars, _vals, varIters, _idxs, _deps);
+    _expr.setSolverContext(this, _vars, _vals, varIters, _idxs, _deps);
 
     // foreach (varIter; varIters) {
     //   import std.stdio;

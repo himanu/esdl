@@ -140,7 +140,7 @@ class CstObj(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // 	return _var;
       // }
 
-      // void setBddContext(CstPredicate pred,
+      // void setSolverContext(CstPredicate pred,
       // 			 ref CstDomain[] vars,
       // 			 ref CstDomain[] vals,
       // 			 ref CstIteratorBase[] iters,
@@ -266,7 +266,7 @@ class CstObj(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0)
       }
     }
 
-    void setBddContext(CstPredicate pred,
+    void setSolverContext(CstPredicate pred,
 		       ref CstDomain[] vars,
 		       ref CstDomain[] vals,
 		       ref CstIteratorBase[] iters,
@@ -282,7 +282,7 @@ class CstObj(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0)
       if (_parent.isPhysical()) {
 	deps ~= _parent._arrLen;
       }
-      _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
+      _parent.setSolverContext(pred, vars, vals, iters, idxs, deps);
 
       if (_indexExpr !is null) {
 	// Here we need to put the parent as a dep for the pred
@@ -292,7 +292,7 @@ class CstObj(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0)
 	// not. When the indexExpr gets resolved, it should inform
 	// the parent about resolution which in turn should inform
 	// the pred that it can go ahead
-	_indexExpr.setBddContext(pred, idxs, vals, iters, idxs, deps);
+	_indexExpr.setSolverContext(pred, idxs, vals, iters, idxs, deps);
       }
     }
 
@@ -571,7 +571,7 @@ class CstObjArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
     return getLen(*_var, indx);
   }
 
-  void setBddContext(CstPredicate pred,
+  void setSolverContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
@@ -736,7 +736,7 @@ class CstObjArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     }
   }
 
-  void setBddContext(CstPredicate pred,
+  void setSolverContext(CstPredicate pred,
 		     ref CstDomain[] vars,
 		     ref CstDomain[] vals,
 		     ref CstIteratorBase[] iters,
@@ -751,9 +751,9 @@ class CstObjArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     if (_parent.isPhysical()) {
       deps ~= _parent._arrLen;
     }
-    _parent.setBddContext(pred, vals, vals, iters, idxs, deps);
+    _parent.setSolverContext(pred, vals, vals, iters, idxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setBddContext(pred, idxs, vals, iters, idxs, deps);
+      _indexExpr.setSolverContext(pred, idxs, vals, iters, idxs, deps);
     }
   }
 

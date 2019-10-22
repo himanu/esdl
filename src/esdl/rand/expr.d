@@ -956,12 +956,12 @@ class CstIterator(RV): CstIteratorBase, CstVecElem
     assert(false, "Can not evaluate an Iterator: " ~ this.name());
   }
 
-  override void setBddContext(CstPredicate pred,
-			      ref CstDomain[] vars,
-			      ref CstDomain[] vals,
-			      ref CstIteratorBase[] iters,
-			      ref CstDomain[] idxs,
-			      ref CstDomain[] deps) {
+  override void setSolverContext(CstPredicate pred,
+				 ref CstDomain[] vars,
+				 ref CstDomain[] vals,
+				 ref CstIteratorBase[] iters,
+				 ref CstDomain[] idxs,
+				 ref CstDomain[] deps) {
     iters ~= this;
   }
 
@@ -1040,7 +1040,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 	// return _domvec;
       }
       else if ((! this.isRand) ||
-	      this.isRand && stage().solved()) { // work with the value
+	       this.isRand && stage().solved()) { // work with the value
 	return _valvec;
       }
       else {
@@ -1203,12 +1203,12 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     bool listed;
     foreach (var; vars) {
       if (var is this) {
@@ -1220,7 +1220,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
       vars ~= this;
     }
     markAbstractVecDomains(true);
-    _parent.setBddContext(pred, vars, vals, iters, idxs, deps);
+    _parent.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   override bool getIntType(ref INTTYPE iType) {
@@ -1400,23 +1400,23 @@ class CstVal(T = int): CstValBase
     return true;
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     if (_valvec.isNull()) {
       _valvec.buildVec(pred.getSolver().getBuddy(), _val);
     }
   }
 
-   bool getIntRange(ref IntR rng) {
-     assert(false, "getIntRange should never be called for a CstVal");
+  bool getIntRange(ref IntR rng) {
+    assert(false, "getIntRange should never be called for a CstVal");
   }
 
-   bool getUniRange(ref UniRange rng) {
-     assert(false, "UniRange should never be called for a CstVal");
+  bool getUniRange(ref UniRange rng) {
+    assert(false, "UniRange should never be called for a CstVal");
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -1592,14 +1592,14 @@ class CstVec2VecExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _lhs.setBddContext(pred, vars, vals, iters, idxs, deps);
-    _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _lhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getUniRange(ref UniRange rng) {
@@ -1799,22 +1799,22 @@ class CstVecSliceExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _vec.setBddContext(pred, vars, vals, iters, idxs, deps);
-    _range.setBddContext(pred, deps, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _vec.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _range.setSolverContext(pred, deps, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
-     return false;
+    return false;
   }
 
   bool getUniRange(ref UniRange rng) {
-     return false;
+    return false;
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -1879,21 +1879,21 @@ class CstNotVecExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _expr.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
-     return false;
+    return false;
   }
 
   bool getUniRange(ref UniRange rng) {
-     return false;
+    return false;
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -1957,28 +1957,28 @@ class CstNegVecExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _expr.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
-     return false;
+    return false;
   }
 
   bool getUniRange(ref UniRange rng) {
-     return false;
+    return false;
   }
 
   bool getIntType(ref INTTYPE iType) {
     return false;
   }
 
-override bool solved() {
+  override bool solved() {
     return _expr.solved();
   }
 }
@@ -2030,14 +2030,14 @@ class CstBdd2BddExpr: CstBddElem
     _rhs.resolveLap(lap);
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _lhs.setBddContext(pred, vars, vals, iters, idxs, deps);
-    _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _lhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
@@ -2112,33 +2112,33 @@ class CstIteBddExpr: CstBddElem
     return "CstIteBddExpr";
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     assert(false, "TBD");
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref UIntRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref LongRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref ULongRS rs) {
-     return false;
+    return false;
   }
 
   override bool getIntRangeSet(ref IntRS rs) {
-     return false;
+    return false;
   }
 
   bool cstExprIsNop() {
@@ -2223,14 +2223,14 @@ class CstVec2BddExpr: CstBddElem
   }
 
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _lhs.setBddContext(pred, vars, vals, iters, idxs, deps);
-    _rhs.setBddContext(pred, vars, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _lhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -2378,33 +2378,33 @@ class CstBddConst: CstBddElem
   }
   void resolveLap(uint lap) {}
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     // nothing for CstBddConst
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref UIntRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref LongRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref ULongRS rs) {
-     return false;
+    return false;
   }
 
   override bool getIntRangeSet(ref IntRS rng) {
-     return false;
+    return false;
   }
 
   override bool solved() {
@@ -2440,33 +2440,33 @@ class CstNotBddExpr: CstBddElem
     _expr.resolveLap(lap);
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
-    _expr.setBddContext(pred, vars, vals, iters, idxs, deps);
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
+    _expr.setSolverContext(pred, vars, vals, iters, idxs, deps);
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref UIntRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref LongRS rs) {
-     return false;
+    return false;
   }
 
   override bool getUniRangeSet(ref ULongRS rs) {
-     return false;
+    return false;
   }
 
   override bool getIntRangeSet(ref IntRS rng) {
-     return false;
+    return false;
   }
 
   override bool solved() {

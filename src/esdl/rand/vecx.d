@@ -9,7 +9,7 @@ import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIteratorBase, DomType, CstStage, CstDomain,
-  CstBddExpr, CstPredicate, _esdl__Solver; // CstValAllocator,
+  CstPredicate, _esdl__Solver; // CstValAllocator,
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecElem, CstIterator;
 
@@ -123,7 +123,6 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  assert (stage(), "Stage not set for " ~ this.name());
 	  if (this.isRand && s is stage()) {
 	    return bddvec(buddy);
-	    // return _domvec;
 	  }
 	  else if ((! this.isRand) ||
 		   this.isRand && stage().solved()) { // work with the value
@@ -150,12 +149,12 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setBddContext(CstPredicate pred,
-			 ref CstDomain[] vars,
-			 ref CstDomain[] vals,
-			 ref CstIteratorBase[] iters,
-			 ref CstDomain[] idxs,
-			 ref CstDomain[] deps) {
+      void setSolverContext(CstPredicate pred,
+			    ref CstDomain[] vars,
+			    ref CstDomain[] vals,
+			    ref CstIteratorBase[] iters,
+			    ref CstDomain[] idxs,
+			    ref CstDomain[] deps) {
 	static if (is (R: _esdl__norand)) {
 	  // markAbstractVecDomains(false);
 	  if (! canFind(vals, this)) vals ~= this;
@@ -337,12 +336,12 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setBddContext(CstPredicate pred,
-			 ref CstDomain[] vars,
-			 ref CstDomain[] vals,
-			 ref CstIteratorBase[] iters,
-			 ref CstDomain[] idxs,
-			 ref CstDomain[] deps) {
+      void setSolverContext(CstPredicate pred,
+			    ref CstDomain[] vars,
+			    ref CstDomain[] vals,
+			    ref CstIteratorBase[] iters,
+			    ref CstDomain[] idxs,
+			    ref CstDomain[] deps) {
 	static if (is (R: _esdl__norand)) {
 	  if (! canFind(vals, this)) vals ~= this;
 	}
@@ -353,7 +352,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	if (_parent.isPhysical()) {
 	  deps ~= _parent._arrLen;
 	}
-	_parent.setBddContext(pred, vars, vals, iters, idxs, deps);
+	_parent.setSolverContext(pred, vars, vals, iters, idxs, deps);
 
 	if (_indexExpr !is null) {
 	  // Here we need to put the parent as a dep for the pred
@@ -363,7 +362,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
-	  _indexExpr.setBddContext(pred, idxs, vals, iters, idxs, deps);
+	  _indexExpr.setSolverContext(pred, idxs, vals, iters, idxs, deps);
 	}
       }
 
@@ -544,7 +543,7 @@ mixin template CstVecArrMixin()
 
   EV opIndex(size_t index) {
     if (_arrLen.solved()) {
-      auto len = _arrLen.evaluate();
+      uint len = cast(uint) _arrLen.evaluate();
       if (len <= index) {
 	assert (false, "Index Out of Range");
       }
@@ -701,12 +700,12 @@ class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
     return getLen(*_var, indx);
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
     // when indexExpr is not contant, but an expression)
@@ -873,12 +872,12 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     }
   }
 
-  void setBddContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+  void setSolverContext(CstPredicate pred,
+			ref CstDomain[] vars,
+			ref CstDomain[] vals,
+			ref CstIteratorBase[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
     // when indexExpr is not contant, but an expression)
@@ -888,9 +887,9 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     if (_parent.isPhysical()) {
       deps ~= _parent._arrLen;
     }
-    _parent.setBddContext(pred, vals, vals, iters, idxs, deps);
+    _parent.setSolverContext(pred, vals, vals, iters, idxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setBddContext(pred, idxs, vals, iters, idxs, deps);
+      _indexExpr.setSolverContext(pred, idxs, vals, iters, idxs, deps);
     }
   }
 
