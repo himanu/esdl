@@ -323,12 +323,12 @@ template _esdl__RandDeclFuncs(T, int I=0)
       // enum _esdl__RandDeclFuncs =
       //   "  const auto " ~ NAME ~ "() { return this._esdl__outer." ~ NAME ~ "; }\n" ~
       enum _esdl__RandDeclFuncs =
-	"  const ref auto " ~ NAME ~ "() { return this._esdl__outer.tupleof[" ~ I.stringof ~ "]; }\n" ~
+	"  const ref auto " ~ NAME ~ "()() { return this._esdl__outer.tupleof[" ~ I.stringof ~ "]; }\n" ~
 	_esdl__RandDeclFuncs!(T, I+1);
     }
     else {
       enum _esdl__RandDeclFuncs =
-	"  auto " ~ NAME ~ "() { return _esdl__" ~ NAME ~ "; }\n" ~
+	"  auto " ~ NAME ~ "()() { return _esdl__" ~ NAME ~ "; }\n" ~
 	_esdl__RandDeclFuncs!(T, I+1);
     }
   }
