@@ -379,7 +379,7 @@ void multicore(bool policy)(RootEntity t, uint[] pool) {
   t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.MULTI, pool));
 }
 
-void multicore(RootEntity t, int index, int count, int workerCount) {
+void multicore(RootEntity t, int index, int count, int workerCount=0) {
   t._esdl__multicore.merge(_esdl__Multicore(MulticorePolicy.CONTEXT, index,
 					    count, workerCount));
 }
