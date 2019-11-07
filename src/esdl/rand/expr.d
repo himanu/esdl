@@ -2,14 +2,14 @@ module esdl.rand.expr;
 
 import esdl.rand.intr;
 import esdl.rand.obdd;
-import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned, Unconst;
+import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst;
 import esdl.rand.misc: CstBinVecOp, CstBinBddOp, CstBddOp;
 
 import esdl.rand.base;
 import esdl.data.bvec: isBitVector;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray, isSomeChar;
 
-interface CstVecElem: CstVecExpr
+interface CstVecTerm: CstVecExpr
 {
 
   final CstBddElem toBdd() {
@@ -19,7 +19,7 @@ interface CstVecElem: CstVecExpr
 
   // abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
 
-  CstVec2VecExpr opBinary(string op)(CstVecElem other)
+  CstVec2VecExpr opBinary(string op)(CstVecTerm other)
   {
     static if(op == "&") {
       return new CstVec2VecExpr(this, other, CstBinVecOp.AND);
@@ -134,7 +134,7 @@ interface CstVecElem: CstVecExpr
 	}
       }
 
-  final CstVecSliceExpr opIndex(CstVecElem index) {
+  final CstVecSliceExpr opIndex(CstVecTerm index) {
     // assert(false, "Index operation defined only for Arrays");
     CstVec2VecExpr range = cast(CstVec2VecExpr) index;
     if (range is null || range._op !is CstBinVecOp.RANGE) {
@@ -143,16 +143,16 @@ interface CstVecElem: CstVecExpr
     return new CstVecSliceExpr(this, range);
   }
 
-  // CstVecElem opSlice(P)(P p)
+  // CstVecTerm opSlice(P)(P p)
   //   if(isIntegral!P || isBitVector!P) {
   //     return new CstVecSliceExpr(this, new CstVal!P(p)); // CstVal!P.allocate(p));
   //   }
 
-  // final CstVecElem opSlice(CstVecExpr lhs, CstVecExpr rhs) {
+  // final CstVecTerm opSlice(CstVecExpr lhs, CstVecExpr rhs) {
   //   return new CstVecSliceExpr(this, lhs, rhs);
   // }
 
-  // CstVecElem opSlice(P, Q)(P p, Q q)
+  // CstVecTerm opSlice(P, Q)(P p, Q q)
   //   if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
   //     return new CstVecSliceExpr(this, new CstVal!P(p), // CstVal!P.allocate(p),
   // 				 new CstVal!Q(q)); // CstVal!Q.allocate(q));
@@ -184,14 +184,14 @@ interface CstVecElem: CstVecExpr
   }
 }
 
-class CstVecDomain(T, alias R): CstDomain, CstVecElem
+class CstVecDomain(T, rand R): CstDomain, CstVecTerm
 {
-  enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
+  enum HAS_RAND_ATTRIB = R.isRand();
 
   BddVec _valvec;
-  _esdl__Solver _root;
+  _esdl__Proxy _root;
 
-  Unconst!T _refreshedVal;
+  Unconst!T _shadowValue;
 
   string _name;
 
@@ -200,15 +200,12 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
   }
 
   static if (HAS_RAND_ATTRIB) {
-    // BddVec       _domvec;
     uint         _domIndex = uint.max;
     CstStage     _stage = null;
     uint         _resolveLap = 0;
   }
 
-  Unconst!T _shadowValue;
-
-  this(_esdl__Solver root) {
+  this(_esdl__Proxy root) {
     _root = root;
     fixRangeSet();
   }
@@ -277,7 +274,7 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
 
   override uint bitcount() {
     static if (isBoolean!T)         return 1;
-    else static if (isIntegral!T)   return T.sizeof * 8;
+    else static if (isIntegral!T || isSomeChar!T)   return T.sizeof * 8;
     else static if (isBitVector!T)  return T.SIZE;
     else static assert(false, "bitcount can not operate on: " ~ T.stringof);
   }
@@ -574,15 +571,6 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
     }
   }
 
-  override bool isRand() {
-    static if (HAS_RAND_ATTRIB) {
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
   bool _valueChanged = true;
 
   override bool hasChanged() {
@@ -620,9 +608,13 @@ class CstVecDomain(T, alias R): CstDomain, CstVecElem
     enum bool IS_RANGE = true;
   }
   else static if (isBoolean!T) {
-    import std.traits;
     enum bool tSigned = false;
     enum size_t tSize = 1;
+    enum bool IS_RANGE = true;
+  }
+  else static if (isSomeChar!T) {
+    enum bool tSigned = false;
+    enum size_t tSize = T.sizeof * 8;
     enum bool IS_RANGE = true;
   }
   else static if (isBitVector!T) {
@@ -835,7 +827,7 @@ interface CstBddElem: CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICIMP);
   }
 
-  final CstBddElem implies(CstVecElem other)
+  final CstBddElem implies(CstVecTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICIMP);
   }
@@ -845,7 +837,7 @@ interface CstBddElem: CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICOR);
   }
 
-  final CstBddElem logicOr(CstVecElem other)
+  final CstBddElem logicOr(CstVecTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICOR);
   }
@@ -855,14 +847,14 @@ interface CstBddElem: CstBddExpr
     return new CstBdd2BddExpr(this, other, CstBddOp.LOGICAND);
   }
 
-  final CstBddElem logicAnd(CstVecElem other)
+  final CstBddElem logicAnd(CstVecTerm other)
   {
     return new CstBdd2BddExpr(this, other.toBdd(), CstBddOp.LOGICAND);
   }
 
 }
 
-class CstIterator(RV): CstIteratorBase, CstVecElem
+class CstIterator(RV): CstIteratorBase, CstVecTerm
 {
   RV _arrVar;
 
@@ -956,7 +948,7 @@ class CstIterator(RV): CstIteratorBase, CstVecElem
     assert(false, "Can not evaluate an Iterator: " ~ this.name());
   }
 
-  override void setSolverContext(CstPredicate pred,
+  override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] vars,
 				 ref CstDomain[] vals,
 				 ref CstIteratorBase[] iters,
@@ -985,7 +977,7 @@ class CstIterator(RV): CstIteratorBase, CstVecElem
 class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 {
 
-  enum HAS_RAND_ATTRIB = (! __traits(isSame, RV.RAND, _esdl__norand));
+  enum HAS_RAND_ATTRIB = RV.RAND.isRand();
 
   // This bdd has the constraint on the max length of the array
   BDD _primBdd;
@@ -1004,12 +996,12 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   this(string name, RV parent) {
     assert (parent !is null);
-    super(parent.getSolverRoot());
+    super(parent.getProxyRoot());
     _name = name;
     _parent = parent;
     _iterVar = new CstIterator!RV(_parent);
     if (_parent.isPhysical()) {
-      _parent.getSolverRoot().addDomain(this, HAS_RAND_ATTRIB);
+      _parent.getProxyRoot().addDomain(this, HAS_RAND_ATTRIB);
     }
   }
 
@@ -1019,8 +1011,8 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _primBdd.reset();
   }
 
-  override _esdl__Solver getSolverRoot() {
-    return _parent.getSolverRoot();
+  override _esdl__Proxy getProxyRoot() {
+    return _parent.getProxyRoot();
   }
 
   override CstVecLen!RV getResolved() { // always self
@@ -1203,7 +1195,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
@@ -1220,7 +1212,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
       vars ~= this;
     }
     markAbstractVecDomains(true);
-    _parent.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _parent.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   override bool getIntType(ref INTTYPE iType) {
@@ -1276,7 +1268,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 }
 
-abstract class CstValBase: CstVecElem
+abstract class CstValBase: CstVecTerm
 {
   CstBddExpr _cstExpr;
   
@@ -1400,14 +1392,14 @@ class CstVal(T = int): CstValBase
     return true;
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
     if (_valvec.isNull()) {
-      _valvec.buildVec(pred.getSolver().getBuddy(), _val);
+      _valvec.buildVec(pred.getProxy().getBuddy(), _val);
     }
   }
 
@@ -1456,7 +1448,7 @@ class CstVal(T = int): CstValBase
 
 // This class would hold two(bin) vector nodes and produces a vector
 // only after processing those two nodes
-class CstVec2VecExpr: CstVecElem
+class CstVec2VecExpr: CstVecTerm
 {
   import std.conv;
 
@@ -1592,14 +1584,14 @@ class CstVec2VecExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _lhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
-    _rhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _lhs.setDomainContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getUniRange(ref UniRange rng) {
@@ -1724,7 +1716,7 @@ class CstVec2VecExpr: CstVecElem
 
 }
 
-class CstVecSliceExpr: CstVecElem
+class CstVecSliceExpr: CstVecTerm
 {
   CstVecExpr _vec;
   CstVec2VecExpr _range;
@@ -1799,14 +1791,14 @@ class CstVecSliceExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _vec.setSolverContext(pred, vars, vals, iters, idxs, deps);
-    _range.setSolverContext(pred, deps, vals, iters, idxs, deps);
+    _vec.setDomainContext(pred, vars, vals, iters, idxs, deps);
+    _range.setDomainContext(pred, deps, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
@@ -1827,7 +1819,7 @@ class CstVecSliceExpr: CstVecElem
   
 }
 
-class CstNotVecExpr: CstVecElem
+class CstNotVecExpr: CstVecTerm
 {
   import std.conv;
 
@@ -1879,13 +1871,13 @@ class CstNotVecExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _expr.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _expr.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
@@ -1905,7 +1897,7 @@ class CstNotVecExpr: CstVecElem
   }
 }
 
-class CstNegVecExpr: CstVecElem
+class CstNegVecExpr: CstVecTerm
 {
   import std.conv;
 
@@ -1957,13 +1949,13 @@ class CstNegVecExpr: CstVecElem
     return false;		// only CstVecOrderingExpr return true
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _expr.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _expr.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
@@ -2030,14 +2022,14 @@ class CstBdd2BddExpr: CstBddElem
     _rhs.resolveLap(lap);
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _lhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
-    _rhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _lhs.setDomainContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
@@ -2112,7 +2104,7 @@ class CstIteBddExpr: CstBddElem
     return "CstIteBddExpr";
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
@@ -2223,14 +2215,14 @@ class CstVec2BddExpr: CstBddElem
   }
 
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _lhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
-    _rhs.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _lhs.setDomainContext(pred, vars, vals, iters, idxs, deps);
+    _rhs.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -2378,7 +2370,7 @@ class CstBddConst: CstBddElem
   }
   void resolveLap(uint lap) {}
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
@@ -2440,13 +2432,13 @@ class CstNotBddExpr: CstBddElem
     _expr.resolveLap(lap);
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
-    _expr.setSolverContext(pred, vars, vals, iters, idxs, deps);
+    _expr.setDomainContext(pred, vars, vals, iters, idxs, deps);
   }
 
   override bool getUniRangeSet(ref IntRS rs) {

@@ -9,21 +9,30 @@ import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIteratorBase, DomType, CstStage, CstDomain,
-  CstPredicate, _esdl__Solver; // CstValAllocator,
+  CstPredicate, _esdl__Proxy, CstVecIntf, CstVecArrIntf;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecElem, CstIterator;
+  CstVecTerm, CstIterator;
 
 import esdl.rand.intr: IntRangeSet;
-import esdl.rand.meta: _esdl__SolverResolve;
+import esdl.rand.meta: _esdl__ProxyResolve;
 
 import std.algorithm.searching: canFind;
 
 mixin template CstVecMixin() {
-  enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
+  enum HAS_RAND_ATTRIB = R.isRand();
   alias LEAF = LeafElementType!V;
 
   static if (HAS_RAND_ATTRIB) {
     CstVecPrim[] _preReqs;
+  }
+
+  override bool isRand() {
+    static if (HAS_RAND_ATTRIB) {
+      return true;
+    }
+    else {
+      return false;
+    }
   }
 
   void solveBefore(CstVecPrim other) {
@@ -57,15 +66,19 @@ mixin template CstVecMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
 
-class CstVecIdx(V, alias R, int N, int IDX): CstVec!(V, R, N)
+class CstVecIdx(V, rand R, int N, P, int IDX): CstVec!(V, R, N)
 {
-  this(string name, ref V var, _esdl__Solver parent) {
+  enum _esdl__ISRAND = R.isRand();
+  enum _esdl__HASPROXY = R.hasProxy();
+  alias _esdl__PROXYT = P;
+  enum int _esdl__INDEX = IDX;
+  this(string name, ref V var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
 }
 
-class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, R), CstVecPrim
+class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecDomain!(LeafElementType!V, R), CstVecPrim, CstVecIntf
     {
       import std.traits;
       import std.range;
@@ -76,15 +89,15 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       alias RV = typeof(this);
 
       V* _var;
-      _esdl__Solver _parent;
+      _esdl__Proxy _parent;
       
-      this(string name, ref V var, _esdl__Solver parent) {
+      this(string name, ref V var, _esdl__Proxy parent) {
 	// import std.stdio;
 	// writeln("New vec ", name);
-	super(parent.getSolverRoot());
+	super(parent.getProxyRoot());
 	_var = &var;
 	_parent = parent;
-	_root = _parent.getSolverRoot();
+	_root = _parent.getProxyRoot();
 	_root.addDomain(this, HAS_RAND_ATTRIB);
       }
 
@@ -96,7 +109,7 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	_var = &var;
       }
       
-      override _esdl__Solver getSolverRoot() {
+      override _esdl__Proxy getProxyRoot() {
 	assert (_root !is null);
 	return _root;
       }
@@ -149,18 +162,17 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setSolverContext(CstPredicate pred,
+      void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] vars,
 			    ref CstDomain[] vals,
 			    ref CstIteratorBase[] iters,
 			    ref CstDomain[] idxs,
 			    ref CstDomain[] deps) {
-	static if (is (R: _esdl__norand)) {
-	  // markAbstractVecDomains(false);
-	  if (! canFind(vals, this)) vals ~= this;
+	static if (R.isRand()) {
+	  if (! canFind(vars, this)) vars ~= this;
 	}
 	else {
-	  if (! canFind(vars, this)) vars ~= this;
+	  if (! canFind(vals, this)) vals ~= this;
 	}
       }
 
@@ -182,7 +194,7 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return;
       }
 
-      auto _esdl__rand_term_chain(S ...)(CstVecElem[] indx ...)
+      auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
       {
 	static assert (S.length <= 1);
 	static if (S.length == 0) return this;
@@ -196,8 +208,8 @@ class CstVec(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
     }
 
-class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, R), CstVecPrim
+class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecDomain!(LeafElementType!V, R), CstVecPrim, CstVecIntf
     {
       import std.traits;
       import std.range;
@@ -219,23 +231,23 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	// import std.stdio;
 	// writeln("New ", name);
 	assert (parent !is null);
-	super(parent.getSolverRoot());
+	super(parent.getProxyRoot());
 	_parent = parent;
 	_indexExpr = indexExpr;
-	_root = _parent.getSolverRoot();
+	_root = _parent.getProxyRoot();
 	// only concrete elements need be added
-	// getSolverRoot().addRndDomain(this);
+	// getProxyRoot().addRndDomain(this);
       }
 
       this(string name, P parent, uint index) {
 	// import std.stdio;
 	// writeln("New ", name);
 	assert (parent !is null);
-	super(parent.getSolverRoot());
+	super(parent.getProxyRoot());
 	_parent = parent;
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
-	_root = _parent.getSolverRoot();
+	_root = _parent.getProxyRoot();
 	
 	if (this.isPhysical()) {
 	  _root.addDomain(this, HAS_RAND_ATTRIB);
@@ -255,7 +267,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 		_parent.isPhysical());
       }
 
-      override _esdl__Solver getSolverRoot() {
+      override _esdl__Proxy getProxyRoot() {
 	assert (_root !is null);
 	return _root;
       }
@@ -263,7 +275,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       override RV getResolved() {
 	// domains do not resolve by themselves -- we only check if a
 	// domain has dependencies. If not, we make a call to getResolved()
-	if (_resolvedCycle != getSolverRoot()._cycle) {
+	if (_resolvedCycle != getProxyRoot()._cycle) {
 	  auto parent = _parent.getResolved();
 	  if (_indexExpr) {
 	    _resolvedVec = parent[cast(size_t) _indexExpr.evaluate()];
@@ -271,7 +283,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  else {
 	    _resolvedVec = parent[_pindex];
 	  }
-	  _resolvedCycle = getSolverRoot()._cycle;
+	  _resolvedCycle = getProxyRoot()._cycle;
 	}
 	return _resolvedVec;
       }
@@ -336,23 +348,23 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setSolverContext(CstPredicate pred,
+      void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] vars,
 			    ref CstDomain[] vals,
 			    ref CstIteratorBase[] iters,
 			    ref CstDomain[] idxs,
 			    ref CstDomain[] deps) {
-	static if (is (R: _esdl__norand)) {
-	  if (! canFind(vals, this)) vals ~= this;
-	}
-	else {
+	static if (R.isRand()) {
 	  markAbstractVecDomains(false);
 	  if (! canFind(vars, this)) vars ~= this;
+	}
+	else {
+	  if (! canFind(vals, this)) vals ~= this;
 	}
 	if (_parent.isPhysical()) {
 	  deps ~= _parent._arrLen;
 	}
-	_parent.setSolverContext(pred, vars, vals, iters, idxs, deps);
+	_parent.setDomainContext(pred, vars, vals, iters, idxs, deps);
 
 	if (_indexExpr !is null) {
 	  // Here we need to put the parent as a dep for the pred
@@ -362,7 +374,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
-	  _indexExpr.setSolverContext(pred, idxs, vals, iters, idxs, deps);
+	  _indexExpr.setDomainContext(pred, idxs, vals, iters, idxs, deps);
 	}
       }
 
@@ -401,7 +413,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      auto _esdl__rand_term_chain(S ...)(CstVecElem[] indx ...)
+      auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
       {
 	static assert (S.length <= 1);
 	static if (S.length == 0) return this;
@@ -425,7 +437,7 @@ class CstVec(V, alias R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 mixin template CstVecArrMixin()
 {
   alias RV = typeof(this);
-  enum HAS_RAND_ATTRIB = (! __traits(isSame, R, _esdl__norand));
+  enum HAS_RAND_ATTRIB = R.isRand();
   alias LEAF = LeafElementType!V;
 
   alias L = ElementTypeN!(V, N);
@@ -453,7 +465,16 @@ mixin template CstVecArrMixin()
     CstVecPrim[] _preReqs;
   }
 
-  _esdl__Solver getSolverRoot() {
+  override bool isRand() {
+    static if (HAS_RAND_ATTRIB) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  _esdl__Proxy getProxyRoot() {
     assert (_root !is null);
     return _root;
   }
@@ -601,17 +622,17 @@ mixin template CstVecArrMixin()
     }
   }
 
-  size_t maxArrLen() {
+  uint maxArrLen() {
     static if (HAS_RAND_ATTRIB) {
       static if(isStaticArray!L) {
-	return L.length;
+	return cast(uint) L.length;
       }
       else {
-	return getRandAttrN!(R, N);
+	return R[N];
       }
     }
     else {
-      return -1;
+      return uint.max;
     }
   }
 
@@ -625,14 +646,20 @@ mixin template CstVecArrMixin()
 
 // Arrays (Multidimensional arrays as well)
 
-class CstVecArrIdx(V, alias R, int N, int IDX): CstVecArr!(V, R, N)
+class CstVecArrIdx(V, rand R, int N, P, int IDX): CstVecArr!(V, R, N)
 {
-  this(string name, ref V var, _esdl__Solver parent) {
+  enum _esdl__ISRAND = R.isRand();
+  enum _esdl__HASPROXY = R.hasProxy();
+  alias _esdl__PROXYT = P;
+  enum int _esdl__INDEX = IDX;
+  this(string name, ref V var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
 }
 
-class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim
+class CstVecArr(V, rand R, int N)
+  if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
+    CstVecPrim, CstVecArrIntf
 {
   mixin CstVecArrMixin;
   CstVecLen!RV _arrLen;
@@ -640,18 +667,18 @@ class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
   alias RAND=R;
 
   V* _var;
-  _esdl__Solver _parent;
-  _esdl__Solver _root;
+  _esdl__Proxy _parent;
+  _esdl__Proxy _root;
     
   void _esdl__setValRef(ref V var) {
     _var = &var;
   }
       
-  this(string name, ref V var, _esdl__Solver parent) {
+  this(string name, ref V var, _esdl__Proxy parent) {
     _name = name;
     _var = &var;
     _parent = parent;
-    _root = _parent.getSolverRoot();
+    _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
     if (_hasAbstractLenDomains) {
       _arrLen.labelAbstractVecDomains(true);
@@ -700,7 +727,7 @@ class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
     return getLen(*_var, indx);
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
@@ -740,7 +767,7 @@ class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
     }
   }
 
-  auto _esdl__rand_term_chain(S ...)(CstVecElem[] indx ...)
+  auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
   {
     static if (S.length == 0) return this;
     else static if (S[0] == "") {
@@ -753,7 +780,9 @@ class CstVecArr(V, alias R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): C
   }
 }
 
-class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim
+class CstVecArr(V, rand R, int N)
+  if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
+    CstVecPrim, CstVecArrIntf
 {
   mixin CstVecArrMixin;
   import std.traits;
@@ -761,7 +790,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   import esdl.data.bvec;
   alias P = CstVecArr!(V, R, N-1);
   P _parent;
-  _esdl__Solver _root;
+  _esdl__Proxy _root;
   CstVecExpr _indexExpr = null;
   int _pindex = 0;
 
@@ -779,7 +808,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     _name = name;
     _parent = parent;
     _indexExpr = indexExpr;
-    _root = _parent.getSolverRoot();
+    _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
     if (_hasAbstractLenDomains) {
       _arrLen.labelAbstractVecDomains(true);
@@ -794,7 +823,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     _parent = parent;
     // _indexExpr = _esdl__cstVal(index);
     _pindex = index;
-    _root = _parent.getSolverRoot();
+    _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
     if (_hasAbstractLenDomains) {
       _arrLen.labelAbstractVecDomains(true);
@@ -815,7 +844,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   RV getResolved() {
-    if (_resolvedCycle != getSolverRoot()._cycle) {
+    if (_resolvedCycle != getProxyRoot()._cycle) {
       auto parent = _parent.getResolved();
       if (_indexExpr) {
 	_resolvedVec = parent[_indexExpr.evaluate()];
@@ -823,7 +852,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
       else {
 	_resolvedVec = parent[_pindex];
       }
-      _resolvedCycle = getSolverRoot()._cycle;
+      _resolvedCycle = getProxyRoot()._cycle;
     }
     return _resolvedVec;
   }
@@ -872,7 +901,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     }
   }
 
-  void setSolverContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 			ref CstDomain[] vars,
 			ref CstDomain[] vals,
 			ref CstIteratorBase[] iters,
@@ -887,9 +916,9 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     if (_parent.isPhysical()) {
       deps ~= _parent._arrLen;
     }
-    _parent.setSolverContext(pred, vals, vals, iters, idxs, deps);
+    _parent.setDomainContext(pred, vals, vals, iters, idxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setSolverContext(pred, idxs, vals, iters, idxs, deps);
+      _indexExpr.setDomainContext(pred, idxs, vals, iters, idxs, deps);
     }
   }
 
@@ -927,7 +956,7 @@ class CstVecArr(V, alias R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     }
   }
 
-  auto _esdl__rand_term_chain(S ...)(CstVecElem[] indx ...)
+  auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
   {
     static if (S.length == 0) return this;
     else static if (S[0] == "") {

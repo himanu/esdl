@@ -61,7 +61,7 @@ struct CstParser {
   
   string dummy;			// sometimes required in dryRun
 
-  string _solver;
+  string _proxy;
   
   size_t outCursor = 0;
   size_t dclCursor = 0;
@@ -348,6 +348,12 @@ struct CstParser {
     return result;
   }
 
+  bool parseMappedChain(string mapped, ref int cursor) {
+    if (cursor >= mapped.length) return false;
+    while (cursor < mapped.length && mapped[cursor] != '.') cursor += 1;
+    return true;
+  }
+
   size_t moveToMatchingBracket() {
     size_t start = srcCursor;
     uint bracketCount = 0;
@@ -394,20 +400,38 @@ struct CstParser {
     auto start = srcCursor;
     auto srcTag = srcCursor;
     int[MaxHierDepth * 2] idChain = parseIdentifierChain();
+    string mapped;
+    int mappedCursor = 0;
+    int mappedPrevCursor = 0;
     if (idChain[0] != -1) {
-      fill("_esdl__rand_proxy(");
+      fill("_esdl__rand_proxy!(");
       int indx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
       if (indx == -1) {
 	fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
 	fillDeclaration(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	// fill(", \"");
+	// fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
+	// fill("\"");
       }
       else {
-	fill(varMap[indx].xLat);
+	mapped = varMap[indx].xLat;
+	parseMappedChain(mapped, mappedCursor);
+	fill(mapped[0..mappedCursor]);
 	fillDeclaration(varMap[indx].xLatBase);
+	// fill(", \"");
+	// fill(mapped[0..mappedCursor]);
+	// fill("\"");
+	mappedPrevCursor = ++mappedCursor;
       }
-      fill(", \"");
+      fill(")(\"");
       fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
-      fill("\", this.getSolver())");
+      fill("\", this.outer)");
+      while (parseMappedChain(mapped, mappedCursor)) {
+	fill("._esdl__rand_term_chain!(\"");
+	fill(mapped[mappedPrevCursor..mappedCursor]);
+	fill("\")");
+	mappedPrevCursor = ++mappedCursor;
+      }
       if (idChain[2] != -1) {
 	fill("._esdl__rand_term_chain!(");
       }
@@ -442,25 +466,32 @@ struct CstParser {
       }
     }
     else {
-      fill("_esdl__rand_proxy(");
+      fill("_esdl__rand_proxy!(");
       srcTag = parseLiteral();
       if (srcCursor > srcTag) {
 	fill(CST[srcTag..srcCursor]);
 	fillDeclaration(CST[srcTag..srcCursor]);
+	// fill(", \"");
+	// fill(CST[srcTag..srcCursor]);
+	// fill("\"");
       }
       else {
 	srcTag = parseWithArg();
 	if (srcCursor > srcTag) {
 	  fill("_esdl__arg!");
 	  fill(CST[srcTag+1..srcCursor]);
+	  // fill(", \"");
+	  // fill("_esdl__arg!");
+	  // fill(CST[srcTag+1..srcCursor]);
+	  // fill("\"");
 	}
 	else {
 	  errorToken();
 	}
       }
-      fill(", \"");
+      fill(")(\"");
       fill(CST[start..srcCursor]);
-      fill("\", this.getSolver())");
+      fill("\", this.outer)");
     }
     return start;
   }
@@ -797,8 +828,8 @@ struct CstParser {
     assert (curs == 11);
   }
 
-  char[] translate(string solver, string name) {
-    _solver = solver;
+  char[] translate(string proxy, string name) {
+    _proxy = proxy;
 
     translateBlock(name);
 
@@ -979,25 +1010,25 @@ struct CstParser {
     }
 
     // add index
-    iterators ~= array ~ "._esdl__iter()";
+    iterators ~= array ~ "._esdl__iter";
     
     if (index.length != 0) {
       VarPair x;
       x.varName  = index;
-      x.xLat     = array ~ "._esdl__iter()";
+      x.xLat     = array ~ "._esdl__iter";
       x.xLatBase = arrayBase;
       varMap ~= x;
     }
 
     VarPair x;
     x.varName  = elem;
-    x.xLat     = array ~ "._esdl__elems()";
+    x.xLat     = array ~ "._esdl__elems";
     x.xLatBase = arrayBase;
     varMap ~= x;
 
     // start of foreach
     // fill("    // Start of Foreach: " ~ array ~ ".iterator() \n");
-    fill("    " ~ _solver ~ ".pushScope(" ~ array ~ "._esdl__iter());\n");
+    fill("    " ~ _proxy ~ ".pushScope(" ~ array ~ "._esdl__iter);\n");
     if (CST[srcCursor] is '{') {
       ++srcCursor;
       procBlock();
@@ -1006,7 +1037,7 @@ struct CstParser {
       procStmt();
     }
 
-    fill("    " ~ _solver ~ ".popScope();\n");
+    fill("    " ~ _proxy ~ ".popScope();\n");
     // fill("    // End of Foreach \n");
     
     iterators = iterators[0..$-1];
@@ -1401,7 +1432,7 @@ struct CstParser {
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
-    fill("  _esdl__block ~= new CstPredicate(" ~ _solver ~ ", ");
+    fill("  _esdl__block ~= new CstPredicate(" ~ _proxy ~ ", ");
 
     if (ifConds.length !is 0) {
       fill("// Conditions \n        ( ");

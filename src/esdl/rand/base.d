@@ -2,13 +2,25 @@ module esdl.rand.base;
 
 import esdl.rand.obdd;
 import esdl.rand.intr;
-import esdl.rand.misc: _esdl__RandGen, _esdl__norand, isVecSigned;
+import esdl.rand.misc: _esdl__RandGen, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
 import std.algorithm;
 import std.array;
 import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+
+interface CstVarIntf {
+  bool isRand();
+  void _esdl__reset();
+}
+
+interface CstVecIntf: CstVarIntf {}
+interface CstVecArrIntf: CstVarIntf {}
+
+interface CstObjIntf: CstVarIntf {}
+interface CstObjArrIntf: CstVarIntf {}
+
 
 enum DomType: ubyte
 {   MONO = 1,
@@ -18,7 +30,7 @@ enum DomType: ubyte
     MULTI = 5
     }
 
-abstract class _esdl__Solver
+abstract class _esdl__Proxy
 {
   Buddy _esdl__buddy;
 
@@ -30,8 +42,8 @@ abstract class _esdl__Solver
   uint _domIndex = 0;
   
   // compositional parent -- not inheritance based
-  _esdl__Solver _parent;
-  _esdl__Solver _root;
+  _esdl__Proxy _parent;
+  _esdl__Proxy _root;
   
   Folder!CstPredicate _rolledPreds;
   Folder!CstPredicate _unrolledPreds;
@@ -88,11 +100,11 @@ abstract class _esdl__Solver
     }
   }
   
-  _esdl__Solver getSolverRoot() {
+  _esdl__Proxy getProxyRoot()() {
     return _root;
   }
 
-  CstVecPrim[] _esdl__randsList;
+  CstVarIntf[] _esdl__randsList;
   _esdl__RandGen _esdl__rGen;
 
   _esdl__RandGen _esdl__getRandGen() {
@@ -120,7 +132,7 @@ abstract class _esdl__Solver
     _esdl__rGen.seed(seed);    
   }
   
-  this(string name, _esdl__Solver parent) {
+  this(string name, _esdl__Proxy parent) {
     import std.random: Random, uniform;
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
@@ -145,7 +157,7 @@ abstract class _esdl__Solver
     }
     else {
       _parent = parent;
-      _root = _parent.getSolverRoot();
+      _root = _parent.getProxyRoot();
       _esdl__buddy = _root._esdl__buddy;
     }
     // scopes for constraint parsing
@@ -379,7 +391,7 @@ abstract class CstDomain
   abstract bool isRand();
   abstract uint bitcount();
   abstract void reset();
-  abstract _esdl__Solver getSolverRoot();
+  abstract _esdl__Proxy getProxyRoot();
   abstract BDD getPrimBdd(Buddy buddy);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
@@ -394,7 +406,7 @@ abstract class CstDomain
 
 
   final void _esdl__doRandomize() {
-    this._esdl__doRandomize(getSolverRoot()._esdl__getRandGen());
+    this._esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
   }
 
   final void randIfNoCst() {
@@ -411,12 +423,12 @@ abstract class CstDomain
       stderr.writeln(this.describe());
     }
     _tempPreds.reset();
-    _solvedCycle = getSolverRoot()._cycle;
+    _solvedCycle = getProxyRoot()._cycle;
   }
 
   final bool solved() {
     if(isRand()) {
-      if (_solvedCycle == getSolverRoot()._cycle) {
+      if (_solvedCycle == getProxyRoot()._cycle) {
 	return true;
       }
       else if (stage() is null) {
@@ -441,7 +453,7 @@ abstract class CstDomain
 
   Folder!CstPredicate _tempPreds;
 
-  // init value has to be different from solver._cycle init value
+  // init value has to be different from proxy._cycle init value
   uint _solvedCycle = -1;   // cycle for which _arrLen has been solved
   uint _unresolveLap;
 
@@ -487,7 +499,6 @@ interface CstVecPrim
   abstract string name();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
-  abstract void _esdl__reset();
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);
 }
@@ -527,7 +538,7 @@ interface CstVecExpr
   //   return false;		// only CstVecOrderingExpr return true
   // }
 
-  abstract void setSolverContext(CstPredicate pred,
+  abstract void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] vars,
 				 ref CstDomain[] vals,
 				 ref CstIteratorBase[] iters,
@@ -572,7 +583,7 @@ interface CstBddExpr
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
 
-  abstract void setSolverContext(CstPredicate pred,
+  abstract void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] vars,
 				 ref CstDomain[] vals,
 				 ref CstIteratorBase[] iters,
@@ -603,7 +614,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   // alias _expr this;
 
-  _esdl__Solver _solver;
+  _esdl__Proxy _proxy;
   CstScope _scope;
   uint _level;
   CstBddExpr _expr;
@@ -614,14 +625,14 @@ class CstPredicate: CstIterCallback, CstDepCallback
   Folder!CstPredicate _uwPreds;
   size_t _uwLength;
   
-  this(_esdl__Solver solver, CstBddExpr expr,
+  this(_esdl__Proxy proxy, CstBddExpr expr,
        CstPredicate parent=null, CstIteratorBase unrollIter=null, uint unrollIterVal=0// ,
        // CstIteratorBase[] iters ...
        ) {
-    assert(solver !is null);
-    _solver = solver;
+    assert(proxy !is null);
+    _proxy = proxy;
     if (parent is null) {
-      _scope = _solver.currentScope();
+      _scope = _proxy.currentScope();
       _level = 0;
     }
     else {
@@ -644,16 +655,16 @@ class CstPredicate: CstIterCallback, CstDepCallback
 				     unrollIterVal)).array;
     }
       
-    this.setSolverContext();
+    this.setDomainContext();
     debug(CSTPREDS) {
       import std.stdio;
       stderr.writeln(this.describe());
     }
   }
 
-  _esdl__Solver getSolver() {
-    assert(_solver !is null);
-    return _solver;
+  _esdl__Proxy getProxy()() {
+    assert(_proxy !is null);
+    return _proxy;
   }
 
   void doResolve() {
@@ -667,7 +678,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   void doUnroll() {
-    if (_unrollCycle == _solver._cycle) { // already executed
+    if (_unrollCycle == _proxy._cycle) { // already executed
       return;
     }
     // check if all the dependencies are resolved
@@ -679,14 +690,14 @@ class CstPredicate: CstIterCallback, CstDepCallback
     CstIteratorBase iter = _iters[0];
     if (iter.getLenVec().solved()) {
       this.unroll(iter);
-      _unrollCycle = _solver._cycle;
+      _unrollCycle = _proxy._cycle;
     }
   }
   
   void unroll(CstIteratorBase iter) {
     assert (iter is _iters[0]);
 
-    _solver.addToUnrolled(this);
+    _proxy.addToUnrolled(this);
 
     if(! iter.isUnrollable()) {
       assert(false, "CstIteratorBase is not unrollabe yet: "
@@ -701,7 +712,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
       for (uint i = cast(uint) _uwPreds.length;
 	   i != currLen; ++i) {
-	_uwPreds ~= new CstPredicate(_solver, _expr.unroll(iter, i), this, iter, i// ,
+	_uwPreds ~= new CstPredicate(_proxy, _expr.unroll(iter, i), this, iter, i// ,
 				     // _iters[1..$].map!(tr => tr.unrollIterator(iter, i)).array
 				     );
       }
@@ -711,7 +722,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // array than the current value of currLen
     if (this._iters.length == 1) {
       for (size_t i=0; i!=currLen; ++i) {
-	_solver.addUnrolled(_uwPreds[i]);
+	_proxy.addUnrolled(_uwPreds[i]);
       }
     }
 
@@ -798,7 +809,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   final bool isRolled() {
     if (this._iters.length > 0 &&
-	_unrollCycle != _solver._cycle) {
+	_unrollCycle != _proxy._cycle) {
       return true;
     }
     return false;
@@ -812,10 +823,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return _deps.length == 0 && _iters.length == 0;
   }
   
-  final void setSolverContext() {
+  final void setDomainContext() {
     CstIteratorBase[] varIters;
     
-    _expr.setSolverContext(this, _vars, _vals, varIters, _idxs, _deps);
+    _expr.setDomainContext(this, _vars, _vals, varIters, _idxs, _deps);
 
     // foreach (varIter; varIters) {
     //   import std.stdio;
@@ -888,7 +899,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	return true;
       }
     }
-    if (_solver._cycle == 1) {
+    if (_proxy._cycle == 1) {
       return true;
     }
     return false;

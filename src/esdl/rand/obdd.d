@@ -706,17 +706,9 @@ struct BddVec
     return dst;
   }
 
-  final BddVec opUnary(string op)()
-    if (op == "+" || op == "-" || op == "~") {
-      static if(op == "+") {
-	return this;
-      }
-      static if (op == "-") {
-	return this.opNeg();
-      }
-      static if (op == "~") {
-	return this.opCom();
-      }
+  final BddVec opUnary(string op)() if (op == "+")
+    {
+      return this;
     }
 
   final BddVec opBinary(string op)(long rhs)
@@ -928,7 +920,7 @@ struct BddVec
     return res;
   }
 
-  BddVec opCom()
+  BddVec opUnary(string op)() if (op == "~")
   {
     BddVec res = BddVec(size, false);
     for(int n=0 ; n < size ; n++)
@@ -936,7 +928,7 @@ struct BddVec
     return res;
   }
 
-  BddVec opNeg()
+  BddVec opUnary(string op)() if (op == "-")
   {
     BddVec lhs = BddVec(size, false);
     return lhs.sub(this);
@@ -1783,7 +1775,7 @@ struct BDD
     return makeBdd(_index);
   }
 
-  BDD opCom()
+  BDD opUnary(string op)() if (op == "~")
   {
     return this.not();
   }
@@ -1808,13 +1800,6 @@ struct BDD
     return this.apply(other, BddOp.DIFF);
   }
 
-  final BDD opUnary(string op)() {
-    static if(op == "~")
-      {
-	return this.not();
-      }
-  }
-  
   final BDD opBinary(string op)(BDD other)
   {
     static if(op == "|")

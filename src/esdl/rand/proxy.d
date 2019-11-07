@@ -1,8 +1,8 @@
-module esdl.rand.solver;
+module esdl.rand.proxy;
 import esdl.rand.obdd;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstBddExpr,
-  CstDomain, CstPredicate, CstBlock, _esdl__Solver;
+  CstDomain, CstPredicate, CstBlock, _esdl__Proxy;
 import esdl.rand.misc;
 import esdl.data.folder;
 import std.container: Array;
@@ -10,18 +10,18 @@ import std.array;
 
 abstract class _esdl__ConstraintBase: _esdl__Norand
 {
-  this(_esdl__SolverRoot eng, string name, string constraint, size_t index) {
+  this(_esdl__ProxyRoot eng, string name, string constraint, size_t index) {
     _cstEng = eng;
     _name = name;
     _constraint = constraint;
     _index = cast(uint) index;
   }
-  immutable @rand!false string _constraint;
-  protected @rand!false bool _enabled = true;
-  protected @rand!false _esdl__SolverRoot _cstEng;
-  protected @rand!false string _name;
+  immutable @rand(false) string _constraint;
+  protected @rand(false) bool _enabled = true;
+  protected @rand(false) _esdl__ProxyRoot _cstEng;
+  protected @rand(false) string _name;
   // index in the constraint Database
-  protected @rand!false uint _index;
+  protected @rand(false) uint _index;
 
   bool isEnabled() {
     return _enabled;
@@ -39,24 +39,24 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
     return _name;
   }
 
-  final _esdl__SolverRoot getSolver() {
+  final _esdl__ProxyRoot getProxy() {
     return _cstEng;
   }
 
   abstract CstBlock getCstExpr();
 }
 
-static char[] constraintXlate(string SOLVER, string CST,
+static char[] constraintXlate(string PROXY, string CST,
 			      string FILE, size_t LINE, string NAME="") {
   import esdl.rand.cstx;
   CstParser parser = CstParser(CST, FILE, LINE);
-  return parser.translate(SOLVER, NAME);
+  return parser.translate(PROXY, NAME);
 }
 
 abstract class Constraint(string CONSTRAINT, string FILE=__FILE__, size_t LINE=__LINE__)
   : _esdl__ConstraintBase
 {
-  this(_esdl__SolverRoot eng, string name, size_t index) {
+  this(_esdl__ProxyRoot eng, string name, size_t index) {
     super(eng, name, CONSTRAINT, index);
   }
 };
@@ -79,7 +79,7 @@ template _esdl__baseHasRandomization(T) {
 }
 
 
-abstract class _esdl__SolverRoot: _esdl__Solver
+abstract class _esdl__ProxyRoot: _esdl__Proxy
 {
   // Keep a list of constraints in the class
   _esdl__ConstraintBase[] _esdl__cstsList;
@@ -92,7 +92,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
   Array!ulong _solveValue;
   
-  this(string name, _esdl__Solver parent) {
+  this(string name, Object outer, _esdl__Proxy parent) {
     super(name, parent);
     if (parent is null) {
       _esdl__cstExprs = new CstBlock();
@@ -352,7 +352,7 @@ abstract class _esdl__SolverRoot: _esdl__Solver
 
     // foreach (pred; preds) {
     //   import std.stdio;
-    //   writeln("Solver: ", pred.name(), " update: ", pred.hasUpdate());
+    //   writeln("Proxy: ", pred.name(), " update: ", pred.hasUpdate());
     // }
     BDD solveBDD = _esdl__buddy.one();
     foreach(vec; stage._domVars) {

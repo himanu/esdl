@@ -2,14 +2,58 @@ module esdl.rand.misc;
 
 import esdl.data.bvec: isBitVector;
 import std.traits: isIntegral, isBoolean, isArray,
-  isStaticArray, isDynamicArray, EnumMembers;
+  isStaticArray, isDynamicArray, EnumMembers, isSomeChar;
 import std.meta: AliasSeq;
 
-// To be returned when no @rand or @norand is found
-enum _esdl__norand;
+interface _esdl__Norand { } 	// classes derived from this interface shall not have a proxy
+
+// Different types attributes for UI
+// template _esdl__norand() {}
+// enum norand;
+
+struct rand
+{
+  bool _noRand;
+  bool _noProxy;
+
+  uint[] _counts;
+
+  this(uint[] counts ...) {
+    _counts = counts;
+  }
+  
+  this(bool hasProxy) {
+    _noProxy = ! hasProxy;
+    _noRand  = _noProxy;
+  }
+
+  this(bool noRand, bool noProxy) {
+    _noRand = noRand;
+    _noProxy = noProxy;
+  }
+
+  bool hasProxy() {
+    return ! _noProxy;
+  }
+
+  bool isRand() {
+    return ! _noRand;
+  }
+
+  uint opIndex(size_t N) {
+    if (_counts.length <= N) return uint.max;
+    else return _counts[N];
+  }
+}
 
 
-interface _esdl__Norand { }
+// template rand(N...) if (CheckRandParams!N) {
+//   enum LENGTH = N.length;
+//   // enum _esdl__isRandAttribute = true;
+//   enum IDX(size_t I) = N[I];
+//   alias RAND = _esdl__rand!(N);
+// }
+
 
 // This is part of the user API, but is intended to be seldom used
 // We do not want to create proxy rand objects for evey element of a
@@ -26,16 +70,8 @@ interface _esdl__Norand { }
 //     }
 //   } cst_b;
 // }
-enum norand;
 
-struct _esdl__rand(N...) { }
-
-template rand(N...) if (CheckRandParams!N) {
-  enum LENGTH = N.length;
-  // enum _esdl__isRandAttribute = true;
-  enum IDX(size_t I) = N[I];
-  alias RAND = _esdl__rand!(N);
-}
+// struct _esdl__rand(N...) { }
 
 template isVecSigned(L) {
   import std.traits: isIntegral, isSigned;
@@ -45,6 +81,8 @@ template isVecSigned(L) {
     enum bool isVecSigned = L.ISSIGNED;
   else static if (isIntegral!L)
     enum bool isVecSigned = isSigned!L;
+  else static if (isSomeChar!L)
+    enum bool isVecSigned = false;
   else
     static assert(false, "isVecSigned: Can not determine sign of type " ~
 		  L.stringof);
@@ -53,7 +91,10 @@ template isVecSigned(L) {
 template LeafElementType(T)
 {
   import std.range;		// ElementType
-  static if(isArray!T) {
+  static if (is (T == string)) {
+    alias LeafElementType = immutable(char);
+  }
+  else static if(isArray!T) {
     alias LeafElementType = LeafElementType!(ElementType!T);
   }
   else {
@@ -101,33 +142,33 @@ template _esdl__ArrOrder(T, int I, int N=0) {
 }
 
 // Make sure that all the parameters are of type size_t
-template CheckRandParamsLoop(N...) {
-  static if(N.length > 0) {
-    static if(!is(typeof(N[0]) == bool) && // do not confuse bool as size_t
-	      is(typeof(N[0]) : size_t)) {
-      static assert(N[0] != 0, "Can not have arrays with size 0");
-      static assert(N[0] > 0, "Can not have arrays with negative size");
-      enum bool CheckRecurse = CheckRandParamsLoop!(N[1..$]);
-      enum bool CheckRandParamsLoop = CheckRecurse;
-    }
-    else {
-      static assert(false, "Only positive integral values are allowed as array dimensions");
-      enum bool CheckRandParamsLoop = false;
-    }
-  }
-  else {
-    enum bool CheckRandParamsLoop = true;
-  }
-}
+// template CheckRandParamsLoop(N...) {
+//   static if(N.length > 0) {
+//     static if(!is(typeof(N[0]) == bool) && // do not confuse bool as size_t
+// 	      is(typeof(N[0]) : size_t)) {
+//       static assert(N[0] != 0, "Can not have arrays with size 0");
+//       static assert(N[0] > 0, "Can not have arrays with negative size");
+//       enum bool CheckRecurse = CheckRandParamsLoop!(N[1..$]);
+//       enum bool CheckRandParamsLoop = CheckRecurse;
+//     }
+//     else {
+//       static assert(false, "Only positive integral values are allowed as array dimensions");
+//       enum bool CheckRandParamsLoop = false;
+//     }
+//   }
+//   else {
+//     enum bool CheckRandParamsLoop = true;
+//   }
+// }
 
-template CheckRandParams(N...) {
-  static if(N.length == 1 && N[0] == false) {
-    enum bool CheckRandParams = true;
-  }
-  else {
-    enum bool CheckRandParams = CheckRandParamsLoop!N;
-  }
-}
+// template CheckRandParams(N...) {
+//   static if(N.length == 1 && N[0] == false) {
+//     enum bool CheckRandParams = true;
+//   }
+//   else {
+//     enum bool CheckRandParams = CheckRandParamsLoop!N;
+//   }
+// }
 
 // // generates the code for rand structure inside the class object getting
 // // randomized
@@ -168,17 +209,6 @@ template CheckRandParams(N...) {
 // 					     __traits(getMember, T, R)));
 // }
 
-template getRandAttrN(alias R, int N) {
-  static if (__traits(isSame, R, rand) ||
-	     __traits(isSame, R, rand!false)) {
-    enum int getRandAttrN = -1;
-  }
-  else {
-    // pragma(msg, N.stringof ~ R.IDX!N.stringof);
-    enum getRandAttrN = R.IDX!N;
-  }
-}
-
 // template getRandAttr(T, int I, int N) {
 //   alias Attr = getRandAttr!(T, I);
 //   static if (is (Attr == _esdl__rand!A, A...)) {
@@ -190,35 +220,48 @@ template getRandAttrN(alias R, int N) {
 //   }
 // }
 
+template hasNorandHierAttr(T) {
+  enum rand RAND = scanRandAttr!(__traits(getAttributes, T));
+  static if (RAND.hasProxy()) {
+    enum bool hasNorandHierAttr = false;
+  }
+  else {
+    enum bool hasNorandHierAttr = true;
+  }
+}
+
+// template scanNorandHierAttr(A...) {
+//   static if(A.length == 0) {
+//     enum bool scanNorandHierAttr = false;
+//   }
+//   else static if(__traits(isSame, A[0], _esdl__NorandHier)) {
+//     enum bool scanNorandHierAttr = true;
+//   }
+//   else {
+//     enum rand scanNorandHierAttr = scanNorandHierAttr!(A[1..$]);
+//   }
+// }
+
 template getRandAttr(T, int I) {
   alias getRandAttr = scanRandAttr!(__traits(getAttributes, T.tupleof[I]));
 }
 
 template scanRandAttr(A...) {
   static if(A.length == 0) {
-    alias scanRandAttr = _esdl__norand;
+    enum rand scanRandAttr = rand(true, false);
   }
-  else static if(__traits(isSame, A[0], norand)) {
-    static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
-    alias scanRandAttr = A[0];
+  else static if(__traits(isSame, A[0], rand)) {
+    enum rand scanRandAttr = rand(false, false);
   }
-  else static if (__traits(isSame, A[0], rand)) {
-    static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
-    alias scanRandAttr = A[0];
-  }
-  else static if (
-		  // __traits(compiles, A[0]._esdl__isRandAttribute) ||
-		  // is (A[0] == rand!M, M...) ||
-		  (__traits(compiles, A[0].RAND) &&
-		   is (A[0].RAND == _esdl__rand!M, M...))) {
-    // pragma(msg, A[0].RAND.stringof);
-    static assert(__traits(isSame, scanRandAttr!(A[1..$]), _esdl__norand));
-    alias scanRandAttr = A[0];
+  else static if (__traits(compiles, typeof(A[0])) &&
+		  (is (typeof(A[0]) == rand))) {
+    enum rand scanRandAttr = A[0];
   }
   else {
-    alias scanRandAttr = scanRandAttr!(A[1..$]);
+    enum rand scanRandAttr = scanRandAttr!(A[1..$]);
   }
 }
+
 
 class _esdl__RandGen
 {
@@ -355,3 +398,6 @@ enum CstBddOp: byte
       LOGICOR ,
       LOGICIMP,
       }
+
+
+enum isLvalue(alias A) = is(typeof((ref _){}(A)));
