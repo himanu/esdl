@@ -11,7 +11,7 @@ class Foo
 {
   mixin Randomization;
   @rand int roo;
-  private @rand ubyte pop;
+  @rand ubyte pop;
   Constraint! q{
     roo > 2;
   } rooc;
