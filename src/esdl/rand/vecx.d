@@ -138,7 +138,7 @@ class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	    return bddvec(buddy);
 	  }
 	  else if ((! this.isRand) ||
-		   this.isRand && stage().solved()) { // work with the value
+		   this.isRand && stage().isSolved()) { // work with the value
 	    return _valvec;
 	  }
 	  else {
@@ -324,7 +324,7 @@ class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	    return bddvec(buddy);
 	  }
 	  else if ((! this.isRand) ||
-		   this.isRand && stage().solved()) { // work with the value
+		   this.isRand && stage().isSolved()) { // work with the value
 	    return _valvec;
 	  }
 	  else {
@@ -521,7 +521,7 @@ mixin template CstVecArrMixin()
   
   size_t _forcedLength;
   void buildElements(size_t v) {
-    if (! _arrLen.solved()) {
+    if (! _arrLen.isSolved()) {
       if (v > _forcedLength) {
 	_forcedLength = v;
       }
@@ -549,7 +549,7 @@ mixin template CstVecArrMixin()
   EV opIndex(CstVecExpr indexExpr) {
     if (indexExpr.isConst()) {
       size_t index = cast(size_t) indexExpr.evaluate();
-      if (_arrLen.solved()) {
+      if (_arrLen.isSolved()) {
 	if (_arrLen.evaluate() <= index) {
 	  assert (false, "Index Out of Range");
 	}
@@ -563,7 +563,7 @@ mixin template CstVecArrMixin()
   }
 
   EV opIndex(size_t index) {
-    if (_arrLen.solved()) {
+    if (_arrLen.isSolved()) {
       uint len = cast(uint) _arrLen.evaluate();
       if (len <= index) {
 	assert (false, "Index Out of Range");

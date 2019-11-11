@@ -168,7 +168,7 @@ abstract class _esdl__Proxy
   bool procMonoDomain(CstPredicate pred) {
     assert (pred._vars.length > 0);
     auto dom = pred._vars[0];
-    if (! dom.solved()) {
+    if (! dom.isSolved()) {
       return dom.solveRange(_esdl__getRandGen());
     }
     else {
@@ -185,7 +185,7 @@ abstract class _esdl__Proxy
     if (! dom.isPhysical()) {
       dom = dom.getResolved();
     }
-    if (! dom.solved()) {
+    if (! dom.isSolved()) {
       return dom.solveRange(_esdl__getRandGen());
     }
     else {
@@ -348,7 +348,7 @@ class CstStage {
     return _id;
   }
 
-  bool solved() {
+  bool isSolved() {
     if(_id != -1) return true;
     else return false;
   }
@@ -373,6 +373,12 @@ class CstStage {
 
 //   abstract void markIndex();
 // }
+
+enum DomainState: ubyte
+{   INIT,
+    ANNOTATED,
+    SOLVED
+    }
 
 abstract class CstDomain
 {
@@ -410,32 +416,49 @@ abstract class CstDomain
   }
 
   final void randIfNoCst() {
-    if (! solved()) {
+    if (! isSolved()) {
       if (_varPreds.length == 0) {
 	_esdl__doRandomize();
       }
     }
   }
 
-  final void markSolved() {
+  void markSolved() {
     debug(CSTDOMAINS) {
       import std.stdio;
       stderr.writeln(this.describe());
     }
     _tempPreds.reset();
-    _solvedCycle = getProxyRoot()._cycle;
+    _cycle = getProxyRoot()._cycle;
+    _state = DomainState.SOLVED;
   }
 
-  final bool solved() {
-    if(isRand()) {
-      if (_solvedCycle == getProxyRoot()._cycle) {
+  final bool isSolved() {
+    if (isRand()) {
+      if (_cycle == getProxyRoot()._cycle &&
+	  _state == DomainState.SOLVED) {
 	return true;
       }
       else if (stage() is null) {
 	return false;
       }
       else {
-	return stage().solved();
+	return stage().isSolved();
+      }
+    }
+    else {
+      return true;
+    }
+  }
+
+  final bool isAnnotated() {
+    if (isRand()) {
+      if (_cycle == getProxyRoot()._cycle &&
+	  _state >= DomainState.ANNOTATED) {
+	return true;
+      }
+      else {
+	return false;
       }
     }
     else {
@@ -454,7 +477,8 @@ abstract class CstDomain
   Folder!CstPredicate _tempPreds;
 
   // init value has to be different from proxy._cycle init value
-  uint _solvedCycle = -1;   // cycle for which _arrLen has been solved
+  uint _cycle = -1;
+  DomainState _state;
   uint _unresolveLap;
 
   DomType _type = DomType.MONO;
@@ -551,7 +575,8 @@ interface CstVecExpr
   // get the number of bits and the sign information of an expression
   abstract bool getIntType(ref INTTYPE iType);
 
-  abstract bool solved();
+  abstract bool isSolved();
+  abstract void annotate(ref uint varN);
 }
 
 
@@ -572,7 +597,7 @@ abstract class CstIteratorBase
   abstract CstIteratorBase unrollIterator(CstIteratorBase iter, uint n);
   abstract CstDomain getLenVec();
   final bool isUnrollable() {
-    return getLenVec().solved();
+    return getLenVec().isSolved();
   }
 }
 
@@ -603,7 +628,8 @@ interface CstBddExpr
 
   abstract BDD getBDD(CstStage stage, Buddy buddy);
 
-  abstract bool solved();
+  abstract bool isSolved();
+  abstract void annotate(ref uint varN);
 }
 
 class CstPredicate: CstIterCallback, CstDepCallback
@@ -683,12 +709,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     // check if all the dependencies are resolved
     foreach (dep; _deps) {
-      if (! dep.solved()) {
+      if (! dep.isSolved()) {
 	return;
       }
     }
     CstIteratorBase iter = _iters[0];
-    if (iter.getLenVec().solved()) {
+    if (iter.getLenVec().isSolved()) {
       this.unroll(iter);
       _unrollCycle = _proxy._cycle;
     }
@@ -734,12 +760,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (_markResolve || force) {
       _markResolve = false;
       foreach (dep; _deps) {
-	if (! dep.solved()) {
+	if (! dep.isSolved()) {
 	  return false;
 	}
       }
       foreach (idx; _idxs) {
-	if (! idx.solved()) {
+	if (! idx.isSolved()) {
 	  return false;
 	}
       }
@@ -889,22 +915,24 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   bool hasUpdate() {
-    foreach(val; _vals) {
+    foreach (val; _vals) {
       if (val.hasChanged()) {
 	return true;
       }
     }
-    foreach(idx; _idxs) {
+    foreach (idx; _idxs) {
       if (idx.hasChanged()) {
 	return true;
       }
     }
-    if (_proxy._cycle == 1) {
-      return true;
-    }
     return false;
   }
 
+  void annotate() {
+    uint varN = 0;
+    _expr.annotate(varN);
+  }
+  
   string describe() {
     import std.string:format;
     string description = name() ~ "\n    ";

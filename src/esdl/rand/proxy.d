@@ -350,14 +350,17 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     import std.conv;
     CstPredicate[] preds = stage._predicates;
 
+    foreach (pred; preds) {
+      pred.annotate();
+    }
+
     // foreach (pred; preds) {
     //   import std.stdio;
     //   writeln("Proxy: ", pred.name(), " update: ", pred.hasUpdate());
     // }
-    BDD solveBDD = _esdl__buddy.one();
-    foreach(vec; stage._domVars) {
-      if(vec.stage is stage) {
-	if(vec.bddvec(_esdl__buddy).isNull()) {
+    foreach (vec; stage._domVars) {
+      if (vec.stage is stage) {
+	if (vec.bddvec(_esdl__buddy).isNull()) {
 	  vec.bddvec(_esdl__buddy).buildVec(vec.domIndex, vec.signed);
 	}
       }
@@ -365,6 +368,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 
     // make the bdd tree
     bool updated = false;
+
     foreach (pred; preds) {
       updated |= pred.hasUpdate();
     }
@@ -380,6 +384,8 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     // foreach (pred; stage._predicates) {
     //   writeln("saved: ", pred.name());
     // }
+    BDD solveBDD = _esdl__buddy.one();
+
     if ((! updated) &&
 	savedStages.length > stageIndx &&
 	savedStages[stageIndx]._predicates == stage._predicates) {
@@ -482,7 +488,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     // foreach (vec; vecs) writeln(vec.name());
     CstStage stage;
     foreach (ref vec; vecs) {
-      if (! vec.solved()) {
+      if (! vec.isSolved()) {
 	assert(vec !is null);
 	if (vec.stage() is null) {
 	  // import std.stdio;

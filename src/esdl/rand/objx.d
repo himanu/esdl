@@ -376,7 +376,7 @@ mixin template CstObjArrMixin()
   
   size_t _forcedLength;
   void buildElements(size_t v) {
-    if (! _arrLen.solved()) {
+    if (! _arrLen.isSolved()) {
       if (v > _forcedLength) {
 	_forcedLength = v;
       }
@@ -404,7 +404,7 @@ mixin template CstObjArrMixin()
   EV opIndex(CstVecExpr indexExpr) {
     if (indexExpr.isConst()) {
       size_t index = cast(size_t) indexExpr.evaluate();
-      if (_arrLen.solved()) {
+      if (_arrLen.isSolved()) {
 	if (_arrLen.evaluate() <= index) {
 	  assert (false, "Index Out of Range");
 	}
@@ -418,7 +418,7 @@ mixin template CstObjArrMixin()
   }
 
   EV opIndex(size_t index) {
-    if (_arrLen.solved()) {
+    if (_arrLen.isSolved()) {
       auto len = _arrLen.evaluate();
       if (len <= index) {
 	assert (false, "Index Out of Range");
