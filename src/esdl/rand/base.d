@@ -1,7 +1,11 @@
 module esdl.rand.base;
 
-import esdl.rand.obdd;
+import esdl.solver.obdd;
+import esdl.solver.base;
+import esdl.solver.bdd;
+
 import esdl.rand.intr;
+import esdl.rand.expr: CstValue;
 import esdl.rand.misc: _esdl__RandGen, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
@@ -32,11 +36,11 @@ enum DomType: ubyte
 
 abstract class _esdl__Proxy
 {
-  Buddy _esdl__buddy;
+  // static Buddy _esdl__buddy;
 
   Array!uint _domains;		// indexes of domains
 
-  CstDomain[] _cstRndDomains;
+  // CstDomain[] _cstRndDomains;
   CstDomain[] _cstValDomains;
 
   uint _domIndex = 0;
@@ -78,20 +82,7 @@ abstract class _esdl__Proxy
   uint _cycle;
 
   Buddy getBuddy() {
-    assert (_esdl__buddy !is null);
-    return _esdl__buddy;
-  }
-
-  void addDomain(CstDomain domain, bool isRand) {
-    if (isRand) {
-      _root._cstRndDomains ~= domain;
-      useBuddy(_esdl__buddy);
-      domain.domIndex = _root._domIndex++;
-      _root._domains ~= _esdl__buddy.extDomVec(domain.bitcount);
-    }
-    else {
-      _root._cstValDomains ~= domain;
-    }
+    return CstBddSolver.buddy;
   }
 
   void updateValDomains() {
@@ -152,13 +143,15 @@ abstract class _esdl__Proxy
     _esdl__rGen = new _esdl__RandGen(_esdl__seed);
 
     if(parent is null) {
-      _esdl__buddy = new Buddy(400, 400);
+      // if (_esdl__buddy is null) {
+      // 	_esdl__buddy = new Buddy(400, 400);
+      // }
       _root = this;
     }
     else {
       _parent = parent;
       _root = _parent.getProxyRoot();
-      _esdl__buddy = _root._esdl__buddy;
+      // _esdl__buddy = _root._esdl__buddy;
     }
     // scopes for constraint parsing
     _rootScope = new CstScope(null, null);
@@ -166,8 +159,8 @@ abstract class _esdl__Proxy
   }
 
   bool procMonoDomain(CstPredicate pred) {
-    assert (pred._vars.length > 0);
-    auto dom = pred._vars[0];
+    assert (pred._rnds.length > 0);
+    auto dom = pred._rnds[0];
     if (! dom.isSolved()) {
       return dom.solveRange(_esdl__getRandGen());
     }
@@ -177,12 +170,12 @@ abstract class _esdl__Proxy
   }
 
   bool procMaybeMonoDomain(CstPredicate pred) {
-    assert (pred._vars.length > 0);
-    if (pred._vars.length > 1) {
+    assert (pred._rnds.length > 0);
+    if (pred._rnds.length > 1) {
       return false;
     }
-    auto dom = pred._vars[0];
-    if (! dom.isPhysical()) {
+    auto dom = pred._rnds[0];
+    if (! dom.isStatic()) {
       dom = dom.getResolved();
     }
     if (! dom.isSolved()) {
@@ -194,15 +187,15 @@ abstract class _esdl__Proxy
   }
 
   void procResolved(CstPredicate pred) {
-    assert (pred._vars.length > 0);
-    if (pred._vars[0]._type <= DomType.LAZYMONO) {
+    assert (pred._rnds.length > 0);
+    if (pred._rnds[0]._type <= DomType.LAZYMONO) {
       _resolvedMonoPreds ~= pred;
-      // procMonoDomain(pred._vars[0], pred);
+      // procMonoDomain(pred._rnds[0], pred);
     }
     else {
-      foreach (var; pred._vars) {
-	if (! var.isPhysical()) {
-	  auto dom = var.getResolved();
+      foreach (rnd; pred._rnds) {
+	if (! rnd.isStatic()) {
+	  auto dom = rnd.getResolved();
 	  dom._tempPreds ~= pred;
 	}
       }
@@ -227,7 +220,7 @@ abstract class _esdl__Proxy
   CstScope _rootScope;
   CstScope _currentScope;
 
-  void pushScope(CstIteratorBase iter) {
+  void pushScope(CstIterator iter) {
     assert (_currentScope !is null);
     _currentScope = _currentScope.push(iter);
   }
@@ -253,10 +246,11 @@ abstract class _esdl__Proxy
   void addVecPrime(void* ptr, CstVecPrim p) {
     _cstVecPrimes[ptr] = p;
   }
+
 }
 
 class CstScope {
-  this(CstScope parent, CstIteratorBase iter) {
+  this(CstScope parent, CstIterator iter) {
     _parent = parent;
     _iter = iter;
     if (_parent !is null) parent._children ~= this;
@@ -268,7 +262,7 @@ class CstScope {
     return _parent;
   }
 
-  CstScope push(CstIteratorBase iter) {
+  CstScope push(CstIterator iter) {
     CstScope childScope;
     foreach (child; _children) {
       if (child._iter is iter) {
@@ -286,7 +280,7 @@ class CstScope {
     return _level;
   }
 
-  void getIterators(ref CstIteratorBase[] iters, uint level) {
+  void getIterators(ref CstIterator[] iters, uint level) {
     if (_level == level) return;
     else {
       assert (_iter !is null);
@@ -298,7 +292,7 @@ class CstScope {
 
   CstScope _parent;
   CstScope[] _children;
-  CstIteratorBase _iter;
+  CstIterator _iter;
   uint _level;
 
   string describe() {
@@ -311,9 +305,13 @@ class CstScope {
 }
 
 class CstStage {
+  CstSolver _solver;
   // List of randomized variables associated with this stage. A
   // variable can be associated with only one stage
   CstDomain[] _domVars;
+
+  CstDomain[] _domains;
+  CstValue[]  _values;
   // The Bdd expressions that apply to this stage
   CstPredicate[] _predicates;
   // These are the length variables that this stage will solve
@@ -329,6 +327,7 @@ class CstStage {
   }
   
   void copyFrom(CstStage from) {
+    _domains = from._domains;
     _domVars = from._domVars;
     _predicates = from._predicates;
     _solveBDD = from._solveBDD;
@@ -352,10 +351,12 @@ class CstStage {
     if(_id != -1) return true;
     else return false;
   }
+
+
 }
 
-// abstract class CstValAllocator {
-//   static CstValAllocator[] allocators;
+// abstract class CstValueAllocator {
+//   static CstValueAllocator[] allocators;
 
 //   static void mark() {
 //     foreach (allocator; allocators) {
@@ -398,26 +399,27 @@ abstract class CstDomain
   abstract uint bitcount();
   abstract void reset();
   abstract _esdl__Proxy getProxyRoot();
-  abstract BDD getPrimBdd(Buddy buddy);
+  // abstract BDD getPrimBdd(Buddy buddy);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   abstract CstDomain getResolved();
-  abstract void updateVal();
+  abstract bool updateVal();
   abstract bool hasChanged();
-  abstract bool isPhysical();
+  abstract bool isStatic();
+  abstract void registerRndPred(CstPredicate rndPred);  
   abstract void registerVarPred(CstPredicate varPred);  
-  abstract void registerValPred(CstPredicate valPred);  
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
 
-
+  abstract long value();
+  
   final void _esdl__doRandomize() {
     this._esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
   }
 
   final void randIfNoCst() {
     if (! isSolved()) {
-      if (_varPreds.length == 0) {
+      if (_rndPreds.length == 0) {
 	_esdl__doRandomize();
       }
     }
@@ -443,6 +445,8 @@ abstract class CstDomain
 	return false;
       }
       else {
+	auto retval = stage().isSolved();
+	assert (retval is false);
 	return stage().isSolved();
       }
     }
@@ -469,8 +473,8 @@ abstract class CstDomain
   // Callbacks
   CstDepCallback[] _depCbs;
 
+  CstPredicate[] _rndPreds;
   CstPredicate[] _varPreds;
-  CstPredicate[] _valPreds;
 
   IntRS _rangeSet;
 
@@ -486,7 +490,7 @@ abstract class CstDomain
   void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {
       _unresolveLap = lap;
-      foreach (pred; _varPreds) {
+      foreach (pred; _rndPreds) {
 	pred.markAsUnresolved(lap);
       }
     }
@@ -505,6 +509,10 @@ abstract class CstDomain
   }
 
   abstract string describe();
+
+  CstSolverDomain _solverDomain;
+
+  CstSolverValue  _solverValue;
 }
 
 // The client keeps a list of agents that when resolved makes the client happy
@@ -527,47 +535,43 @@ interface CstVecPrim
   abstract void addPreRequisite(CstVecPrim other);
 }
 
-
-interface CstVecExpr
+interface CstExpr
 {
-
-  // alias evaluate this;
-
-  abstract string name();
-  
-  // Array of indexes this expression has to resolve before it can be
-  // converted into a BDD
-  // get the primary (outermost foreach) iterator CstVecExpr
+  string name();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
-  
-  abstract bool isConst();//  {
-  //   return false;
-  // }
 
+  abstract void setDomainContext(CstPredicate pred,
+				 ref CstDomain[] rnds,
+				 ref CstDomain[] vars,
+				 ref CstValue[] vals,
+				 ref CstIterator[] iters,
+				 ref CstDomain[] idxs,
+				 ref CstDomain[] deps);
+
+  abstract bool isSolved();
+  abstract void annotate(ref uint varN);
+
+  abstract void visit(CstSolver solver);
+
+
+  abstract size_t getExprStringLength();
+  abstract size_t writeExprString(ref char[] str, size_t cursor);
+}
+
+interface CstVecExpr: CstExpr
+{
+  abstract bool isConst();
   abstract bool isIterator();
   
-  // get the list of stages this expression should be avaluated in
-  // abstract CstStage[] getStages();
   abstract BddVec getBDD(CstStage stage, Buddy buddy);
 
   abstract long evaluate();
 
-  // abstract bool getVal(ref long val);
-  
-  abstract CstVecExpr unroll(CstIteratorBase iter, uint n);
+  abstract CstVecExpr unroll(CstIterator iter, uint n);
 
-  abstract bool isOrderingExpr();//  {
-  //   return false;		// only CstVecOrderingExpr return true
-  // }
-
-  abstract void setDomainContext(CstPredicate pred,
-				 ref CstDomain[] vars,
-				 ref CstDomain[] vals,
-				 ref CstIteratorBase[] iters,
-				 ref CstDomain[] idxs,
-				 ref CstDomain[] deps);
+  abstract bool isOrderingExpr();
 
   abstract bool getIntRange(ref IntR iRange);
   abstract bool getUniRange(ref UniRange rs);
@@ -575,13 +579,26 @@ interface CstVecExpr
   // get the number of bits and the sign information of an expression
   abstract bool getIntType(ref INTTYPE iType);
 
-  abstract bool isSolved();
-  abstract void annotate(ref uint varN);
+}
+
+interface CstBddExpr: CstExpr
+{
+  abstract bool getIntRangeSet(ref IntRS iRangeSet);
+
+  abstract bool getUniRangeSet(ref IntRS rs);
+  abstract bool getUniRangeSet(ref UIntRS rs);
+  abstract bool getUniRangeSet(ref LongRS rs);
+  abstract bool getUniRangeSet(ref ULongRS rs);
+
+  abstract CstBddExpr unroll(CstIterator iter, uint n);
+
+  abstract BDD getBDD(CstStage stage, Buddy buddy);
+
 }
 
 
 // This class represents an unwound Foreach iter at vec level
-abstract class CstIteratorBase
+abstract class CstIterator
 {
   CstIterCallback[] _cbs;
   void registerRolled(CstIterCallback cb) {
@@ -594,42 +611,16 @@ abstract class CstIteratorBase
   }
   abstract uint maxVal();
   abstract string name();
-  abstract CstIteratorBase unrollIterator(CstIteratorBase iter, uint n);
+  abstract CstIterator unrollIterator(CstIterator iter, uint n);
   abstract CstDomain getLenVec();
   final bool isUnrollable() {
     return getLenVec().isSolved();
   }
 }
 
-interface CstBddExpr
+class CstPredGroup			// group of related predicates
 {
-  string name();
-
-  abstract uint resolveLap();
-  abstract void resolveLap(uint lap);
-
-  abstract void setDomainContext(CstPredicate pred,
-				 ref CstDomain[] vars,
-				 ref CstDomain[] vals,
-				 ref CstIteratorBase[] iters,
-				 ref CstDomain[] idxs,
-				 ref CstDomain[] deps);
-
-  abstract bool getIntRangeSet(ref IntRS iRangeSet);
-
-  abstract bool getUniRangeSet(ref IntRS rs);
-  abstract bool getUniRangeSet(ref UIntRS rs);
-  abstract bool getUniRangeSet(ref LongRS rs);
-  abstract bool getUniRangeSet(ref ULongRS rs);
-
-  abstract CstBddExpr unroll(CstIteratorBase iter, uint n);
-
-  // abstract CstStage[] getStages();
-
-  abstract BDD getBDD(CstStage stage, Buddy buddy);
-
-  abstract bool isSolved();
-  abstract void annotate(ref uint varN);
+  Folder!CstPredicate _preds;
 }
 
 class CstPredicate: CstIterCallback, CstDepCallback
@@ -638,6 +629,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return "PREDICATE: " ~ _expr.name();
   }
 
+  uint _groupIdx;
   // alias _expr this;
 
   _esdl__Proxy _proxy;
@@ -652,8 +644,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   size_t _uwLength;
   
   this(_esdl__Proxy proxy, CstBddExpr expr,
-       CstPredicate parent=null, CstIteratorBase unrollIter=null, uint unrollIterVal=0// ,
-       // CstIteratorBase[] iters ...
+       CstPredicate parent=null, CstIterator unrollIter=null, uint unrollIterVal=0// ,
+       // CstIterator[] iters ...
        ) {
     assert(proxy !is null);
     _proxy = proxy;
@@ -713,20 +705,20 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	return;
       }
     }
-    CstIteratorBase iter = _iters[0];
+    CstIterator iter = _iters[0];
     if (iter.getLenVec().isSolved()) {
       this.unroll(iter);
       _unrollCycle = _proxy._cycle;
     }
   }
   
-  void unroll(CstIteratorBase iter) {
+  void unroll(CstIterator iter) {
     assert (iter is _iters[0]);
 
     _proxy.addToUnrolled(this);
 
     if(! iter.isUnrollable()) {
-      assert(false, "CstIteratorBase is not unrollabe yet: "
+      assert(false, "CstIterator is not unrollabe yet: "
 	     ~ this.describe());
     }
     auto currLen = iter.maxVal();
@@ -774,20 +766,33 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return false;
   }
   
+  CstDomain[] _rnds;
   CstDomain[] _vars;
-  CstDomain[] _vals;
+  CstValue[]  _vals;
   CstDomain[] _deps;
   CstDomain[] _idxs;
-  CstIteratorBase[] _iters;
-  CstIteratorBase[] _parsedIters;
+  CstIterator[] _iters;
+  CstIterator[] _parsedIters;
 
-  CstIteratorBase _unrollIter;
+  CstIterator _unrollIter;
   uint _unrollIterVal;
 
   uint _unresolveLap;
 
-  final CstDomain[] getDomains() {
+  final CstDomain[] getRnds() {
+    return _rnds;
+  }
+
+  final CstDomain[] getVars() {
     return _vars;
+  }
+
+  final CstValue[] getVals() {
+    return _vals;
+  }
+
+  final CstDomain[] getDomains() {
+    return _rnds;
   }
 
   final void randomizeDepsRolled() {
@@ -810,8 +815,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   final void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {	 // already marked -- avoid infinite recursion
       _unresolveLap = lap;
-      foreach (var; _vars) {
-	var.markAsUnresolved(lap);
+      foreach (rnd; _rnds) {
+	rnd.markAsUnresolved(lap);
       }
     }
   }
@@ -850,9 +855,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
   
   final void setDomainContext() {
-    CstIteratorBase[] varIters;
+    CstIterator[] varIters;
     
-    _expr.setDomainContext(this, _vars, _vals, varIters, _idxs, _deps);
+    _expr.setDomainContext(this, _rnds, _vars, _vals, varIters, _idxs, _deps);
 
     // foreach (varIter; varIters) {
     //   import std.stdio;
@@ -861,25 +866,25 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // if (_iters.length > 0) {
     //   _len = _iters[0].getLenVec();
     // }
+    foreach (rnd; _rnds) rnd.registerRndPred(this);
     foreach (var; _vars) var.registerVarPred(this);
-    foreach (val; _vals) val.registerValPred(this);
 
-    assert(_vars.length != 0);
-    if (_vars.length > 1) {
-      foreach (var; _vars) {
-	var._type = DomType.MULTI;
+    assert(_rnds.length != 0);
+    if (_rnds.length > 1) {
+      foreach (rnd; _rnds) {
+	rnd._type = DomType.MULTI;
       }
     }
     else {
-      assert(_vars.length == 1);
-      auto var = _vars[0];
-      if (var._type == DomType.MONO) {
-	if (_vals.length > 0) {
-	  var._type = DomType.LAZYMONO;
+      assert(_rnds.length == 1);
+      auto rnd = _rnds[0];
+      if (rnd._type == DomType.MONO) {
+	if (_vars.length > 0) {
+	  rnd._type = DomType.LAZYMONO;
 	}
 	if (_idxs.length > 0) {
-	  assert(! var.isPhysical());
-	  var._type = DomType.INDEXEDMONO;
+	  assert(! rnd.isStatic());
+	  rnd._type = DomType.INDEXEDMONO;
 	}
       }
     }
@@ -898,7 +903,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // _iters = pasredIters.filter!(itr =>
     // 				 canFind(varIters, itr)).array;
     _iters = _parsedIters.filter!(itr =>
-				  canFind!((CstIteratorBase a, CstIteratorBase b) => a == b)
+				  canFind!((CstIterator a, CstIterator b) => a == b)
 				  (varIters, itr)).array;
     
     if (_iters.length != 0) _iters[0].registerRolled(this);
@@ -915,8 +920,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   bool hasUpdate() {
-    foreach (val; _vals) {
-      if (val.hasChanged()) {
+    foreach (var; _vars) {
+      if (var.hasChanged()) {
 	return true;
       }
     }
@@ -942,6 +947,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
       description ~= "    Iterators: \n";
       foreach (iter; _iters) {
 	description ~= "\t" ~ iter.name() ~ "\n";
+      }
+    }
+    if (_rnds.length > 0) {
+      description ~= "    Domains: \n";
+      foreach (rnd; _rnds) {
+	description ~= "\t" ~ rnd.name() ~ "\n";
       }
     }
     if (_vars.length > 0) {
@@ -970,6 +981,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     description ~= "\n";
     return description;
+  }
+
+  void fixGroup() {
   }
 }
 

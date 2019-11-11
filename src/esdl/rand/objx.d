@@ -4,15 +4,15 @@ import esdl.data.bvec;
 import esdl.data.bstr;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-import esdl.rand.obdd;
+import esdl.solver.obdd;
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
-  CstIteratorBase, DomType, CstStage, CstDomain,
+  CstIterator, DomType, CstStage, CstDomain,
   CstBddExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__ProxyRoot;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstIterator;
+  CstVecTerm, CstVecIterator;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve;
@@ -139,7 +139,7 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // }
 
       // // RV
-      // CstVecExpr unroll(CstIteratorBase iter, uint n) {
+      // CstVecExpr unroll(CstIterator iter, uint n) {
       // 	return this;
       // }
 
@@ -148,24 +148,25 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // }
 
       // void setDomainContext(CstPredicate pred,
+      // 			 ref CstDomain[] rnds,
       // 			 ref CstDomain[] vars,
-      // 			 ref CstDomain[] vals,
-      // 			 ref CstIteratorBase[] iters,
+      // 			 ref CstValue[] vals,
+      // 			 ref CstIterator[] iters,
       // 			 ref CstDomain[] idxs,
       // 			 ref CstDomain[] deps) {
       // 	static if (is (R: _esdl__norand)) {
       // 	  // markAbstractVecDomains(false);
-      // 	  if (! canFind(vals, this)) vals ~= this;
+      // 	  if (! canFind(vars, this)) vars ~= this;
       // 	}
       // 	else {
-      // 	  if (! canFind(vars, this)) vars ~= this;
+      // 	  if (! canFind(rnds, this)) rnds ~= this;
       // 	}
       // }
 
       // final override void markAsUnresolved(uint lap) {
       // 	if (_unresolveLap != lap) {
       // 	  _unresolveLap = lap;
-      // 	  foreach (pred; _varPreds) {
+      // 	  foreach (pred; _rndPreds) {
       // 	    pred.markAsUnresolved(lap);
       // 	  }
       // 	}
@@ -230,11 +231,11 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
       else return (_parent == rhs._parent && _indexExpr == _indexExpr);
     }
       
-    final bool isPhysical() {
+    final bool isStatic() {
       return ((_indexExpr is null ||
 	       _indexExpr.isIterator ||
 	       _indexExpr.isConst) &&
-	      _parent.isPhysical());
+	      _parent.isStatic());
     }
 
     _esdl__Proxy getProxyRoot()() {
@@ -257,7 +258,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
     }
 
     // RV
-    auto unroll(CstIteratorBase iter, uint n) {
+    auto unroll(CstIterator iter, uint n) {
       if (_indexExpr) {
 	return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
       }
@@ -276,22 +277,23 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
     }
 
     void setDomainContext(CstPredicate pred,
+		       ref CstDomain[] rnds,
 		       ref CstDomain[] vars,
-		       ref CstDomain[] vals,
-		       ref CstIteratorBase[] iters,
+		       ref CstValue[] vals,
+		       ref CstIterator[] iters,
 		       ref CstDomain[] idxs,
 		       ref CstDomain[] deps) {
       static if (R.isRand()) {
 	markAbstractVecDomains(false);
-      // 	if (! canFind(vars, this)) vars ~= this;
+      // 	if (! canFind(rnds, this)) rnds ~= this;
       // }
       // else {
-      // 	if (! canFind(vals, this)) vals ~= this;
+      // 	if (! canFind(vars, this)) vars ~= this;
       }
-      if (_parent.isPhysical()) {
+      if (_parent.isStatic()) {
 	deps ~= _parent._arrLen;
       }
-      _parent.setDomainContext(pred, vars, vals, iters, idxs, deps);
+      _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
 
       if (_indexExpr !is null) {
 	// Here we need to put the parent as a dep for the pred
@@ -301,7 +303,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 	// not. When the indexExpr gets resolved, it should inform
 	// the parent about resolution which in turn should inform
 	// the pred that it can go ahead
-	_indexExpr.setDomainContext(pred, idxs, vals, iters, idxs, deps);
+	_indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
       }
     }
 
@@ -311,7 +313,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 
     void markAbstractVecDomains(bool len) {
       assert (len is false);
-      if (this.isPhysical()) {
+      if (this.isStatic()) {
 	return;
       }
       else {
@@ -454,8 +456,8 @@ mixin template CstObjArrMixin()
     return this[_esdl__iter()];
   }
 
-  CstIterator!RV _esdl__iter() {
-    CstIterator!RV iter = arrLen.makeIterVar();
+  CstVecIterator!RV _esdl__iter() {
+    CstVecIterator!RV iter = arrLen.makeIterVar();
     return iter;
   }
 
@@ -542,7 +544,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     return _root;
   }
 
-  final bool isPhysical() {
+  final bool isStatic() {
     return true; 		// N == 0
   }
 
@@ -550,7 +552,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     return this;
   }
 
-  RV unroll(CstIteratorBase iter, uint n) {
+  RV unroll(CstIterator iter, uint n) {
     return this;
   }
 
@@ -585,11 +587,12 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   void setDomainContext(CstPredicate pred,
-		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] deps) {
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
     // when indexExpr is not contant, but an expression)
@@ -684,11 +687,11 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     else return (_parent == rhs._parent && _indexExpr == _indexExpr);
   }
       
-  final bool isPhysical() {
+  final bool isStatic() {
     return ((_indexExpr is null  ||
 	     _indexExpr.isIterator ||
 	     _indexExpr.isConst) &&
-	    _parent.isPhysical());
+	    _parent.isStatic());
   }
 
   RV getResolved() {
@@ -705,7 +708,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     return _resolvedObj;
   }
 
-  RV unroll(CstIteratorBase iter, uint n) {
+  RV unroll(CstIterator iter, uint n) {
     if (_indexExpr) {
       return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
     }
@@ -750,9 +753,10 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
   }
 
   void setDomainContext(CstPredicate pred,
+		     ref CstDomain[] rnds,
 		     ref CstDomain[] vars,
-		     ref CstDomain[] vals,
-		     ref CstIteratorBase[] iters,
+		     ref CstValue[] vals,
+		     ref CstIterator[] iters,
 		     ref CstDomain[] idxs,
 		     ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
@@ -761,17 +765,17 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
 	  
     // auto iter = arrLen.makeIterVar();
     // iters ~= iter;
-    if (_parent.isPhysical()) {
+    if (_parent.isStatic()) {
       deps ~= _parent._arrLen;
     }
-    _parent.setDomainContext(pred, vals, vals, iters, idxs, deps);
+    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setDomainContext(pred, idxs, vals, iters, idxs, deps);
+      _indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
     }
   }
 
   // void markAsUnresolved(uint lap) {
-  //   if (isPhysical()) {
+  //   if (isStatic()) {
   //     foreach (elem; _elems) {
   // 	elem.markAsUnresolved(lap);
   //     }
@@ -782,7 +786,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
   // }
 
   void markAbstractVecDomains(bool len) {
-    if (this.isPhysical()) {
+    if (this.isStatic()) {
       labelAbstractVecDomains(len);
     }
     else {

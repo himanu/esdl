@@ -8,7 +8,8 @@
 
 module esdl.rand.meta;
 
-import esdl.rand.obdd;
+import esdl.solver.obdd;
+import esdl.solver.bdd;
 
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray, isSomeChar;
 import esdl.data.bvec: isBitVector;
@@ -18,7 +19,7 @@ import std.exception: enforce;
 import std.range: ElementType;
 
 import esdl.rand.misc;
-import esdl.rand.expr: CstVal;
+import esdl.rand.expr: CstVecValue;
 import esdl.rand.base: CstBlock, _esdl__Proxy, CstVecPrim, CstPredicate, CstVarIntf;
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
@@ -339,7 +340,7 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
     t._esdl__proxyInst._esdl__cstWithChanged = false;
   }
 
-  useBuddy(t._esdl__proxyInst._esdl__buddy);
+  useBuddy(CstBddSolver.buddy);
 
   foreach(rnd; t._esdl__proxyInst._esdl__randsList) {
     rnd._esdl__reset();
@@ -379,6 +380,7 @@ class Randomizable {
 
 mixin template Randomization()
 {
+  import esdl.solver.bdd: CstBddSolver;
   alias _esdl__T = typeof(this);
   
   // While making _esdl__ProxyRand class non-static nested class
@@ -456,8 +458,8 @@ mixin template Randomization()
       _esdl__randomize(this, withCst);
     }
     void useThisBuddy() {
-      import esdl.rand.obdd;
-      useBuddy(_esdl__proxyInst._esdl__buddy);
+      import esdl.solver.obdd;
+      useBuddy(CstBddSolver.buddy);
     }
     void seedRandom(int seed) {
       if (_esdl__proxyInst is null) {
@@ -675,7 +677,7 @@ auto _esdl__rand_proxy(L)(L l, string name,
 			  _esdl__Proxy parent)
   if (isIntegral!L || isBitVector!L ||
       isBoolean!L || isSomeChar!L || is (L == enum)) {
-    return new CstVal!L(l); // CstVal!L.allocate(l);
+    return new CstVecValue!L(l); // CstVecValue!L.allocate(l);
   }
 
 struct _esdl__rand_type_proxy(T, P)
@@ -712,7 +714,7 @@ auto _esdl__rand_proxy(alias V, // string VS,
       return new CstVecIdx!(L, rand(true, true), 0, -1)(name, V, parent);
     }
     else {
-      return new CstVal!L(V); // CstVal!L.allocate(l);
+      return new CstVecValue!L(V); // CstVecValue!L.allocate(l);
     }
   }
   else static if (isArray!L) {

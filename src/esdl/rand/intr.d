@@ -4,7 +4,7 @@ import std.traits: isIntegral, isSigned;
 import std.container.array;
 import std.traits: Unsigned, Signed, isUnsigned, isSigned;
 import esdl.data.bvec;
-import esdl.rand.misc: CstBinVecOp, CstBinBddOp, CstBddOp, _esdl__RandGen;
+import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicalOp, _esdl__RandGen;
 
 T larger(T) (T a, T b) {
   if (a > b) return a;
@@ -72,7 +72,7 @@ struct UniRange
   }
   
   
-  this(CstBinBddOp op, INTTYPE iType, long val, bool reverse=false) {
+  this(CstCompareOp op, INTTYPE iType, long val, bool reverse=false) {
     if (iType == INTTYPE.UINT) {
       uint iVal = cast(uint) val;
       assert (iVal == val);
@@ -282,25 +282,25 @@ struct IntRange(T) if (isIntegral!T) {
     _full = uRange._full;
   }
 
-  this(CstBinBddOp op, T val, bool reverse=false) {
+  this(CstCompareOp op, T val, bool reverse=false) {
     if (! reverse) {
       final switch(op) {
-      case CstBinBddOp.LTH: _min = T.min; _max = val; break;
-      case CstBinBddOp.GTH: _min = ++val; _max = T.max; break;
-      case CstBinBddOp.LTE: _min = T.min; _max = ++val; break;
-      case CstBinBddOp.GTE: _min = val; _max = T.max; break;
-      case CstBinBddOp.EQU: _min = val; _max = ++val; break;
-      case CstBinBddOp.NEQ: _min = ++val; _max = val; break;
+      case CstCompareOp.LTH: _min = T.min; _max = val; break;
+      case CstCompareOp.GTH: _min = ++val; _max = T.max; break;
+      case CstCompareOp.LTE: _min = T.min; _max = ++val; break;
+      case CstCompareOp.GTE: _min = val; _max = T.max; break;
+      case CstCompareOp.EQU: _min = val; _max = ++val; break;
+      case CstCompareOp.NEQ: _min = ++val; _max = val; break;
       }
     }
     else {
       final switch(op) {
-      case CstBinBddOp.GTH: _min = T.min; _max = val; break;
-      case CstBinBddOp.LTH: _min = ++val; _max = T.max; break;
-      case CstBinBddOp.GTE: _min = T.min; _max = ++val; break;
-      case CstBinBddOp.LTE: _min = val; _max = T.max; break;
-      case CstBinBddOp.EQU: _min = val; _max = ++val; break;
-      case CstBinBddOp.NEQ: _min = ++val; _max = val; break;
+      case CstCompareOp.GTH: _min = T.min; _max = val; break;
+      case CstCompareOp.LTH: _min = ++val; _max = T.max; break;
+      case CstCompareOp.GTE: _min = T.min; _max = ++val; break;
+      case CstCompareOp.LTE: _min = val; _max = T.max; break;
+      case CstCompareOp.EQU: _min = val; _max = ++val; break;
+      case CstCompareOp.NEQ: _min = ++val; _max = val; break;
       }
     }
   }

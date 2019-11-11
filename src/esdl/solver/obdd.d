@@ -7,7 +7,7 @@
 // Authors:   Puneet Goel <puneet@coverify.com>
 // Credits:   Ported from the Buddy C++ library by Jorn Lind-Nielsen
 
-module esdl.rand.obdd;
+module esdl.solver.obdd;
 
 import std.stdio;
 import std.datetime;
@@ -500,8 +500,6 @@ struct BddDomain // fdd.c:52
 
 }
 
-
-
 struct BddVec
 {
 
@@ -585,6 +583,12 @@ struct BddVec
     initialize(buddy, val);
   }
 
+  void buildVec(Buddy buddy, ulong value, uint size, bool signed) {
+      _bitvec.length = size;
+      _signed = signed;
+      initialize(buddy, value);
+  }
+
   void buildVec(uint di, bool signed = false) {
     auto d = getBuddy()._domains[di];
     _signed = signed;
@@ -643,7 +647,7 @@ struct BddVec
 
   void initialize(Buddy buddy, long val) {
     for (size_t i=0; i!=length; ++i) {
-      if((val & 0x1) != 0) _bitvec[i] = one(buddy);
+      if ((val & 0x1) != 0) _bitvec[i] = one(buddy);
       else _bitvec[i] = zero(buddy);
       val >>= 1;
     }
@@ -879,7 +883,7 @@ struct BddVec
     return val;
   }
 
-  void reset() {
+  void free() {
     // size = 0;
     foreach(ref bdd; _bitvec) {
       bdd.reset();
@@ -1202,7 +1206,7 @@ struct BddVec
       // throw new BddException();
       bdd_error(BddError.BVEC_SIZE);
     }
-    reset();
+    this.free();
     this._bitvec = that.bitvec;
   }
 
@@ -1714,6 +1718,7 @@ struct BDD
 	_buddy.addRef(_index);
       }
   }
+
   this(this)
   {
     if(_index != 0 && _buddy !is null) {
@@ -9444,7 +9449,7 @@ class Buddy
   void bdd_vec_done() {
     if (_vecs.length > 0) {
       for (int n=0 ; n < _fdvarnum ; n++) {
-	_vecs[n].reset();
+	_vecs[n].free();
       }
       _vecs.clear();
     }

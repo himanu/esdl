@@ -1,8 +1,10 @@
 module esdl.rand.proxy;
-import esdl.rand.obdd;
+import esdl.solver.obdd;
+import esdl.solver.base;
+import esdl.solver.bdd;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstBddExpr,
-  CstDomain, CstPredicate, CstBlock, _esdl__Proxy;
+  CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup;
 import esdl.rand.misc;
 import esdl.data.folder;
 import std.container: Array;
@@ -84,11 +86,14 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   // Keep a list of constraints in the class
   _esdl__ConstraintBase[] _esdl__cstsList;
   _esdl__ConstraintBase _esdl__cstWith;
+
   bool _esdl__cstWithChanged;
 
   CstBlock _esdl__cstExprs;
 
   CstStage[] savedStages;
+
+  Array!CstPredGroup _predGroups;
 
   Array!ulong _solveValue;
   
@@ -328,6 +333,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	}
 	else {
 	  if (! procMaybeMonoDomain(pred)) {
+	    pred.fixGroup();
 	    addCstStage(pred);
 	  }
 	}
@@ -346,26 +352,33 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     }
   }
 
+  void addDomain(CstDomain domain) {
+    if (domain.isRand()) {
+      // _root._cstRndDomains ~= domain;
+      useBuddy(CstBddSolver.buddy());
+      domain.domIndex = _root._domIndex++;
+      _root._domains ~= CstBddSolver.buddy.extDomVec(domain.bitcount);
+      // if (domain.bddvec(_esdl__buddy).isNull()) {
+      CstBddSolver.buddy.getVec(domain.domIndex).buildVec(domain.domIndex, domain.signed);
+      // }
+    }
+    else {
+      _root._cstValDomains ~= domain;
+    }
+  }
+
   void solveStage(CstStage stage, ref int stageIndx) {
     import std.conv;
     CstPredicate[] preds = stage._predicates;
 
-    foreach (pred; preds) {
-      pred.annotate();
-    }
+    // foreach (pred; preds) {
+    //   pred.annotate();
+    // }
 
     // foreach (pred; preds) {
     //   import std.stdio;
     //   writeln("Proxy: ", pred.name(), " update: ", pred.hasUpdate());
     // }
-    foreach (vec; stage._domVars) {
-      if (vec.stage is stage) {
-	if (vec.bddvec(_esdl__buddy).isNull()) {
-	  vec.bddvec(_esdl__buddy).buildVec(vec.domIndex, vec.signed);
-	}
-      }
-    }
-
     // make the bdd tree
     bool updated = false;
 
@@ -384,7 +397,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     // foreach (pred; stage._predicates) {
     //   writeln("saved: ", pred.name());
     // }
-    BDD solveBDD = _esdl__buddy.one();
+    BDD solveBDD = CstBddSolver.buddy.one();
 
     if ((! updated) &&
 	savedStages.length > stageIndx &&
@@ -396,14 +409,28 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       solveBDD = stage._solveBDD;
     }
     else {
-      foreach(vec; stage._domVars) {
-	BDD primBdd = vec.getPrimBdd(_esdl__buddy);
-	if(! primBdd.isOne()) {
-	  solveBDD = solveBDD & primBdd;
+      auto solver = new CstBddSolver(stage);
+      stage._solver = solver;
+      foreach (vec; stage._domVars) {
+	if (vec.stage is stage) {
+	  if (vec.domIndex == uint.max) {
+	    this.addDomain(vec);
+	    stage._solver.registerDomain(vec);
+	  }
+	  // if (vec.bddvec(_esdl__buddy).isNull()) {
+	  //   vec.bddvec(_esdl__buddy).buildVec(vec.domIndex, vec.signed);
+	  // }
 	}
       }
+      // foreach(vec; stage._domVars) {
+      // 	BDD primBdd = vec.getPrimBdd(_esdl__buddy);
+      // 	if(! primBdd.isOne()) {
+      // 	  solveBDD = solveBDD & primBdd;
+      // 	}
+      // }
       foreach(pred; preds) {
-	solveBDD = solveBDD & pred.getExpr().getBDD(stage, _esdl__buddy);
+	pred.getExpr().visit(solver);
+	solveBDD = solveBDD & pred.getExpr().getBDD(stage, CstBddSolver.buddy);
 	// writeln(pred.name());
       }
       stage._solveBDD = solveBDD;
@@ -483,7 +510,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     // uint stage = cast(uint) _solveStages.length;
     // auto vecs = pred.getExpr().getRndDomains(true);
     auto vecs = pred.getDomains();
-    // auto vecs = pred._vars;
+    // auto vecs = pred._rnds;
     // import std.stdio;
     // foreach (vec; vecs) writeln(vec.name());
     CstStage stage;

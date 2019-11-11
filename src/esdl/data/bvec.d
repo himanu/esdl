@@ -574,9 +574,11 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
       }
     }
     else {
-      foreach(i, n;(mixin(stringToBits(extractBits!(false, RADIX)(VAL),
-				       store_t.sizeof, STORESIZE)))) {
-	_aval[i] &= ~n;
+      // pragma(msg, stringToBits(extractBits!(false, RADIX)(VAL),
+      // 			       store_t.sizeof, STORESIZE));
+      foreach(i, n; (mixin(stringToBits(extractBits!(false, RADIX)(VAL),
+				        store_t.sizeof, STORESIZE)))) {
+	_aval[i] &= cast(store_t) ~n;
       }
       if(this.aValMSB) {
 	_aval[$-1] |= SMASK;
@@ -1473,6 +1475,23 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       else {
 	return toCharString!(V, RADIX);
       }
+    }
+
+    // write in Hex form for all the bytes of data
+    size_t writeHexString(ref char[] str, size_t pos=0) {
+      enum size_t NIBBLES = 2 * (SIZE + 7)/8;
+      enum size_t NIBBLESPERWORD = 2 * store_t.sizeof;
+      enum store_t NIBBLEMASK = 0xF;
+      assert (str.length >= NIBBLES + pos);
+      for (size_t i=0; i != NIBBLES; ++i) {
+	import std.stdio;
+	size_t j = i / NIBBLESPERWORD;
+	size_t k = i % NIBBLESPERWORD;
+	auto C = (_aval[j] >> (k * 4)) & NIBBLEMASK;
+	if (C < 10) str[pos+NIBBLES-i-1] = (cast(char) ('0' + C));
+	else str[pos+NIBBLES-i-1] = cast(char) ('A' + C - 10);
+      }
+      return NIBBLES;
     }
 
     string toString()() {
@@ -2953,6 +2972,19 @@ alias UBitVec UBit;
 alias LogicVec Logic;
 alias ULogicVec ULogic;
 
+
+// write in Hex form for all the bytes of data
+size_t writeHexString(T)(T val, ref char[] str, size_t pos=0) {
+  enum size_t NIBBLES = 2 * T.sizeof;
+  enum T NIBBLEMASK = 0xF;
+  assert (str.length >= NIBBLES + pos);
+  for (size_t i=0; i != NIBBLES; ++i) {
+    auto C = (val >> (i * 4)) & NIBBLEMASK;
+    if (C < 10) str[pos+NIBBLES-i-1] = (cast(char) ('0' + C));
+    else str[pos+NIBBLES-i-1] = cast(char) ('A' + C - 10);
+  }
+  return NIBBLES;
+}
 
 
 
