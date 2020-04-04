@@ -716,13 +716,18 @@ struct BddVec
     }
 
   final BddVec opBinary(string op)(long rhs)
-    if(op == "<<" || op == ">>" || op == "*" || op == "/" || op == "%")
+    if(op == "<<" || op == ">>" || op == ">>>" || op == "*" || op == "/" || op == "%")
       {
 	static if(op == "<<")
 	  {
 	    return this.shl(cast(int) rhs, zero());
 	  }
 	static if(op == ">>")
+	  {
+	    if (_signed) return this.shr(cast(int) rhs, _bitvec[_bitvec.length -1]);
+	    else return this.shr(cast(int) rhs, zero());
+	  }
+	static if(op == ">>>")
 	  {
 	    return this.shr(cast(int) rhs, zero());
 	  }
@@ -751,7 +756,7 @@ struct BddVec
 
   final BddVec opBinary(string op)(BddVec rhs)
     if(op == "&" || op == "|" || op == "^" ||
-       op == "<<" || op == ">>" || op == "+" ||
+       op == "<<" || op == ">>" || op == ">>>" || op == "+" ||
        op == "-" || op == "*"  || op == "/" ||
        op == "%")
       {
@@ -772,6 +777,11 @@ struct BddVec
 	    return this.shl(rhs, zero());
 	  }
 	static if(op == ">>")
+	  {
+	    if (_signed) return this.shr(rhs, _bitvec[_bitvec.length -1]);
+	    else return this.shr(rhs, zero());
+	  }
+	static if(op == ">>>")
 	  {
 	    return this.shr(rhs, zero());
 	  }

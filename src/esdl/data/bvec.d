@@ -515,6 +515,7 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
   enum size_t SIZE = stringBitSize(VAL, RADIX);
 
   private alias VecParams!(SIZE,S).StoreT store_t;
+  alias STORE_T = store_t;
 
   enum size_t   STORESIZE  = VecParams!(SIZE,S).STORESIZE;
   enum size_t   WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
@@ -766,6 +767,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 
     enum size_t SIZE = VecSize!(1,N);
     private alias store_t = VecParams!(SIZE,S).StoreT;
+    alias STORE_T = store_t;
 
     enum size_t  STORESIZE  = VecParams!(SIZE,S).STORESIZE;
     enum size_t  WORDSIZE   = VecParams!(SIZE,S).WORDSIZE;
@@ -881,7 +883,17 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       (cast(ubyte*) _aval.ptr)[0..STORESIZE*store_t.sizeof][index] = val;
     }
 
-    public auto aVal() {
+    public const (store_t)[] aVal() {
+      return _aval;
+    }
+
+    static if (L) {
+      public const (store_t)[] bVal() {
+	return _bval;
+      }
+    }
+    
+    public auto getValueVec() {
       // http://d.puremagic.com/issues/show_bug.cgi?id=9143
       // _bvec!(S, false, N) retVal;
       _bvec!(S, false, N) retVal;
@@ -889,9 +901,11 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       return retVal;
     }
 
-    public auto bVal() {
+    public auto getMetaVec() {
       _bvec!(S, false, N) retVal;
-      retVal._aval[] = this._bval[];
+      static if (L) {
+	retVal._aval[] = this._bval[];
+      }
       return retVal;
     }
 
@@ -1475,23 +1489,6 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
       else {
 	return toCharString!(V, RADIX);
       }
-    }
-
-    // write in Hex form for all the bytes of data
-    size_t writeHexString(ref char[] str, size_t pos=0) {
-      enum size_t NIBBLES = 2 * (SIZE + 7)/8;
-      enum size_t NIBBLESPERWORD = 2 * store_t.sizeof;
-      enum store_t NIBBLEMASK = 0xF;
-      assert (str.length >= NIBBLES + pos);
-      for (size_t i=0; i != NIBBLES; ++i) {
-	import std.stdio;
-	size_t j = i / NIBBLESPERWORD;
-	size_t k = i % NIBBLESPERWORD;
-	auto C = (_aval[j] >> (k * 4)) & NIBBLEMASK;
-	if (C < 10) str[pos+NIBBLES-i-1] = (cast(char) ('0' + C));
-	else str[pos+NIBBLES-i-1] = cast(char) ('A' + C - 10);
-      }
-      return NIBBLES;
     }
 
     string toString()() {
@@ -2971,22 +2968,6 @@ alias BitVec Bit;
 alias UBitVec UBit;
 alias LogicVec Logic;
 alias ULogicVec ULogic;
-
-
-// write in Hex form for all the bytes of data
-size_t writeHexString(T)(T val, ref char[] str, size_t pos=0) {
-  enum size_t NIBBLES = 2 * T.sizeof;
-  enum T NIBBLEMASK = 0xF;
-  assert (str.length >= NIBBLES + pos);
-  for (size_t i=0; i != NIBBLES; ++i) {
-    auto C = (val >> (i * 4)) & NIBBLEMASK;
-    if (C < 10) str[pos+NIBBLES-i-1] = (cast(char) ('0' + C));
-    else str[pos+NIBBLES-i-1] = cast(char) ('A' + C - 10);
-  }
-  return NIBBLES;
-}
-
-
 
 /*    */
 unittest {
