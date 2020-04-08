@@ -86,8 +86,7 @@ class CstBddSolver: CstSolver
 	_cstRnds ~= domain;
 	useBuddy(_esdl__buddy);
 	if (domain._solverDomain is null) {
-	  uint domIndex = _esdl__buddy.extDomVec(domain.bitcount);
-	  _esdl__buddy.getVec(domIndex).buildVec(domIndex, domain.signed);
+	  uint domIndex = _esdl__buddy.addDomVec(domain.bitcount, domain.signed);
 	  domain._solverDomain = new CstBddSolverDomain(this, domain, domIndex);
 	}
       }

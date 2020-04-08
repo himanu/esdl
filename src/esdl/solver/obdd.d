@@ -9254,6 +9254,14 @@ class Buddy
 
   alias createDomain = Domain_create;
 
+  uint addDomVec(uint domainSize, bool signed) {
+    uint index = cast(uint) _vecs.length;
+    _vecs.length = _vecs.length + 1;
+    uint di = extDomain(domainSize);
+    _vecs[index].buildVec(_domains[di], signed);
+    return index;
+  }
+
   uint extDomVec(uint domainSize) {
     _vecs.length = _vecs.length + 1;
     return extDomain(domainSize);
