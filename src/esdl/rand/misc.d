@@ -1,6 +1,7 @@
 module esdl.rand.misc;
 
 import esdl.data.bvec: isBitVector;
+import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray,
   isStaticArray, isDynamicArray, EnumMembers, isSomeChar;
 import std.meta: AliasSeq;
@@ -10,6 +11,36 @@ interface _esdl__Norand { } 	// classes derived from this interface shall not ha
 // Different types attributes for UI
 // template _esdl__norand() {}
 // enum norand;
+
+
+
+// write in Hex form for all the bytes of data
+size_t writeHexString(T)(T val, ref Charbuf str) {
+  static if (isBitVector!T) {
+    enum size_t NIBBLES = 2 * (T.SIZE + 7)/8;
+    enum size_t NIBBLESPERWORD = 2 * T.STORE_T.sizeof;
+    enum T.STORE_T NIBBLEMASK = 0xF;
+    for (size_t i=NIBBLES; i != 0; --i) {
+      import std.stdio;
+      size_t j = (i-1) / NIBBLESPERWORD;
+      size_t k = (i-1) % NIBBLESPERWORD;
+      auto C = (val.aVal[j] >> (k * 4)) & NIBBLEMASK;
+      if (C < 10) str ~= (cast(char) ('0' + C));
+      else str ~= cast(char) ('A' + C - 10);
+    }
+    return NIBBLES;
+  }
+  else {
+    enum size_t NIBBLES = 2 * T.sizeof;
+    enum ubyte NIBBLEMASK = 0xF;
+    for (size_t i=NIBBLES; i != 0; --i) {
+      auto C = (val >> ((i-1) * 4)) & NIBBLEMASK;
+      if (C < 10) str ~= (cast(char) ('0' + C));
+      else str ~= cast(char) ('A' + C - 10);
+    }
+    return NIBBLES;
+  }
+}
 
 struct rand
 {
@@ -382,7 +413,8 @@ enum CstBinaryOp: byte
     DIV,
     REM,
     LSH,
-    RSH,
+    RSH,			// Arith shift right ">>"
+    LRSH,			// Logic shift right ">>>"
     RANGE, 			// for bitvec slice
     BITINDEX,
     }

@@ -22,7 +22,7 @@ import esdl.rand.meta: _esdl__ProxyResolve;
 import std.algorithm.searching: canFind;
 
 mixin template CstVecMixin() {
-  enum HAS_RAND_ATTRIB = R.isRand();
+  enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
   alias LEAF = LeafElementType!V;
 
   static if (HAS_RAND_ATTRIB) {
@@ -69,10 +69,10 @@ mixin template CstVecMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
 
-class CstVecIdx(V, rand R, int N, P, int IDX): CstVec!(V, R, N)
+class CstVecIdx(V, rand RAND_ATTR, int N, P, int IDX): CstVec!(V, RAND_ATTR, N)
 {
-  enum _esdl__ISRAND = R.isRand();
-  enum _esdl__HASPROXY = R.hasProxy();
+  enum _esdl__ISRAND = RAND_ATTR.isRand();
+  enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
   this(string name, ref V var, _esdl__Proxy parent) {
@@ -80,8 +80,9 @@ class CstVecIdx(V, rand R, int N, P, int IDX): CstVec!(V, R, N)
   }
 }
 
-class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, R), CstVecPrim, CstVecIntf
+// Primary Vector -- not an element of any array
+class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim, CstVecIntf
     {
       import std.traits;
       import std.range;
@@ -134,7 +135,10 @@ class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return cast (long) (*_var);
       }
 
-      void visit(CstSolver solver) {}
+      void visit(CstSolver solver) {
+	// assert (solver !is null);
+	solver.pushDomain(this);
+      }
 
       BddVec getBDD(CstStage s, Buddy buddy) {
 	static if (HAS_RAND_ATTRIB) {
@@ -147,7 +151,7 @@ class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	    return _valvec;
 	  }
 	  else {
-	    assert (false, "Constraint evaluation in wrong stage");
+	    assert (false, "Constraint evaluation in wrong stage: " ~ this.name());
 	  }
 	}
 	else {
@@ -174,7 +178,7 @@ class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 			    ref CstIterator[] iters,
 			    ref CstDomain[] idxs,
 			    ref CstDomain[] deps) {
-	static if (R.isRand()) {
+	static if (RAND_ATTR.isRand()) {
 	  if (! canFind(rnds, this)) rnds ~= this;
 	}
 	else {
@@ -191,11 +195,11 @@ class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
       
-      bool hasAbstractVecDomains() {
+      bool isMaybeMono() {
 	return false;
       }
 
-      void markAbstractVecDomains(bool len) {
+      void markMaybeMono(bool len) {
 	assert (len is false);
 	return;
       }
@@ -214,8 +218,9 @@ class CstVec(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
     }
 
-class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, R), CstVecPrim, CstVecIntf
+// Array Element
+class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim, CstVecIntf
     {
       import std.traits;
       import std.range;
@@ -224,7 +229,7 @@ class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       mixin CstVecMixin;
       
       alias RV = typeof(this);
-      alias P = CstVecArr!(V, R, N-1);
+      alias P = CstVecArr!(V, RAND_ATTR, N-1);
       P _parent;
 
       CstVecExpr _indexExpr = null;
@@ -328,7 +333,9 @@ class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       	}
       }
 
-      void visit(CstSolver solver) {}
+      void visit(CstSolver solver) {
+	solver.pushDomain(this);
+      }
 
       BddVec getBDD(CstStage s, Buddy buddy) {
 	static if (HAS_RAND_ATTRIB) {
@@ -369,8 +376,8 @@ class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 			    ref CstIterator[] iters,
 			    ref CstDomain[] idxs,
 			    ref CstDomain[] deps) {
-	static if (R.isRand()) {
-	  markAbstractVecDomains(false);
+	static if (RAND_ATTR.isRand()) {
+	  markMaybeMono(false);
 	  if (! canFind(rnds, this)) rnds ~= this;
 	}
 	else {
@@ -407,21 +414,21 @@ class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
 
-      bool hasAbstractVecDomains() {
-	return _parent.hasAbstractVecDomains();
+      bool isMaybeMono() {
+	return _parent.isMaybeMono();
       }
 
-      void markAbstractVecDomains(bool len) {
+      void markMaybeMono(bool len) {
 	assert (len is false);
 	if (this.isStatic()) {
 	  return;
 	}
 	else {
-	  _parent.markAbstractVecDomains(len);
+	  _parent.markMaybeMono(len);
 	}
       }
 
-      void labelAbstractVecDomains(bool len) {
+      void labelMaybeMono(bool len) {
 	assert (len is false);
 	if (this._type !is DomType.MULTI) {
 	  this._type = DomType.MAYBEMONO;
@@ -452,25 +459,25 @@ class CstVec(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 mixin template CstVecArrMixin()
 {
   alias RV = typeof(this);
-  enum HAS_RAND_ATTRIB = R.isRand();
+  enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
   alias LEAF = LeafElementType!V;
 
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
 
   static if (_esdl__ArrOrder!(V, N+1) == 0) {
-    alias EV = CstVec!(V, R, N+1);
+    alias EV = CstVec!(V, RAND_ATTR, N+1);
   }
   else {
-    alias EV = CstVecArr!(V, R, N+1);
+    alias EV = CstVecArr!(V, RAND_ATTR, N+1);
   }
 
   EV[] _elems;
 
   string _name;
 
-  bool _hasAbstractVecDomains;
-  bool _hasAbstractLenDomains;
+  bool _isMaybeMono;
+  bool _isMaybeMonoLen;
 
   override string name() {
     return _name;
@@ -554,8 +561,8 @@ mixin template CstVecArrMixin()
 	import std.conv: to;
 	_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
 			   this, cast(uint) i);
-	if (_hasAbstractVecDomains) {
-	  _elems[i].labelAbstractVecDomains(false);
+	if (_isMaybeMono) {
+	  _elems[i].labelMaybeMono(false);
 	}
       }
     }
@@ -643,7 +650,7 @@ mixin template CstVecArrMixin()
 	return cast(uint) L.length;
       }
       else {
-	return R[N];
+	return RAND_ATTR[N];
       }
     }
     else {
@@ -661,10 +668,10 @@ mixin template CstVecArrMixin()
 
 // Arrays (Multidimensional arrays as well)
 
-class CstVecArrIdx(V, rand R, int N, P, int IDX): CstVecArr!(V, R, N)
+class CstVecArrIdx(V, rand RAND_ATTR, int N, P, int IDX): CstVecArr!(V, RAND_ATTR, N)
 {
-  enum _esdl__ISRAND = R.isRand();
-  enum _esdl__HASPROXY = R.hasProxy();
+  enum _esdl__ISRAND = RAND_ATTR.isRand();
+  enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
   this(string name, ref V var, _esdl__Proxy parent) {
@@ -672,14 +679,15 @@ class CstVecArrIdx(V, rand R, int N, P, int IDX): CstVecArr!(V, R, N)
   }
 }
 
-class CstVecArr(V, rand R, int N)
+// Primary Array
+class CstVecArr(V, rand RAND_ATTR, int N)
   if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
     CstVecPrim, CstVecArrIntf
 {
   mixin CstVecArrMixin;
   CstVecLen!RV _arrLen;
 
-  alias RAND=R;
+  alias RAND=RAND_ATTR;
 
   V* _var;
   _esdl__Proxy _parent;
@@ -695,8 +703,8 @@ class CstVecArr(V, rand R, int N)
     _parent = parent;
     _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_hasAbstractLenDomains) {
-      _arrLen.labelAbstractVecDomains(true);
+    if (_isMaybeMonoLen) {
+      _arrLen.labelMaybeMono(true);
     }
   }
 
@@ -765,20 +773,26 @@ class CstVecArr(V, rand R, int N)
     }
   }
 
-  void markAbstractVecDomains(bool len) {
-    labelAbstractVecDomains(len);
+  void markMaybeMono(bool len) {
+    // if (this.isStatic()) {
+    //   // assert (len is false);
+    //   // return;
+    // }
+    // else {
+    labelMaybeMono(len);
+    // }
   }
 
-  bool hasAbstractVecDomains() {
-    return _hasAbstractVecDomains;
+  bool isMaybeMono() {
+    return _isMaybeMono;
   }
 
-  void labelAbstractVecDomains(bool len) {
-    if (_hasAbstractVecDomains is false) {
-      _hasAbstractVecDomains = true;
-      if (len is true) _arrLen.labelAbstractVecDomains(len);
+  void labelMaybeMono(bool len) {
+    if (_isMaybeMono is false) {
+      _isMaybeMono = true;
+      if (len is true) _arrLen.labelMaybeMono(len);
       foreach (elem; _elems) {
-	elem.labelAbstractVecDomains(len);
+	elem.labelMaybeMono(len);
       }
     }
   }
@@ -796,7 +810,8 @@ class CstVecArr(V, rand R, int N)
   }
 }
 
-class CstVecArr(V, rand R, int N)
+// Array that is elelment of another array
+class CstVecArr(V, rand RAND_ATTR, int N)
   if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     CstVecPrim, CstVecArrIntf
 {
@@ -804,7 +819,7 @@ class CstVecArr(V, rand R, int N)
   import std.traits;
   import std.range;
   import esdl.data.bvec;
-  alias P = CstVecArr!(V, R, N-1);
+  alias P = CstVecArr!(V, RAND_ATTR, N-1);
   P _parent;
   _esdl__Proxy _root;
   CstVecExpr _indexExpr = null;
@@ -812,7 +827,7 @@ class CstVecArr(V, rand R, int N)
 
   CstVecLen!RV _arrLen;
 
-  alias RAND=R;
+  alias RAND=RAND_ATTR;
       
   uint _resolvedCycle;	// cycle for which indexExpr has been resolved
   RV _resolvedVec;
@@ -826,8 +841,8 @@ class CstVecArr(V, rand R, int N)
     _indexExpr = indexExpr;
     _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_hasAbstractLenDomains) {
-      _arrLen.labelAbstractVecDomains(true);
+    if (_isMaybeMonoLen) {
+      _arrLen.labelMaybeMono(true);
     }
   }
 
@@ -841,8 +856,8 @@ class CstVecArr(V, rand R, int N)
     _pindex = index;
     _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_hasAbstractLenDomains) {
-      _arrLen.labelAbstractVecDomains(true);
+    if (_isMaybeMonoLen) {
+      _arrLen.labelMaybeMono(true);
     }
   }
 
@@ -950,25 +965,25 @@ class CstVecArr(V, rand R, int N)
     }
   }
 
-  void markAbstractVecDomains(bool len) {
+  void markMaybeMono(bool len) {
     if (this.isStatic()) {
-      labelAbstractVecDomains(len);
+      labelMaybeMono(len);
     }
     else {
-      _parent.markAbstractVecDomains(len);
+      _parent.markMaybeMono(len);
     }
   }
 
-  bool hasAbstractVecDomains() {
-    return _hasAbstractVecDomains;
+  bool isMaybeMono() {
+    return _isMaybeMono;
   }
 
-  void labelAbstractVecDomains(bool len) {
-    if (_hasAbstractVecDomains is false) {
-      _hasAbstractVecDomains = true;
-      if (len is true) _arrLen.labelAbstractVecDomains(len);
+  void labelMaybeMono(bool len) {
+    if (_isMaybeMono is false) {
+      _isMaybeMono = true;
+      if (len is true) _arrLen.labelMaybeMono(len);
       foreach (elem; _elems) {
-	elem.labelAbstractVecDomains(len);
+	elem.labelMaybeMono(len);
       }
     }
   }

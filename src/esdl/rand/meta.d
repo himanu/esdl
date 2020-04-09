@@ -264,7 +264,7 @@ template _esdl__ConstraintDefaults(string NAME, int I, rand RAND) {
       enum string ARR = "_esdl__elem_" ~ NAME ~ "_" ~ J.stringof;
     }
     enum string ELEM = "_esdl__elem_" ~ NAME ~ "_" ~ I.stringof;
-    enum string _esdl__ConstraintDefaultsLength = ARR ~ ".length" ~ " <= "
+    enum string _esdl__ConstraintDefaultsLength = ARR ~ ".length <= "
       ~ LENGTH.stringof ~ ";\n";
     
     static if (NEXTL == uint.max) {

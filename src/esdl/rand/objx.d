@@ -9,7 +9,7 @@ import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIterator, DomType, CstStage, CstDomain,
-  CstBddExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
+  CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__ProxyRoot;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator;
@@ -155,7 +155,7 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // 			 ref CstDomain[] idxs,
       // 			 ref CstDomain[] deps) {
       // 	static if (is (R: _esdl__norand)) {
-      // 	  // markAbstractVecDomains(false);
+      // 	  // markMaybeMono(false);
       // 	  if (! canFind(vars, this)) vars ~= this;
       // 	}
       // 	else {
@@ -172,11 +172,11 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // 	}
       // }
       
-      // bool hasAbstractVecDomains() {
+      // bool isMaybeMono() {
       // 	return false;
       // }
 
-      // void markAbstractVecDomains(bool len) {
+      // void markMaybeMono(bool len) {
       // 	assert (len is false);
       // 	return;
       // }
@@ -284,7 +284,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 		       ref CstDomain[] idxs,
 		       ref CstDomain[] deps) {
       static if (R.isRand()) {
-	markAbstractVecDomains(false);
+	markMaybeMono(false);
       // 	if (! canFind(rnds, this)) rnds ~= this;
       // }
       // else {
@@ -307,21 +307,21 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
       }
     }
 
-    bool hasAbstractVecDomains() {
-      return _parent.hasAbstractVecDomains();
+    bool isMaybeMono() {
+      return _parent.isMaybeMono();
     }
 
-    void markAbstractVecDomains(bool len) {
+    void markMaybeMono(bool len) {
       assert (len is false);
       if (this.isStatic()) {
 	return;
       }
       else {
-	_parent.markAbstractVecDomains(len);
+	_parent.markMaybeMono(len);
       }
     }
 
-    void labelAbstractVecDomains(bool len) {
+    void labelMaybeMono(bool len) {
       // assert (len is false);
       // if (this._type !is DomType.MULTI) {
       // 	this._type = DomType.MAYBEMONO;
@@ -360,8 +360,8 @@ mixin template CstObjArrMixin()
 
   string _name;
 
-  bool _hasAbstractVecDomains;
-  bool _hasAbstractLenDomains;
+  bool _isMaybeMono;
+  bool _isMaybeMonoLen;
 
   string name() {
     return _name;
@@ -396,8 +396,8 @@ mixin template CstObjArrMixin()
 	import std.conv: to;
 	_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
 			   this, cast(uint) i);
-	if (_hasAbstractVecDomains) {
-	  _elems[i].labelAbstractVecDomains(false);
+	if (_isMaybeMono) {
+	  _elems[i].labelMaybeMono(false);
 	}
       }
     }
@@ -534,8 +534,8 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     _parent = parent;
     // _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_hasAbstractLenDomains) {
-      _arrLen.labelAbstractVecDomains(true);
+    if (_isMaybeMonoLen) {
+      _arrLen.labelMaybeMono(true);
     }
   }
 
@@ -609,20 +609,20 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   //   }
   // }
 
-  void markAbstractVecDomains(bool len) {
-    labelAbstractVecDomains(len);
+  void markMaybeMono(bool len) {
+    labelMaybeMono(len);
   }
 
-  bool hasAbstractVecDomains() {
-    return _hasAbstractVecDomains;
+  bool isMaybeMono() {
+    return _isMaybeMono;
   }
 
-  void labelAbstractVecDomains(bool len) {
-    if (_hasAbstractVecDomains is false) {
-      _hasAbstractVecDomains = true;
-      if (len is true) _arrLen.labelAbstractVecDomains(len);
+  void labelMaybeMono(bool len) {
+    if (_isMaybeMono is false) {
+      _isMaybeMono = true;
+      if (len is true) _arrLen.labelMaybeMono(len);
       foreach (elem; _elems) {
-	elem.labelAbstractVecDomains(len);
+	elem.labelMaybeMono(len);
       }
     }
   }
@@ -656,8 +656,8 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _indexExpr = indexExpr;
     // _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_hasAbstractLenDomains) {
-      _arrLen.labelAbstractVecDomains(true);
+    if (_isMaybeMonoLen) {
+      _arrLen.labelMaybeMono(true);
     }
   }
 
@@ -671,8 +671,8 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _pindex = index;
     // _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_hasAbstractLenDomains) {
-      _arrLen.labelAbstractVecDomains(true);
+    if (_isMaybeMonoLen) {
+      _arrLen.labelMaybeMono(true);
     }
   }
 
@@ -785,25 +785,25 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
   //   }
   // }
 
-  void markAbstractVecDomains(bool len) {
+  void markMaybeMono(bool len) {
     if (this.isStatic()) {
-      labelAbstractVecDomains(len);
+      labelMaybeMono(len);
     }
     else {
-      _parent.markAbstractVecDomains(len);
+      _parent.markMaybeMono(len);
     }
   }
 
-  bool hasAbstractVecDomains() {
-    return _hasAbstractVecDomains;
+  bool isMaybeMono() {
+    return _isMaybeMono;
   }
 
-  void labelAbstractVecDomains(bool len) {
-    if (_hasAbstractVecDomains is false) {
-      _hasAbstractVecDomains = true;
-      if (len is true) _arrLen.labelAbstractVecDomains(len);
+  void labelMaybeMono(bool len) {
+    if (_isMaybeMono is false) {
+      _isMaybeMono = true;
+      if (len is true) _arrLen.labelMaybeMono(len);
       foreach (elem; _elems) {
-	elem.labelAbstractVecDomains(len);
+	elem.labelMaybeMono(len);
       }
     }
   }
