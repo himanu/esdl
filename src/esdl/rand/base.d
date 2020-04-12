@@ -28,8 +28,8 @@ interface CstObjArrIntf: CstVarIntf {}
 
 
 enum DomType: ubyte
-{   MONO = 1,
-    LAZYMONO = 2,		// like MONO with only some vals that need runtime eval
+{   TRUEMONO = 1,
+    LAZYMONO = 2,		// like TRUEMONO with only some vals that need runtime eval
     MAYBEMONO = 3,
     INDEXEDMONO = 4,
     MULTI = 5
@@ -502,7 +502,7 @@ abstract class CstDomain
   DomainState _state;
   uint _unresolveLap;
 
-  DomType _type = DomType.MONO;
+  DomType _type = DomType.TRUEMONO;
 
   void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {
@@ -913,7 +913,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     else {
       assert(_rnds.length == 1);
       auto rnd = _rnds[0];
-      if (rnd._type == DomType.MONO) {
+      if (rnd._type == DomType.TRUEMONO) {
 	if (_vars.length > 0) {
 	  rnd._type = DomType.LAZYMONO;
 	}
@@ -987,6 +987,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (_rnds.length > 0) {
       description ~= "    Domains: \n";
       foreach (rnd; _rnds) {
+	description ~= "\t" ~ rnd.name() ~ "\n";
+      }
+    }
+    if (_dynRnds.length > 0) {
+      description ~= "    Dyn Domains: \n";
+      foreach (rnd; _dynRnds) {
 	description ~= "\t" ~ rnd.name() ~ "\n";
       }
     }

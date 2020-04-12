@@ -251,12 +251,21 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     updateValDomains();
 
     foreach (pred; _allPreds) {
-      addPredicate(pred);
+      pred.randomizeDeps();
+      if (pred.isRolled()) {
+	_rolledPreds ~= pred;
+      }
+      else if (pred._deps.length > 0) {
+	_unresolvedPreds ~= pred;
+      }
+      else {
+	procResolved(pred);
+      }
     }
 
     while (_resolvedMonoPreds.length > 0 ||
-	   _resolvedPreds.length > 0 ||
 	   _resolvedDynPreds.length > 0 ||
+	   _resolvedPreds.length > 0 ||
 	   _unresolvedPreds.length > 0) {
       // import std.stdio;
 

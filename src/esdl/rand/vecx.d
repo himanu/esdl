@@ -195,15 +195,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
       
-      bool isMaybeMono() {
-	return false;
-      }
-
-      void markMaybeMono(bool len) {
-	assert (len is false);
-	return;
-      }
-
       auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
       {
 	static assert (S.length <= 1);
@@ -377,7 +368,9 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 			    ref CstDomain[] idxs,
 			    ref CstDomain[] deps) {
 	static if (RAND_ATTR.isRand()) {
-	  markMaybeMono(false);
+	  if (! this.isStatic()) {
+	    if (_type <= DomType.LAZYMONO) _type = DomType.MAYBEMONO;
+	  }
 	  if (! canFind(rnds, this)) rnds ~= this;
 	}
 	else {
@@ -411,27 +404,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	}
 	else {
 	  _parent.markAsUnresolved(lap);
-	}
-      }
-
-      bool isMaybeMono() {
-	return _parent.isMaybeMono();
-      }
-
-      void markMaybeMono(bool len) {
-	assert (len is false);
-	if (this.isStatic()) {
-	  return;
-	}
-	else {
-	  _parent.markMaybeMono(len);
-	}
-      }
-
-      void labelMaybeMono(bool len) {
-	assert (len is false);
-	if (this._type !is DomType.MULTI) {
-	  this._type = DomType.MAYBEMONO;
 	}
       }
 
@@ -475,9 +447,6 @@ mixin template CstVecArrMixin()
   EV[] _elems;
 
   string _name;
-
-  bool _isMaybeMono;
-  bool _isMaybeMonoLen;
 
   override string name() {
     return _name;
@@ -561,9 +530,6 @@ mixin template CstVecArrMixin()
 	import std.conv: to;
 	_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
 			   this, cast(uint) i);
-	if (_isMaybeMono) {
-	  _elems[i].labelMaybeMono(false);
-	}
       }
     }
   }
@@ -703,9 +669,6 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     _parent = parent;
     _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_isMaybeMonoLen) {
-      _arrLen.labelMaybeMono(true);
-    }
   }
 
   final bool isStatic() {
@@ -773,30 +736,6 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     }
   }
 
-  void markMaybeMono(bool len) {
-    // if (this.isStatic()) {
-    //   // assert (len is false);
-    //   // return;
-    // }
-    // else {
-    labelMaybeMono(len);
-    // }
-  }
-
-  bool isMaybeMono() {
-    return _isMaybeMono;
-  }
-
-  void labelMaybeMono(bool len) {
-    if (_isMaybeMono is false) {
-      _isMaybeMono = true;
-      if (len is true) _arrLen.labelMaybeMono(len);
-      foreach (elem; _elems) {
-	elem.labelMaybeMono(len);
-      }
-    }
-  }
-
   auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
   {
     static if (S.length == 0) return this;
@@ -841,9 +780,6 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     _indexExpr = indexExpr;
     _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_isMaybeMonoLen) {
-      _arrLen.labelMaybeMono(true);
-    }
   }
 
   this(string name, P parent, uint index) {
@@ -856,9 +792,6 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     _pindex = index;
     _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_isMaybeMonoLen) {
-      _arrLen.labelMaybeMono(true);
-    }
   }
 
   override bool opEquals(Object other) {
@@ -962,29 +895,6 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     }
     else {
       _parent.markAsUnresolved(lap);
-    }
-  }
-
-  void markMaybeMono(bool len) {
-    if (this.isStatic()) {
-      labelMaybeMono(len);
-    }
-    else {
-      _parent.markMaybeMono(len);
-    }
-  }
-
-  bool isMaybeMono() {
-    return _isMaybeMono;
-  }
-
-  void labelMaybeMono(bool len) {
-    if (_isMaybeMono is false) {
-      _isMaybeMono = true;
-      if (len is true) _arrLen.labelMaybeMono(len);
-      foreach (elem; _elems) {
-	elem.labelMaybeMono(len);
-      }
     }
   }
 

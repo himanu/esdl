@@ -751,7 +751,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   override bool solveRange(_esdl__RandGen randGen) {
     // final
     switch(this._type) {
-    case DomType.MONO:
+    case DomType.TRUEMONO:
       if (this._rs.isEmpty()) {
 	assert(false, "Constraints on domain " ~ this.name() ~
 	       " do not converge");
@@ -1331,7 +1331,11 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     if (listed is false) {
       rnds ~= this;
     }
-    markMaybeMono(true);
+    static if (HAS_RAND_ATTRIB) {
+      if (! this.isStatic()) {
+	if (_type <= DomType.LAZYMONO) _type = DomType.MAYBEMONO;
+      }
+    }
     _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
   }
 
@@ -1373,21 +1377,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   
   final override bool isStatic() {
     return _parent.isStatic();
-  }
-
-  bool isMaybeMono() {
-    return _parent.isMaybeMono();
-  }
-
-  void markMaybeMono(bool len) {
-    _parent.markMaybeMono(len);
-  }
-
-  void labelMaybeMono(bool len) {
-    assert(len is true);
-    if (this._type !is DomType.MULTI) {
-      this._type = DomType.MAYBEMONO;
-    }
   }
 
 }

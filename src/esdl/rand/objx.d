@@ -155,7 +155,6 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // 			 ref CstDomain[] idxs,
       // 			 ref CstDomain[] deps) {
       // 	static if (is (R: _esdl__norand)) {
-      // 	  // markMaybeMono(false);
       // 	  if (! canFind(vars, this)) vars ~= this;
       // 	}
       // 	else {
@@ -172,15 +171,6 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // 	}
       // }
       
-      // bool isMaybeMono() {
-      // 	return false;
-      // }
-
-      // void markMaybeMono(bool len) {
-      // 	assert (len is false);
-      // 	return;
-      // }
-
     }
 
 class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstObjIntf
@@ -284,7 +274,6 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 		       ref CstDomain[] idxs,
 		       ref CstDomain[] deps) {
       static if (R.isRand()) {
-	markMaybeMono(false);
       // 	if (! canFind(rnds, this)) rnds ~= this;
       // }
       // else {
@@ -305,27 +294,6 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 	// the pred that it can go ahead
 	_indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
       }
-    }
-
-    bool isMaybeMono() {
-      return _parent.isMaybeMono();
-    }
-
-    void markMaybeMono(bool len) {
-      assert (len is false);
-      if (this.isStatic()) {
-	return;
-      }
-      else {
-	_parent.markMaybeMono(len);
-      }
-    }
-
-    void labelMaybeMono(bool len) {
-      // assert (len is false);
-      // if (this._type !is DomType.MULTI) {
-      // 	this._type = DomType.MAYBEMONO;
-      // }
     }
 
     auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...) {
@@ -360,9 +328,6 @@ mixin template CstObjArrMixin()
 
   string _name;
 
-  bool _isMaybeMono;
-  bool _isMaybeMonoLen;
-
   string name() {
     return _name;
   }
@@ -396,9 +361,6 @@ mixin template CstObjArrMixin()
 	import std.conv: to;
 	_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
 			   this, cast(uint) i);
-	if (_isMaybeMono) {
-	  _elems[i].labelMaybeMono(false);
-	}
       }
     }
   }
@@ -534,9 +496,6 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     _parent = parent;
     // _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_isMaybeMonoLen) {
-      _arrLen.labelMaybeMono(true);
-    }
   }
 
   _esdl__Proxy getProxyRoot()() {
@@ -609,23 +568,6 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   //   }
   // }
 
-  void markMaybeMono(bool len) {
-    labelMaybeMono(len);
-  }
-
-  bool isMaybeMono() {
-    return _isMaybeMono;
-  }
-
-  void labelMaybeMono(bool len) {
-    if (_isMaybeMono is false) {
-      _isMaybeMono = true;
-      if (len is true) _arrLen.labelMaybeMono(len);
-      foreach (elem; _elems) {
-	elem.labelMaybeMono(len);
-      }
-    }
-  }
 }
 
 class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim, CstObjArrIntf
@@ -656,9 +598,6 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _indexExpr = indexExpr;
     // _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_isMaybeMonoLen) {
-      _arrLen.labelMaybeMono(true);
-    }
   }
 
   this(string name, P parent, uint index) {
@@ -671,9 +610,6 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _pindex = index;
     // _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
-    if (_isMaybeMonoLen) {
-      _arrLen.labelMaybeMono(true);
-    }
   }
 
   _esdl__Proxy getProxyRoot() {
@@ -785,28 +721,6 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
   //   }
   // }
 
-  void markMaybeMono(bool len) {
-    if (this.isStatic()) {
-      labelMaybeMono(len);
-    }
-    else {
-      _parent.markMaybeMono(len);
-    }
-  }
-
-  bool isMaybeMono() {
-    return _isMaybeMono;
-  }
-
-  void labelMaybeMono(bool len) {
-    if (_isMaybeMono is false) {
-      _isMaybeMono = true;
-      if (len is true) _arrLen.labelMaybeMono(len);
-      foreach (elem; _elems) {
-	elem.labelMaybeMono(len);
-      }
-    }
-  }
 }
 
 // T is any of the above defines classes
