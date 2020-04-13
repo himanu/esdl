@@ -236,6 +236,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 
     // reset all bins
     _rolledPreds.reset();
+    _toRolledPreds.reset();
     // _unrolledPreds.reset();
     _resolvedPreds.reset();
     _resolvedDynPreds.reset();
@@ -253,7 +254,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     foreach (pred; _allPreds) {
       pred.randomizeDeps();
       if (pred.isRolled()) {
-	_rolledPreds ~= pred;
+	_toRolledPreds ~= pred;
       }
       else if (pred._deps.length > 0) {
 	_unresolvedPreds ~= pred;
@@ -266,7 +267,8 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     while (_resolvedMonoPreds.length > 0 ||
 	   _resolvedDynPreds.length > 0 ||
 	   _resolvedPreds.length > 0 ||
-	   _unresolvedPreds.length > 0) {
+	   _unresolvedPreds.length > 0 ||
+	   _toRolledPreds.length > 0) {
       // import std.stdio;
 
       // if (_resolvedMonoPreds.length > 0) {
@@ -294,9 +296,13 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       
       // _unrolledPreds.reset();
 
+      _rolledPreds.reset();
+      _rolledPreds.swop(_toRolledPreds);
+
       foreach (pred; _rolledPreds) {
 	if (pred.isRolled()) {
 	  pred.markAsUnresolved(_lap);
+	  _toRolledPreds ~= pred;
 	}
       }
 

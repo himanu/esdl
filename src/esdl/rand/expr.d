@@ -1063,6 +1063,7 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
 				 ref CstIterator[] iters,
 				 ref CstDomain[] idxs,
 				 ref CstDomain[] deps) {
+    deps ~= getLenVec();
     iters ~= this;
   }
 
@@ -2005,7 +2006,7 @@ class CstVecSliceExpr: CstVecTerm
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
-    _range.setDomainContext(pred, deps, vars, vals, iters, idxs, deps);
+    _range.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {

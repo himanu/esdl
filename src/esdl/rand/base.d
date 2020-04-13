@@ -47,6 +47,7 @@ abstract class _esdl__Proxy
   _esdl__Proxy _root;
   
   Folder!CstPredicate _rolledPreds;
+  Folder!CstPredicate _toRolledPreds;
   // Folder!CstPredicate _unrolledPreds;
   // Folder!CstPredicate _toUnrolledPreds;
   Folder!CstPredicate _resolvedPreds;
@@ -186,45 +187,35 @@ abstract class _esdl__Proxy
 
   void procResolved(CstPredicate pred) {
     assert (pred._rnds.length > 0);
-    if (pred._rnds[0]._type <= DomType.LAZYMONO) {
+    if (pred._rnds.length == 1 &&
+	pred._rnds[0]._type <= DomType.LAZYMONO) {
       _resolvedMonoPreds ~= pred;
       // procMonoDomain(pred._rnds[0], pred);
     }
-    else {
-      if (pred._dynRnds.length > 0) {
-	foreach (rnd; pred._dynRnds) {
-	  auto dom = rnd.getResolved();
-	  dom._tempPreds ~= pred;
-	}
-	_resolvedDynPreds ~= pred;
+    else if (pred._dynRnds.length > 0) {
+      foreach (rnd; pred._dynRnds) {
+	auto dom = rnd.getResolved();
+	dom._tempPreds ~= pred;
       }
-      else {
-	_resolvedPreds ~= pred;
-      }
-    }
-  }
-
-  void addPredicate(CstPredicate pred) {
-    pred.randomizeDeps();
-    if (pred.isRolled()) {
-      _rolledPreds ~= pred;
-      // _unresolvedPreds ~= pred;
-    }
-    else if (pred.hasDeps) {
-      _unresolvedPreds ~= pred;
+      _resolvedDynPreds ~= pred;
     }
     else {
-      procResolved(pred);
+      _resolvedPreds ~= pred;
     }
   }
 
   void addUnrolledPredicate(CstPredicate pred) {
     pred.randomizeDeps();
-    if (! pred.isResolved(true)) {
-      _unresolvedPreds ~= pred;
+    if (pred._iters.length == 0) {
+      if (pred.isResolved(true)) {
+	procResolved(pred);
+      }
+      else {
+	_toUnresolvedPreds ~= pred;
+      }
     }
     else {
-      procResolved(pred);
+      _toRolledPreds ~= pred;
     }
   }
 
@@ -781,11 +772,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	  return false;
 	}
       }
-      foreach (idx; _idxs) {
-	if (! idx.isSolved()) {
-	  return false;
-	}
-      }
+      // All _idxs are rolled into _deps
+      // foreach (idx; _idxs) {
+      // 	if (! idx.isSolved()) {
+      // 	  return false;
+      // 	}
+      // }
       return true;
     }
     return false;
@@ -925,13 +917,16 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
 
     // When the parent unrolls, its dependencies would already be take care of
-    if (_parent !is null) {
-      CstDomain[] _foundDeps = _deps ~ _idxs;
-      _deps = _foundDeps.filter!(dep => (! canFind(_parent._deps, dep))).array;
-    }
+    // if (_parent !is null) {
+    //   CstDomain[] _foundDeps = _deps ~ _idxs;
+    //   _deps = _foundDeps.filter!(dep => (! canFind(_parent._deps, dep))).array;
+    // }
+    _deps = _deps ~ _idxs;
     
     foreach (dep; _deps) dep.registerDepPred(this);
-    foreach (idx; _idxs) idx.registerIdxPred(this);
+
+    // For now treat _idxs as _deps since _idxs are merged with _deps
+    // foreach (idx; _idxs) idx.registerIdxPred(this);
 
     // take only the parsed iterators that are found in the expression
     // as well

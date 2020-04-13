@@ -376,9 +376,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	else {
 	  if (! canFind(vars, this)) vars ~= this;
 	}
-	if (_parent.isStatic()) {
-	  deps ~= _parent._arrLen;
-	}
 	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
 
 	if (_indexExpr !is null) {
@@ -878,9 +875,6 @@ class CstVecArr(V, rand RAND_ATTR, int N)
 	  
     // auto iter = arrLen.makeIterVar();
     // iters ~= iter;
-    if (_parent.isStatic()) {
-      deps ~= _parent._arrLen;
-    }
     _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
     if (_indexExpr !is null) {
       _indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
