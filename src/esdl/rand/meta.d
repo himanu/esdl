@@ -11,7 +11,8 @@ module esdl.rand.meta;
 import esdl.solver.obdd;
 import esdl.solver.bdd;
 
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray, isSomeChar;
+import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
+  isDynamicArray, isSomeChar, PointerTarget;
 import esdl.data.bvec: isBitVector;
 import esdl.data.bstr;
 
@@ -113,8 +114,16 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
     // pragma(msg, "#" ~ Q.stringof);
     static if (is (Q: CstVarIntf)) {
       static if (Q._esdl__HASPROXY && Q._esdl__ISRAND) {
-	enum NAME = __traits(identifier, p._esdl__outer.tupleof[Q._esdl__INDEX]);
-	p.tupleof[I] = new Q(NAME, p._esdl__outer.tupleof[Q._esdl__INDEX], p);
+	alias T = typeof(p._esdl__outer);
+	static if (is (T == class)) { // class
+	  enum NAME = __traits(identifier, T.tupleof[Q._esdl__INDEX]);
+	}
+	else { // struct
+	  alias U = PointerTarget!T;
+	  enum NAME = __traits(identifier, U.tupleof[Q._esdl__INDEX]);
+	}
+	T t = p._esdl__outer;
+	p.tupleof[I] = new Q(NAME, t.tupleof[Q._esdl__INDEX], p);
 	p._esdl__randsList ~= p.tupleof[I];
       }
     }
@@ -139,7 +148,7 @@ void _esdl__doInitCstsElems(P, int I=0)(P p) {
     static if (is (Q == Constraint!(C, F, N),
 		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
       p.tupleof[I] = p.new p._esdl__Constraint!(C, F, N)
-	(p, p.tupleof[I].stringof, p._esdl__cstsList.length);
+	(p, p.tupleof[I].stringof[2..$], p._esdl__cstsList.length);
       p._esdl__cstsList ~= p.tupleof[I];
     }
     _esdl__doInitCstsElems!(P, I+1)(p);
@@ -342,10 +351,6 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
 
   useBuddy(CstBddSolver.buddy);
 
-  foreach(rnd; t._esdl__proxyInst._esdl__randsList) {
-    rnd._esdl__reset();
-  }
-
   t._esdl__proxyInst.solve();
 
   t._esdl__proxyInst._esdl__doRandomize(t._esdl__proxyInst._esdl__getRandGen);
@@ -356,6 +361,8 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
   static if(__traits(compiles, t.postRandomize())) {
     t.postRandomize();
   }
+
+  t._esdl__proxyInst.reset();
 }
 
 
@@ -542,7 +549,7 @@ class _esdl__ProxyNoRand(_esdl__T) if (is (_esdl__T == struct)):
 	   _esdl__Proxy parent) {
 	_esdl__outer = &outer;
 	// static if(_esdl__baseHasRandomization!_esdl__T) {
-	super(name, outer, parent);
+	super(name, parent);
 	// }
 	// else {
 	//   super(name, parent);
@@ -569,7 +576,7 @@ mixin template _esdl__ProxyMixin()
     }
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
-    CstBlock _esdl__cst_block;
+    // CstBlock _esdl__cst_block;
     debug(CSTPARSER) {
       pragma(msg, "// constraintXlate! STARTS\n");
       pragma(msg, constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
@@ -608,7 +615,7 @@ mixin template _esdl__ProxyMixin()
 
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
-    CstBlock _esdl__cst_block;
+    // CstBlock _esdl__cst_block;
     mixin(constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
     debug(CSTPARSER) {
       pragma(msg, "// randomizeWith! STARTS\n");

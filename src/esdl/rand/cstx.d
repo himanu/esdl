@@ -57,6 +57,8 @@ struct CstParser {
   
   bool dryRun = true;
 
+  uint stmtCount = 0;
+
   char[] outBuffer;
   
   string dummy;			// sometimes required in dryRun
@@ -92,6 +94,7 @@ struct CstParser {
       assert (false, "varMap has not been unrolled completely");
     }
     dryRun = false;
+    stmtCount = 0;
   }
 
   this(string CST, string FILE, size_t LINE) {
@@ -841,29 +844,29 @@ struct CstParser {
   }
 
   void translateBlock(string name) {
-    string blockName;
+    // string blockName;
     import std.conv: to;
     fill("// Constraint @ File: " ~ FILE ~ " Line: " ~ LINE.to!string ~ "\n\n");
     if (name == "") {
       fill("override CstBlock getCstExpr() {\n"//  ~
 	   // "\n  auto cstExpr = new CstBlock;\n"
 	   );
-      blockName = "_esdl__cst_block";
+      // blockName = "_esdl__cst_block";
     }
     else {
       fill("CstBlock _esdl__cst_func_" ~ name ~ "() {\n"//  ~
 	   // "\n  auto cstExpr = new CstBlock;\n"
 	   );
-      blockName = "_esdl__cst_block_" ~ name;
+      // blockName = "_esdl__cst_block_" ~ name;
     }
 
-    fill("  if (" ~ blockName ~ " !is null) return " ~
-	 blockName ~ ";\n");
+    // fill("  if (" ~ blockName ~ " !is null) return " ~
+    // 	 blockName ~ ";\n");
 
     fill("  CstBlock _esdl__block = new CstBlock();\n");
 
     procBlock();
-    fill("  " ~ blockName ~ " = _esdl__block;\n");
+    // fill("  " ~ blockName ~ " = _esdl__block;\n");
     fill("  return _esdl__block;\n}\n");
   }
 
@@ -1432,8 +1435,13 @@ struct CstParser {
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
-    fill("  _esdl__block ~= new CstPredicate(" ~ _proxy ~ ", ");
-
+    import std.conv;
+    fill("  _esdl__block ~= new CstPredicate(this, ");
+    fill(stmtCount.to!string);
+    stmtCount += 1;
+    fill(", ");
+    fill(_proxy);
+    fill(", ");
     if (ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
       foreach (ifCond; ifConds[0..$-1]) {
@@ -1513,6 +1521,7 @@ struct CstParser {
   }
   
   void procBlock() {
+    uint stmtCount = 0;
     while (srcCursor <= CST.length) {
       size_t srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);

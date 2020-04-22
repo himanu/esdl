@@ -4,7 +4,7 @@ import esdl.solver.base;
 import esdl.solver.bdd;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstLogicExpr,
-  CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup;
+  CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup, DomainState;
 import esdl.rand.misc;
 import esdl.data.folder;
 import esdl.data.charbuf;
@@ -99,6 +99,13 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   Array!ulong _solveValue;
   
   this(string name, Object outer, _esdl__Proxy parent) {
+    super(name, parent);
+    if (parent is null) {
+      _esdl__cstExprs = new CstBlock();
+    }
+  }
+
+  this(string name, _esdl__Proxy parent) { // for structs
     super(name, parent);
     if (parent is null) {
       _esdl__cstExprs = new CstBlock();
@@ -205,7 +212,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     _esdl__cstExprs.clear(); // start empty
 
     // take all the constraints -- even if disabled
-    foreach(ref _esdl__ConstraintBase cst; _esdl__cstsList) {
+    foreach(_esdl__ConstraintBase cst; _esdl__cstsList) {
       _esdl__cstExprs ~= cst.getCstExpr();
     }
 
@@ -246,12 +253,14 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     _toUnresolvedPreds.reset();
 
     _resolvedMonoPreds.reset();
-    _solveMonoPreds.reset();
 
+    _solvedDomains.reset();
 
     updateValDomains();
 
     foreach (pred; _allPreds) {
+      // import std.stdio;
+      // writeln("Adding: ", pred.name());
       pred.randomizeDeps();
       if (pred.isRolled()) {
 	_toRolledPreds ~= pred;
@@ -367,6 +376,13 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _unresolvedPreds.reset();
       _unresolvedPreds.swop(_toUnresolvedPreds);
     }
+
+  }
+
+  void reset() {
+    foreach (dom; _solvedDomains) {
+      dom.reset();
+    }
   }
 
   void addDomain(CstDomain domain) {
@@ -416,7 +432,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     //   writeln("saved: ", pred.name());
     // }
     BDD solveBDD = CstBddSolver.buddy.one();
-
+    
     if (savedStages.length > stageIndx &&
 	savedStages[stageIndx]._predicates == stage._predicates) {
       if (! updated) {
@@ -509,6 +525,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	}
       }
       vec.setVal(array(_solveValue[0..NUMWORDS]));
+      _solvedDomains ~= vec;
     }
     stage.id(stageIndx);
 

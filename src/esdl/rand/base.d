@@ -6,6 +6,7 @@ import esdl.solver.bdd;
 
 import esdl.rand.intr;
 import esdl.rand.expr: CstValue;
+import esdl.rand.proxy: _esdl__ConstraintBase;
 import esdl.rand.misc: _esdl__RandGen, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
@@ -17,7 +18,6 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 
 interface CstVarIntf {
   bool isRand();
-  void _esdl__reset();
 }
 
 interface CstVecIntf: CstVarIntf {}
@@ -58,7 +58,8 @@ abstract class _esdl__Proxy
   Folder!CstPredicate _toUnresolvedPreds;
 
   Folder!CstPredicate _resolvedMonoPreds;
-  Folder!CstPredicate _solveMonoPreds;
+
+  Folder!CstDomain    _solvedDomains;
 
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
@@ -161,11 +162,13 @@ abstract class _esdl__Proxy
     assert (pred._rnds.length > 0);
     auto dom = pred._rnds[0];
     if (! dom.isSolved()) {
-      return dom.solveRange(_esdl__getRandGen());
+      if (dom.solveRange(_esdl__getRandGen())) {
+	_solvedDomains ~= dom;
+	return true;
+      }
+      else return false;
     }
-    else {
-      return true;
-    }
+    else return true;
   }
 
   bool procMaybeMonoDomain(CstPredicate pred) {
@@ -178,11 +181,13 @@ abstract class _esdl__Proxy
       dom = dom.getResolved();
     }
     if (! dom.isSolved()) {
-      return dom.solveRange(_esdl__getRandGen());
+      if (dom.solveRange(_esdl__getRandGen())) {
+	_solvedDomains ~= dom;
+	return true;
+      }
+      else return false;
     }
-    else {
-      return true;
-    }
+    else return true;
   }
 
   void procResolved(CstPredicate pred) {
@@ -205,6 +210,8 @@ abstract class _esdl__Proxy
   }
 
   void addUnrolledPredicate(CstPredicate pred) {
+    // import std.stdio;
+    // writeln("Adding: ", pred.name());
     pred.randomizeDeps();
     if (pred._iters.length == 0) {
       if (pred.isResolved(true)) {
@@ -439,43 +446,23 @@ abstract class CstDomain
       stderr.writeln(this.describe());
     }
     _tempPreds.reset();
-    _cycle = getProxyRoot()._cycle;
     _state = DomainState.SOLVED;
   }
 
   final bool isSolved() {
     if (isRand()) {
-      if (_cycle == getProxyRoot()._cycle &&
-	  _state == DomainState.SOLVED) {
-	return true;
-      }
-      else if (stage() is null) {
-	return false;
-      }
-      else {
-	auto retval = stage().isSolved();
-	assert (retval is false);
-	return stage().isSolved();
-      }
+      if (_state == DomainState.SOLVED) return true;
+      else return false;
     }
-    else {
-      return true;
-    }
+    else return true;
   }
 
   final bool isAnnotated() {
     if (isRand()) {
-      if (_cycle == getProxyRoot()._cycle &&
-	  _state >= DomainState.ANNOTATED) {
-	return true;
-      }
-      else {
-	return false;
-      }
+      if (_state >= DomainState.ANNOTATED) return true;
+      else return false;
     }
-    else {
-      return true;
-    }
+    else return true;
   }
 
   // Callbacks
@@ -545,7 +532,7 @@ interface CstVecPrim
 
 interface CstExpr
 {
-  string name();
+  string describe();
 
   abstract uint resolveLap();
   abstract void resolveLap(uint lap);
@@ -648,11 +635,19 @@ class CstPredGroup			// group of related predicates
 class CstPredicate: CstIterCallback, CstDepCallback
 {
   string name() {
-    return "PREDICATE: " ~ _expr.name();
+    import std.conv;
+    if (_parent is null) {
+      return _constraint.name() ~ '/' ~ _statement.to!string;
+    }
+    else {
+      return _parent.name() ~ '[' ~ _unrollIterVal.to!string ~ ']';
+    }
   }
 
   // alias _expr this;
 
+  _esdl__ConstraintBase _constraint;
+  uint _statement;
   _esdl__Proxy _proxy;
   CstScope _scope;
   uint _level;
@@ -664,12 +659,15 @@ class CstPredicate: CstIterCallback, CstDepCallback
   Folder!CstPredicate _uwPreds;
   size_t _uwLength;
   
-  this(_esdl__Proxy proxy, CstLogicExpr expr,
+  this(_esdl__ConstraintBase cst, uint stmt, _esdl__Proxy proxy, CstLogicExpr expr,
        CstPredicate parent=null, CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...
        ) {
     assert(proxy !is null);
+    _constraint = cst;
+    _statement = stmt;
     _proxy = proxy;
+    _unrollIterVal = unrollIterVal;
     if (parent is null) {
       _scope = _proxy.currentScope();
       _level = 0;
@@ -749,7 +747,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
       for (uint i = cast(uint) _uwPreds.length;
 	   i != currLen; ++i) {
-	_uwPreds ~= new CstPredicate(_proxy, _expr.unroll(iter, i), this, iter, i// ,
+	_uwPreds ~= new CstPredicate(_constraint, _statement, _proxy, _expr.unroll(iter, i),
+				     this, iter, i// ,
 				     // _iters[1..$].map!(tr => tr.unrollIterator(iter, i)).array
 				     );
       }
@@ -970,7 +969,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   
   string describe() {
     import std.string:format;
-    string description = name() ~ "\n    ";
+    string description = "Expr: " ~ _expr.describe() ~ "\n    ";
     description ~= _scope.describe();
     description ~= format("    Level: %s\n", _level);
     if (_iters.length > 0) {
@@ -1000,7 +999,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (_vals.length > 0) {
       description ~= "    Values: \n";
       foreach (val; _vals) {
-	description ~= "\t" ~ val.name() ~ "\n";
+	description ~= "\t" ~ val.describe() ~ "\n";
       }
     }
     if (_idxs.length > 0) {
@@ -1036,10 +1035,10 @@ class CstBlock
   CstPredicate[] _preds;
   bool[] _booleans;
 
-  string name() {
+  string describe() {
     string name_ = "";
     foreach(pred; _preds) {
-      name_ ~= " & " ~ pred._expr.name() ~ "\n";
+      name_ ~= " & " ~ pred._expr.describe() ~ "\n";
     }
     return name_;
   }

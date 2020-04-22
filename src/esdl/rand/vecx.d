@@ -56,13 +56,6 @@ mixin template CstVecMixin() {
     }
   }
 
-  void _esdl__reset() {
-    static if (HAS_RAND_ATTRIB) {
-      _stage = null;
-      _resolveLap = 0;
-    }
-  }
-
 }
 
 // T represents the type of the declared array/non-array member
@@ -543,7 +536,7 @@ mixin template CstVecArrMixin()
       return _elems[index];
     }
     else {
-      return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
+      return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
     }
   }
 
@@ -595,16 +588,6 @@ mixin template CstVecArrMixin()
 
   CstVecLen!RV arrLen() {
     return _arrLen;
-  }
-
-  void _esdl__reset() {
-    _forcedLength = 0;
-    _arrLen._esdl__reset();
-    foreach(elem; _elems) {
-      if(elem !is null) {
-	elem._esdl__reset();
-      }
-    }
   }
 
   uint maxArrLen() {

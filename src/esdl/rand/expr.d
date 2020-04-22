@@ -494,7 +494,9 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 
   override void reset() {
     static if (HAS_RAND_ATTRIB) {
-      _domIndex = uint.max;
+      _state = DomainState.INIT;
+      _stage = null;
+      _resolveLap = 0;
     }
   }
   
@@ -600,17 +602,17 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
-  override void setVal(ulong value) {
+  override void setVal(ulong val) {
     static if (isBitVector!T) {
       assert (T.SIZE <= 64);
     }
     static if (HAS_RAND_ATTRIB) {
       Unconst!T newVal;
       static if(isIntegral!T || isBoolean!T) {
-	newVal = cast(T) value;
+	newVal = cast(T) val;
       }
       else {
-	newVal._setNthWord(value, 0);
+	newVal._setNthWord(val, 0);
       }
 
       if (newVal != *(getRef())) {
@@ -994,6 +996,10 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
     return n[0..$-3] ~ "iter";
   }
 
+  override string describe() {
+    return name();
+  }
+
   // while an iterator is a singleton wrt to an array, the array
   // itself could have multiple object instances in case it is not
   // concrete -- eg foo[foo.iter].iter
@@ -1288,13 +1294,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.unroll(iter,n).arrLen();
   }
 
-  void _esdl__reset() {
-    static if (HAS_RAND_ATTRIB) {
-      _stage = null;
-      _resolveLap = 0;
-    }
-  }
-
   void solveBefore(CstVecPrim other) {
     other.addPreRequisite(this);
   }
@@ -1478,7 +1477,7 @@ class CstVecValue(T = int): CstValue
   T _val;			// the value of the constant
   BddVec _valvec;
 
-  string name() {
+  string describe() {
     return _val.to!string();
   }
 
@@ -1624,8 +1623,8 @@ class CstVec2VecExpr: CstVecTerm
   CstVecExpr _rhs;
   CstBinaryOp _op;
 
-  string name() {
-    return "( " ~ _lhs.name ~ " " ~ _op.to!string() ~ " " ~ _rhs.name ~ " )";
+  string describe() {
+    return "( " ~ _lhs.describe ~ " " ~ _op.to!string() ~ " " ~ _rhs.describe ~ " )";
   }
 
   void annotate(ref uint varN) {
@@ -1916,8 +1915,8 @@ class CstVecSliceExpr: CstVecTerm
   CstVec2VecExpr _range;
 
 
-  string name() {
-    return _vec.name() ~ "[ " ~ _range.name() ~ " ]";
+  string describe() {
+    return _vec.describe() ~ "[ " ~ _range.describe() ~ " ]";
   }
 
   void annotate(ref uint varN) {
@@ -2039,8 +2038,8 @@ class CstNotVecExpr: CstVecTerm
 
   CstVecExpr _expr;
 
-  string name() {
-    return "( ~ " ~ _expr.name ~ " )";
+  string describe() {
+    return "( ~ " ~ _expr.describe ~ " )";
   }
 
   void annotate(ref uint varN) {
@@ -2133,8 +2132,8 @@ class CstNegVecExpr: CstVecTerm
 
   CstVecExpr _expr;
 
-  string name() {
-    return "( - " ~ _expr.name ~ " )";
+  string describe() {
+    return "( - " ~ _expr.describe ~ " )";
   }
 
   void annotate(ref uint varN) {
@@ -2236,8 +2235,8 @@ class CstLogic2LogicExpr: CstLogicTerm
     _op = op;
   }
 
-  string name() {
-    return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
+  string describe() {
+    return "( " ~ _lhs.describe ~ " " ~ _op.to!string ~ " " ~ _rhs.describe ~ " )";
   }
 
   void visit(CstSolver solver) {
@@ -2371,7 +2370,7 @@ class CstLogic2LogicExpr: CstLogicTerm
 // TBD
 class CstIteBddExpr: CstLogicTerm
 {
-  string name() {
+  string describe() {
     return "CstIteBddExpr";
   }
 
@@ -2454,8 +2453,8 @@ class CstVec2LogicExpr: CstLogicTerm
     _op = op;
   }
 
-  string name() {
-    return "( " ~ _lhs.name ~ " " ~ _op.to!string ~ " " ~ _rhs.name ~ " )";
+  string describe() {
+    return "( " ~ _lhs.describe ~ " " ~ _op.to!string ~ " " ~ _rhs.describe ~ " )";
   }
 
   void annotate(ref uint varN) {
@@ -2487,9 +2486,9 @@ class CstVec2LogicExpr: CstLogicTerm
 
   override CstVec2LogicExpr unroll(CstIterator iter, uint n) {
     // import std.stdio;
-    // writeln(_lhs.name() ~ " " ~ _op.to!string ~ " " ~ _rhs.name() ~ " Getting unwound!");
-    // writeln("RHS: ", _rhs.unroll(iter, n).name());
-    // writeln("LHS: ", _lhs.unroll(iter, n).name());
+    // writeln(_lhs.describe() ~ " " ~ _op.to!string ~ " " ~ _rhs.describe() ~ " Getting unwound!");
+    // writeln("RHS: ", _rhs.unroll(iter, n).describe());
+    // writeln("LHS: ", _lhs.unroll(iter, n).describe());
     return new CstVec2LogicExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
   }
 
@@ -2575,7 +2574,7 @@ class CstVec2LogicExpr: CstLogicTerm
     static if (is (RS == IntRangeSet!T, T)) {
       if (_rhs.isSolved()) {
 	INTTYPE iType;
-	assert(! _lhs.isSolved(), "Expression: " ~ _lhs.name());
+	assert(! _lhs.isSolved(), "Expression: " ~ _lhs.describe());
 	bool valid = this.getIntType(iType);
 	if (valid) {
 	  ulong rhs = cast(int) _rhs.evaluate();
@@ -2588,7 +2587,7 @@ class CstVec2LogicExpr: CstLogicTerm
       }
       else if (_lhs.isSolved()) {
 	INTTYPE iType;
-	assert(! _rhs.isSolved(), "Expression: " ~ _rhs.name());
+	assert(! _rhs.isSolved(), "Expression: " ~ _rhs.describe());
 	bool valid = this.getIntType(iType);
 	if (valid) {
 	  ulong lhs = cast(int) _lhs.evaluate();
@@ -2610,7 +2609,7 @@ class CstVec2LogicExpr: CstLogicTerm
 
   override bool getIntRangeSet(ref IntRS rs) {
     if (_rhs.isSolved()) {
-      assert(! _lhs.isSolved(), "Expression: " ~ _lhs.name());
+      assert(! _lhs.isSolved(), "Expression: " ~ _lhs.describe());
       auto rhs = cast(int) _rhs.evaluate();
       IntR rn = IntR(_op, rhs);
       bool valid = _lhs.getIntRange(rn);
@@ -2618,7 +2617,7 @@ class CstVec2LogicExpr: CstLogicTerm
       return valid;
     }
     else if (_lhs.isSolved()) {
-      assert(! _rhs.isSolved(), "Expression: " ~ _rhs.name());
+      assert(! _rhs.isSolved(), "Expression: " ~ _rhs.describe());
       auto lhs = cast(int) _lhs.evaluate();
       IntR rn = IntR(_op, lhs, true);
       bool valid = _rhs.getIntRange(rn);
@@ -2668,7 +2667,7 @@ class CstBddConst: CstLogicTerm
     else return buddy.zero();
   }
 
-  string name() {
+  string describe() {
     if(_expr) return "TRUE";
     else return "FALSE";
   }
@@ -2730,8 +2729,8 @@ class CstNotBddExpr: CstLogicTerm
     _expr = expr;
   }
 
-  string name() {
-    return "( " ~ "!" ~ " " ~ _expr.name ~ " )";
+  string describe() {
+    return "( " ~ "!" ~ " " ~ _expr.describe ~ " )";
   }
 
   void annotate(ref uint varN) {

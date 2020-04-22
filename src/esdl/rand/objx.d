@@ -50,11 +50,6 @@ mixin template CstObjMixin() {
     return this.to!string();
   }
 
-  void _esdl__reset() {
-    static if (HAS_RAND_ATTRIB) {
-    }
-  }
-
   bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
@@ -429,16 +424,6 @@ mixin template CstObjArrMixin()
 
   CstVecLen!RV arrLen() {
     return _arrLen;
-  }
-
-  void _esdl__reset() {
-    _forcedLength = 0;
-    _arrLen._esdl__reset();
-    foreach(elem; _elems) {
-      if(elem !is null) {
-	elem._esdl__reset();
-      }
-    }
   }
 
   uint maxArrLen() {
