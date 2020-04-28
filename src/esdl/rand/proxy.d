@@ -13,18 +13,15 @@ import std.array;
 
 abstract class _esdl__ConstraintBase: _esdl__Norand
 {
-  this(_esdl__ProxyRoot eng, string name, string constraint, size_t index) {
+  this(_esdl__ProxyRoot eng, string name, string constraint) {
     _cstEng = eng;
     _name = name;
     _constraint = constraint;
-    _index = cast(uint) index;
   }
   immutable @rand(false) string _constraint;
   protected @rand(false) bool _enabled = true;
   protected @rand(false) _esdl__ProxyRoot _cstEng;
   protected @rand(false) string _name;
-  // index in the constraint Database
-  protected @rand(false) uint _index;
 
   bool isEnabled() {
     return _enabled;
@@ -59,8 +56,8 @@ static char[] constraintXlate(string PROXY, string CST,
 abstract class Constraint(string CONSTRAINT, string FILE=__FILE__, size_t LINE=__LINE__)
   : _esdl__ConstraintBase
 {
-  this(_esdl__ProxyRoot eng, string name, size_t index) {
-    super(eng, name, CONSTRAINT, index);
+  this(_esdl__ProxyRoot eng, string name) {
+    super(eng, name, CONSTRAINT);
   }
 };
 
@@ -85,7 +82,6 @@ template _esdl__baseHasRandomization(T) {
 abstract class _esdl__ProxyRoot: _esdl__Proxy
 {
   // Keep a list of constraints in the class
-  _esdl__ConstraintBase[] _esdl__cstsList;
   _esdl__ConstraintBase _esdl__cstWith;
 
   bool _esdl__cstWithChanged;
@@ -118,6 +114,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   void _esdl__doInitCsts() { }
   
   void _esdl__doRandomize(_esdl__RandGen randGen) { }
+  void _esdl__doConstrain(_esdl__Proxy proxy) { }
 
   // void obsoleteSolve() { // (T)(T t) {
   //   // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
@@ -203,42 +200,13 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   //   }
   // }
 
-  Folder!CstPredicate _allPreds;
-
   Folder!CstStage _solveStages;
 
-  void initPreds() {
-    assert(_root is this);
-    _esdl__cstExprs.clear(); // start empty
+  void reset() {
 
-    // take all the constraints -- even if disabled
-    foreach(_esdl__ConstraintBase cst; _esdl__cstsList) {
-      _esdl__cstExprs ~= cst.getCstExpr();
-    }
-
-    if(_esdl__cstWith !is null) {
-      _esdl__cstExprs ~= _esdl__cstWith.getCstExpr();
-    }
-
-    foreach (pred; _esdl__cstExprs._preds) {
-      _allPreds ~= pred;
-    }
-  }
-  
-  void solve() {
-    assert(_root is this);
-    this._cycle += 1;
-    
-    int stageIndx=0;
-
-    if (_esdl__cstExprs.isEmpty || _esdl__cstWithChanged is true) {
-      initPreds();
-      // TODO -- have we collected the predicates from inside the
-      // @rand child objects ?  There could also be arrays of objects
-      // that may be with a fixed array length or without a constraint
-      // on the array length. In such cases the array length would not
-      // be randomized. All the constraints inside such objects should
-      // be included.
+    // _solvedDomains is from previous cycle
+    foreach (dom; _solvedDomains) {
+      dom.reset();
     }
 
     // reset all bins
@@ -257,21 +225,13 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     _solvedDomains.reset();
 
     updateValDomains();
+  }
 
-    foreach (pred; _allPreds) {
-      // import std.stdio;
-      // writeln("Adding: ", pred.name());
-      pred.randomizeDeps();
-      if (pred.isRolled()) {
-	_toRolledPreds ~= pred;
-      }
-      else if (pred._deps.length > 0) {
-	_unresolvedPreds ~= pred;
-      }
-      else {
-	procResolved(pred);
-      }
-    }
+  void solve() {
+    assert(_root is this);
+    this._cycle += 1;
+    
+    int stageIndx=0;
 
     while (_resolvedMonoPreds.length > 0 ||
 	   _resolvedDynPreds.length > 0 ||
@@ -377,12 +337,6 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _unresolvedPreds.swop(_toUnresolvedPreds);
     }
 
-  }
-
-  void reset() {
-    foreach (dom; _solvedDomains) {
-      dom.reset();
-    }
   }
 
   void addDomain(CstDomain domain) {

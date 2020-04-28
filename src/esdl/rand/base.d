@@ -95,7 +95,6 @@ abstract class _esdl__Proxy
     return _root;
   }
 
-  CstVarIntf[] _esdl__randsList;
   _esdl__RandGen _esdl__rGen;
 
   _esdl__RandGen _esdl__getRandGen() {
@@ -206,6 +205,21 @@ abstract class _esdl__Proxy
     }
     else {
       _resolvedPreds ~= pred;
+    }
+  }
+
+  void addPredicate(CstPredicate pred) {
+    // import std.stdio;
+    // writeln("Adding Predicate: ", pred.name());
+    pred.randomizeDeps();
+    if (pred._iters.length > 0) {
+      _toRolledPreds ~= pred;
+    }
+    else if (pred._deps.length > 0) {
+      _unresolvedPreds ~= pred;
+    }
+    else {
+      procResolved(pred);
     }
   }
 

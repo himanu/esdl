@@ -21,7 +21,8 @@ import std.range: ElementType;
 
 import esdl.rand.misc;
 import esdl.rand.expr: CstVecValue;
-import esdl.rand.base: CstBlock, _esdl__Proxy, CstVecPrim, CstPredicate, CstVarIntf;
+import esdl.rand.base: CstBlock, _esdl__Proxy, CstVecPrim, CstPredicate,
+  CstVarIntf, CstObjIntf, CstObjArrIntf;
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
 import esdl.rand.proxy;
@@ -74,27 +75,56 @@ template _esdl__RandProxyType(T, P, int I)
   }
 }
 
-void _esdl__doRandomizeElems(V, int I=0)(V v, _esdl__RandGen randGen) {
+void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__Proxy proxy) {
   static if (I == 0 &&
-	     is (V B == super) &&
+	     is (P B == super) &&
 	     is (B[0] : _esdl__ProxyRoot) &&
 	     is (B[0] == class)) {
-    B[0] b = v;			// super object
-    _esdl__doRandomizeElems(b, randGen);
+    B[0] b = p;			// super object
+    _esdl__doConstrainElems(b, proxy);
   }
-  static if (I == V.tupleof.length) {
+  static if (I == P.tupleof.length) {
     return;
   }
   else {
-    alias Q = typeof (V.tupleof[I]);
-    static if (is (Q: CstVarIntf)) {
-      // just to filter out uninitialized v.tupleof[I]
-      static if (V.tupleof[I]._esdl__ISRAND) {
-	if (v.tupleof[I].isRand())
-	  v.tupleof[I]._esdl__doRandomize(randGen);
+    alias Q = typeof (P.tupleof[I]);
+    static if (is (Q == Constraint!(C, F, N),
+		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
+      foreach (pred; p.tupleof[I].getCstExpr()._preds) {
+	proxy.addPredicate(pred);
       }
     }
-    _esdl__doRandomizeElems!(V, I+1)(v, randGen);
+    static if (is (Q: CstObjIntf) ||
+	       is (Q: CstObjArrIntf)) {
+      static if (P.tupleof[I]._esdl__ISRAND) {
+	if (p.tupleof[I].isRand())
+	  p.tupleof[I]._esdl__doConstrain(proxy);
+      }
+    }
+    _esdl__doConstrainElems!(P, I+1)(p, proxy);
+  }
+}
+
+void _esdl__doRandomizeElems(P, int I=0)(P p, _esdl__RandGen randGen) {
+  static if (I == 0 &&
+	     is (P B == super) &&
+	     is (B[0] : _esdl__ProxyRoot) &&
+	     is (B[0] == class)) {
+    B[0] b = p;			// super object
+    _esdl__doRandomizeElems(b, randGen);
+  }
+  static if (I == P.tupleof.length) {
+    return;
+  }
+  else {
+    alias Q = typeof (P.tupleof[I]);
+    static if (is (Q: CstVarIntf)) {
+      static if (P.tupleof[I]._esdl__ISRAND) {
+	if (p.tupleof[I].isRand())
+	  p.tupleof[I]._esdl__doRandomize(randGen);
+      }
+    }
+    _esdl__doRandomizeElems!(P, I+1)(p, randGen);
   }
 }
 
@@ -124,7 +154,6 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
 	}
 	T t = p._esdl__outer;
 	p.tupleof[I] = new Q(NAME, t.tupleof[Q._esdl__INDEX], p);
-	p._esdl__randsList ~= p.tupleof[I];
       }
     }
     _esdl__doInitRandsElems!(P, I+1)(p);
@@ -148,8 +177,7 @@ void _esdl__doInitCstsElems(P, int I=0)(P p) {
     static if (is (Q == Constraint!(C, F, N),
 		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
       p.tupleof[I] = p.new p._esdl__Constraint!(C, F, N)
-	(p, p.tupleof[I].stringof[2..$], p._esdl__cstsList.length);
-      p._esdl__cstsList ~= p.tupleof[I];
+	(p, p.tupleof[I].stringof[2..$]);
     }
     _esdl__doInitCstsElems!(P, I+1)(p);
   }
@@ -335,9 +363,6 @@ template _esdl__constraintParams(T, int I)
 }
 
 void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
-  static if(__traits(compiles, t.preRandomize())) {
-    t.preRandomize();
-  }
 
   t._esdl__initProxy();
   
@@ -351,18 +376,19 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
 
   useBuddy(CstBddSolver.buddy);
 
+  static if(__traits(compiles, t.preRandomize())) {
+    t.preRandomize();
+  }
+
+  t._esdl__proxyInst.reset();
+  t._esdl__proxyInst._esdl__doConstrain(t._esdl__proxyInst);
   t._esdl__proxyInst.solve();
-
   t._esdl__proxyInst._esdl__doRandomize(t._esdl__proxyInst._esdl__getRandGen);
-
-  // _esdl__setRands(t, t._esdl__proxyInst._esdl__randsList,
-  //		  t._esdl__proxyInst._esdl__rGen);
 
   static if(__traits(compiles, t.postRandomize())) {
     t.postRandomize();
   }
 
-  t._esdl__proxyInst.reset();
 }
 
 
@@ -571,8 +597,8 @@ mixin template _esdl__ProxyMixin()
   class _esdl__Constraint(string _esdl__CstString, string FILE, size_t LINE):
     Constraint!(_esdl__CstString, FILE, LINE)
   {
-    this(_esdl__ProxyRoot eng, string name, size_t index) {
-      super(eng, name, index);
+    this(_esdl__ProxyRoot eng, string name) {
+      super(eng, name);
     }
     // This mixin writes out the bdd functions after parsing the
     // constraint string at compile time
@@ -600,7 +626,7 @@ mixin template _esdl__ProxyMixin()
     }
 
     this(ARGS...)(string name, ARGS args) {
-      super(this.outer, name, cast(uint) this.outer._esdl__cstsList.length);
+      super(this.outer, name);
       // writeln("pointer: ", &(args[0]));
       foreach (i, arg; args) {
 	_withArgs[i] = arg;
@@ -638,6 +664,10 @@ mixin template _esdl__ProxyMixin()
 
   mixin(_esdl__randsMixin!(_esdl__T, _esdl__PROXYT));
 
+
+  override void _esdl__doConstrain(_esdl__Proxy proxy) {
+    _esdl__doConstrainElems(this, proxy);
+  }
 
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
     _esdl__doRandomizeElems(this, randGen);
