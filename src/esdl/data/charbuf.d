@@ -34,7 +34,7 @@ struct Charbuf
   @disable this(this);
   
 
-  void swop(ref Charbuf other) {
+  void swap(ref Charbuf other) {
     ubyte[(Charbuf).sizeof] temp;
     
     memcpy(cast(void*) temp.ptr, cast(void*) &other, (Charbuf).sizeof);

@@ -6,7 +6,7 @@ import esdl.solver.bdd;
 
 import esdl.rand.intr;
 import esdl.rand.expr: CstValue;
-import esdl.rand.proxy: _esdl__ConstraintBase;
+import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__ProxyRoot;
 import esdl.rand.misc: _esdl__RandGen, isVecSigned;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
@@ -46,20 +46,17 @@ abstract class _esdl__Proxy
   _esdl__Proxy _parent;
   _esdl__Proxy _root;
   
-  Folder!CstPredicate _rolledPreds;
-  Folder!CstPredicate _toRolledPreds;
-  // Folder!CstPredicate _unrolledPreds;
-  // Folder!CstPredicate _toUnrolledPreds;
-  Folder!CstPredicate _resolvedPreds;
-  Folder!CstPredicate _resolvedDynPreds;
-  Folder!CstPredicate _toSolvePreds;
-  Folder!CstPredicate _solvePreds;
-  Folder!CstPredicate _unresolvedPreds;
-  Folder!CstPredicate _toUnresolvedPreds;
+  Folder!(CstPredicate, "rolledPreds") _rolledPreds;
+  Folder!(CstPredicate, "toRolledPreds") _toRolledPreds;
+  Folder!(CstPredicate, "resolvedPreds") _resolvedPreds;
+  Folder!(CstPredicate, "resolvedDynPreds") _resolvedDynPreds;
+  Folder!(CstPredicate, "toSolvePreds") _toSolvePreds;
+  Folder!(CstPredicate, "unresolvedPreds") _unresolvedPreds;
+  Folder!(CstPredicate, "toResolvedPreds") _toUnresolvedPreds;
 
-  Folder!CstPredicate _resolvedMonoPreds;
+  Folder!(CstPredicate, "resolvedMonoPreds") _resolvedMonoPreds;
 
-  Folder!CstDomain    _solvedDomains;
+  Folder!(CstDomain, "solvedDomains") _solvedDomains;
 
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
@@ -155,89 +152,6 @@ abstract class _esdl__Proxy
     // scopes for constraint parsing
     _rootScope = new CstScope(null, null);
     _currentScope = _rootScope;
-  }
-
-  bool procMonoDomain(CstPredicate pred) {
-    assert (pred._rnds.length > 0);
-    auto dom = pred._rnds[0];
-    if (! dom.isSolved()) {
-      if (dom.solveRange(_esdl__getRandGen())) {
-	_solvedDomains ~= dom;
-	return true;
-      }
-      else return false;
-    }
-    else return true;
-  }
-
-  bool procMaybeMonoDomain(CstPredicate pred) {
-    assert (pred._rnds.length > 0);
-    if (pred._rnds.length > 1) {
-      return false;
-    }
-    auto dom = pred._rnds[0];
-    if (! dom.isStatic()) {
-      dom = dom.getResolved();
-    }
-    if (! dom.isSolved()) {
-      if (dom.solveRange(_esdl__getRandGen())) {
-	_solvedDomains ~= dom;
-	return true;
-      }
-      else return false;
-    }
-    else return true;
-  }
-
-  void procResolved(CstPredicate pred) {
-    assert (pred._rnds.length > 0);
-    if (pred._rnds.length == 1 &&
-	pred._rnds[0]._type <= DomType.LAZYMONO) {
-      _resolvedMonoPreds ~= pred;
-      // procMonoDomain(pred._rnds[0], pred);
-    }
-    else if (pred._dynRnds.length > 0) {
-      foreach (rnd; pred._dynRnds) {
-	auto dom = rnd.getResolved();
-	dom._tempPreds ~= pred;
-      }
-      _resolvedDynPreds ~= pred;
-    }
-    else {
-      _resolvedPreds ~= pred;
-    }
-  }
-
-  void addPredicate(CstPredicate pred) {
-    // import std.stdio;
-    // writeln("Adding Predicate: ", pred.name());
-    pred.randomizeDeps();
-    if (pred._iters.length > 0) {
-      _toRolledPreds ~= pred;
-    }
-    else if (pred._deps.length > 0) {
-      _unresolvedPreds ~= pred;
-    }
-    else {
-      procResolved(pred);
-    }
-  }
-
-  void addUnrolledPredicate(CstPredicate pred) {
-    // import std.stdio;
-    // writeln("Adding: ", pred.name());
-    pred.randomizeDeps();
-    if (pred._iters.length == 0) {
-      if (pred.isResolved(true)) {
-	procResolved(pred);
-      }
-      else {
-	_toUnresolvedPreds ~= pred;
-      }
-    }
-    else {
-      _toRolledPreds ~= pred;
-    }
   }
 
   
@@ -487,7 +401,7 @@ abstract class CstDomain
 
   IntRS _rangeSet;
 
-  Folder!CstPredicate _tempPreds;
+  Folder!(CstPredicate, "tempPreds") _tempPreds;
 
   // init value has to be different from proxy._cycle init value
   uint _cycle = -1;
@@ -634,7 +548,7 @@ class CstPredGroup			// group of related predicates
   uint _cycle;
   
   // List of predicates permanently in this group
-  Folder!CstPredicate _preds;
+  Folder!(CstPredicate, "preds") _preds;
 
   // The flag _hasDynamicBinding gets set if there is at least one
   // predicate that has a dynamically resolvable constraint --
@@ -643,7 +557,7 @@ class CstPredGroup			// group of related predicates
 
   // If there are groups that are related. This will only be true if
   // the _hasDynamicBinding flag is true
-  Folder!CstPredGroup _boundGroups;
+  Folder!(CstPredGroup, "boundGroups") _boundGroups;
 }
 
 class CstPredicate: CstIterCallback, CstDepCallback
@@ -662,7 +576,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   _esdl__ConstraintBase _constraint;
   uint _statement;
-  _esdl__Proxy _proxy;
+  _esdl__ProxyRoot _proxy;
   CstScope _scope;
   uint _level;
   CstLogicExpr _expr;
@@ -670,10 +584,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool _markResolve;
   uint _unrollCycle;
 
-  Folder!CstPredicate _uwPreds;
+  Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
   
-  this(_esdl__ConstraintBase cst, uint stmt, _esdl__Proxy proxy, CstLogicExpr expr,
+  this(_esdl__ConstraintBase cst, uint stmt, _esdl__ProxyRoot proxy, CstLogicExpr expr,
        CstPredicate parent=null, CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...
        ) {

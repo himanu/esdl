@@ -4,7 +4,8 @@ import esdl.solver.base;
 import esdl.solver.bdd;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstLogicExpr,
-  CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup, DomainState;
+  CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup,
+  DomainState, DomType;
 import esdl.rand.misc;
 import esdl.data.folder;
 import esdl.data.charbuf;
@@ -22,6 +23,7 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
   protected @rand(false) bool _enabled = true;
   protected @rand(false) _esdl__ProxyRoot _cstEng;
   protected @rand(false) string _name;
+  protected @rand(false) CstBlock _cstBlock;
 
   bool isEnabled() {
     return _enabled;
@@ -43,7 +45,14 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
     return _cstEng;
   }
 
-  abstract CstBlock getCstExpr();
+  final CstBlock getCstBlock() {
+    if (_cstBlock is null) {
+      _cstBlock = getParsedCstBlock();
+    }
+    return _cstBlock;
+  }
+
+  abstract CstBlock getParsedCstBlock();
 }
 
 static char[] constraintXlate(string PROXY, string CST,
@@ -109,12 +118,8 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   }
 
   // overridden by Randomization mixin -- see meta.d
-  void _esdl__doInitRands() { }
-  void _esdl__doSetOuter(bool changed) { }
-  void _esdl__doInitCsts() { }
-  
-  void _esdl__doRandomize(_esdl__RandGen randGen) { }
-  void _esdl__doConstrain(_esdl__Proxy proxy) { }
+  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
+  abstract void _esdl__doConstrain(_esdl__ProxyRoot proxy);
 
   // void obsoleteSolve() { // (T)(T t) {
   //   // writeln("Solving BDD for number of constraints = ", _esdl__cstsList.length);
@@ -200,10 +205,9 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   //   }
   // }
 
-  Folder!CstStage _solveStages;
+  Folder!(CstStage, "solvedStages") _solveStages;
 
   void reset() {
-
     // _solvedDomains is from previous cycle
     foreach (dom; _solvedDomains) {
       dom.reset();
@@ -212,11 +216,9 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     // reset all bins
     _rolledPreds.reset();
     _toRolledPreds.reset();
-    // _unrolledPreds.reset();
     _resolvedPreds.reset();
     _resolvedDynPreds.reset();
     _toSolvePreds.reset();
-    _solvePreds.reset();
     _unresolvedPreds.reset();
     _toUnresolvedPreds.reset();
 
@@ -249,24 +251,13 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       // if (_unresolvedPreds.length > 0) {
       // 	writeln("Here for _unresolvedPreds: ", _unresolvedPreds.length);
       // }
-      // if (_unrolledPreds.length > 0) {
-      // 	writeln("Here for _unrolledPreds: ", _unrolledPreds.length);
-      // }
       // _lap, like _cycle starts with 1
       // this is to avoid default values
       _lap += 1;
       // writeln("Lap: ", _lap);
 
-      // _toUnrolledPreds.swop(_unrolledPreds);
-      // _toUnrolledPreds.reset();
-      // foreach (pred; _unrolledPreds) {
-      // 	pred.randomizeDepsRolled();
-      // }
-      
-      // _unrolledPreds.reset();
-
       _rolledPreds.reset();
-      _rolledPreds.swop(_toRolledPreds);
+      _rolledPreds.swap(_toRolledPreds);
 
       foreach (pred; _rolledPreds) {
 	if (pred.isRolled()) {
@@ -285,7 +276,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	}
       }
 
-      _resolvedMonoPreds.swop(_toSolvePreds);
+      _resolvedMonoPreds.swap(_toSolvePreds);
 
       foreach (pred; _toSolvePreds) {
 	if (! procMonoDomain(pred)) {
@@ -296,7 +287,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _toSolvePreds.reset();
       
       // first handle _resolvedDynPreds
-      _resolvedDynPreds.swop(_toSolvePreds);
+      _resolvedDynPreds.swap(_toSolvePreds);
 
       foreach (pred; _toSolvePreds) {
 	if (pred.isMarkedUnresolved(_lap)) {
@@ -312,7 +303,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _toSolvePreds.reset();
 
       // now the normal _resolvedPreds
-      _resolvedPreds.swop(_toSolvePreds);
+      _resolvedPreds.swap(_toSolvePreds);
 
       foreach (pred; _toSolvePreds) {
 	if (pred.isMarkedUnresolved(_lap)) {
@@ -334,9 +325,90 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _solveStages.reset();
 
       _unresolvedPreds.reset();
-      _unresolvedPreds.swop(_toUnresolvedPreds);
+      _unresolvedPreds.swap(_toUnresolvedPreds);
     }
 
+  }
+
+  bool procMonoDomain(CstPredicate pred) {
+    assert (pred._rnds.length > 0);
+    auto dom = pred._rnds[0];
+    if (! dom.isSolved()) {
+      if (dom.solveRange(_esdl__getRandGen())) {
+	_solvedDomains ~= dom;
+	return true;
+      }
+      else return false;
+    }
+    else return true;
+  }
+
+  bool procMaybeMonoDomain(CstPredicate pred) {
+    assert (pred._rnds.length > 0);
+    if (pred._rnds.length > 1) {
+      return false;
+    }
+    auto dom = pred._rnds[0];
+    if (! dom.isStatic()) {
+      dom = dom.getResolved();
+    }
+    if (! dom.isSolved()) {
+      if (dom.solveRange(_esdl__getRandGen())) {
+	_solvedDomains ~= dom;
+	return true;
+      }
+      else return false;
+    }
+    else return true;
+  }
+
+  void procResolved(CstPredicate pred) {
+    assert (pred._rnds.length > 0);
+    if (pred._rnds.length == 1 &&
+	pred._rnds[0]._type <= DomType.LAZYMONO) {
+      _resolvedMonoPreds ~= pred;
+      // procMonoDomain(pred._rnds[0], pred);
+    }
+    else if (pred._dynRnds.length > 0) {
+      foreach (rnd; pred._dynRnds) {
+	auto dom = rnd.getResolved();
+	dom._tempPreds ~= pred;
+      }
+      _resolvedDynPreds ~= pred;
+    }
+    else {
+      _resolvedPreds ~= pred;
+    }
+  }
+
+  void addPredicate(CstPredicate pred) {
+    // import std.stdio;
+    // writeln("Adding Predicate: ", pred.name());
+    pred.randomizeDeps();
+    if (pred._iters.length > 0) {
+      _toRolledPreds ~= pred;
+    }
+    else if (pred._deps.length > 0) {
+      _unresolvedPreds ~= pred;
+    }
+    else {
+      procResolved(pred);
+    }
+  }
+
+  void addUnrolledPredicate(CstPredicate pred) {
+    pred.randomizeDeps();
+    if (pred._iters.length == 0) {
+      if (pred.isResolved(true)) {
+	procResolved(pred);
+      }
+      else {
+	_toUnresolvedPreds ~= pred;
+      }
+    }
+    else {
+      _toRolledPreds ~= pred;
+    }
   }
 
   void addDomain(CstDomain domain) {

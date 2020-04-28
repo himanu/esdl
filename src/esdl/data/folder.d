@@ -18,7 +18,7 @@ alias realloc = pureRealloc;
 
 enum MINCAP = 4;
 
-struct Folder(T) if (is (T == class))
+struct Folder(T, string NAME="") if (is (T == class))
 {
   // total capacity of memory allocate
   size_t _capacity;
@@ -35,7 +35,7 @@ struct Folder(T) if (is (T == class))
   @disable this(this);
   
 
-  void swop(ref Folder!T other) {
+  void swap(F)(ref F other) if (is (F: Folder!(T, S), string S)) {
     ubyte[(Folder!T).sizeof] temp;
     
     memcpy(cast(void*) temp.ptr, cast(void*) &other, (Folder!T).sizeof);
@@ -46,6 +46,11 @@ struct Folder(T) if (is (T == class))
   // grow minimum to size
   void growCapacity(size_t cap) {
     import core.checkedint : mulu;
+
+    // import std.stdio;
+    // if (cap > 1000) {
+    //   writeln("Folder ", NAME, ": ", cap);
+    // }
 
     size_t newcap = cap;
     if (newcap < MINCAP) newcap = MINCAP;

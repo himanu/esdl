@@ -848,7 +848,7 @@ struct CstParser {
     import std.conv: to;
     fill("// Constraint @ File: " ~ FILE ~ " Line: " ~ LINE.to!string ~ "\n\n");
     if (name == "") {
-      fill("override CstBlock getCstExpr() {\n"//  ~
+      fill("override CstBlock getParsedCstBlock() {\n"//  ~
 	   // "\n  auto cstExpr = new CstBlock;\n"
 	   );
       // blockName = "_esdl__cst_block";

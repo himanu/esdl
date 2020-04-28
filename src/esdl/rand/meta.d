@@ -75,7 +75,7 @@ template _esdl__RandProxyType(T, P, int I)
   }
 }
 
-void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__Proxy proxy) {
+void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__ProxyRoot proxy) {
   static if (I == 0 &&
 	     is (P B == super) &&
 	     is (B[0] : _esdl__ProxyRoot) &&
@@ -90,7 +90,7 @@ void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__Proxy proxy) {
     alias Q = typeof (P.tupleof[I]);
     static if (is (Q == Constraint!(C, F, N),
 		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
-      foreach (pred; p.tupleof[I].getCstExpr()._preds) {
+      foreach (pred; p.tupleof[I].getCstBlock()._preds) {
 	proxy.addPredicate(pred);
       }
     }
@@ -439,8 +439,8 @@ mixin template Randomization()
       // else {
       // 	super(name, parent);
       // }
-      _esdl__doInitRands();
-      _esdl__doInitCsts();
+      _esdl__doInitRandsElems(this);
+      _esdl__doInitCstsElems(this);
     }
 
     mixin _esdl__ProxyMixin;
@@ -554,8 +554,8 @@ class _esdl__ProxyNoRand(_esdl__T) if (is (_esdl__T == class)):
 	// else {
 	//   super(name, parent);
 	// }
-	_esdl__doInitRands();
-	_esdl__doInitCsts();
+	_esdl__doInitRandsElems(this);
+	_esdl__doInitCstsElems(this);
       }
 
       mixin _esdl__ProxyMixin;
@@ -580,8 +580,8 @@ class _esdl__ProxyNoRand(_esdl__T) if (is (_esdl__T == struct)):
 	// else {
 	//   super(name, parent);
 	// }
-	_esdl__doInitRands();
-	_esdl__doInitCsts();
+	_esdl__doInitRandsElems(this);
+	_esdl__doInitCstsElems(this);
       }
 
       mixin _esdl__ProxyMixin;
@@ -665,7 +665,7 @@ mixin template _esdl__ProxyMixin()
   mixin(_esdl__randsMixin!(_esdl__T, _esdl__PROXYT));
 
 
-  override void _esdl__doConstrain(_esdl__Proxy proxy) {
+  override void _esdl__doConstrain(_esdl__ProxyRoot proxy) {
     _esdl__doConstrainElems(this, proxy);
   }
 
@@ -673,19 +673,10 @@ mixin template _esdl__ProxyMixin()
     _esdl__doRandomizeElems(this, randGen);
   }
 
-  void _esdl__doInitRands()() {
-    _esdl__doInitRandsElems(this);
-  }
-
-  override void _esdl__doSetOuter(bool changed) {
+  void _esdl__doSetOuter()(bool changed) {
     _esdl__doSetOuterElems(this, changed);
   }
 
-  void _esdl__doInitCsts()() {
-    _esdl__doInitCstsElems(this);
-  }
-
-  
 }
 
 auto ref _esdl__rand_proxy(L)(ref L l, string name,

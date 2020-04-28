@@ -2307,8 +2307,8 @@ class CstLogic2LogicExpr: CstLogicTerm
   }
     
   bool getUniRangeSetImpl(T)(ref T rs) {
-    assert(! _lhs.isSolved());
-    assert(! _rhs.isSolved());
+    assert(! _lhs.isSolved(), this.describe());
+    assert(! _rhs.isSolved(), this.describe());
 
     T lhs;
     T rhs;
