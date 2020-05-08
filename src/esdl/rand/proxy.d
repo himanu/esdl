@@ -5,7 +5,8 @@ import esdl.solver.bdd;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstLogicExpr,
   CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup,
-  DomainState, DomType;
+  DomType;
+
 import esdl.rand.misc;
 import esdl.data.folder;
 import esdl.data.charbuf;
@@ -98,8 +99,6 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   CstBlock _esdl__cstExprs;
 
   CstStage[] savedStages;
-
-  Array!CstPredGroup _predGroups;
 
   Array!ulong _solveValue;
   
@@ -296,6 +295,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	else {
 	  if (! procMaybeMonoDomain(pred)) {
 	    pred.solve();
+	    _solvePreds ~= pred;
 	    addCstStage(pred);
 	  }
 	}
@@ -311,12 +311,26 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	}
 	else {
 	  pred.solve();
+	  _solvePreds ~= pred;
 	  addCstStage(pred);
 	}
       }
 
       _toSolvePreds.reset();
 
+      // Work on _solvePreds
+      foreach (pred; _solvePreds) {
+	CstPredGroup group = pred.group();
+	if (group is null) {
+	  group = new CstPredGroup;
+	  pred._group = group;
+	  pred.setGroupContext(group);
+	}
+      }
+
+      _solvePreds.reset();
+
+      
       foreach(stage; _solveStages) {
 	if(stage !is null) {
 	  solveStage(stage, stageIndx);

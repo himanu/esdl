@@ -51,6 +51,9 @@ abstract class _esdl__Proxy
   Folder!(CstPredicate, "resolvedPreds") _resolvedPreds;
   Folder!(CstPredicate, "resolvedDynPreds") _resolvedDynPreds;
   Folder!(CstPredicate, "toSolvePreds") _toSolvePreds;
+
+  Folder!(CstPredicate, "_solvePreds") _solvePreds;
+
   Folder!(CstPredicate, "unresolvedPreds") _unresolvedPreds;
   Folder!(CstPredicate, "toResolvedPreds") _toUnresolvedPreds;
 
@@ -318,14 +321,15 @@ class CstStage {
 //   abstract void markIndex();
 // }
 
-enum DomainState: ubyte
-{   INIT,
-    ANNOTATED,
-    SOLVED
-    }
-
 abstract class CstDomain
 {
+
+  public enum State: ubyte
+  {   INIT,
+      SOLVED
+      }
+
+  
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
@@ -374,20 +378,12 @@ abstract class CstDomain
       stderr.writeln(this.describe());
     }
     _tempPreds.reset();
-    _state = DomainState.SOLVED;
+    _state = State.SOLVED;
   }
 
   final bool isSolved() {
     if (isRand()) {
-      if (_state == DomainState.SOLVED) return true;
-      else return false;
-    }
-    else return true;
-  }
-
-  final bool isAnnotated() {
-    if (isRand()) {
-      if (_state >= DomainState.ANNOTATED) return true;
+      if (_state == State.SOLVED) return true;
       else return false;
     }
     else return true;
@@ -403,9 +399,20 @@ abstract class CstDomain
 
   Folder!(CstPredicate, "tempPreds") _tempPreds;
 
+  CstPredGroup _group;
+
+  void setGroupContext(CstPredGroup group) {
+    if (_group is null && (! this.isSolved())) {
+      _group = group;
+      foreach (pred; _rndPreds) {
+	pred.setGroupContext(group);
+      }
+    }
+  }
+
   // init value has to be different from proxy._cycle init value
   uint _cycle = -1;
-  DomainState _state;
+  State _state;
   uint _unresolveLap;
 
   DomType _type = DomType.TRUEMONO;
@@ -549,15 +556,38 @@ class CstPredGroup			// group of related predicates
   
   // List of predicates permanently in this group
   Folder!(CstPredicate, "preds") _preds;
+  Folder!(CstPredicate, "dynPreds") _dynPreds;
 
   // The flag _hasDynamicBinding gets set if there is at least one
   // predicate that has a dynamically resolvable constraint --
   // typically that would mean a random variable dependancy as part of index 
   bool _hasDynamicBinding;
 
+  Folder!(CstDomain, "doms") _doms;
+  void addDomain(CstDomain dom) {
+    _doms ~= dom;
+  }
+  
+  Folder!(CstDomain, "vars") _vars;
+  void addVariable(CstDomain var) {
+    _vars ~= var;
+  }
+
   // If there are groups that are related. This will only be true if
   // the _hasDynamicBinding flag is true
   Folder!(CstPredGroup, "boundGroups") _boundGroups;
+
+  public enum State: ubyte
+  {   INIT,
+      SCHEDULED,
+      SOLVED
+      }
+
+  State _state;
+  
+  void reset() {
+    _state = State.INIT;
+  }
 }
 
 class CstPredicate: CstIterCallback, CstDepCallback
@@ -578,11 +608,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _statement;
   _esdl__ProxyRoot _proxy;
   CstScope _scope;
-  uint _level;
   CstLogicExpr _expr;
   CstPredicate _parent;
-  bool _markResolve;
+  uint _level;
   uint _unrollCycle;
+  bool _markResolve;
 
   Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
@@ -950,6 +980,15 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   CstPredGroup group() {
     return _group;
+  }
+
+  void setGroupContext(CstPredGroup group) {
+    if (_group is null) {
+      _group = group;
+      foreach (dom; _rnds) {
+	dom.setGroupContext(group);
+      }
+    }
   }
 
   void solve() {

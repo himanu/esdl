@@ -494,7 +494,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 
   override void reset() {
     static if (HAS_RAND_ATTRIB) {
-      _state = DomainState.INIT;
+      _state = State.INIT;
       _stage = null;
       _resolveLap = 0;
     }
