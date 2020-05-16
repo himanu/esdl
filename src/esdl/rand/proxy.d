@@ -320,11 +320,10 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 
       // Work on _solvePreds
       foreach (pred; _solvePreds) {
-	CstPredGroup group = pred.group();
-	if (group is null) {
-	  group = new CstPredGroup;
-	  pred._group = group;
-	  pred.setGroupContext(group);
+	if (pred.group() is null) {
+	  CstPredGroup group = new CstPredGroup;
+	  group.setGroupContext(pred);
+	  writeln(group.describe());
 	}
       }
 

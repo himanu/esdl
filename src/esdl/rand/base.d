@@ -401,10 +401,15 @@ abstract class CstDomain
 
   CstPredGroup _group;
 
+  CstPredGroup group() {
+    return _group;
+  }
+
   void setGroupContext(CstPredGroup group) {
-    if (_group is null && (! this.isSolved())) {
-      _group = group;
-      foreach (pred; _rndPreds) {
+    assert (_group is null && (! this.isSolved()));
+    _group = group;
+    foreach (pred; _rndPreds) {
+      if (pred.group() is null) {
 	pred.setGroupContext(group);
       }
     }
@@ -558,6 +563,15 @@ class CstPredGroup			// group of related predicates
   Folder!(CstPredicate, "preds") _preds;
   Folder!(CstPredicate, "dynPreds") _dynPreds;
 
+  
+  void addPredicate(CstPredicate pred) {
+    _preds ~= pred;
+  }
+
+  void addDynPredicate(CstPredicate pred) {
+    _dynPreds ~= pred;
+  }
+
   // The flag _hasDynamicBinding gets set if there is at least one
   // predicate that has a dynamically resolvable constraint --
   // typically that would mean a random variable dependancy as part of index 
@@ -577,6 +591,22 @@ class CstPredGroup			// group of related predicates
   // the _hasDynamicBinding flag is true
   Folder!(CstPredGroup, "boundGroups") _boundGroups;
 
+  void setGroupContext(CstPredicate pred) {
+    import std.algorithm.sorting: sort;
+    pred.setGroupContext(this);
+    
+    auto byName = sort!((x, y) => x.name() < y.name())(_preds[]);
+    for (size_t i=0; i!=_preds.length; ++i) {
+      _preds[i] = byName[i];
+    }
+
+    auto byNameDyn = sort!((x, y) => x.name() < y.name())(_dynPreds[]);
+    for (size_t i=0; i!=_dynPreds.length; ++i) {
+      _dynPreds[i] = byNameDyn[i];
+    }
+
+  }
+
   public enum State: ubyte
   {   INIT,
       SCHEDULED,
@@ -587,6 +617,23 @@ class CstPredGroup			// group of related predicates
   
   void reset() {
     _state = State.INIT;
+  }
+
+  string describe() {
+    string description = "CstPredGroup:\n";
+    if (_preds.length > 0) {
+      description ~= "  Predicates:\n";
+	foreach (pred; _preds) {
+	  description ~= "    " ~ pred.name() ~ '\n';
+	}
+    }
+    if (_dynPreds.length > 0) {
+      description ~= "  Dynamic Predicates:\n";
+	foreach (pred; _dynPreds) {
+	  description ~= "    " ~ pred.name() ~ '\n';
+	}
+    }
+    return description;
   }
 }
 
@@ -753,6 +800,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _unrollIterVal;
 
   uint _unresolveLap;
+
+  bool isDynamic() {
+    if (_dynRnds.length > 0) return true;
+    else return false;
+  }
 
   final CstDomain[] getRnds() {
     return _rnds;
@@ -983,9 +1035,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   void setGroupContext(CstPredGroup group) {
-    if (_group is null) {
-      _group = group;
-      foreach (dom; _rnds) {
+    assert (_group is null);
+    _group = group;
+    if (this.isDynamic()) group.addDynPredicate(this);
+    else group.addPredicate(this);
+    foreach (dom; _rnds) {
+      if (dom.group is null && (! dom.isSolved())) {
 	dom.setGroupContext(group);
       }
     }

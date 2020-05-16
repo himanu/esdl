@@ -321,25 +321,25 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
-  S to(S)()
-    if (is (S == string)) {
-      import std.conv;
-      static if (HAS_RAND_ATTRIB) {
-	if (isRand) {
-	  return "RAND#" ~ _name ~ ":" ~ value().to!string();
-	}
-	else {
-	  return "VAL#" ~ _name ~ ":" ~ value().to!string();
-	}
-      }
-      else {
-	return "VAR#" ~ _name ~ ":" ~ value().to!string();
-      }
-    }
+  // S to(S)()
+  //   if (is (S == string)) {
+  //     import std.conv;
+  //     static if (HAS_RAND_ATTRIB) {
+  // 	if (isRand) {
+  // 	  return "RAND#" ~ _name ~ ":" ~ value().to!string();
+  // 	}
+  // 	else {
+  // 	  return "VAL#" ~ _name ~ ":" ~ value().to!string();
+  // 	}
+  //     }
+  //     else {
+  // 	return "VAR#" ~ _name ~ ":" ~ value().to!string();
+  //     }
+  //   }
 
-  override string toString() {
-    return this.to!string();
-  }
+  // override string toString() {
+  //   return this.to!string();
+  // }
 
   // implementation of CstVecDomain API
   // static if (HAS_RAND_ATTRIB && is(T == enum)) {
