@@ -48,7 +48,7 @@ void resetParams() {
   Z3_global_param_reset_all();
 }
 
-private static class Z3Exception: Throwable
+static class Z3Exception: Throwable
 {
   this(string err="Unknown Exception") {
     super(err);
@@ -732,31 +732,6 @@ void checkContext(U, V) (U a, V b) {
   assert (a.context() is b.context());
 }
 
-struct castAST(T) {
-  static if (is (T == AST))
-    static T opCall(Context c, Z3_ast a) {
-      return T(c, a);
-    }
-  static if (is (T == Expr))
-    static T opCall(Context c, Z3_ast a) {
-      assert (Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_NUMERAL_AST ||
-	      Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_APP_AST ||
-	      Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_QUANTIFIER_AST ||
-	      Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_VAR_AST);
-      return T(c, a);
-    }
-  static if (is (T == Sort))
-    static T opCall(Context c, Z3_ast a) {
-      assert (Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_SORT_AST);
-      return T(c, cast(Z3_sort) a);
-    }
-  static if (is (T == FuncDecl))
-    static T opCall(Context c, Z3_ast a) {
-      assert (Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_FUNC_DECL_AST);
-      return T(c, cast(Z3_func_decl) a);
-    }
-}
-
 struct AstVectorTpl(T)
 {
   mixin HasContext;
@@ -797,7 +772,7 @@ struct AstVectorTpl(T)
   T opIndex(uint i) {
     Z3_ast r = Z3_ast_vector_get(context(), _m_vector, i);
     checkError();
-    return castAST!T(context(), r);
+    return T.castAST(context(), r);
   }
 
   void pushBack()(auto ref T e) {
@@ -1049,6 +1024,10 @@ struct AST
   mixin HasContext;
 
   protected Z3_ast _m_ast;
+  Z3_ast m_ast() {
+    return _m_ast;
+  }
+  
   this(Context c) {
     setContext(c);
     _m_ast = null;
@@ -1112,6 +1091,11 @@ struct AST
   bool eq()(auto ref AST other) {
     return Z3_is_eq_ast(context(), this, other);
   }
+
+  static AST castAST(Context c, Z3_ast a) {
+    return AST(c, a);
+  }
+
 }
 
 /**
@@ -1299,6 +1283,12 @@ struct Sort
     checkError();
     return Sort(context(), s);
   }
+
+  static Sort castAST(Context c, Z3_ast a) {
+    assert (Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_SORT_AST);
+    return Sort(c, cast(Z3_sort) a);
+  }
+
 }
 
 /**
@@ -1484,9 +1474,12 @@ struct FuncDecl
     checkError();
     return Expr(context(), r);
   }
-}
 
-enum ExprType: ubyte { SIGNEDVEC, UNSIGNEDVEC, BOOL }
+  static FuncDecl castAST(Context c, Z3_ast a) {
+    assert (Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_FUNC_DECL_AST);
+    return FuncDecl(c, cast(Z3_func_decl) a);
+  }
+}
 
 struct Expr
 {
@@ -1498,6 +1491,12 @@ struct Expr
     _ast = AST(c);
   }
 
+  this(Context c, string name, uint size) {
+    Z3_ast r = Z3_mk_const(c, c.strSymbol(name), c.bvSort(size));
+    c.checkError();
+    _ast = AST(c, r);
+  }
+  
   this(Context c, Z3_ast n) {
     _ast = AST(c, n);
   }
@@ -2316,23 +2315,31 @@ struct Expr
 	r = Z3_mk_bvmul(this.context(), getAST, other);
       }
       static if(op == "/") {
-	r = Z3_mk_bvsdiv(a.context(), getAST, other);
+	r = Z3_mk_bvsdiv(this.context(), getAST, other);
       }
       static if(op == "%") {
-	r = Z3_mk_bvsrem(a.context(), getAST, other);
+	r = Z3_mk_bvsrem(this.context(), getAST, other);
       }
       static if(op == "<<") {
-	r = Z3_mk_bvshl(a.context(), getAST, other);
+	r = Z3_mk_bvshl(this.context(), getAST, other);
       }
       static if(op == ">>") {
-	r = Z3_mk_bvashr(a.context(), getAST, other);
+	r = Z3_mk_bvashr(this.context(), getAST, other);
       }
       static if(op == ">>>") {
-	r = Z3_mk_bvlshr(a.context(), getAST, other);
+	r = Z3_mk_bvlshr(this.context(), getAST, other);
       }
       checkError();
       return Expr(this.context(), r);
     }
+
+  static Expr castAST(Context c, Z3_ast a) {
+    assert (Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_NUMERAL_AST ||
+	    Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_APP_AST ||
+	    Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_QUANTIFIER_AST ||
+	    Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_VAR_AST);
+    return Expr(c, a);
+  }
 }
 
 struct FuncEntry
@@ -4468,7 +4475,7 @@ Expr bvxor()(auto ref Expr a, int b) {
   return bvxor(a, a.context().numVal(b, a.getSort().byRef).byRef);
 }
 // friend expr operator^(int a, expr & b);
-Expr bitXor()(int a, auto ref Expr b) {
+Expr bvXor()(int a, auto ref Expr b) {
   return bvxor(b.context().numVal(a, b.getSort().byRef).byRef, b);
 }
 
@@ -4962,6 +4969,13 @@ Expr ashr()(int a, auto ref Expr b) {
 */
 Expr zext()(auto ref Expr a, uint i) {
   return toExpr(a.context(), Z3_mk_zero_ext(a.context(), i, a.getAST));
+}
+
+/**
+   \brief Extend the given bit-vector with sign bit to the (signed) equivalent bitvector of size m+i, where m is the size of the given bit-vector.
+*/
+Expr sext()(auto ref Expr a, uint i) {
+  return toExpr(a.context(), Z3_mk_sign_ext(a.context(), i, a.getAST));
 }
 
 
