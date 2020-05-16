@@ -470,16 +470,18 @@ template _bvec(T, U, string OP)
   static if (isIntegral!T || isSomeChar!T) alias TT = _bvec!T;
   else alias TT = T;
   static if(TT.ISSIGNED && UU.ISSIGNED) {enum bool S = true;}
-  else                                {enum bool S = false;}
+  else                                  {enum bool S = false;}
   static if(TT.IS4STATE || UU.IS4STATE) {enum bool L = true;}
-  else                                {enum bool L = false;}
+  else                                  {enum bool L = false;}
+
   static if(OP == "~") {
     alias _bvec!(TT.ISSIGNED, L, TT.SIZE + UU.SIZE) _bvec;
   }
   else {
     static if(TT.SIZE > UU.SIZE)        {enum size_t N = TT.SIZE;}
-    else                              {enum size_t N = UU.SIZE;}
-    alias _bvec = _bvec!(TT.ISSIGNED, L, N);
+    else                                {enum size_t N = UU.SIZE;}
+
+    alias _bvec = _bvec!(S, L, N);
   }
 }
 
