@@ -1,4 +1,4 @@
-module esdl.solver.z3.api.z3_types;
+module esdl.intf.z3.api.z3_types;
 
 extern (C):
 

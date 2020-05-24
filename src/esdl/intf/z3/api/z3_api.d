@@ -1,6 +1,6 @@
-module esdl.solver.z3.api.z3_api;
+module esdl.intf.z3.api.z3_api;
 
-import esdl.solver.z3.api.z3_types;
+import esdl.intf.z3.api.z3_types;
 
 /*++
   Copyright (c) 2015 Microsoft Corporation

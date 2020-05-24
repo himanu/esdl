@@ -1,6 +1,6 @@
-module esdl.solver.z3.z3;
+module esdl.intf.z3.z3;
 
-import esdl.solver.z3.api;
+import esdl.intf.z3.api;
 import std.string: toStringz;
 import core.stdc.string: strlen;
 

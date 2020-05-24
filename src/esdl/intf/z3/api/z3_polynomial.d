@@ -1,6 +1,6 @@
-module esdl.solver.z3.api.z3_polynomial;
-import esdl.solver.z3.api.z3_types;
-import esdl.solver.z3.api.z3_api;
+module esdl.intf.z3.api.z3_polynomial;
+import esdl.intf.z3.api.z3_types;
+import esdl.intf.z3.api.z3_api;
 
 /*++
 Copyright (c) 2012 Microsoft Corporation

@@ -1,6 +1,6 @@
-module esdl.solver.z3.api.z3_spacer;
-import esdl.solver.z3.api.z3_types;
-import esdl.solver.z3.api.z3_api;
+module esdl.intf.z3.api.z3_spacer;
+import esdl.intf.z3.api.z3_types;
+import esdl.intf.z3.api.z3_api;
 
 /*++
 Copyright (c) 2017 Arie Gurfinkel
