@@ -60,6 +60,7 @@ abstract class _esdl__Proxy
   Folder!(CstPredicate, "resolvedMonoPreds") _resolvedMonoPreds;
 
   Folder!(CstDomain, "solvedDomains") _solvedDomains;
+  Folder!(CstPredGroup, "solvedGroups") _solvedGroups;
 
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
@@ -326,6 +327,7 @@ abstract class CstDomain
 
   public enum State: ubyte
   {   INIT,
+      GROUPED,
       SOLVED
       }
 
@@ -357,7 +359,8 @@ abstract class CstDomain
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
-
+  abstract void annotate(CstPredGroup group);
+  
   abstract long value();
   
   final void _esdl__doRandomize() {
@@ -399,15 +402,17 @@ abstract class CstDomain
 
   Folder!(CstPredicate, "tempPreds") _tempPreds;
 
-  CstPredGroup _group;
+  // CstPredGroup _group;
 
-  CstPredGroup group() {
-    return _group;
-  }
+  // CstPredGroup group() {
+  //   return _group;
+  // }
 
   void setGroupContext(CstPredGroup group) {
-    assert (_group is null && (! this.isSolved()));
-    _group = group;
+    assert (_state is State.INIT && (! this.isSolved()));
+    _state = State.GROUPED;
+    // assert (_group is null && (! this.isSolved()));
+    // _group = group;
     foreach (pred; _rndPreds) {
       if (pred.group() is null) {
 	pred.setGroupContext(group);
@@ -486,7 +491,6 @@ interface CstExpr
 				 ref CstDomain[] deps);
 
   abstract bool isSolved();
-  abstract void annotate(ref uint varN);
 
   abstract void visit(CstSolver solver);
 
@@ -563,7 +567,6 @@ class CstPredGroup			// group of related predicates
   Folder!(CstPredicate, "preds") _preds;
   Folder!(CstPredicate, "dynPreds") _dynPreds;
 
-  
   void addPredicate(CstPredicate pred) {
     _preds ~= pred;
   }
@@ -578,22 +581,26 @@ class CstPredGroup			// group of related predicates
   bool _hasDynamicBinding;
 
   Folder!(CstDomain, "doms") _doms;
-  void addDomain(CstDomain dom) {
+  uint addDomain(CstDomain dom) {
+    uint index = cast (uint) _doms.length;
     _doms ~= dom;
+    return index;
   }
   
   Folder!(CstDomain, "vars") _vars;
-  void addVariable(CstDomain var) {
+  uint addVariable(CstDomain var) {
+    uint index = cast (uint) _vars.length;
     _vars ~= var;
+    return index;
   }
 
   // If there are groups that are related. This will only be true if
   // the _hasDynamicBinding flag is true
   Folder!(CstPredGroup, "boundGroups") _boundGroups;
 
-  void setGroupContext(CstPredicate pred) {
+  void setGroupContext(CstPredicate solvablePred) {
     import std.algorithm.sorting: sort;
-    pred.setGroupContext(this);
+    solvablePred.setGroupContext(this);
     
     auto byName = sort!((x, y) => x.name() < y.name())(_preds[]);
     for (size_t i=0; i!=_preds.length; ++i) {
@@ -604,9 +611,30 @@ class CstPredGroup			// group of related predicates
     for (size_t i=0; i!=_dynPreds.length; ++i) {
       _dynPreds[i] = byNameDyn[i];
     }
-
   }
 
+  void annotate() {
+    foreach (pred; _preds) {
+      foreach (rnd; pred._rnds) {
+	rnd.annotate(this);
+      }
+      foreach (var; pred._vars) {
+	var.annotate(this);
+      }
+    }
+  }
+
+  Charbuf sig;
+  
+  string signature() {
+    sig.reset();
+    sig ~= "GROUP:\n";
+    foreach (pred; _preds) {
+      pred._expr.writeExprString(sig);
+    }
+    return sig.toString();
+  }
+  
   public enum State: ubyte
   {   INIT,
       SCHEDULED,
@@ -617,6 +645,21 @@ class CstPredGroup			// group of related predicates
   
   void reset() {
     _state = State.INIT;
+  }
+
+  void solved() {
+    _state = State.SOLVED;
+  }
+
+  bool isSolved() {
+    return _state == State.SOLVED;
+  }
+
+  void solve() {
+    import std.stdio;
+    writeln(this.describe());
+    annotate();
+    writeln(signature());
   }
 
   string describe() {
@@ -651,6 +694,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   // alias _expr this;
 
+  enum State: byte {
+    INIT = 0,
+    GROUPED = 1,
+    SOLVED = 2,
+  }
+
   _esdl__ConstraintBase _constraint;
   uint _statement;
   _esdl__ProxyRoot _proxy;
@@ -660,6 +709,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _level;
   uint _unrollCycle;
   bool _markResolve;
+
+  State _state = State.INIT;
 
   Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
@@ -972,11 +1023,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return false;
   }
 
-  void annotate() {
-    uint varN = 0;
-    _expr.annotate(varN);
-  }
-  
   string describe() {
     import std.string:format;
     string description = "Expr: " ~ _expr.describe() ~ "\n    ";
@@ -1040,7 +1086,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (this.isDynamic()) group.addDynPredicate(this);
     else group.addPredicate(this);
     foreach (dom; _rnds) {
-      if (dom.group is null && (! dom.isSolved())) {
+      // if (dom.group is null && (! dom.isSolved())) {
+      if (dom._state is CstDomain.State.INIT && (! dom.isSolved())) {
 	dom.setGroupContext(group);
       }
     }

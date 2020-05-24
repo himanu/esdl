@@ -217,80 +217,50 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 
   static if (HAS_RAND_ATTRIB) {
     uint         _domIndex = uint.max;
-    uint         _varN = uint.max;
     CstStage     _stage = null;
     uint         _resolveLap = 0;
   }
 
-  void annotate(ref uint varN) {
-    static if (HAS_RAND_ATTRIB) {
-      if (! this.isSolved()) {
-	if (_varN == uint.max) {
-	  _varN = varN;
-	  varN += 1;
-	}
+  uint         _varN = uint.max;
+  
+  override void annotate(CstPredGroup group) {
+    if (_varN == uint.max) {
+      if (HAS_RAND_ATTRIB && (! this.isSolved())) {
+	_varN = group.addDomain(this);
+      }
+      else {
+	_varN = group.addVariable(this);
       }
     }
   }
 
   void writeExprString(ref Charbuf str) {
-    if (this.isRand()) {
-      str ~= 'R';
-      static if (HAS_RAND_ATTRIB) {
-	if (_varN < 256) (cast(ubyte) _varN).writeHexString(str);
-	else (cast(ushort) _varN).writeHexString(str);
-      }
-      static if (isBitVector!T) {
-	static if (T.ISSIGNED) {
-	  str ~= 'S';
-	}
-	else {
-	  str ~= 'U';
-	}
-	if (T.SIZE < 256) (cast(ubyte) T.SIZE).writeHexString(str);
-	else (cast(ushort) T.SIZE).writeHexString(str);
-      }
-      static if (isIntegral!T) {
-	static if (isSigned!T) {
-	  str ~= 'S';
-	}
-	else {
-	  str ~= 'U';
-	}
-	(cast(ubyte) (T.sizeof * 8)).writeHexString(str);
-      }
-      static if (isBoolean!T) {
-	str ~= 'U';
-	(cast(ubyte) 1).writeHexString(str);
-      }
-    }
-    else {
-      str ~= 'V';
-      static if (isBoolean!T) {
-	T value = cast(T) this.evaluate;
-	str ~= 'U';
-	value.writeHexString(str);
-      }
-      static if (isIntegral!T) {
-	T value = cast(T) this.evaluate;
-	static if (isSigned!T) {
-	  str ~= 'S';
-	}
-	else {
-	  str ~= 'U';
-	}
-	value.writeHexString(str);
+    if (HAS_RAND_ATTRIB && (! this.isSolved())) str ~= 'R';
+    else str ~= 'V';
+    if (_varN < 256) (cast(ubyte) _varN).writeHexString(str);
+    else (cast(ushort) _varN).writeHexString(str);
+    static if (isBitVector!T) {
+      static if (T.ISSIGNED) {
+	str ~= 'S';
       }
       else {
-	T value = cast(T) this.evaluate.toBitVec();
-	static if (T.ISSIGNED) {
-	  str ~= 'S';
-	}
-	else {
-	  str ~= 'U';
-	}
-	value.writeHexString(str);
+	str ~= 'U';
       }
+      if (T.SIZE < 256) (cast(ubyte) T.SIZE).writeHexString(str);
+      else (cast(ushort) T.SIZE).writeHexString(str);
+    }
+    static if (isIntegral!T) {
+      static if (isSigned!T) {
+	str ~= 'S';
+      }
+      else {
+	str ~= 'U';
+      }
+      (cast(ubyte) (T.sizeof * 8)).writeHexString(str);
+    }
+    static if (isBoolean!T) {
+      str ~= 'U';
+      (cast(ubyte) 1).writeHexString(str);
     }
   }
 
@@ -972,10 +942,6 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
     // _arrVar._arrLen.iterVar(this);
   }
 
-  void annotate(ref uint varN) {
-    assert(false);
-  }
-
   final override CstDomain getLenVec() {
     return _arrVar.arrLen();
   }
@@ -1501,10 +1467,6 @@ class CstVecValue(T = int): CstValue
     _valvec.free();
   }
 
-  void annotate(ref uint varN) {
-    // do nothing for a val
-  }
-
   void visit(CstSolver solver) {
     solver.pushValue(this);
   }
@@ -1625,11 +1587,6 @@ class CstVec2VecExpr: CstVecTerm
 
   string describe() {
     return "( " ~ _lhs.describe ~ " " ~ _op.to!string() ~ " " ~ _rhs.describe ~ " )";
-  }
-
-  void annotate(ref uint varN) {
-    _lhs.annotate(varN);
-    _rhs.annotate(varN);
   }
 
   void visit(CstSolver solver) {
@@ -1919,11 +1876,6 @@ class CstVecSliceExpr: CstVecTerm
     return _vec.describe() ~ "[ " ~ _range.describe() ~ " ]";
   }
 
-  void annotate(ref uint varN) {
-    _vec.annotate(varN);
-    _range.annotate(varN);
-  }
-
   void visit(CstSolver solver) {
     _vec.visit(solver);
     _range._lhs.visit(solver);
@@ -2042,10 +1994,6 @@ class CstNotVecExpr: CstVecTerm
     return "( ~ " ~ _expr.describe ~ " )";
   }
 
-  void annotate(ref uint varN) {
-    _expr.annotate(varN);
-  }
-
   void visit(CstSolver solver) {
     _expr.visit(solver);
     solver.process(CstUnaryOp.NOT);
@@ -2134,10 +2082,6 @@ class CstNegVecExpr: CstVecTerm
 
   string describe() {
     return "( - " ~ _expr.describe ~ " )";
-  }
-
-  void annotate(ref uint varN) {
-    _expr.annotate(varN);
   }
 
   void visit(CstSolver solver) {
@@ -2257,11 +2201,6 @@ class CstLogic2LogicExpr: CstLogicTerm
     case CstLogicalOp.LOGICNOT: assert(false);
     }
     return retval;
-  }
-
-  void annotate(ref uint varN) {
-    _lhs.annotate(varN);
-    _rhs.annotate(varN);
   }
 
   override CstLogic2LogicExpr unroll(CstIterator iter, uint n) {
@@ -2384,10 +2323,6 @@ class CstIteBddExpr: CstLogicTerm
     assert(false, "TBD");
   }
 
-  void annotate(ref uint varN) {
-    assert(false, "TBD");
-  }
-
   override bool getUniRangeSet(ref IntRS rs) {
     return false;
   }
@@ -2455,11 +2390,6 @@ class CstVec2LogicExpr: CstLogicTerm
 
   string describe() {
     return "( " ~ _lhs.describe ~ " " ~ _op.to!string ~ " " ~ _rhs.describe ~ " )";
-  }
-
-  void annotate(ref uint varN) {
-    _lhs.annotate(varN);
-    _rhs.annotate(varN);
   }
 
   void visit(CstSolver solver) {
@@ -2653,11 +2583,6 @@ class CstBddConst: CstLogicTerm
     _expr = expr;
   }
 
-  void annotate(ref uint varN) {
-    // _lhs.annotate(varN);
-    // _rhs.annotate(varN);
-  }
-
   void visit(CstSolver solver) {
     solver.pushValue(_expr);
   }
@@ -2731,10 +2656,6 @@ class CstNotBddExpr: CstLogicTerm
 
   string describe() {
     return "( " ~ "!" ~ " " ~ _expr.describe ~ " )";
-  }
-
-  void annotate(ref uint varN) {
-    _expr.annotate(varN);
   }
 
   void visit(CstSolver solver) {
