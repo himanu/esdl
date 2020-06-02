@@ -6,60 +6,23 @@ import esdl.rand.misc;
 
 abstract class CstSolver
 {
-  CstStage _stage;
+  string _signature;
 
-  this(CstStage stage) {
-    _stage = stage;
+  this(string signature) {
+    _signature = signature;
   }
 
-  CstStage stage() {
-    return _stage;
-  }
+  // abstract void registerDomain(CstDomain domain);
+  // abstract void registerValue(CstValue value);
 
-  abstract void registerDomain(CstDomain domain);
-  abstract void pushDomain(CstDomain domain);
-  abstract void registerValue(CstValue value);
-  abstract void pushValue(CstValue value);
-  abstract void pushValue(bool value);
-  // abstract void pushValue(ulong value, uint bitcount, bool signed);
-  abstract void process(CstUnaryOp op);
-  abstract void process(CstBinaryOp op);
-  abstract void process(CstCompareOp op);
-  abstract void process(CstLogicalOp op);
-}
+  abstract void solve(CstPredGroup group);
 
-abstract class CstSolverDomain
-{
-  CstDomain _domain;
-  
-  this(CstDomain domain) {
-    _domain = domain;
-  }
+  abstract void pushToEvalStack(CstDomain domain);
+  abstract void pushToEvalStack(CstValue value);
+  abstract void pushToEvalStack(bool value);
 
-  final CstDomain domain() {
-    return _domain;
-  }
-
-}
-
-abstract class CstSolverValue
-{
-  CstValue _value;
-  CstDomain _domain;
-  
-  this(CstValue value) {
-    _value = value;
-  }
-
-  this(CstDomain domain) {
-    _domain = domain;
-  }
-
-  final CstValue value() {
-    return _value;
-  }
-
-  final CstDomain domain() {
-    return _domain;
-  }
+  abstract void processEvalStack(CstUnaryOp op);
+  abstract void processEvalStack(CstBinaryOp op);
+  abstract void processEvalStack(CstCompareOp op);
+  abstract void processEvalStack(CstLogicalOp op);
 }

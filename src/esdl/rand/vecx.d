@@ -130,7 +130,7 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 
       void visit(CstSolver solver) {
 	// assert (solver !is null);
-	solver.pushDomain(this);
+	solver.pushToEvalStack(this);
       }
 
       BddVec getBDD(CstStage s, Buddy buddy) {
@@ -318,7 +318,7 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
       }
 
       void visit(CstSolver solver) {
-	solver.pushDomain(this);
+	solver.pushToEvalStack(this);
       }
 
       BddVec getBDD(CstStage s, Buddy buddy) {

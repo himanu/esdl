@@ -310,7 +310,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	  _resolvedPreds ~= pred;
 	}
 	else {
-	  pred.solve();
+	  pred.reset();
 	  _solvePreds ~= pred;
 	  addCstStage(pred);
 	}
@@ -322,13 +322,12 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       foreach (pred; _solvePreds) {
 	CstPredGroup group = pred.group();
 	if (group is null) {
-	  import std.stdio;
-	  group = new CstPredGroup;
-	  group.setGroupContext(pred);
-	  writeln(group.describe());
+	  group = new CstPredGroup(this);
 	}
 	if (! group.isSolved()) {
+	  group.setGroupContext(pred);
 	  group.solve();
+	  _solvedGroups ~= group;
 	}
       }
 
@@ -342,6 +341,11 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       }
       _solveStages.reset();
 
+      foreach (group; _solvedGroups) {
+	group.reset();
+      }
+      _solvedGroups.reset();
+      
       _unresolvedPreds.reset();
       _unresolvedPreds.swap(_toUnresolvedPreds);
     }
@@ -497,11 +501,11 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     }
     else {
       // auto solver = new CstBddSolver(stage);
-      if (stage._solver is null) {
-	// import std.stdio;
-	// writeln("new solver");
-	stage._solver = new CstBddSolver(stage);
-      }
+      // if (stage._solver is null) {
+      // 	// import std.stdio;
+      // 	// writeln("new solver");
+      // 	stage._solver = new CstBddSolver(stage);
+      // }
       foreach (vec; stage._domVars) {
 	if (vec.stage is stage) {
 	  if (vec.domIndex == uint.max) {

@@ -3,6 +3,7 @@ module esdl.rand.base;
 import esdl.solver.obdd;
 import esdl.solver.base;
 import esdl.solver.bdd;
+import esdl.solver.z3;
 
 import esdl.rand.intr;
 import esdl.rand.expr: CstValue;
@@ -45,6 +46,8 @@ abstract class _esdl__Proxy
   // compositional parent -- not inheritance based
   _esdl__Proxy _parent;
   _esdl__Proxy _root;
+
+  CstSolver[string] _solvers;
   
   Folder!(CstPredicate, "rolledPreds") _rolledPreds;
   Folder!(CstPredicate, "toRolledPreds") _toRolledPreds;
@@ -104,6 +107,12 @@ abstract class _esdl__Proxy
   }
 
   uint _esdl__seed;
+  uint _esdl__varN;
+
+  uint indexVar() {
+    return _esdl__varN++;
+  }
+  
   bool _esdl__seeded = false;
 
   uint getRandomSeed() {
@@ -331,7 +340,13 @@ abstract class CstDomain
       SOLVED
       }
 
+  uint         _domN = uint.max;
+  uint annotation() {
+    return _domN;
+  }
   
+  uint         _varN = uint.max;
+
   abstract string name();
   abstract ref BddVec bddvec(Buddy buddy);
   // abstract void bddvec(BddVec b);
@@ -414,7 +429,7 @@ abstract class CstDomain
     // assert (_group is null && (! this.isSolved()));
     // _group = group;
     foreach (pred; _rndPreds) {
-      if (pred.group() is null) {
+      if (pred._state is CstPredicate.State.INIT) {
 	pred.setGroupContext(group);
       }
     }
@@ -449,10 +464,6 @@ abstract class CstDomain
   }
 
   abstract string describe();
-
-  CstSolverDomain _solverDomain;
-
-  CstSolverValue  _solverValue;
 }
 
 // The client keeps a list of agents that when resolved makes the client happy
@@ -567,12 +578,29 @@ class CstPredGroup			// group of related predicates
   Folder!(CstPredicate, "preds") _preds;
   Folder!(CstPredicate, "dynPreds") _dynPreds;
 
+  Folder!(CstPredicate, "preds") _predList;
+  Folder!(CstPredicate, "dynPreds") _dynPredList;
+  
+  CstPredicate[] predicates() {
+    return _preds[];
+  }
+
+  _esdl__Proxy _proxy;
+
+  this(_esdl__Proxy proxy) {
+    _proxy = proxy;
+  }
+
+  _esdl__Proxy getProxy() {
+    return _proxy;
+  }
+
   void addPredicate(CstPredicate pred) {
-    _preds ~= pred;
+    _predList ~= pred;
   }
 
   void addDynPredicate(CstPredicate pred) {
-    _dynPreds ~= pred;
+    _dynPredList ~= pred;
   }
 
   // The flag _hasDynamicBinding gets set if there is at least one
@@ -586,12 +614,20 @@ class CstPredGroup			// group of related predicates
     _doms ~= dom;
     return index;
   }
+
+  CstDomain[] domains() {
+    return _doms[];
+  }
   
   Folder!(CstDomain, "vars") _vars;
   uint addVariable(CstDomain var) {
     uint index = cast (uint) _vars.length;
     _vars ~= var;
     return index;
+  }
+
+  CstDomain[] variables() {
+    return _vars[];
   }
 
   // If there are groups that are related. This will only be true if
@@ -602,15 +638,26 @@ class CstPredGroup			// group of related predicates
     import std.algorithm.sorting: sort;
     solvablePred.setGroupContext(this);
     
-    auto byName = sort!((x, y) => x.name() < y.name())(_preds[]);
-    for (size_t i=0; i!=_preds.length; ++i) {
-      _preds[i] = byName[i];
+    if (_state is State.NEEDSYNC ||
+	_predList.length != _preds.length ||
+	_dynPredList.length != _dynPreds.length) {
+      _state = State.NEEDSYNC;	// mark that we need to reassign a solver
+      foreach (pred; _preds) pred._group = null;
+      _preds.reset();
+      foreach (pred; sort!((x, y) => x.name() < y.name())(_predList[])) {
+	pred._group = this;
+	_preds ~= pred;
+      }
+      foreach (pred; _dynPreds) pred._group = null;
+      _dynPreds.reset();
+      foreach (pred; sort!((x, y) => x.name() < y.name())(_dynPredList[])) {
+	pred._group = this;
+	_dynPreds ~= pred;
+      }
     }
-
-    auto byNameDyn = sort!((x, y) => x.name() < y.name())(_dynPreds[]);
-    for (size_t i=0; i!=_dynPreds.length; ++i) {
-      _dynPreds[i] = byNameDyn[i];
-    }
+    // for the next cycle
+    _predList.reset();
+    _dynPredList.reset();
   }
 
   void annotate() {
@@ -624,20 +671,20 @@ class CstPredGroup			// group of related predicates
     }
   }
 
-  Charbuf sig;
+  Charbuf _sig;
   
   string signature() {
-    sig.reset();
-    sig ~= "GROUP:\n";
+    _sig.reset();
+    _sig ~= "GROUP:\n";
     foreach (pred; _preds) {
-      pred._expr.writeExprString(sig);
+      pred._expr.writeExprString(_sig);
     }
-    return sig.toString();
+    return _sig.toString();
   }
   
   public enum State: ubyte
   {   INIT,
-      SCHEDULED,
+      NEEDSYNC,
       SOLVED
       }
 
@@ -645,6 +692,10 @@ class CstPredGroup			// group of related predicates
   
   void reset() {
     _state = State.INIT;
+  }
+
+  void needSync() {
+    _state = State.NEEDSYNC;
   }
 
   void solved() {
@@ -655,12 +706,37 @@ class CstPredGroup			// group of related predicates
     return _state == State.SOLVED;
   }
 
+  CstSolver _solver;
+
   void solve() {
     import std.stdio;
-    writeln(this.describe());
-    annotate();
-    writeln(signature());
+    // writeln(this.describe());
+    if (_state is State.NEEDSYNC) {
+      _doms.reset();
+      _vars.reset();
+      annotate();
+      string sig = signature();
+
+      CstSolver* solverp = sig in _proxy._solvers;
+
+      if (solverp !is null) {
+	_solver = *solverp;
+      }
+      else {
+	// import std.stdio;
+	// writeln(sig);
+	_solver = new CstZ3Solver(sig, this);
+	_proxy._solvers[sig] = _solver;
+      }
+      foreach (var; _vars) {
+	var._domN = uint.max;
+      }
+    }
+
+    _solver.solve(this);
+    this.solved();
   }
+      
 
   string describe() {
     string description = "CstPredGroup:\n";
@@ -692,6 +768,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
   }
 
+  void visit(CstSolver solver) {
+    _expr.visit(solver);
+  }
   // alias _expr this;
 
   enum State: byte {
@@ -711,6 +790,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool _markResolve;
 
   State _state = State.INIT;
+
+  void reset() {
+    _state = State.INIT;
+  }
 
   Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
@@ -1081,8 +1164,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   void setGroupContext(CstPredGroup group) {
-    assert (_group is null);
-    _group = group;
+    _state = State.GROUPED;
+    if (_group !is group) {
+      assert(_group is null, "A predicate may add to a group, but group should not change");
+      group.needSync();
+    }
     if (this.isDynamic()) group.addDynPredicate(this);
     else group.addPredicate(this);
     foreach (dom; _rnds) {

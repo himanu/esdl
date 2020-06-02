@@ -2,9 +2,9 @@ module esdl.rand.expr;
 
 import esdl.rand.intr;
 import esdl.solver.obdd;
-import esdl.solver.base: CstSolver, CstSolverDomain, CstSolverValue;
+import esdl.solver.base: CstSolver;
 
-import esdl.solver.bdd: CstBddSolver, CstBddSolverValue;
+import esdl.solver.bdd: CstBddSolver;
 
 import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst;
 import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicalOp,
@@ -221,46 +221,54 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     uint         _resolveLap = 0;
   }
 
-  uint         _varN = uint.max;
-  
   override void annotate(CstPredGroup group) {
-    if (_varN == uint.max) {
-      if (HAS_RAND_ATTRIB && (! this.isSolved())) {
-	_varN = group.addDomain(this);
+    if (_domN == uint.max) {
+      if (this.isSolved()) {
+	_domN = group.addVariable(this);
+	if (_varN == uint.max) _varN = _root.indexVar();
       }
       else {
-	_varN = group.addVariable(this);
+	_domN = group.addDomain(this);
       }
     }
   }
 
   void writeExprString(ref Charbuf str) {
-    if (HAS_RAND_ATTRIB && (! this.isSolved())) str ~= 'R';
-    else str ~= 'V';
-    if (_varN < 256) (cast(ubyte) _varN).writeHexString(str);
-    else (cast(ushort) _varN).writeHexString(str);
-    static if (isBitVector!T) {
-      static if (T.ISSIGNED) {
-	str ~= 'S';
-      }
-      else {
-	str ~= 'U';
-      }
-      if (T.SIZE < 256) (cast(ubyte) T.SIZE).writeHexString(str);
-      else (cast(ushort) T.SIZE).writeHexString(str);
+    if (this.isSolved()) {
+      str ~= 'V';
+      if (_domN < 256) (cast(ubyte) _domN).writeHexString(str);
+      else (cast(ushort) _domN).writeHexString(str);
+      str ~= '#';
+      if (_varN < 256) (cast(ubyte) _varN).writeHexString(str);
+      else (cast(ushort) _varN).writeHexString(str);
     }
-    static if (isIntegral!T) {
-      static if (isSigned!T) {
-	str ~= 'S';
+    else {
+      str ~= 'R';
+      if (_domN < 256) (cast(ubyte) _domN).writeHexString(str);
+      else (cast(ushort) _domN).writeHexString(str);
+      static if (isBitVector!T) {
+	static if (T.ISSIGNED) {
+	  str ~= 'S';
+	}
+	else {
+	  str ~= 'U';
+	}
+	if (T.SIZE < 256) (cast(ubyte) T.SIZE).writeHexString(str);
+	else (cast(ushort) T.SIZE).writeHexString(str);
       }
-      else {
+      static if (isIntegral!T) {
+	static if (isSigned!T) {
+	  str ~= 'S';
+	}
+	else {
+	  str ~= 'U';
+	}
+	(cast(ubyte) (T.sizeof * 8)).writeHexString(str);
+      }
+      static if (isBoolean!T) {
 	str ~= 'U';
+	(cast(ubyte) 1).writeHexString(str);
       }
-      (cast(ubyte) (T.sizeof * 8)).writeHexString(str);
-    }
-    static if (isBoolean!T) {
-      str ~= 'U';
-      (cast(ubyte) 1).writeHexString(str);
     }
   }
 
@@ -840,7 +848,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     super.markSolved();
     static if (HAS_RAND_ATTRIB) {
       if (this.isRand()) {
-	_varN = uint.max;
+	_domN = uint.max;
       }
     }
   }
@@ -1108,7 +1116,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   void visit(CstSolver solver) {
     assert (stage() !is null, "stage null for: " ~ name());
-    solver.pushDomain(this);
+    solver.pushToEvalStack(this);
   }
 
   BddVec getBDD(CstStage s, Buddy buddy) {
@@ -1363,8 +1371,6 @@ abstract class CstValue: CstVecTerm
     return this;
   }
 
-  CstSolverValue _solverValue;
-
   abstract long value();
   abstract bool signed();
   abstract uint bitcount();
@@ -1468,7 +1474,7 @@ class CstVecValue(T = int): CstValue
   }
 
   void visit(CstSolver solver) {
-    solver.pushValue(this);
+    solver.pushToEvalStack(this);
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -1592,7 +1598,7 @@ class CstVec2VecExpr: CstVecTerm
   void visit(CstSolver solver) {
     _lhs.visit(solver);
     _rhs.visit(solver);
-    solver.process(_op);
+    solver.processEvalStack(_op);
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -1880,7 +1886,7 @@ class CstVecSliceExpr: CstVecTerm
     _vec.visit(solver);
     _range._lhs.visit(solver);
     _range._rhs.visit(solver);
-    solver.process(CstBinaryOp.RANGE);
+    solver.processEvalStack(CstBinaryOp.RANGE);
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -1996,7 +2002,7 @@ class CstNotVecExpr: CstVecTerm
 
   void visit(CstSolver solver) {
     _expr.visit(solver);
-    solver.process(CstUnaryOp.NOT);
+    solver.processEvalStack(CstUnaryOp.NOT);
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -2086,7 +2092,7 @@ class CstNegVecExpr: CstVecTerm
 
   void visit(CstSolver solver) {
     _expr.visit(solver);
-    solver.process(CstUnaryOp.NEG);
+    solver.processEvalStack(CstUnaryOp.NEG);
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
@@ -2186,7 +2192,7 @@ class CstLogic2LogicExpr: CstLogicTerm
   void visit(CstSolver solver) {
     _lhs.visit(solver);
     _rhs.visit(solver);
-    solver.process(_op);
+    solver.processEvalStack(_op);
   }
 
   BDD getBDD(CstStage stage, Buddy buddy) {
@@ -2395,7 +2401,7 @@ class CstVec2LogicExpr: CstLogicTerm
   void visit(CstSolver solver) {
     _lhs.visit(solver);
     _rhs.visit(solver);
-    solver.process(_op);
+    solver.processEvalStack(_op);
   }
 
   BDD getBDD(CstStage stage, Buddy buddy) {
@@ -2584,7 +2590,7 @@ class CstBddConst: CstLogicTerm
   }
 
   void visit(CstSolver solver) {
-    solver.pushValue(_expr);
+    solver.pushToEvalStack(_expr);
   }
 
   BDD getBDD(CstStage stage, Buddy buddy) {
@@ -2660,7 +2666,7 @@ class CstNotBddExpr: CstLogicTerm
 
   void visit(CstSolver solver) {
     _expr.visit(solver);
-    solver.process(CstLogicalOp.LOGICNOT);
+    solver.processEvalStack(CstLogicalOp.LOGICNOT);
   }
 
   BDD getBDD(CstStage stage, Buddy buddy) {
