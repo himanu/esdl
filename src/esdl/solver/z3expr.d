@@ -1,4 +1,4 @@
-module esdl.intf.z3.bvec;
+module esdl.solver.z3expr;
 
 import esdl.intf.z3.api;
 import esdl.intf.z3.z3;
@@ -10,6 +10,20 @@ import std.stdio;
 
 alias BvExprVector = AstVectorTpl!BvExpr;
 alias BoolExprVector = AstVectorTpl!BoolExpr;
+
+T StaticCast(T, F)(const F from)
+  if (is (F == class) && is (T == class)
+      // make sure that F is indeed amongst the base classes of T
+      && staticIndexOf!(F, BaseClassesTuple!T) != -1
+      )
+    in {
+      // assert statement will not be compiled for production release
+      assert((from is null) || cast(T)from !is null);
+    }
+body {
+  return cast(T) cast(void*) from;
+ }
+
 
 struct BvExpr
 {
@@ -33,6 +47,10 @@ struct BvExpr
   this(ref return scope BvExpr rhs) {
     _signed = rhs._signed;
     _ast = rhs._ast;
+  }
+
+  bool isNull() {
+    return _ast.isNull();
   }
 
   BvExpr opAssign(ref return scope BvExpr rhs) {
@@ -529,15 +547,109 @@ struct BvExpr
     return BvExpr(c, a);
   }
 
+  int getNumeralInt() {
+    int result = 0;
+    if (!isNumeralI(result)) {
+      assert (context().enableExceptions());
+      if (!context().enableExceptions()) return 0;
+      throw new Z3Exception("numeral does not fit in machine int");
+    }
+    return result;
+  }
+
+  uint getNumeralUint() {
+    uint result = 0;
+    if (!isNumeralU(result)) {
+      assert (context().enableExceptions());
+      if (!context().enableExceptions()) return 0;
+      throw new Z3Exception("numeral does not fit in machine uint");
+    }
+    return result;
+  }
+
+  long getNumeralInt64() {
+    long result = 0;
+    if (!isNumeralI64(result)) {
+      assert (context().enableExceptions());
+      if (!context().enableExceptions()) return 0;
+      throw new Z3Exception("numeral does not fit in machine int64_t");
+    }
+    return result;
+  }
+
+  ulong getNumeralUint64() {
+    ulong result = 0;
+    if (!isNumeralU64(result)) {
+      assert (context().enableExceptions());
+      if (!context().enableExceptions()) return 0;
+      throw new Z3Exception("numeral does not fit in machine uint64_t");
+    }
+    return result;
+  }
+
+  bool isNumeralI64(ref long i) {
+    bool r = Z3_get_numeral_int64(context(), getAST, &i);
+    checkError();
+    return r;
+  }
+
+  bool isNumeralU64(ref ulong i) {
+    bool r = Z3_get_numeral_uint64(context(), getAST, &i);
+    checkError();
+    return r;
+  }
+
+  bool isNumeralI(ref int i) {
+    bool r = Z3_get_numeral_int(context(), getAST, &i);
+    checkError();
+    return r;
+  }
+
+  bool isNumeralU(ref uint i) {
+    bool r = Z3_get_numeral_uint(context(), getAST, &i);
+    checkError();
+    return r;
+  }
+
+  bool isNumeral(ref string s) {
+    auto r = Z3_get_numeral_string(context(), getAST);
+    s = cast(string) r[0..r.strlen];
+    checkError();
+    return true;
+  }
+
+
+  BvExpr mapTo(ref Model m, bool model_completion=false) {
+    checkContext(this, m);
+    Z3_ast r = null;
+    bool status = Z3_model_eval(context(), m, this.getAST, model_completion, &r);
+    checkError();
+    if (status == false && context().enableExceptions())
+      throw(new Exception("failed to evaluate expression"));
+    return BvExpr(context(), r, _signed);
+  }
 }
 
 
-BvExpr intVal(T)(Context c, T n, auto ref Sort s) {
+BvExpr bvNumVal(T)(Context c, T n, uint bitcount = T.sizeof * 8) {
   import std.traits: isSigned;
-  Z3_ast r = Z3_mk_int(c, n, s);
+  enum SIGNED = isSigned!T;
+  Sort s = c.bvSort(bitcount);
+  static if (T.sizeof <= 4) {
+    static if (SIGNED) Z3_ast r = Z3_mk_int(c, n, s);
+    else Z3_ast r = Z3_mk_unsigned_int(c, n, s);
+  }
+  else static if (T.sizeof <= 8) {
+    static if (SIGNED) Z3_ast r = Z3_mk_int64(c, n, s);
+    else Z3_ast r = Z3_mk_unsigned_int64(c, n, s);
+  }
+  else {
+    // use the following API for BV
+    // extern(C) Z3_ast Z3_mk_bv_numeral (Z3_context c, uint sz, const(bool)* bits);
+    static assert (false, "BitVector needs to be implemented");
+  }
   c.checkError();
-  enum signed = isSigned!T;
-  return BvExpr(c, r, signed);
+  return BvExpr(c, r, SIGNED);
 }
 
 bool promoteToCommonType(ref BvExpr a, ref BvExpr b,
@@ -627,17 +739,17 @@ BoolExpr eq()(auto ref BvExpr a, auto ref BvExpr b) {
   return BoolExpr(lhs.context(), r);
 }
 
-// friend expr operator==(expr & a, int b);
-BoolExpr eq()(auto ref BvExpr a, int b) {
-  assert (a.isBv());
-  return eq(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator==(expr & a, int b);
+// BoolExpr eq()(auto ref BvExpr a, int b) {
+//   assert (a.isBv());
+//   return eq(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator==(int a, expr & b);
-BoolExpr eq()(int a, auto ref BvExpr b) {
-  assert(b.isBv());
-  return eq(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator==(int a, expr & b);
+// BoolExpr eq()(int a, auto ref BvExpr b) {
+//   assert(b.isBv());
+//   return eq(bvNumVal(b.context(), a).byRef, b);
+// }
 
 
 
@@ -651,37 +763,18 @@ BoolExpr neq()(auto ref BvExpr a, auto ref BvExpr b) {
   return BoolExpr(lhs.context(), r);
 }
 
-// friend expr operator!=(expr & a, int b);
-BoolExpr neq()(auto ref BvExpr a, int b) {
-  assert (a.isArith() || a.isBv() || a.isFpa());
-  return neq(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator!=(expr & a, int b);
+// BoolExpr neq()(auto ref BvExpr a, int b) {
+//   assert (a.isArith() || a.isBv() || a.isFpa());
+//   return neq(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator!=(int a, expr & b);
-BoolExpr neq()(int a, auto ref BvExpr b) {
-  assert(b.isArith() || b.isBv() || b.isFpa());
-  return neq(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator!=(int a, expr & b);
+// BoolExpr neq()(int a, auto ref BvExpr b) {
+//   assert(b.isArith() || b.isBv() || b.isFpa());
+//   return neq(bvNumVal(b.context(), a).byRef, b);
+// }
 
-
-// friend expr operator+(expr & a, expr & b);
-BvExpr add()(auto ref BvExpr a, auto ref BvExpr b) {
-  BvExpr lhs, rhs;
-  bool signed = promoteToCommonType(a, b, lhs, rhs);
-  Z3_ast r = Z3_mk_bvadd(lhs.context(), lhs.getAST, rhs.getAST);
-  lhs.checkError();
-  return BvExpr(lhs.context(), r);
-}
-
-// friend expr operator+(expr & a, int b);
-BvExpr add()(auto ref BvExpr a, int b) {
-  return add(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
-    
-// friend expr operator+(int a, expr & b);
-BvExpr add()(int a, auto ref BvExpr b) {
-  return add((b.intVa, a, b.getSort().byRef).byRef, b);
-}
 
 
 // friend expr sum(expr_vector const& args);
@@ -699,21 +792,20 @@ BvExpr sum()(auto ref BvExprVector args) {
 BvExpr mul()(auto ref BvExpr a, auto ref BvExpr b) {
   BvExpr lhs, rhs;
   bool signed = promoteToCommonType(a, b, lhs, rhs);
-  Z3_ast r = null;
-  r = Z3_mk_bvmul(lhs.context(), lhs.getAST, rhs.getAST);
+  Z3_ast r = Z3_mk_bvmul(lhs.context(), lhs.getAST, rhs.getAST);
   lhs.checkError();
-  return BvExpr(lhs.context(), r);
+  return BvExpr(lhs.context(), r, signed);
 }
 
-// friend expr operator*(expr & a, int b);
-BvExpr mul()(auto ref BvExpr a, int b) {
-  return mul(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator*(expr & a, int b);
+// BvExpr mul()(auto ref BvExpr a, int b) {
+//   return mul(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator*(int a, expr & b);
-BvExpr mul()(int a, auto ref BvExpr b) {
-  return mul(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator*(int a, expr & b);
+// BvExpr mul()(int a, auto ref BvExpr b) {
+//   return mul(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // /*  \brief Power operator  */
 // friend expr pw(expr & a, expr & b);
@@ -725,15 +817,15 @@ BvExpr pw()(auto ref BvExpr a, auto ref BvExpr b) {
   return BvExpr(lhs.context(), r);
 }
 
-// friend expr pw(expr & a, int b);
-BvExpr pw()(auto ref BvExpr a, int b) {
-  return pw(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr pw(expr & a, int b);
+// BvExpr pw()(auto ref BvExpr a, int b) {
+//   return pw(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr pw(int a, expr & b);
-BvExpr pw()(int a, auto ref BvExpr b) {
-  return pw(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr pw(int a, expr & b);
+// BvExpr pw()(int a, auto ref BvExpr b) {
+//   return pw(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // /* \brief mod operator */
 // friend expr mod(expr const& a, expr const& b);
@@ -745,15 +837,15 @@ BvExpr mod()(auto ref BvExpr a, auto ref BvExpr b) {
   return BvExpr(lhs.context(), r);
 }
 
-// friend expr mod(expr const& a, int b);
-BvExpr mod()(auto ref BvExpr a, int b) {
-  return mod(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr mod(expr const& a, int b);
+// BvExpr mod()(auto ref BvExpr a, int b) {
+//   return mod(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr mod(int a, expr const& b);
-BvExpr mod()(int a, auto ref BvExpr b) {
-  return mod(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr mod(int a, expr const& b);
+// BvExpr mod()(int a, auto ref BvExpr b) {
+//   return mod(bvNumVal(b.context(), a).byRef, b);
+// }
 
 
 // /* \brief rem operator */
@@ -761,46 +853,75 @@ BvExpr mod()(int a, auto ref BvExpr b) {
 BvExpr rem()(auto ref BvExpr a, auto ref BvExpr b) {
   BvExpr lhs, rhs;
   bool signed = promoteToCommonType(a, b, lhs, rhs);
-  Z3_ast r = Z3_mk_rem(lhs.context(), lhs.getAST, rhs.getAST);
+  Z3_ast r;
+  if (signed) r = Z3_mk_bvsrem(a.context(), lhs.getAST, rhs.getAST);
+  else        r = Z3_mk_bvurem(a.context(), lhs.getAST, rhs.getAST);
   lhs.checkError();
-  return BvExpr(lhs.context(), r);
+  return BvExpr(lhs.context(), r, signed);
 }
 
-// friend expr rem(expr const& a, int b);
-BvExpr rem()(auto ref BvExpr a, int b) {
-  return rem(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr rem(expr const& a, int b);
+// BvExpr rem()(auto ref BvExpr a, int b) {
+//   return rem(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr rem(int a, expr const& b);
-BvExpr rem()(int a, auto ref BvExpr b) {
-  return rem(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr rem(int a, expr const& b);
+// BvExpr rem()(int a, auto ref BvExpr b) {
+//   return rem(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr operator/(expr & a, expr & b);
 BvExpr div()(auto ref BvExpr a, auto ref BvExpr b) {
   BvExpr lhs, rhs;
   bool signed = promoteToCommonType(a, b, lhs, rhs);
-  Z3_ast r = Z3_mk_bvsdiv(lhs.context(), lhs.getAST, rhs.getAST);
+  Z3_ast r;
+  if (signed) r = Z3_mk_bvsdiv(a.context(), lhs.getAST, rhs.getAST);
+  else        r = Z3_mk_bvudiv(a.context(), lhs.getAST, rhs.getAST);
   lhs.checkError();
-  return BvExpr(lhs.context(), r);
+  return BvExpr(lhs.context(), r, signed);
 }
 
-// friend expr operator/(expr & a, int b);
-BvExpr div()(auto ref BvExpr a, int b) {
-  return div(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator/(expr & a, int b);
+// BvExpr div()(auto ref BvExpr a, int b) {
+//   return div(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator/(int a, expr & b);
-BvExpr div()(int a, auto ref BvExpr b) {
-  return div(intVal(b.context(), a, b.getSort().byRef).byRef, b);
+// // friend expr operator/(int a, expr & b);
+// BvExpr div()(int a, auto ref BvExpr b) {
+//   return div(bvNumVal(b.context(), a).byRef, b);
+// }
+
+BvExpr compliment()(auto ref BvExpr a) {
+  Z3_ast r = Z3_mk_bvnot(a.context(), a.getAST);
+  a.checkError();
+  return BvExpr(a.context(), r, a._signed);
 }
 
 // friend expr operator-(expr & a);
 BvExpr neg()(auto ref BvExpr a) {
   Z3_ast r = Z3_mk_bvneg(a.context(), a.getAST);
   a.checkError();
-  return BvExpr(a.context(), r);
+  return BvExpr(a.context(), r, a._signed);
 }
+
+// friend expr operator+(expr & a, expr & b);
+BvExpr add()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
+  Z3_ast r = Z3_mk_bvadd(lhs.context(), lhs.getAST, rhs.getAST);
+  lhs.checkError();
+  return BvExpr(lhs.context(), r, signed);
+}
+
+// // friend expr operator+(expr & a, int b);
+// BvExpr add()(auto ref BvExpr a, int b) {
+//   return add(a, bvNumVal(a.context(), b).byRef);
+// }
+    
+// // friend expr operator+(int a, expr & b);
+// BvExpr add()(int a, auto ref BvExpr b) {
+//   return add(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr operator-(expr & a, expr & b);
 BvExpr sub()(auto ref BvExpr a, auto ref BvExpr b) {
@@ -808,57 +929,87 @@ BvExpr sub()(auto ref BvExpr a, auto ref BvExpr b) {
   bool signed = promoteToCommonType(a, b, lhs, rhs);
   Z3_ast r = Z3_mk_bvsub(lhs.context(), lhs.getAST, rhs.getAST);
   lhs.checkError();
-  return BvExpr(lhs.context(), r);
+  return BvExpr(lhs.context(), r, signed);
 }
 
-// friend expr operator-(expr & a, int b);
-BvExpr sub()(auto ref BvExpr a, int b) {
-  return sub(a, intVal(a.context(), b, a.getSort().byRef).byRef);
+// // friend expr operator-(expr & a, int b);
+// BvExpr sub()(auto ref BvExpr a, int b) {
+//   return sub(a, bvNumVal(a.context(), b).byRef);
+// }
+
+// // friend expr operator-(int a, expr & b);
+// BvExpr sub()(int a, auto ref BvExpr b) {
+//   return sub(bvNumVal(b.context(), a).byRef, b);
+// }
+
+
+BvExpr lsh()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
+  Z3_ast r = Z3_mk_bvshl(lhs.context(), lhs.getAST, rhs.getAST);
+  lhs.checkError();
+  return BvExpr(lhs.context(), r, signed);
 }
 
-// friend expr operator-(int a, expr & b);
-BvExpr sub()(int a, auto ref BvExpr b) {
-  return sub(intVal(b.context(), a, b.getSort().byRef).byRef, b);
+BvExpr rsh()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
+  Z3_ast r;
+  if (signed) r = Z3_mk_bvashr(a.context(), lhs.getAST, rhs.getAST);
+  else        r = Z3_mk_bvlshr(a.context(), lhs.getAST, rhs.getAST);
+  lhs.checkError();
+  return BvExpr(lhs.context(), r, signed);
 }
 
+BvExpr lrsh()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
+  Z3_ast r = Z3_mk_bvlshr(a.context(), lhs.getAST, rhs.getAST);
+  lhs.checkError();
+  return BvExpr(lhs.context(), r, signed);
+}
 
 // friend expr operator<=(expr & a, expr & b);
 BoolExpr le()(auto ref BvExpr a, auto ref BvExpr b) {
   BvExpr lhs, rhs;
   bool signed = promoteToCommonType(a, b, lhs, rhs);
-  Z3_ast r = Z3_mk_bvsle(a.context(), lhs.getAST, rhs.getAST);
+  Z3_ast r = null;
+  if (signed) r = Z3_mk_bvsle(a.context(), lhs.getAST, rhs.getAST);
+  else        r = Z3_mk_bvule(a.context(), lhs.getAST, rhs.getAST);
   a.checkError();
   return BoolExpr(a.context(), r);
 }
 
-// friend expr operator<=(expr & a, int b);
-BoolExpr le()(auto ref BvExpr a, int b) {
-  return le(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator<=(expr & a, int b);
+// BoolExpr le()(auto ref BvExpr a, int b) {
+//   return le(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator<=(int a, expr & b);
-BoolExpr le()(int a, auto ref BvExpr b) {
-  return le(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator<=(int a, expr & b);
+// BoolExpr le()(int a, auto ref BvExpr b) {
+//   return le(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr operator>=(expr & a, expr & b);
 BoolExpr ge()(auto ref BvExpr a, auto ref BvExpr b) {
   BvExpr lhs, rhs;
   bool signed = promoteToCommonType(a, b, lhs, rhs);
-  Z3_ast r = Z3_mk_bvsge(a.context(), lhs.getAST, rhs.getAST);
+  Z3_ast r = null;
+  if (signed) r = Z3_mk_bvsge(a.context(), lhs.getAST, rhs.getAST);
+  else        r = Z3_mk_bvuge(a.context(), lhs.getAST, rhs.getAST);
   a.checkError();
   return BoolExpr(a.context(), r);
 }
 
-// friend expr operator>=(expr & a, int b);
-BoolExpr ge()(auto ref BvExpr a, int b) {
-  return ge(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator>=(expr & a, int b);
+// BoolExpr ge()(auto ref BvExpr a, int b) {
+//   return ge(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator>=(int a, expr & b);
-BoolExpr ge()(int a, auto ref BvExpr b) {
-  return ge(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator>=(int a, expr & b);
+// BoolExpr ge()(int a, auto ref BvExpr b) {
+//   return ge(bvNumVal(b.context(), a).byRef, b);
+// }
 
 
 // friend expr operator<(expr & a, expr & b);
@@ -872,15 +1023,15 @@ BoolExpr lt()(auto ref BvExpr a, auto ref BvExpr b) {
   return BoolExpr(a.context(), r);
 }
 
-// friend expr operator<(expr & a, int b);
-BoolExpr lt()(auto ref BvExpr a, int b) {
-  return lt(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator<(expr & a, int b);
+// BoolExpr lt()(auto ref BvExpr a, int b) {
+//   return lt(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator<(int a, expr & b);
-BoolExpr lt()(int a, auto ref BvExpr b) {
-  return lt(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator<(int a, expr & b);
+// BoolExpr lt()(int a, auto ref BvExpr b) {
+//   return lt(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr operator>(expr & a, expr & b);
 BoolExpr gt()(auto ref BvExpr a, auto ref BvExpr b) {
@@ -893,15 +1044,15 @@ BoolExpr gt()(auto ref BvExpr a, auto ref BvExpr b) {
   return BoolExpr(a.context(), r);
 }
 
-// friend expr operator>(expr & a, int b);
-BoolExpr gt()(auto ref BvExpr a, int b) {
-  return gt(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
+// // friend expr operator>(expr & a, int b);
+// BoolExpr gt()(auto ref BvExpr a, int b) {
+//   return gt(a, bvNumVal(a.context(), b).byRef);
+// }
 
-// friend expr operator>(int a, expr & b);
-BoolExpr gt()(int a, auto ref BvExpr b) {
-  return gt(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+// // friend expr operator>(int a, expr & b);
+// BoolExpr gt()(int a, auto ref BvExpr b) {
+//   return gt(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr pble(expr_vector const& es, int * coeffs, int bound);
 BoolExpr pble()(auto ref BvExprVector es, int* coeffs, int bound) {
@@ -950,48 +1101,59 @@ BoolExpr atleast()(auto ref BvExprVector es, uint bound) {
 
 // friend expr operator&(expr & a, expr & b);
 BvExpr bvand()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
   checkContext(a, b);
-  Z3_ast r = Z3_mk_bvand(a.context(), a.getAST, b.getAST);
-  return BvExpr(a.context(), r);
+  Z3_ast r = Z3_mk_bvand(a.context(), lhs, rhs);
+  return BvExpr(a.context(), r, signed);
 }
-// friend expr operator&(expr & a, int b);
-BvExpr bvand()(auto ref BvExpr a, int b) {
-  return bvand(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
-// friend expr operator&(int a, expr & b);
-BvExpr bvand()(int a, auto ref BvExpr b) {
-  return bvand(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+
+// // friend expr operator&(expr & a, int b);
+// BvExpr bvand()(auto ref BvExpr a, int b) {
+//   return bvand(a, bvNumVal(a.context(), b).byRef);
+// }
+// // friend expr operator&(int a, expr & b);
+// BvExpr bvand()(int a, auto ref BvExpr b) {
+//   return bvand(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr operator^(expr & a, expr & b);
-BvExpr bvxor()(auto ref BvExpr a, auto ref BvExpr b) {
+BvExpr bvor()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
   checkContext(a, b);
-  Z3_ast r = Z3_mk_bvxor(a.context(), a.getAST, b.getAST);
-  return BvExpr(a.context(), r);
-}
-// friend expr operator^(expr & a, int b);
-BvExpr bvxor()(auto ref BvExpr a, int b) {
-  return bvxor(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
-// friend expr operator^(int a, expr & b);
-BvExpr bvXor()(int a, auto ref BvExpr b) {
-  return bvxor(intVal(b.context(), a, b.getSort().byRef).byRef, b);
+  Z3_ast r = Z3_mk_bvor(a.context(), lhs, rhs);
+  return BvExpr(a.context(), r, signed);
 }
 
+
+// // friend expr operator^(expr & a, int b);
+// BvExpr bvxor()(auto ref BvExpr a, int b) {
+//   return bvxor(a, bvNumVal(a.context(), b).byRef);
+// }
+// // friend expr operator^(int a, expr & b);
+// BvExpr bvXor()(int a, auto ref BvExpr b) {
+//   return bvxor(bvNumVal(b.context(), a).byRef, b);
+// }
+
 // friend expr operator|(expr & a, expr & b);
-BvExpr bvor()(auto ref BvExpr a, auto ref BvExpr b) {
+BvExpr bvxor()(auto ref BvExpr a, auto ref BvExpr b) {
+  BvExpr lhs, rhs;
+  bool signed = promoteToCommonType(a, b, lhs, rhs);
   checkContext(a, b);
-  Z3_ast r = Z3_mk_bvor(a.context(), a.getAST, b.getAST);
-  return BvExpr(a.context(), r);
+  Z3_ast r = Z3_mk_bvxor(a.context(), lhs, rhs);
+  return BvExpr(a.context(), r, signed);
 }
-// friend expr operator|(expr & a, int b);
-BvExpr bvor()(auto ref BvExpr a, int b) {
-  return bvor(a, intVal(a.context(), b, a.getSort().byRef).byRef);
-}
-// friend expr operator|(int a, expr & b);
-BvExpr bvor()(int a, auto ref BvExpr b) {
-  return bvor(intVal(b.context(), a, b.getSort().byRef).byRef, b);
-}
+
+
+// // friend expr operator|(expr & a, int b);
+// BvExpr bvor()(auto ref BvExpr a, int b) {
+//   return bvor(a, bvNumVal(a.context(), b).byRef);
+// }
+// // friend expr operator|(int a, expr & b);
+// BvExpr bvor()(int a, auto ref BvExpr b) {
+//   return bvor(bvNumVal(b.context(), a).byRef, b);
+// }
 
 // friend expr nand(expr const& a, expr const& b);
 BvExpr bvnand()(auto ref BvExpr a, auto ref BvExpr b) {
@@ -1048,6 +1210,10 @@ struct BoolExpr
 
   this(ref return scope BoolExpr rhs) {
     _ast = AST(rhs._ast);
+  }
+
+  bool isNull() {
+    return _ast.isNull();
   }
 
   BoolExpr opAssign(ref return scope BoolExpr rhs) {
@@ -1297,8 +1463,10 @@ struct BoolExpr
     return BoolExpr(context(), r);
   }
 
-  BoolExpr opUnary(string op)() if(op == "~") {
-    return BoolExpr(this.context(), Z3_mk_bvnot(this.context, getAST));
+  BoolExpr opUnary(string op)() if(op == "!") {
+    Z3_ast r = Z3_mk_not(this.context, getAST);
+    this.checkError();
+    return BoolExpr(this.context(), r);
   }
 
   static BoolExpr castAST(Context c, Z3_ast a) {
@@ -1333,3 +1501,32 @@ BoolExpr ite()(auto ref BoolExpr c, auto ref BoolExpr t, auto ref BoolExpr e) {
   return BoolExpr(c.context(), r);
 }
 
+BoolExpr and()(auto ref BoolExpr a, auto ref BoolExpr b) {
+  checkContext(a, b);
+  Z3_ast[2] args = [a.getAST, b.getAST];
+  Z3_ast r = Z3_mk_and(a.context(), 2, args.ptr);
+  a.checkError();
+  return BoolExpr(a.context(), r);
+}
+  
+BoolExpr or()(auto ref BoolExpr a, auto ref BoolExpr b) {
+  checkContext(a, b);
+  Z3_ast[2] args = [a.getAST, b.getAST];
+  Z3_ast r = Z3_mk_or(a.context(), 2, args.ptr);
+  a.checkError();
+  return BoolExpr(a.context(), r);
+}
+  
+BoolExpr not()(auto ref BoolExpr a) {
+  Z3_ast r = Z3_mk_not(a.context(), a.getAST);
+  a.checkError();
+  return BoolExpr(a.context(), r);
+}
+
+// friend expr implies(expr & a, expr & b);
+BoolExpr implies()(auto ref BoolExpr a, auto ref BoolExpr b) {
+  checkContext(a, b);
+  Z3_ast r = Z3_mk_implies(a.context(), a.getAST, b.getAST);
+  a.checkError();
+  return BoolExpr(a.context(), r);
+}

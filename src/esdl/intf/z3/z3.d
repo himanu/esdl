@@ -1024,6 +1024,11 @@ struct AST
   mixin HasContext;
 
   protected Z3_ast _m_ast;
+
+  bool isNull() {
+    return _m_ast is null;
+  }
+
   Z3_ast m_ast() {
     return _m_ast;
   }
@@ -1088,6 +1093,7 @@ struct AST
   bool opEquals()(auto ref AST other) {
     return Z3_is_eq_ast(context(), this, other);
   }
+
   bool eq()(auto ref AST other) {
     return Z3_is_eq_ast(context(), this, other);
   }
@@ -1635,41 +1641,41 @@ struct Expr
   bool isNumeral() {
     return kind() == Z3_ast_kind.Z3_NUMERAL_AST;
   }
-  bool isNumeralI64()(auto ref long i) {
+  bool isNumeralI64(ref long i) {
     bool r = Z3_get_numeral_int64(context(), getAST, &i);
     checkError();
     return r;
   }
-  bool isNumeralU64()(auto ref ulong i) {
+  bool isNumeralU64(ref ulong i) {
     bool r = Z3_get_numeral_uint64(context(), getAST, &i);
     checkError();
     return r;
   }
-  bool isNumeralI()(auto ref int i) {
+  bool isNumeralI(ref int i) {
     bool r = Z3_get_numeral_int(context(), getAST, &i);
     checkError();
     return r;
   }
-  bool isNumeralU()(auto ref uint i) {
+  bool isNumeralU(ref uint i) {
     bool r = Z3_get_numeral_uint(context(), getAST, &i);
     checkError();
     return r;
   }
-  bool isNumeral()(auto ref string s) {
+  bool isNumeral(ref string s) {
     if (!isNumeral()) return false;
     auto r = Z3_get_numeral_string(context(), getAST);
     s = cast(string) r[0..r.strlen];
     checkError();
     return true;
   }
-  bool isNumeral()(auto ref string s, uint precision) {
+  bool isNumeral(ref string s, uint precision) {
     if (!isNumeral()) return false;
     auto r = Z3_get_numeral_decimal_string(context(), getAST, precision);
     s = cast(string) r[0..r.strlen];
     checkError();
     return true;
   }
-  bool isNumeral()(auto ref double d) {
+  bool isNumeral(ref double d) {
     if (!isNumeral()) return false;
     d = Z3_get_numeral_double(context(), getAST);
     checkError();
