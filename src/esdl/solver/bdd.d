@@ -80,10 +80,12 @@ class CstBddSolver: CstSolver
   override void pushToEvalStack(CstDomain domain) { }
   override void pushToEvalStack(CstValue value) { }
   override void pushToEvalStack(bool value) { }
+  override void pushToEvalStack(ulong value) { }
 
   override void processEvalStack(CstUnaryOp op) { }
   override void processEvalStack(CstBinaryOp op) { }
   override void processEvalStack(CstCompareOp op) { }
   override void processEvalStack(CstLogicalOp op) { }
+  override void processEvalStack(CstSliceOp op) { }
 }
 

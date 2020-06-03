@@ -20,9 +20,11 @@ abstract class CstSolver
   abstract void pushToEvalStack(CstDomain domain);
   abstract void pushToEvalStack(CstValue value);
   abstract void pushToEvalStack(bool value);
+  abstract void pushToEvalStack(ulong value);
 
   abstract void processEvalStack(CstUnaryOp op);
   abstract void processEvalStack(CstBinaryOp op);
   abstract void processEvalStack(CstCompareOp op);
   abstract void processEvalStack(CstLogicalOp op);
+  abstract void processEvalStack(CstSliceOp op);
 }

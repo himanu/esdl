@@ -59,6 +59,9 @@ struct BvExpr
     return this;
   }
 
+  bool isSigned() {
+    return _signed;
+  }
 
   void setContext(Context ctx) {
     _ast.setContext(ctx);
@@ -256,7 +259,7 @@ struct BvExpr
   BvExpr extract(uint hi, uint lo) {
     Z3_ast r = Z3_mk_extract(context(), hi, lo, getAST);
     context().checkError();
-    return BvExpr(context(), r, _signed);
+    return BvExpr(context(), r, false);
   }
   
   // uint lo() { assert (is_app() && Z3_get_decl_num_parameters(context(), decl()) == 2); return static_cast<uint>(Z3_get_decl_int_parameter(context(), decl(), 1)); }

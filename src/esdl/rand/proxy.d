@@ -296,7 +296,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	  if (! procMaybeMonoDomain(pred)) {
 	    pred.solve();
 	    _solvePreds ~= pred;
-	    addCstStage(pred);
+	    // addCstStage(pred);
 	  }
 	}
       }
@@ -312,7 +312,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	else {
 	  pred.reset();
 	  _solvePreds ~= pred;
-	  addCstStage(pred);
+	  // addCstStage(pred);
 	}
       }
 
@@ -334,15 +334,17 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _solvePreds.reset();
 
       
-      foreach(stage; _solveStages) {
-	if(stage !is null) {
-	  solveStage(stage, stageIndx);
-	}
-      }
+      // foreach(stage; _solveStages) {
+      // 	if(stage !is null) {
+      // 	  solveStage(stage, stageIndx);
+      // 	}
+      // }
+
       _solveStages.reset();
 
       foreach (group; _solvedGroups) {
 	group.reset();
+	_solvedDomains ~= group.domains();
       }
       _solvedGroups.reset();
       

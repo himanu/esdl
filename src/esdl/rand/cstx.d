@@ -1427,7 +1427,7 @@ struct CstParser {
 	//   size_t tag = indexTag[$-1];
 	//   outBuffer[tag..tag+8] = ".opSlice";
 	// }
-	fill(" ~ ");
+	fill(", ");
 	break;
       }
     }

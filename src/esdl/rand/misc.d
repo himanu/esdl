@@ -415,9 +415,12 @@ enum CstBinaryOp: byte
     LSH,
     RSH,			// Arith shift right ">>"
     LRSH,			// Logic shift right ">>>"
-    RANGE, 			// for bitvec slice
-    BITINDEX,
     }
+
+enum CstSliceOp: byte
+{
+  SLICE,
+}
 
 // All the operations that produce a Bdd
 enum CstCompareOp: byte

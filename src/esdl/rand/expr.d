@@ -8,7 +8,7 @@ import esdl.solver.bdd: CstBddSolver;
 
 import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst;
 import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicalOp,
-  CstUnaryOp, writeHexString;
+  CstUnaryOp, CstSliceOp, writeHexString;
 
 import esdl.rand.base;
 import esdl.data.bvec: isBitVector, toBitVec;
@@ -150,13 +150,9 @@ interface CstVecTerm: CstVecExpr
 	}
       }
 
-  final CstVecSliceExpr opIndex(CstVecTerm index) {
+  final CstVecSliceExpr opSlice(CstVecTerm lhs, CstVecTerm rhs) {
     // assert(false, "Index operation defined only for Arrays");
-    CstVec2VecExpr range = cast(CstVec2VecExpr) index;
-    if (range is null || range._op !is CstBinaryOp.RANGE) {
-      range = index ~ (index + new CstVecValue!(int)(1));
-    }
-    return new CstVecSliceExpr(this, range);
+    return new CstVecSliceExpr(this, lhs, rhs);
   }
 
   // CstVecTerm opSlice(P)(P p)
@@ -1639,10 +1635,6 @@ class CstVec2VecExpr: CstVecTerm
       if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) >>>
 			   _rhs.evaluate();
       return _lhs.getBDD(stage, buddy) >>> _rhs.getBDD(stage, buddy);
-    case CstBinaryOp.BITINDEX:
-      assert(false, "BITINDEX is not implemented yet!");
-    case CstBinaryOp.RANGE:
-      assert(false, "RANGE is used only in conjunction with Slice expressions!");
     }
   }
 
@@ -1689,10 +1681,6 @@ class CstVec2VecExpr: CstVecTerm
     case CstBinaryOp.LSH: return lvec << rvec;
     case CstBinaryOp.RSH: return lvec >> rvec;
     case CstBinaryOp.LRSH: return lvec >>> rvec;
-    case CstBinaryOp.BITINDEX:
-      assert (false, "BITINDEX is not implemented yet!");
-    case CstBinaryOp.RANGE:
-      assert (false, "RANGE is used only in conjunction with Slice expressions!");
     }
   }
 
@@ -1875,31 +1863,38 @@ class CstVec2VecExpr: CstVecTerm
 class CstVecSliceExpr: CstVecTerm
 {
   CstVecExpr _vec;
-  CstVec2VecExpr _range;
-
-
+  CstVecExpr _lhs;
+  CstVecExpr _rhs;
+  
   string describe() {
-    return _vec.describe() ~ "[ " ~ _range.describe() ~ " ]";
+    if (_rhs is null)
+      return _vec.describe() ~ "[ " ~ _lhs.describe() ~ " ]";
+    else
+      return _vec.describe() ~ "[ " ~ _lhs.describe() ~ " .. " ~ _rhs.describe() ~ " ]";
   }
 
   void visit(CstSolver solver) {
     _vec.visit(solver);
-    _range._lhs.visit(solver);
-    _range._rhs.visit(solver);
-    solver.processEvalStack(CstBinaryOp.RANGE);
+    assert (_lhs.isSolved());
+    if (_rhs !is null) assert (_rhs.isSolved());
+    solver.pushToEvalStack(_lhs.evaluate());
+    if (_rhs is null) solver.pushToEvalStack(_lhs.evaluate() + 1);
+    else solver.pushToEvalStack(_rhs.evaluate());
+    solver.processEvalStack(CstSliceOp.SLICE);
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
-    auto vec  = _vec.getBDD(stage, buddy);
-    size_t lvec = cast(size_t) _range._lhs.evaluate();
-    size_t rvec = lvec;
-    if(_range._rhs is null) {
-      rvec = lvec + 1;
-    }
-    else {
-      rvec = cast(size_t) _range._rhs.evaluate();
-    }
-    return vec[lvec..rvec];
+    assert(false);
+    // auto vec  = _vec.getBDD(stage, buddy);
+    // size_t lvec = cast(size_t) _range._lhs.evaluate();
+    // size_t rvec = lvec;
+    // if(_range._rhs is null) {
+    //   rvec = lvec + 1;
+    // }
+    // else {
+    //   rvec = cast(size_t) _range._rhs.evaluate();
+    // }
+    // return vec[lvec..rvec];
   }
 
   // bool getVal(ref long val) {
@@ -1915,24 +1910,18 @@ class CstVecSliceExpr: CstVecTerm
   }
 
   override CstVecSliceExpr unroll(CstIterator iter, uint n) {
-    if (_range._rhs is null) {
-      return new CstVecSliceExpr(_vec.unroll(iter, n), _range._lhs.unroll(iter, n));
-    }
-    else {
+    if (_rhs is null)
       return new CstVecSliceExpr(_vec.unroll(iter, n),
-				 _range._lhs.unroll(iter, n), _range._rhs.unroll(iter, n));
-    }
+				 _lhs.unroll(iter, n), null);
+    else 
+      return new CstVecSliceExpr(_vec.unroll(iter, n),
+				 _lhs.unroll(iter, n), _rhs.unroll(iter, n));
   }
 
-  this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs=null) {
+  this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs) {
     _vec = vec;
-    _range = new CstVec2VecExpr(lhs, rhs, CstBinaryOp.RANGE);
-  }
-
-  this(CstVecExpr vec, CstVec2VecExpr range) {
-    assert (range._op is CstBinaryOp.RANGE);
-    _vec = vec;
-    _range = range;
+    _lhs = lhs;
+    _rhs = rhs;
   }
 
   uint resolveLap() {
@@ -1963,7 +1952,9 @@ class CstVecSliceExpr: CstVecTerm
 			ref CstDomain[] idxs,
 			ref CstDomain[] deps) {
     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
-    _range.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
+    _lhs.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
+    if (_rhs !is null)
+      _rhs.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
@@ -1979,13 +1970,18 @@ class CstVecSliceExpr: CstVecTerm
   }
   
   override bool isSolved() {
-    return _range.isSolved() && _vec.isSolved();
+    if (_rhs is null) return _lhs.isSolved() && _vec.isSolved();
+    else return _lhs.isSolved() && _rhs.isSolved() && _vec.isSolved();
   }
   
   override void writeExprString(ref Charbuf str) {
     _vec.writeExprString(str);
     str ~= '[';
-    _range.writeExprString(str);
+    _lhs.writeExprString(str);
+    if (_rhs !is null) {
+      str ~= "..";
+      _rhs.writeExprString(str);
+    }
     str ~= ']';
   }
 }

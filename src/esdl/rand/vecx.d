@@ -188,17 +188,30 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
       
-      auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
+      auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
       {
-	static assert (S.length <= 1);
-	static if (S.length == 0) return this;
-	else static if (S[0] == "") {
-	  return this.opIndex(indx[0]);
+	static if (S == "") {
+	  return this.opSlice(indx, null);
 	}
-	else {
-	  static assert (S.length == 1);
-	  return __traits(getMember, this, S[0]);
+	else static assert (false);
+      }
+
+      auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
+      {
+	static if (S == "") {
+	  return this.opSlice(lhs, rhs);
 	}
+	else static assert (false);
+      }
+
+      auto _esdl__rand_term_chain(string S)()
+      {
+	return __traits(getMember, this, S);
+      }
+
+      auto _esdl__rand_term_chain()()
+      {
+	return this;
       }
     }
 
@@ -397,18 +410,32 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
 
-      auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
+      auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
       {
-	static assert (S.length <= 1);
-	static if (S.length == 0) return this;
-	else static if (S[0] == "") {
-	  return this.opIndex(indx[0]);
+	static if (S == "") {
+	  return this.opSlice(indx, null);
 	}
-	else {
-	  static assert (S.length == 1);
-	  return __traits(getMember, this, S[0]);
-	}
+	else static assert (false);
       }
+
+      auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
+      {
+	static if (S == "") {
+	  return this.opSlice(lhs, rhs);
+	}
+	else static assert (false);
+      }
+
+      auto _esdl__rand_term_chain(string S)()
+      {
+	return __traits(getMember, this, S);
+      }
+
+      auto _esdl__rand_term_chain()()
+      {
+	return this;
+      }
+
     }
 
 // Arrays (Multidimensional arrays as well)

@@ -11,6 +11,8 @@ import esdl.rand.expr;
 import esdl.rand.base;
 import esdl.rand.misc;
 import esdl.intf.z3.z3;
+import esdl.intf.z3.api.z3_types: Z3_ast;
+import esdl.intf.z3.api.z3_api: Z3_mk_int64, Z3_mk_unsigned_int64;
 
 import std.algorithm.searching: canFind;
 
@@ -20,10 +22,13 @@ private import std.traits: BaseClassesTuple; // required for staticIndexOf
 
 struct Z3Term
 {
-  enum Type: ubyte { BOOL, BV }
+  import std.conv: to;
+  
+  enum Type: ubyte { BOOLEXPR, BVEXPR, ULONG }
 
-  BoolExpr _bool;
-  BvExpr _bv;
+  BoolExpr _boolExpr;
+  BvExpr _bvExpr;
+  ulong   _ulong;
 
   Type _type;
 
@@ -33,50 +38,63 @@ struct Z3Term
   }
 
   ref BvExpr toBv() {
-    if (_type == Type.BOOL) assert(false, "Expected a BV expr, got BOOL");
-    return _bv;
+    if (_type != Type.BVEXPR) assert(false, "Expected a BVEXPR, got "
+				     ~ _type.to!string);
+    return _bvExpr;
   }
 
   ref BoolExpr toBool() {
-    if (_type == Type.BV) assert(false, "Expected a BOOL expr, got BV");
-    return _bool;
+    if (_type != Type.BOOLEXPR) assert(false, "Expected a BOOLEXPR, got "
+				       ~ _type.to!string);
+    return _boolExpr;
+  }
+
+  ulong toUlong() {
+    if (_type != Type.ULONG) assert(false, "Expected a ULONG, got "
+				    ~ _type.to!string);
+    return _ulong;
   }
 
   // workaround for https://issues.dlang.org/show_bug.cgi?id=20876
   this(ref Z3Term other) {
-    _bool = other._bool;
-    _bv = other._bv;
-    _bool = other._bool;
+    _boolExpr = other._boolExpr;
+    _bvExpr = other._bvExpr;
+    _ulong = other._ulong;
     _type = other._type;
   }
 
   this(ref BvExpr expr) {
-    _bv = expr;
-    _type = Type.BV;
+    _bvExpr = expr;
+    _type = Type.BVEXPR;
   }
 
   this(BvExpr expr) {
-    _bv = expr;
-    _type = Type.BV;
+    _bvExpr = expr;
+    _type = Type.BVEXPR;
   }
 
   this(ref BoolExpr expr) {
-    _bool = expr;
-    _type = Type.BOOL;
+    _boolExpr = expr;
+    _type = Type.BOOLEXPR;
   }
 
   this(BoolExpr expr) {
-    _bool = expr;
-    _type = Type.BOOL;
+    _boolExpr = expr;
+    _type = Type.BOOLEXPR;
+  }
+
+  this(ulong expr) {
+    _ulong = expr;
+    _type = Type.ULONG;
   }
 
 }
 
 struct BvVar
 {
-  enum State: ubyte {INIT, CONST, VAR, VARCHANGED, CONSTCHANGED}
+  enum State: ubyte {INIT, CONST, VAR}
   BvExpr _dom;
-  ulong  _val;
+  long   _val;
   State  _state;
 
   alias _dom this;
@@ -95,29 +113,51 @@ struct BvVar
     return this;
   }
 
-  State update(CstDomain dom) {
+  BvExpr getValExpr() {
+    Sort sort = _dom.getSort();
+    Context context = _dom.context();
+    Z3_ast r;
+    if (_dom.isSigned()) r = Z3_mk_int64(context, _val, sort);
+    else        r = Z3_mk_unsigned_int64(context, _val, sort);
+    return BvExpr(context, r, _dom.isSigned());
+  }
+
+  BoolExpr getRule() {
+    return eq(_dom, getValExpr());
+  }
+  
+  void update(CstDomain dom, CstZ3Solver solver) {
     assert (dom.isSolved());
-    ulong val = dom.value();
+    long val = dom.value();
     if (_val != val) {
-      final switch (_state) {
-      case State.INIT: _state = State.CONST; break;
-      case State.CONST: _state = State.CONSTCHANGED; break;
-      case State.VAR: _state = State.VARCHANGED; break;
-      case State.VARCHANGED: _state = State.VARCHANGED; break;
-      case State.CONSTCHANGED: _state = State.VARCHANGED; break;
-      }
       _val = val;
+      final switch (_state) {
+      case State.INIT:
+	_state = State.CONST;
+	solver._count0 += 1;
+	break;
+      case State.CONST:
+	_state = State.VAR;
+	solver._count0 -= 1;
+	solver._count1 += 1;
+	break;
+      case State.VAR:
+	solver._refreshVar = true;
+	break;
+      }
     }
     else {
       final switch (_state) {
-      case State.INIT: _state = State.CONST; break;
-      case State.CONST: _state = State.CONST; break;
-      case State.VAR: _state = State.VAR; break;
-      case State.VARCHANGED: _state = State.VAR; break;
-      case State.CONSTCHANGED: _state = State.VAR; break;
+      case State.INIT:
+	_state = State.CONST;
+	solver._count0 += 1;
+	break;
+      case State.CONST:
+	break;
+      case State.VAR:
+	break;
       }
     }
-    return _state;
   }
 }
 
@@ -135,13 +175,12 @@ class CstZ3Solver: CstSolver
 
   _esdl__Proxy _proxy;
 
-  // whether a push is required to make
-  bool push0;
-  bool push1;
+  uint _count0;
+  uint _count1;
 
-  // true if we need to pop SMT
-  bool pop0;
-  bool pop1;
+  // whether some variables have changed and a refresh required
+  bool _refreshVar;	    // whether the variable values need refresh
+  ubyte _pushCount;	    // balance number of pushed z3 context has
 
   // the group is used only for the purpose of constructing the Z3 solver
   // otherwise the solver identifies with the signature only
@@ -161,8 +200,8 @@ class CstZ3Solver: CstSolver
 
     foreach (i, ref dom; _domains) {
       import std.string: format;
-      import std.stdio;
-      writeln("Adding Z3 Domain for @rand ", doms[i].name());
+      // import std.stdio;
+      // writeln("Adding Z3 Domain for @rand ", doms[i].name());
       auto d = BvExpr(_context, format("_dom%s", i), doms[i].bitcount, doms[i].signed());
       dom = d;
     }
@@ -172,21 +211,20 @@ class CstZ3Solver: CstSolver
 
     foreach (i, ref var; _variables) {
       import std.string: format;
-      import std.stdio;
-      writeln("Adding Z3 Domain for variable ", vars[i].name());
+      // import std.stdio;
+      // writeln("Adding Z3 Domain for variable ", vars[i].name());
       auto d = BvExpr(_context, format("_var%s", i), vars[i].bitcount, vars[i].signed());
       var = d;
-      var.update(vars[i]);
     }
 
     Solver s = Solver(_context);
     _solver = s;
 
     foreach (pred; group.predicates()) {
-      import std.stdio;
-      writeln("Working on: ", pred.name());
+      // import std.stdio;
+      // writeln("Working on: ", pred.name());
       if (pred.group() !is group) {
-	writeln (pred.name(), " Group Violation");
+	assert (false, " Group Violation " ~ pred.name());
       }
       pred.visit(this);
       assert(_evalStack.length == 1);
@@ -195,7 +233,7 @@ class CstZ3Solver: CstSolver
     }
 
 
-    _solver.push();
+    this.push();
 
     // writeln("auto_config: ", getParam("auto_config"));
     // writeln("smt.phase_selection: ", getParam("smt.phase_selection"));
@@ -207,8 +245,23 @@ class CstZ3Solver: CstSolver
 
   BvVar.State varState;
 
+  void push() {
+    assert(_pushCount <= 2);
+    _pushCount += 1;
+    _solver.push();
+  }
+
+  void pop() {
+    assert(_pushCount >= 0);
+    _pushCount -= 1;
+    _solver.pop();
+  }
+
   override void solve(CstPredGroup group) {
+    updateVars(group);
+
     CstDomain[] doms = group.domains();
+
     // writeln(_solver);
     // writeln(_solver.check());
     // writeln(_solver.getModel());
@@ -216,28 +269,52 @@ class CstZ3Solver: CstSolver
     _solver.check();
     auto model = _solver.getModel();
     foreach (i, ref dom; _domains) {
-      import std.string: format;
-      string value;
+      // import std.string: format;
+      // string value;
       BvExpr vdom = dom.mapTo(model, true);
-      writeln("Value for Domain ", doms[i].name(), ": ",
-	      vdom.getNumeralInt64());
+      ulong vlong = vdom.getNumeralInt64();
+      doms[i].setVal(vlong);
+      // writeln("Value for Domain ", doms[i].name(), ": ",
+      // 	      vdom.getNumeralInt64());
       // writeln(vdom.getNumeralInt64());
       // vdom.isNumeral(value);
       // writeln(value);
     }
 
-    CstDomain[] vars = group.variables();
-    
-    BvVar.State newState = BvVar.State.INIT;
-    foreach (i, ref var; _variables) {
-      BvVar.State state = var.update(vars[i]);
-      if (state > newState) newState = state;
-    }
+  }
 
-    import std.stdio;
-    writeln ("Variables state: ", varState, " new: ", newState);
-    
-    varState = newState;
+  void updateVars(CstPredGroup group) {
+    CstDomain[] vars = group.variables();
+    _refreshVar = false;
+    uint pcount0 = _count0;
+    uint pcount1 = _count1;
+    foreach (i, ref var; _variables) var.update(vars[i], this);
+    assert (_count0 + _count1 == _variables.length);
+    // import std.stdio;
+    // writeln("refresh: ", _refreshVar,
+    // 	    " prev counts: ", pcount0, ", ", pcount1,
+    // 	    " now counts: ", _count0, ", ", _count1);
+
+    if (_refreshVar || (pcount1 != 0 && pcount1 != _count1))
+      pop();			// for variables
+    if (pcount0 != 0 && pcount0 != _count0)
+      pop();			// for constants
+
+    // process constants -- if required
+    if (pcount0 != _count0 && _count0 > 0) {
+      push();
+      foreach (i, ref var; _variables) {
+	if (var._state == BvVar.State.CONST)
+	  addRule(_solver, var.getRule());
+      }
+    }
+    if (_refreshVar || pcount1 != _count1) {
+      push();
+      foreach (i, ref var; _variables) {
+	if (var._state == BvVar.State.VAR)
+	  addRule(_solver, var.getRule());
+      }
+    }
   }
 
   override void pushToEvalStack(CstDomain domain) {
@@ -257,13 +334,14 @@ class CstZ3Solver: CstSolver
     _evalStack ~= Z3Term(bvNumVal(_context, value.value(), value.bitcount()));
   }
 
+  override void pushToEvalStack(ulong value) {
+    // writeln("push: ", value);
+    _evalStack ~= Z3Term(value);
+  }
+
   override void pushToEvalStack(bool value) {
     // writeln("push: ", value);
     assert(false);
-  }
-
-  void pop() {
-    _evalStack.length -= 1;
   }
 
   override void processEvalStack(CstUnaryOp op) {
@@ -340,10 +418,6 @@ class CstZ3Solver: CstSolver
       _evalStack.length -= 2;
       _evalStack ~= Z3Term(e);
       break;
-    case CstBinaryOp.RANGE: 			// for bitvec slice
-      assert(false);
-    case CstBinaryOp.BITINDEX:
-      assert(false);
     }
   }
 
@@ -408,5 +482,14 @@ class CstZ3Solver: CstSolver
       break;
     }
   }
+
+  override void processEvalStack(CstSliceOp op) {
+    assert (op == CstSliceOp.SLICE);
+    BvExpr e = _evalStack[$-3].toBv().extract(cast(uint) _evalStack[$-1].toUlong() - 1,
+					      cast(uint) _evalStack[$-2].toUlong());
+    _evalStack.length -= 3;
+    _evalStack ~= Z3Term(e);
+  }
+  
 }
 
