@@ -499,6 +499,7 @@ interface CstExpr
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstDomain[] idxs,
+				 ref CstDomain[] bitIdxs,
 				 ref CstDomain[] deps);
 
   abstract bool isSolved();
@@ -716,6 +717,11 @@ class CstPredGroup			// group of related predicates
       _vars.reset();
       annotate();
       string sig = signature();
+      debug (CSTSOLVER) {
+	import std.stdio;
+	writeln(group.describe());
+	writeln(sig);
+      }
 
       CstSolver* solverp = sig in _proxy._solvers;
 
@@ -787,7 +793,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   CstPredicate _parent;
   uint _level;
   uint _unrollCycle;
-  bool _markResolve;
+  bool _markResolve = true;
 
   State _state = State.INIT;
 
@@ -927,6 +933,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   CstValue[]  _vals;
   CstDomain[] _deps;
   CstDomain[] _idxs;
+  CstDomain[] _bitIdxs;
   CstIterator[] _iters;
   CstIterator[] _parsedIters;
 
@@ -1022,7 +1029,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   final void setDomainContext() {
     CstIterator[] varIters;
     
-    _expr.setDomainContext(this, _rnds, _vars, _vals, varIters, _idxs, _deps);
+    _expr.setDomainContext(this, _rnds, _vars, _vals, varIters, _idxs, _bitIdxs, _deps);
 
     // foreach (varIter; varIters) {
     //   import std.stdio;
@@ -1064,7 +1071,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
     //   CstDomain[] _foundDeps = _deps ~ _idxs;
     //   _deps = _foundDeps.filter!(dep => (! canFind(_parent._deps, dep))).array;
     // }
-    _deps = _deps ~ _idxs;
+
+    foreach (idx; _idxs) if (! idx.isSolved()) _deps ~= idx;
+    foreach (idx; _bitIdxs) if (! idx.isSolved()) _deps ~= idx;
     
     foreach (dep; _deps) dep.registerDepPred(this);
 
@@ -1147,6 +1156,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	description ~= "\t" ~ idx.name() ~ "\n";
       }
     }
+    if (_bitIdxs.length > 0) {
+      description ~= "    Bit Indexes: \n";
+      foreach (idx; _bitIdxs) {
+	description ~= "\t" ~ idx.name() ~ "\n";
+      }
+    }
     if (_deps.length > 0) {
       description ~= "    Depends: \n";
       foreach (dep; _deps) {
@@ -1169,6 +1184,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
       assert(_group is null, "A predicate may add to a group, but group should not change");
       group.needSync();
     }
+    if (_bitIdxs.length != 0) group.needSync();
     if (this.isDynamic()) group.addDynPredicate(this);
     else group.addPredicate(this);
     foreach (dom; _rnds) {
@@ -1180,8 +1196,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
 
   void solve() {
-    if (_group is null) {
-    }
+    // if (_group is null) {
+    // }
   }
 }
 

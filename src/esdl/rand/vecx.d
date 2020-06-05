@@ -170,6 +170,7 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstDomain[] idxs,
+			    ref CstDomain[] bitIdxs,
 			    ref CstDomain[] deps) {
 	static if (RAND_ATTR.isRand()) {
 	  if (! canFind(rnds, this)) rnds ~= this;
@@ -372,6 +373,7 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstDomain[] idxs,
+			    ref CstDomain[] bitIdxs,
 			    ref CstDomain[] deps) {
 	static if (RAND_ATTR.isRand()) {
 	  if (! this.isStatic()) {
@@ -382,7 +384,7 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	else {
 	  if (! canFind(vars, this)) vars ~= this;
 	}
-	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
+	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
 
 	if (_indexExpr !is null) {
 	  // Here we need to put the parent as a dep for the pred
@@ -392,7 +394,7 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
-	  _indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
+	  _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
 	}
       }
 
@@ -726,6 +728,7 @@ class CstVecArr(V, rand RAND_ATTR, int N)
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
 			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
@@ -878,6 +881,7 @@ class CstVecArr(V, rand RAND_ATTR, int N)
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
 			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
@@ -885,9 +889,9 @@ class CstVecArr(V, rand RAND_ATTR, int N)
 	  
     // auto iter = arrLen.makeIterVar();
     // iters ~= iter;
-    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
+    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
+      _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
     }
   }
 

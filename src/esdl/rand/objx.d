@@ -267,6 +267,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 		       ref CstValue[] vals,
 		       ref CstIterator[] iters,
 		       ref CstDomain[] idxs,
+		       ref CstDomain[] bitIdxs,
 		       ref CstDomain[] deps) {
       static if (R.isRand()) {
       // 	if (! canFind(rnds, this)) rnds ~= this;
@@ -277,7 +278,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
       if (_parent.isStatic()) {
 	deps ~= _parent._arrLen;
       }
-      _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
+      _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
 
       if (_indexExpr !is null) {
 	// Here we need to put the parent as a dep for the pred
@@ -287,7 +288,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstOb
 	// not. When the indexExpr gets resolved, it should inform
 	// the parent about resolution which in turn should inform
 	// the pred that it can go ahead
-	_indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
+	_indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
       }
     }
 
@@ -536,6 +537,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
 			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
@@ -679,6 +681,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
 		     ref CstValue[] vals,
 		     ref CstIterator[] iters,
 		     ref CstDomain[] idxs,
+		     ref CstDomain[] bitIdxs,
 		     ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
@@ -689,9 +692,9 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     if (_parent.isStatic()) {
       deps ~= _parent._arrLen;
     }
-    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, deps);
+    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setDomainContext(pred, idxs, vars, vals, iters, idxs, deps);
+      _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
     }
   }
 

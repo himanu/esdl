@@ -262,7 +262,10 @@ class CstZ3Solver: CstSolver
 
     CstDomain[] doms = group.domains();
 
-    // writeln(_solver);
+    debug (Z3SOLVER) {
+      import std.stdio;
+      writeln(_solver);
+    }
     // writeln(_solver.check());
     // writeln(_solver.getModel());
 
