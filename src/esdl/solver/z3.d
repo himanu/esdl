@@ -352,12 +352,12 @@ class CstZ3Solver: CstSolver
     final switch (op) {
     case CstUnaryOp.NOT:
       BvExpr e = compliment(_evalStack[$-1].toBv());
-      _evalStack.length -= 1;
+      _evalStack.length = _evalStack.length - 1;
       _evalStack ~= Z3Term(e);
       break;
     case CstUnaryOp.NEG:
       BvExpr e = neg(_evalStack[$-1].toBv());
-      _evalStack.length -= 1;
+      _evalStack.length = _evalStack.length - 1;
       _evalStack ~= Z3Term(e);
       break;
     }
@@ -368,57 +368,57 @@ class CstZ3Solver: CstSolver
     final switch (op) {
     case CstBinaryOp.AND:
       BvExpr e = bvand(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.OR:
       BvExpr e = bvor(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.XOR:
       BvExpr e = bvxor(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.ADD:
       BvExpr e = add(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.SUB:
       BvExpr e = sub(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.MUL:
       BvExpr e = mul(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.DIV:
       BvExpr e = div(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.REM:
       BvExpr e = rem(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.LSH:
       BvExpr e = lsh(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.RSH:			// Arith shift right ">>"
       BvExpr e = rsh(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstBinaryOp.LRSH:			// Logic shift right ">>>"
       BvExpr e = lrsh(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     }
@@ -429,32 +429,32 @@ class CstZ3Solver: CstSolver
     final switch (op) {
     case CstCompareOp.LTH:
       BoolExpr e = lt(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstCompareOp.LTE:
       BoolExpr e = le(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstCompareOp.GTH:
       BoolExpr e = gt(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstCompareOp.GTE:
       BoolExpr e = ge(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstCompareOp.EQU:
       BoolExpr e = eq(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstCompareOp.NEQ:
       BoolExpr e = neq(_evalStack[$-2].toBv(), _evalStack[$-1].toBv());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     }
@@ -465,22 +465,22 @@ class CstZ3Solver: CstSolver
     final switch (op) {
     case CstLogicalOp.LOGICAND:
       BoolExpr e = and(_evalStack[$-2].toBool(), _evalStack[$-1].toBool());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstLogicalOp.LOGICOR:
       BoolExpr e = or(_evalStack[$-2].toBool(), _evalStack[$-1].toBool());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstLogicalOp.LOGICIMP:
       BoolExpr e = implies(_evalStack[$-2].toBool(), _evalStack[$-1].toBool());
-      _evalStack.length -= 2;
+      _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
     case CstLogicalOp.LOGICNOT:
       BoolExpr e = not(_evalStack[$-1].toBool());
-      _evalStack.length -= 1;
+      _evalStack.length = _evalStack.length - 1;
       _evalStack ~= Z3Term(e);
       break;
     }
@@ -490,7 +490,7 @@ class CstZ3Solver: CstSolver
     assert (op == CstSliceOp.SLICE);
     BvExpr e = _evalStack[$-3].toBv().extract(cast(uint) _evalStack[$-1].toUlong() - 1,
 					      cast(uint) _evalStack[$-2].toUlong());
-    _evalStack.length -= 3;
+    _evalStack.length = _evalStack.length - 3;
     _evalStack ~= Z3Term(e);
   }
   

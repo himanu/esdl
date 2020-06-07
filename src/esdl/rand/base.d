@@ -356,8 +356,8 @@ abstract class CstDomain
   abstract bool solveRange(_esdl__RandGen randGen);
   abstract CstStage stage();
   abstract void stage(CstStage s);
-  abstract uint domIndex();
-  abstract void domIndex(uint s);
+  // abstract uint domIndex();
+  // abstract void domIndex(uint s);
   abstract bool signed();
   abstract bool isRand();
   abstract uint bitcount();

@@ -212,11 +212,12 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   static if (HAS_RAND_ATTRIB) {
-    uint         _domIndex = uint.max;
-    CstStage     _stage = null;
-    uint         _resolveLap = 0;
+    // uint         _domIndex = uint.max;
+    // CstStage     _stage = null;
   }
 
+  uint         _resolveLap = 0;
+  
   override void annotate(CstPredGroup group) {
     if (_domN == uint.max) {
       if (this.isSolved()) {
@@ -428,15 +429,16 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   override ref BddVec bddvec(Buddy buddy) {
-    static if (HAS_RAND_ATTRIB) {
-      assert(_domIndex != uint.max,
-	     "BDD Domain not yet created for: " ~ name());
-      return buddy.getVec(_domIndex);
-      // return _domvec;
-    }
-    else {
-      return _valvec;
-    }
+    assert(false);
+    // static if (HAS_RAND_ATTRIB) {
+    //   // assert(_domIndex != uint.max,
+    //   // 	     "BDD Domain not yet created for: " ~ name());
+    //   return buddy.getVec(_domIndex);
+    //   // return _domvec;
+    // }
+    // else {
+    //   return _valvec;
+    // }
   }
 
   // void bddvec(BddVec b) {
@@ -448,78 +450,58 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   //   }
   // }
 
-  override uint domIndex() {
-    static if (HAS_RAND_ATTRIB) {
-      return _domIndex;
-    }
-    else {
-      assert(false);
-    }
-  }
+  // override uint domIndex() {
+  //   // // static if (HAS_RAND_ATTRIB) {
+  //   // //   return _domIndex;
+  //   // // }
+  //   // // else {
+  //   assert(false);
+  //   //   // }
+  // }
 
-  override void domIndex(uint s) {
-    static if (HAS_RAND_ATTRIB) {
-      _domIndex = s;
-    }
-    else {
-      assert(false);
-    }
-  }
+  // override void domIndex(uint s) {
+  //   // static if (HAS_RAND_ATTRIB) {
+  //   //   _domIndex = s;
+  //   // }
+  //   // else {
+  //   assert(false);
+  //   // }
+  // }
 
   override void reset() {
-    static if (HAS_RAND_ATTRIB) {
-      _state = State.INIT;
-      _stage = null;
-      _resolveLap = 0;
-    }
+    _state = State.INIT;
+    // _stage = null;
+    _resolveLap = 0;
   }
   
   override CstStage stage() {
-    static if (HAS_RAND_ATTRIB) {
-      return _stage;
-    }
-    else {
-      assert(false);
-    }
+    assert (false);
+    // static if (HAS_RAND_ATTRIB) {
+    //   return _stage;
+    // }
+    // else {
+    //   assert(false);
+    // }
   }
 
   override void stage(CstStage s) {
-    static if (HAS_RAND_ATTRIB) {
-      _stage = s;
-    }
-    else {
-      assert(false);
-    }
+    assert (false);
+    // static if (HAS_RAND_ATTRIB) {
+    //   _stage = s;
+    // }
+    // else {
+    //   assert(false);
+    // }
   }
 
   uint resolveLap() {
-    static if (HAS_RAND_ATTRIB) {
-      if (_stage !is null && _stage.isSolved()) {
-	return 0;
-      }
-      else {
-	static if (HAS_RAND_ATTRIB) {
-	  return _resolveLap;
-	}
-	else {
-	  return 0;
-	}
-      }
-    }
-    else return 0;
+    if (isSolved()) return 0;
+    else return _resolveLap;
   }
 
   void resolveLap(uint lap) {
-    static if (HAS_RAND_ATTRIB) {
-      if (_stage !is null && _stage.isSolved()) {
-	_resolveLap = 0;
-      }
-      else {
-	static if (HAS_RAND_ATTRIB) {
-	  _resolveLap = lap;
-	}
-      }
-    }
+    if (isSolved()) _resolveLap = 0;
+    else _resolveLap = lap;
   }
 
   abstract T* getRef();
@@ -1515,9 +1497,9 @@ class CstVecValue(T = int): CstValue
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     vals ~= this;
-    if (_valvec.isNull()) {
-      _valvec.buildVec(pred.getProxy().getBuddy(), _val);
-    }
+    // if (_valvec.isNull()) {
+    //   _valvec.buildVec(pred.getProxy().getBuddy(), _val);
+    // }
   }
 
   bool getIntRange(ref IntR rng) {

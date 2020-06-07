@@ -436,163 +436,165 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   }
 
   void addDomain(CstDomain domain) {
-    if (domain.isRand()) {
-      // _root._cstRndDomains ~= domain;
-      useBuddy(CstBddSolver.buddy());
-      domain.domIndex = CstBddSolver.buddy.addDomVec(domain.bitcount, domain.signed());
-    }
-    else {
-      _root._cstValDomains ~= domain;
-    }
+    assert (false);
+    // if (domain.isRand()) {
+    //   // _root._cstRndDomains ~= domain;
+    //   useBuddy(CstBddSolver.buddy());
+    //   domain.domIndex = CstBddSolver.buddy.addDomVec(domain.bitcount, domain.signed());
+    // }
+    // else {
+    //   _root._cstValDomains ~= domain;
+    // }
   }
 
   void solveStage(CstStage stage, ref int stageIndx) {
-    import std.conv;
-    CstPredicate[] preds = stage._predicates;
-    static Charbuf exprBuf;
+    assert (false);
+    // import std.conv;
+    // CstPredicate[] preds = stage._predicates;
+    // static Charbuf exprBuf;
 
-    foreach(pred; preds) {
-      // pred.getExpr.writeExprString(exprBuf);
-      // writeln(exprBuf[]);
-    }
-    // foreach (pred; preds) {
-    //   pred.annotate();
+    // foreach(pred; preds) {
+    //   // pred.getExpr.writeExprString(exprBuf);
+    //   // writeln(exprBuf[]);
     // }
+    // // foreach (pred; preds) {
+    // //   pred.annotate();
+    // // }
+
+    // // foreach (pred; preds) {
+    // //   import std.stdio;
+    // //   writeln("Proxy: ", pred.name(), " update: ", pred.hasUpdate());
+    // // }
+    // // make the bdd tree
+    // bool updated = false;
 
     // foreach (pred; preds) {
-    //   import std.stdio;
-    //   writeln("Proxy: ", pred.name(), " update: ", pred.hasUpdate());
+    //   updated |= pred.hasUpdate();
     // }
-    // make the bdd tree
-    bool updated = false;
-
-    foreach (pred; preds) {
-      updated |= pred.hasUpdate();
-    }
-    // import std.stdio;
-    // writeln("Saved Stages: ", savedStages.length);
-    // writeln("Saved Stages Index: ", stageIndx);
-    // if (savedStages.length > stageIndx) {
-    //   foreach (pred; savedStages[stageIndx]._predicates) {
-    // 	writeln("saved: ", pred.name());
+    // // import std.stdio;
+    // // writeln("Saved Stages: ", savedStages.length);
+    // // writeln("Saved Stages Index: ", stageIndx);
+    // // if (savedStages.length > stageIndx) {
+    // //   foreach (pred; savedStages[stageIndx]._predicates) {
+    // // 	writeln("saved: ", pred.name());
+    // //   }
+    // //   writeln("Comparison: ", savedStages[stageIndx]._predicates[0] == stage._predicates[0]);
+    // // }
+    // // foreach (pred; stage._predicates) {
+    // //   writeln("saved: ", pred.name());
+    // // }
+    // BDD solveBDD = CstBddSolver.buddy.one();
+    
+    // if (savedStages.length > stageIndx &&
+    // 	savedStages[stageIndx]._predicates == stage._predicates) {
+    //   if (! updated) {
+    // 	// import std.stdio;
+    // 	// writeln("Reusing previous BDD solution");
+    // 	stage._solveBDD = savedStages[stageIndx]._solveBDD;
+    // 	stage._bddDist = savedStages[stageIndx]._bddDist;
+    // 	solveBDD = stage._solveBDD;
     //   }
-    //   writeln("Comparison: ", savedStages[stageIndx]._predicates[0] == stage._predicates[0]);
+    //   else {
+    // 	foreach(pred; preds) {
+    // 	  // pred.getExpr.writeExprString(exprBuf);
+    // 	  // pred.getExpr().visit(savedStages[stageIndx]._solver);
+    // 	  solveBDD = solveBDD & pred.getExpr().getBDD(stage, CstBddSolver.buddy);
+    // 	  // writeln(pred.name());
+    // 	}
+    //   }
     // }
-    // foreach (pred; stage._predicates) {
-    //   writeln("saved: ", pred.name());
+    // else {
+    //   // auto solver = new CstBddSolver(stage);
+    //   // if (stage._solver is null) {
+    //   // 	// import std.stdio;
+    //   // 	// writeln("new solver");
+    //   // 	stage._solver = new CstBddSolver(stage);
+    //   // }
+    //   foreach (vec; stage._domVars) {
+    // 	if (vec.stage is stage) {
+    // 	  if (vec.domIndex == uint.max) {
+    // 	    this.addDomain(vec);
+    // 	  }
+    // 	  // if (vec.bddvec(_esdl__buddy).isNull()) {
+    // 	  //   vec.bddvec(_esdl__buddy).buildVec(vec.domIndex, vec.signed);
+    // 	  // }
+    // 	}
+    //   }
+    //   // foreach(vec; stage._domVars) {
+    //   // 	BDD primBdd = vec.getPrimBdd(_esdl__buddy);
+    //   // 	if(! primBdd.isOne()) {
+    //   // 	  solveBDD = solveBDD & primBdd;
+    //   // 	}
+    //   // }
+    //   foreach(pred; preds) {
+    // 	// import std.stdio;
+    // 	// writeln(pred.describe());
+    // 	// pred.getExpr().visit(stage._solver);
+    // 	// pred.getExpr.writeExprString(exprBuf);
+    // 	solveBDD = solveBDD & pred.getExpr().getBDD(stage, CstBddSolver.buddy);
+    // 	// writeln(pred.name());
+    //   }
     // }
-    BDD solveBDD = CstBddSolver.buddy.one();
+
+    // stage._solveBDD = solveBDD;
+    // stage._bddDist.clear();
+    // solveBDD.satDist(stage._bddDist);
+
+
+    // // import std.stdio;
+    // // writeln("bddDist: ", stage._bddDist);
     
-    if (savedStages.length > stageIndx &&
-	savedStages[stageIndx]._predicates == stage._predicates) {
-      if (! updated) {
-	// import std.stdio;
-	// writeln("Reusing previous BDD solution");
-	stage._solveBDD = savedStages[stageIndx]._solveBDD;
-	stage._bddDist = savedStages[stageIndx]._bddDist;
-	solveBDD = stage._solveBDD;
-      }
-      else {
-	foreach(pred; preds) {
-	  // pred.getExpr.writeExprString(exprBuf);
-	  // pred.getExpr().visit(savedStages[stageIndx]._solver);
-	  solveBDD = solveBDD & pred.getExpr().getBDD(stage, CstBddSolver.buddy);
-	  // writeln(pred.name());
-	}
-      }
-    }
-    else {
-      // auto solver = new CstBddSolver(stage);
-      // if (stage._solver is null) {
-      // 	// import std.stdio;
-      // 	// writeln("new solver");
-      // 	stage._solver = new CstBddSolver(stage);
-      // }
-      foreach (vec; stage._domVars) {
-	if (vec.stage is stage) {
-	  if (vec.domIndex == uint.max) {
-	    this.addDomain(vec);
-	  }
-	  // if (vec.bddvec(_esdl__buddy).isNull()) {
-	  //   vec.bddvec(_esdl__buddy).buildVec(vec.domIndex, vec.signed);
-	  // }
-	}
-      }
-      // foreach(vec; stage._domVars) {
-      // 	BDD primBdd = vec.getPrimBdd(_esdl__buddy);
-      // 	if(! primBdd.isOne()) {
-      // 	  solveBDD = solveBDD & primBdd;
-      // 	}
-      // }
-      foreach(pred; preds) {
-	// import std.stdio;
-	// writeln(pred.describe());
-	// pred.getExpr().visit(stage._solver);
-	// pred.getExpr.writeExprString(exprBuf);
-	solveBDD = solveBDD & pred.getExpr().getBDD(stage, CstBddSolver.buddy);
-	// writeln(pred.name());
-      }
-    }
+    // auto solution = solveBDD.randSatOne(this._esdl__rGen.get(),
+    // 					stage._bddDist);
+    // auto solVecs = solution.toVector();
 
-    stage._solveBDD = solveBDD;
-    stage._bddDist.clear();
-    solveBDD.satDist(stage._bddDist);
-
-
-    // import std.stdio;
-    // writeln("bddDist: ", stage._bddDist);
-    
-    auto solution = solveBDD.randSatOne(this._esdl__rGen.get(),
-					stage._bddDist);
-    auto solVecs = solution.toVector();
-
-    byte[] bits;
-    if(solVecs.length != 0) {
-      bits = solVecs[0];
-    }
-
-    foreach (vec; stage._domVars) {
-      ulong v;
-      enum WORDSIZE = 8 * v.sizeof;
-      auto bitvals = solveBDD.getIndices(vec.domIndex);
-      auto NUMWORDS = (bitvals.length+WORDSIZE-1)/WORDSIZE;
-      
-      if (_solveValue.length < NUMWORDS) {
-	_solveValue.length = NUMWORDS;
-      }
-      foreach (i, ref j; bitvals) {
-	uint pos = (cast(uint) i) % WORDSIZE;
-	uint word = (cast(uint) i) / WORDSIZE;
-	if (bits.length == 0 || bits[j] == -1) {
-	  v = v + ((cast(size_t) _esdl__rGen.flip()) << pos);
-	}
-	else if (bits[j] == 1) {
-	  v = v + ((cast(ulong) 1) << pos);
-	}
-	if (pos == WORDSIZE - 1 || i == bitvals.length - 1) {
-	  _solveValue[word] = v;
-	  v = 0;
-	}
-      }
-      vec.setVal(array(_solveValue[0..NUMWORDS]));
-      _solvedDomains ~= vec;
-    }
-    stage.id(stageIndx);
+    // byte[] bits;
+    // if(solVecs.length != 0) {
+    //   bits = solVecs[0];
+    // }
 
     // foreach (vec; stage._domVars) {
-    //   vec.execCbs();
+    //   ulong v;
+    //   enum WORDSIZE = 8 * v.sizeof;
+    //   auto bitvals = solveBDD.getIndices(vec.domIndex);
+    //   auto NUMWORDS = (bitvals.length+WORDSIZE-1)/WORDSIZE;
+      
+    //   if (_solveValue.length < NUMWORDS) {
+    // 	_solveValue.length = NUMWORDS;
+    //   }
+    //   foreach (i, ref j; bitvals) {
+    // 	uint pos = (cast(uint) i) % WORDSIZE;
+    // 	uint word = (cast(uint) i) / WORDSIZE;
+    // 	if (bits.length == 0 || bits[j] == -1) {
+    // 	  v = v + ((cast(size_t) _esdl__rGen.flip()) << pos);
+    // 	}
+    // 	else if (bits[j] == 1) {
+    // 	  v = v + ((cast(ulong) 1) << pos);
+    // 	}
+    // 	if (pos == WORDSIZE - 1 || i == bitvals.length - 1) {
+    // 	  _solveValue[word] = v;
+    // 	  v = 0;
+    // 	}
+    //   }
+    //   vec.setVal(array(_solveValue[0..NUMWORDS]));
+    //   _solvedDomains ~= vec;
     // }
+    // stage.id(stageIndx);
+
+    // // foreach (vec; stage._domVars) {
+    // //   vec.execCbs();
+    // // }
     
 
-    // save for future reference
-    while (savedStages.length <= stageIndx) {
-      savedStages ~= new CstStage();
-    }
-    assert(savedStages[stageIndx] !is stage);
+    // // save for future reference
+    // while (savedStages.length <= stageIndx) {
+    //   savedStages ~= new CstStage();
+    // }
+    // assert(savedStages[stageIndx] !is stage);
 
-    savedStages[stageIndx].copyFrom(stage);
+    // savedStages[stageIndx].copyFrom(stage);
 
-    stageIndx += 1;
+    // stageIndx += 1;
   }
 
   // list of constraint preds to solve at a given stage
