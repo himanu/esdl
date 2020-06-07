@@ -226,9 +226,9 @@ class CstBddSolver: CstSolver
 
     CstDomain[] doms = group.domains();
 
-    foreach (dom; doms) {
-      _domains ~= _esdl__buddy.createDomVec(dom.bitcount, dom.signed());
-    }
+    // foreach (dom; doms) {
+    //   _domains ~= _esdl__buddy.createDomVec(dom.bitcount, dom.signed());
+    // }
       
     // import std.stdio;
     // writeln("Adding Z3 Domain for @rand ", doms[i].name());

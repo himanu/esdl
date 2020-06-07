@@ -36,6 +36,15 @@ void main()
   	foreach (i, x; a) {
   	  a[i].b == 0;
   	}
+  	foreach (i, x; a) {
+  	  a[i] == 0;
+  	}
+  	foreach (i, x; a) {
+  	  a[i].b == 0;
+  	}
+  	foreach (i, x; a) {
+  	  a[i] == 0;
+  	}
       }, __FILE__, __LINE__));
   
 }
