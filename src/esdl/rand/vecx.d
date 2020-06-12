@@ -141,6 +141,10 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	  }
 	  else if ((! this.isRand) ||
 		   this.isRand && stage().isSolved()) { // work with the value
+	    if (_valvec.isNull()) {
+	      _valvec.buildVec(buddy, this.evaluate());
+	      assert(_valvec._buddy !is null);
+	    }
 	    return _valvec;
 	  }
 	  else {
@@ -148,6 +152,10 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	  }
 	}
 	else {
+	  if (_valvec.isNull()) {
+	    _valvec.buildVec(buddy, this.evaluate());
+	    assert(_valvec._buddy !is null);
+	  }
 	  return _valvec;
 	}
       }
@@ -330,6 +338,10 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	  }
 	  else if ((! this.isRand) ||
 		   this.isRand && stage().isSolved()) { // work with the value
+	    if (_valvec.isNull()) {
+	      _valvec.buildVec(buddy, this.evaluate());
+	      assert(_valvec._buddy !is null);
+	    }
 	    return _valvec;
 	  }
 	  else {
@@ -337,6 +349,10 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	  }
 	}
 	else {
+	  if (_valvec.isNull()) {
+	    _valvec.buildVec(buddy, this.evaluate());
+	    assert(_valvec._buddy !is null);
+	  }
 	  return _valvec;
 	}
       }

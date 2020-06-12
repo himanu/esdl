@@ -119,7 +119,7 @@ void main()
 {
   auto foo = new Bar;
   foo.seedRandom(100);
-  for (size_t i=0; i!=40; ++i)
+  for (size_t i=0; i!=4; ++i)
     {
       foo.randomize();
       foo.display();
