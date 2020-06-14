@@ -60,11 +60,11 @@ class CstBddSolver: CstSolver
     return _esdl__buddy;
   }
 
-  Array!BddTerm _evalStack;
+  BddTerm[] _evalStack;
 
   // Array!uint _domains;		// indexes of domains
-  Array!CstDomain _cstRnds;
-  Array!CstDomain _cstVars;
+  CstDomain[] _cstRnds;
+  CstDomain[] _cstVars;
 
   // Array!CstValue  _cstVals;
 
