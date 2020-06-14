@@ -1,7 +1,6 @@
 module esdl.solver.base;
 import esdl.rand.base;
 import esdl.rand.expr;
-import esdl.solver.obdd: BddVec;
 import esdl.rand.misc;
 
 abstract class CstSolver

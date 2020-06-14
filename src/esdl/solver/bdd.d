@@ -139,7 +139,7 @@ struct BvVar
 
   BddVec getValExpr() {
     size_t size = _dom.length;
-    return getBuddy().buildVec(size, _val, _dom.signed());
+    return _dom._buddy.buildVec(size, _val, _dom.signed());
   }
 
   BDD getRule() {

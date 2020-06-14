@@ -211,10 +211,8 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     return _name;
   }
 
-  static if (HAS_RAND_ATTRIB) {
-    // uint         _domIndex = uint.max;
-    // CstStage     _stage = null;
-  }
+  uint         _domIndex = uint.max;
+  CstStage     _stage = null;
 
   uint         _resolveLap = 0;
   
@@ -429,16 +427,19 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   override ref BddVec bddvec(Buddy buddy) {
-    assert(false);
-    // static if (HAS_RAND_ATTRIB) {
-    //   // assert(_domIndex != uint.max,
-    //   // 	     "BDD Domain not yet created for: " ~ name());
-    //   return buddy.getVec(_domIndex);
-    //   // return _domvec;
-    // }
-    // else {
-    //   return _valvec;
-    // }
+    static if (HAS_RAND_ATTRIB) {
+      assert(_domIndex != uint.max,
+	     "BDD Domain not yet created for: " ~ name());
+      return buddy.getVec(_domIndex);
+      // return _domvec;
+    }
+    else {
+      if (_valvec.isNull()) {
+	_valvec.buildVec(buddy, this.evaluate());
+	assert(_valvec._buddy !is null);
+      }
+      return _valvec;
+    }
   }
 
   // void bddvec(BddVec b) {
@@ -1112,6 +1113,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
       }
       else if ((! this.isRand) ||
 	       this.isRand && stage().isSolved()) { // work with the value
+	if (_valvec.isNull()) {
+	  _valvec.buildVec(buddy, _val);
+	  assert(_valvec._buddy !is null);
+	}
 	return _valvec;
       }
       else {
@@ -1120,6 +1125,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
       // }
     }
     else {
+      if (_valvec.isNull()) {
+	_valvec.buildVec(buddy, _val);
+	assert(_valvec._buddy !is null);
+      }
       return _valvec;
     }
   }
@@ -1458,6 +1467,10 @@ class CstVecValue(T = int): CstValue
   }
 
   BddVec getBDD(CstStage stage, Buddy buddy) {
+    if (_valvec.isNull()) {
+      _valvec.buildVec(buddy, _val);
+      assert(_valvec._buddy !is null);
+    }
     return _valvec;
   }
 
