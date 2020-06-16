@@ -85,10 +85,6 @@ abstract class _esdl__Proxy
   //    vec/vec-array for the indicated randomization cycle
   uint _cycle;
 
-  Buddy getBuddy() {
-    return CstBddSolver.buddy;
-  }
-
   void updateValDomains() {
     foreach (dom; _cstValDomains) {
       dom.updateVal();
@@ -731,7 +727,7 @@ class CstPredGroup			// group of related predicates
       else {
 	// import std.stdio;
 	// writeln(sig);
-	_solver = new CstZ3Solver(sig, this);
+	_solver = new CstBddSolver(sig, this);
 	_proxy._solvers[sig] = _solver;
       }
       foreach (var; _vars) {

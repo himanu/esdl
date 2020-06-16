@@ -635,7 +635,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 	  newVal != _shadowValue) {
 	_shadowValue = newVal;
 	_valueChanged = true;
-	_valvec.buildVec(CstBddSolver.buddy(), _shadowValue);
+	// _valvec.buildVec(CstBddSolver.buddy(), _shadowValue);
 	return true;
       }
       else {

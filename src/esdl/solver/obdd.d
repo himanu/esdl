@@ -453,9 +453,8 @@ struct BddVec
 
   Buddy _buddy;
   
-  protected this(Buddy buddy, size_t bitnum, bool signed = false)
+  this(size_t bitnum, bool signed = false)
   {
-    _buddy = buddy;
     _signed = signed;
     _bitvec.length = bitnum;
   }
@@ -470,12 +469,23 @@ struct BddVec
       _buddy.addRef(b);
     }
   }
+
+  ref BddVec opAssign(ref BddVec other) {
+    _buddy = other._buddy;
+    _signed = other._signed;
+    foreach (b; _bitvec) _buddy.delRef(b);
+    _bitvec = other._bitvec;
+    foreach (b; _bitvec) _buddy.addRef(b);
+    return this;
+  }
   
   ~this() {
-    foreach (b; _bitvec) {
-      // import std.stdio;
-      // writeln("bitvec delRef: ", b);
-      _buddy.delRef(b);
+    if (_buddy !is null) {
+      foreach (b; _bitvec) {
+	// import std.stdio;
+	// writeln("bitvec delRef: ", b);
+	_buddy.delRef(b);
+      }
     }
   }
 
@@ -489,7 +499,6 @@ struct BddVec
   {
     import std.traits;
     _buddy = buddy;
-    
     static if(isBitVector!T) {
       _bitvec.length = T.SIZE;
       _signed = T.ISSIGNED;
@@ -531,6 +540,7 @@ struct BddVec
   }
 
   void initialize(T)(Buddy buddy, T val) if (isBitVector!T) {
+    _buddy = buddy;
     for (size_t i=0; i!=length; ++i) {
       if(val[i]) {
 	_bitvec[i] = one(buddy);
@@ -542,6 +552,7 @@ struct BddVec
   }
   
   void initialize(Buddy buddy, bool isTrue) {
+    _buddy = buddy;
     for (size_t i=0; i!=length; ++i) {
       if(isTrue) _bitvec[i] = one(buddy);
       else _bitvec[i] = zero(buddy);
@@ -550,6 +561,7 @@ struct BddVec
 
 
   void initialize(Buddy buddy, int val) {
+    _buddy = buddy;
     for (size_t i=0; i!=length; ++i) {
       if((val & 0x1) != 0) _bitvec[i] = one(buddy);
       else _bitvec[i] = zero(buddy);
@@ -558,6 +570,7 @@ struct BddVec
   }
   
   void initialize(Buddy buddy, long val) {
+    _buddy = buddy;
     for (size_t i=0; i!=length; ++i) {
       if ((val & 0x1) != 0) _bitvec[i] = one(buddy);
       else _bitvec[i] = zero(buddy);
@@ -599,8 +612,8 @@ struct BddVec
   }
 
   BddVec copy() {
-    BddVec dst = BddVec(_buddy, size, false);
-    dst._signed = this._signed;
+    BddVec dst = BddVec(size, this._signed);
+    dst._buddy = this._buddy;
     // dst[0..$] = this[0..$];
     for (int n = 0; n < size; n++) {
       dst[n] = this[n]; // .dup;
@@ -747,7 +760,8 @@ struct BddVec
     if(signed) return copy();
     else
       {
-	BddVec dst = BddVec(_buddy, size+1, true);
+	BddVec dst = BddVec(size+1, true);
+	dst._buddy = this._buddy;
 	// dst[0..$-1] = this[0..$];
 	for(int n = 0; n < size; n++) {
 	  dst[n] = this[n]; // .dup;
@@ -759,7 +773,8 @@ struct BddVec
 
   BddVec coerce(size_t bitnum)
   {
-    BddVec dst = BddVec(_buddy, bitnum, this._signed);
+    BddVec dst = BddVec(bitnum, this._signed);
+    dst._buddy = this._buddy;
     ulong minnum = min(bitnum, size);
     uint n;
     for(n = 0; n < minnum; n++)
@@ -823,7 +838,8 @@ struct BddVec
     // 	// throw new BddException();
     // 	bdd_error(BddError.BVEC_SIZE);
 
-    BddVec res = BddVec(_buddy, maxsize, _signed);
+    BddVec res = BddVec(maxsize, _signed);
+    res._buddy = this._buddy;
     for(size_t n=0 ; n < minsize ; n++)
       res[n] = this[n].apply(that[n], op);
 
@@ -838,7 +854,8 @@ struct BddVec
 
   BddVec opUnary(string op)() if (op == "~")
   {
-    BddVec res = BddVec(_buddy, size, false);
+    BddVec res = BddVec( size, false);
+    res._buddy = this._buddy;
     for(int n=0 ; n < size ; n++)
       res[n] = this[n].not();
     return res;
@@ -846,7 +863,8 @@ struct BddVec
 
   BddVec opUnary(string op)() if (op == "-")
   {
-    BddVec lhs = BddVec(_buddy, size, false);
+    BddVec lhs = BddVec(size, this._signed);
+    lhs._buddy = this._buddy;
     return lhs.sub(this);
   }
 
@@ -864,8 +882,8 @@ struct BddVec
     size_t maxsize = max(a.size, b.size);
 
     BDD c = zero();
-    BddVec res = BddVec(_buddy, maxsize+1, false);
-    res._signed = true;
+    BddVec res = BddVec(maxsize+1, this._signed && that._signed);
+    res._buddy = this._buddy;
 
     for(size_t n = 0; n < minsize; n++)
       {
@@ -959,7 +977,8 @@ struct BddVec
   {
 
     BDD c = zero();
-    BddVec res = BddVec(_buddy, size, false);
+    BddVec res = BddVec(size, this._signed && that._signed);
+    res._buddy = this._buddy;
 
    if (size != that.size)
    {
@@ -990,7 +1009,8 @@ struct BddVec
     size_t maxsize = max(size, that.size);
 
     BDD c = zero();
-    BddVec res = BddVec(_buddy, maxsize+1, false);
+    BddVec res = BddVec(maxsize+1, this._signed && that._signed);
+    res._buddy = this._buddy;
 
     for(int n = 0; n < minsize; n++)
       {
@@ -1058,7 +1078,8 @@ struct BddVec
     BddVec result;
     if(c & 0x1)
       {
-	result = this.add(rest);
+	BddVec r = this.add(rest);
+	result = r;
       } else {
       result = rest;
     }
@@ -1133,10 +1154,9 @@ struct BddVec
 	BddVec tmp = _buddy.buildVec(size, false);
 	BddVec tmpremainder = tmp.shl(1, this[size-1]);
 	BddVec result = this.shl(1, zero());
-	BddVec remainder;
 
 	div_rec(divisor, tmpremainder, result, divisor.size);
-	remainder = tmpremainder.shr(1, zero());
+	BddVec remainder = tmpremainder.shr(1, zero());
 
 	res = result;
 	rem = remainder;
@@ -1149,29 +1169,29 @@ struct BddVec
   }
 
   BddVec rem(BddVec rhs) {
-    BddVec result = BddVec(_buddy, size, _signed);
-    BddVec remainder = BddVec(_buddy, size, _signed);
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
     div(rhs, result, remainder);
     return remainder;
   }
 
   BddVec rem(ulong rhs) {
-    BddVec result = BddVec(_buddy, size, _signed);
-    BddVec remainder = BddVec(_buddy, size, _signed);
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
     div(rhs, result, remainder);
     return remainder;
   }
 
   BddVec div(BddVec rhs) {
-    BddVec result = BddVec(_buddy, size, _signed);
-    BddVec remainder = BddVec(_buddy, size, _signed);
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
     div(rhs, result, remainder);
     return result;
   }
 
   BddVec div(ulong rhs) {
-    BddVec result = BddVec(_buddy, size, _signed);
-    BddVec remainder = BddVec(_buddy, size, _signed);
+    BddVec result = BddVec(size, _signed);
+    BddVec remainder = BddVec(size, _signed);
     div(rhs, result, remainder);
     return result;
   }
@@ -1213,7 +1233,8 @@ struct BddVec
 
 
     result = res;
-    remainder = rem.coerce(rhs.size);
+    auto r = rem.coerce(rhs.size);
+    remainder = r;
     return 0;
   }
 
@@ -1260,9 +1281,9 @@ struct BddVec
 
     BddVec res = _buddy.buildVec(this.size, false);
 
-    for(size_t n = 0 ; n <= this.size ; ++n)
+    for(uint n = 0 ; n <= this.size ; ++n)
       {
-	val = _buddy.buildVec(r.size, n);
+	val.buildVec(_buddy, r.size, n, false);
 	rEquN = r.equ(val);
 
 	for(size_t m = 0 ; m < this.size ; ++m)
@@ -1281,7 +1302,7 @@ struct BddVec
       }
 
     /* At last make sure 'c' is shiftet in for r-values > l-size */
-    val = _buddy.buildVec(r.size, this.size);
+    val.buildVec(_buddy, r.size, cast(uint) this.size, false);
     rEquN = r.gth(val);
     tmp1 = rEquN.and(c);
 
@@ -1320,9 +1341,9 @@ struct BddVec
 
     BddVec res = _buddy.buildVec(this.size, false);
 
-    for(size_t n = 0 ; n <= this.size ; ++n)
+    for(uint n = 0 ; n <= this.size ; ++n)
       {
-	val = _buddy.buildVec(r.size, n);
+	val.buildVec(_buddy, r.size, n, false);
 	rEquN = r.equ(val);
 
 	for(size_t m = 0 ; m < this.size ; m++)
@@ -1339,7 +1360,7 @@ struct BddVec
       }
 
     /* At last make sure 'c' is shiftet in for r-values > l-size */
-    val = _buddy.buildVec(r.size, this.size);
+    val.buildVec(_buddy, r.size, cast(uint) this.size, false);
     rEquN = r.gth(val);
     tmp1 = rEquN.and(c);
 
@@ -1509,10 +1530,9 @@ struct BddVec
     BddVec tmpremainder = tmp.shl(1, this[size-1]);
     BddVec result = this.shl(1, zero());
 
-    BddVec remainder;
 
     div_rec(divisor, tmpremainder, result, cast(int) divisor.size);
-    remainder = tmpremainder.shr(1, zero());
+    BddVec remainder = tmpremainder.shr(1, zero());
 
     if(which)
       {
@@ -9601,19 +9621,19 @@ class Buddy
 
   BddVec createVec(size_t a, bool signed = false)
   {
-    return BddVec(this, a, signed);
+    return BddVec(a, signed);
   }
 
   BddVec buildVec(size_t bitnum, bool b, bool signed = false)
   {
-    BddVec v = BddVec(this, bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(this, b);
     return v;
   }
 
   BddVec buildVec(size_t bitnum, long val, bool signed = false)
   {
-    BddVec v = BddVec(this, bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(this, val);
     return v;
   }
@@ -9662,14 +9682,14 @@ class Buddy
 
   BddVec buildVec(size_t bitnum, int offset, int step, bool signed = false)
   {
-    BddVec v = BddVec(this, bitnum, signed);
+    BddVec v = BddVec(bitnum, signed);
     v.initialize(this, offset, step);
     return v;
   }
 
   BddVec buildVec(BddDomain d, bool signed = false)
   {
-    BddVec v = BddVec(this, d.varNum(), signed);
+    BddVec v = BddVec(d.varNum(), signed);
     v.initialize(d);
     assert (v._buddy !is null);
     return v;
@@ -9677,7 +9697,7 @@ class Buddy
 
   BddVec buildVec(int[] var, bool signed = false)
   {
-    BddVec v = BddVec(this, var.length, signed);
+    BddVec v = BddVec(var.length, signed);
     v.initialize(this, var);
     return v;
   }

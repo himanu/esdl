@@ -374,8 +374,6 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
     t._esdl__proxyInst._esdl__cstWithChanged = false;
   }
 
-  useBuddy(CstBddSolver.buddy);
-
   static if(__traits(compiles, t.preRandomize())) {
     t.preRandomize();
   }
@@ -489,10 +487,6 @@ mixin template Randomization()
     }
     void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
-    }
-    void useThisBuddy() {
-      import esdl.solver.obdd;
-      useBuddy(CstBddSolver.buddy);
     }
     void seedRandom(int seed) {
       if (_esdl__proxyInst is null) {

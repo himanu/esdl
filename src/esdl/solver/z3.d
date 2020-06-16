@@ -224,7 +224,7 @@ class CstZ3Solver: CstSolver
       // import std.stdio;
       // writeln("Working on: ", pred.name());
       if (pred.group() !is group) {
-	assert (false, " Group Violation " ~ pred.name());
+	assert (false, "Group Violation " ~ pred.name());
       }
       pred.visit(this);
       assert(_evalStack.length == 1);
