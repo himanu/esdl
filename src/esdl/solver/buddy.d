@@ -574,28 +574,28 @@ class CstBuddySolver: CstSolver
       break;
     }
   }
-  override void processEvalStack(CstLogicalOp op) {
-    // writeln("eval: CstLogicalOp ", op);
+  override void processEvalStack(CstLogicOp op) {
+    // writeln("eval: CstLogicOp ", op);
     final switch (op) {
-    case CstLogicalOp.LOGICAND:
+    case CstLogicOp.LOGICAND:
       BDD e = _evalStack[$-2].toBool() & _evalStack[$-1].toBool();
       popEvalStack(2);
       // _evalStack.length = _evalStack.length - 2;
       pushToEvalStack(e);
       break;
-    case CstLogicalOp.LOGICOR:
+    case CstLogicOp.LOGICOR:
       BDD e = _evalStack[$-2].toBool() | _evalStack[$-1].toBool();
       popEvalStack(2);
       // _evalStack.length = _evalStack.length - 2;
       pushToEvalStack(e);
       break;
-    case CstLogicalOp.LOGICIMP:
+    case CstLogicOp.LOGICIMP:
       BDD e = _evalStack[$-2].toBool() >> _evalStack[$-1].toBool();
       popEvalStack(2);
       // _evalStack.length = _evalStack.length - 2;
       pushToEvalStack(e);
       break;
-    case CstLogicalOp.LOGICNOT:
+    case CstLogicOp.LOGICNOT:
       BDD e = ~ _evalStack[$-1].toBool();
       popEvalStack(1);
       // _evalStack.length = _evalStack.length - 1;

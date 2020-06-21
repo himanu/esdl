@@ -24,6 +24,6 @@ abstract class CstSolver
   abstract void processEvalStack(CstUnaryOp op);
   abstract void processEvalStack(CstBinaryOp op);
   abstract void processEvalStack(CstCompareOp op);
-  abstract void processEvalStack(CstLogicalOp op);
+  abstract void processEvalStack(CstLogicOp op);
   abstract void processEvalStack(CstSliceOp op);
 }

@@ -7,7 +7,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
-  CstIterator, DomType, CstStage, CstDomain,
+  CstIterator, DomType, CstDomain,
   CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__ProxyRoot;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
@@ -402,11 +402,6 @@ mixin template CstObjArrMixin()
     else {
       assert (false);
     }
-  }
-
-  void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
-    // assert (stage is s);
-    _esdl__doRandomize(randGen);    
   }
 
   EV _esdl__elems() {

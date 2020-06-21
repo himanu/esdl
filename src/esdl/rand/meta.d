@@ -8,8 +8,6 @@
 
 module esdl.rand.meta;
 
-import esdl.solver.obdd;
-
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
   isDynamicArray, isSomeChar, PointerTarget;
 import esdl.data.bvec: isBitVector;
@@ -592,9 +590,6 @@ mixin template _esdl__ProxyMixin()
     this(_esdl__ProxyRoot eng, string name) {
       super(eng, name);
     }
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    // CstBlock _esdl__cst_block;
     debug(CSTPARSER) {
       pragma(msg, "// constraintXlate! STARTS\n");
       pragma(msg, constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
@@ -631,9 +626,6 @@ mixin template _esdl__ProxyMixin()
       return _withArgs[VAR];
     }
 
-    // This mixin writes out the bdd functions after parsing the
-    // constraint string at compile time
-    // CstBlock _esdl__cst_block;
     mixin(constraintXlate("this.outer", _esdl__CstString, FILE, LINE));
     debug(CSTPARSER) {
       pragma(msg, "// randomizeWith! STARTS\n");

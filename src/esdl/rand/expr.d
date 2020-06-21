@@ -3,10 +3,9 @@ module esdl.rand.expr;
 import esdl.rand.intr;
 
 import esdl.solver.base: CstSolver;
-import esdl.solver.obdd;
 
 import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst;
-import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicalOp,
+import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp,
   CstUnaryOp, CstSliceOp, writeHexString;
 
 import esdl.rand.base;
@@ -150,48 +149,17 @@ interface CstVecTerm: CstVecExpr
       }
 
   final CstVecSliceExpr opSlice(CstVecTerm lhs, CstVecTerm rhs) {
-    // assert(false, "Index operation defined only for Arrays");
     return new CstVecSliceExpr(this, lhs, rhs);
   }
 
-  // CstVecTerm opSlice(P)(P p)
-  //   if(isIntegral!P || isBitVector!P) {
-  //     return new CstVecSliceExpr(this, new CstVecValue!P(p)); // CstVecValue!P.allocate(p));
-  //   }
-
-  // final CstVecTerm opSlice(CstVecExpr lhs, CstVecExpr rhs) {
-  //   return new CstVecSliceExpr(this, lhs, rhs);
-  // }
-
-  // CstVecTerm opSlice(P, Q)(P p, Q q)
-  //   if((isIntegral!P || isBitVector!P) && (isIntegral!Q || isBitVector!Q)) {
-  //     return new CstVecSliceExpr(this, new CstVecValue!P(p), // CstVecValue!P.allocate(p),
-  // 				 new CstVecValue!Q(q)); // CstVecValue!Q.allocate(q));
-  //   }
-
-  CstNotBddExpr opUnary(string op)() if(op == "*") {
-    // static if(op == "*") {	// "!" in cstx is translated as "*"
-    return new CstNotBddExpr(this.toBoolExpr());
-    // }
-    // else {
-    //   static assert(false);
-    // }
+  CstNotLogicExpr opUnary(string op)() if(op == "*") {
+    return new CstNotLogicExpr(this.toBoolExpr());
   }
   CstNotVecExpr opUnary(string op)() if(op == "~") {
-    // static if(op == "*") {	// "!" in cstx is translated as "*"
     return new CstNotVecExpr(this);
-    // }
-    // else {
-    //   static assert(false);
-    // }
   }
   CstNegVecExpr opUnary(string op)() if(op == "-") {
-    // static if(op == "*") {	// "!" in cstx is translated as "*"
     return new CstNegVecExpr(this);
-    // }
-    // else {
-    //   static assert(false);
-    // }
   }
 }
 
@@ -199,7 +167,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 {
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
 
-  BddVec _valvec;
   _esdl__Proxy _root;
 
   Unconst!T _shadowValue;
@@ -211,8 +178,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   uint         _domIndex = uint.max;
-  CstStage     _stage = null;
-
   uint         _resolveLap = 0;
   
   override void annotate(CstPredGroup group) {
@@ -273,10 +238,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   ~this() {
-    // static if (HAS_RAND_ATTRIB && is(T == enum)) {
-    //   _primBdd.reset();
-    // }
-    _valvec.free();
   }    
 
   long evaluate() {
@@ -311,25 +272,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 
   // override string toString() {
   //   return this.to!string();
-  // }
-
-  // implementation of CstVecDomain API
-  // static if (HAS_RAND_ATTRIB && is(T == enum)) {
-  //   // BDD _primBdd;
-  //   // override BDD getPrimBdd(Buddy buddy) {
-  //   //   import std.traits;
-  //   //   if (_primBdd.isZero()) {
-  //   // 	foreach(e; EnumMembers!T) {
-  //   // 	  _primBdd = _primBdd | this.bddvec(buddy).equ(buddy.buildVec(e));
-  //   // 	}
-  //   //   }
-  //   //   return _primBdd;
-  //   // }
-  // }
-  // else {
-  //   override BDD getPrimBdd(Buddy buddy) {
-  //     return buddy.one();
-  //   }
   // }
 
   override uint bitcount() {
@@ -425,75 +367,11 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
-  override ref BddVec bddvec(Buddy buddy) {
-    static if (HAS_RAND_ATTRIB) {
-      assert(_domIndex != uint.max,
-	     "BDD Domain not yet created for: " ~ name());
-      return buddy.getVec(_domIndex);
-      // return _domvec;
-    }
-    else {
-      if (_valvec.isNull()) {
-	_valvec.buildVec(buddy, this.evaluate());
-	assert(_valvec._buddy !is null);
-      }
-      return _valvec;
-    }
-  }
-
-  // void bddvec(BddVec b) {
-  //   static if (HAS_RAND_ATTRIB) {
-  //     _domvec = b;
-  //   }
-  //   else {
-  //     assert(false);
-  //   }
-  // }
-
-  // override uint domIndex() {
-  //   // // static if (HAS_RAND_ATTRIB) {
-  //   // //   return _domIndex;
-  //   // // }
-  //   // // else {
-  //   assert(false);
-  //   //   // }
-  // }
-
-  // override void domIndex(uint s) {
-  //   // static if (HAS_RAND_ATTRIB) {
-  //   //   _domIndex = s;
-  //   // }
-  //   // else {
-  //   assert(false);
-  //   // }
-  // }
-
   override void reset() {
     _state = State.INIT;
-    // _stage = null;
     _resolveLap = 0;
   }
   
-  override CstStage stage() {
-    assert (false);
-    // static if (HAS_RAND_ATTRIB) {
-    //   return _stage;
-    // }
-    // else {
-    //   assert(false);
-    // }
-  }
-
-  override void stage(CstStage s) {
-    assert (false);
-    // static if (HAS_RAND_ATTRIB) {
-    //   _stage = s;
-    // }
-    // else {
-    //   assert(false);
-    // }
-  }
-
   uint resolveLap() {
     if (isSolved()) return 0;
     else return _resolveLap;
@@ -607,16 +485,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
-  override void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
-    static if (HAS_RAND_ATTRIB) {
-      assert(stage is s);
-      _esdl__doRandomize(randGen);
-    }
-    else {
-      assert(false);
-    }
-  }
-
   bool _valueChanged = true;
 
   override bool hasChanged() {
@@ -630,11 +498,9 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     if (! this.isSolved()) {
       newVal = *(getRef());
       this.markSolved();
-      if (_valvec.isNull ||
-	  newVal != _shadowValue) {
+      if (newVal != _shadowValue) {
 	_shadowValue = newVal;
 	_valueChanged = true;
-	// _valvec.buildVec(CstBddSolver.buddy(), _shadowValue);
 	return true;
       }
       else {
@@ -863,51 +729,51 @@ interface CstLogicTerm: CstLogicExpr
   CstLogicTerm opBinary(string op)(CstLogicTerm other)
   {
     static if(op == "&") {
-      return new CstLogic2LogicExpr(this, other, CstLogicalOp.LOGICAND);
+      return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICAND);
     }
     static if(op == "|") {
-      return new CstLogic2LogicExpr(this, other, CstLogicalOp.LOGICOR);
+      return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICOR);
     }
     static if(op == ">>") {
-      return new CstLogic2LogicExpr(this, other, CstLogicalOp.LOGICIMP);
+      return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICIMP);
     }
   }
 
   CstLogicTerm opUnary(string op)()
   {
     static if(op == "*") {	// "!" in cstx is translated as "*"
-      return new CstNotBddExpr(this);
+      return new CstNotLogicExpr(this);
     }
   }
 
   final CstLogicTerm implies(CstLogicTerm other)
   {
-    return new CstLogic2LogicExpr(this, other, CstLogicalOp.LOGICIMP);
+    return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICIMP);
   }
 
   final CstLogicTerm implies(CstVecTerm other)
   {
-    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicalOp.LOGICIMP);
+    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicOp.LOGICIMP);
   }
 
   final CstLogicTerm logicOr(CstLogicTerm other)
   {
-    return new CstLogic2LogicExpr(this, other, CstLogicalOp.LOGICOR);
+    return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICOR);
   }
 
   final CstLogicTerm logicOr(CstVecTerm other)
   {
-    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicalOp.LOGICOR);
+    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicOp.LOGICOR);
   }
 
   final CstLogicTerm logicAnd(CstLogicTerm other)
   {
-    return new CstLogic2LogicExpr(this, other, CstLogicalOp.LOGICAND);
+    return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICAND);
   }
 
   final CstLogicTerm logicAnd(CstVecTerm other)
   {
-    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicalOp.LOGICAND);
+    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicOp.LOGICAND);
   }
 
 }
@@ -993,17 +859,8 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
     return false;		// only CstVecOrderingExpr return true
   }
 
-  // get the list of stages this expression should be avaluated in
-  // override CstStage[] getStages() {
-  //   return arrVar.arrLen.getStages();
-  // }
-
   override void visit(CstSolver solver) {
     assert (false, "Can not visit an Iter Variable without unrolling");
-  }
-
-  override BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert (false, "Can not getBDD for a Iter Variable without unrolling");
   }
 
   // override bool getVal(ref long val) {
@@ -1053,9 +910,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   enum HAS_RAND_ATTRIB = RV.RAND.isRand();
 
-  // This bdd has the constraint on the max length of the array
-  // BDD _primBdd;
-  
   CstVecIterator!RV _iterVar;
 
   RV _parent;
@@ -1074,16 +928,9 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     _name = name;
     _parent = parent;
     _iterVar = new CstVecIterator!RV(_parent);
-    // if (_parent.isStatic()) {
-    //   // _parent.getProxyRoot().addDomain(this, HAS_RAND_ATTRIB);
-    // }
   }
 
-  ~this() {
-    // _domvec.reset();
-    _valvec.free();
-    // _primBdd.reset();
-  }
+  ~this() { }
 
   override _esdl__Proxy getProxyRoot() {
     return _parent.getProxyRoot();
@@ -1094,76 +941,15 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   void visit(CstSolver solver) {
-    assert (stage() !is null, "stage null for: " ~ name());
     solver.pushToEvalStack(this);
   }
 
-  BddVec getBDD(CstStage s, Buddy buddy) {
-    static if (HAS_RAND_ATTRIB) {
-      // auto fparent = _parent.flatten();
-      // if (fparent !is _parent) {
-      // 	return _parent.flatten().arrLen.getBDD(s, buddy);
-      // }
-      // else {
-      assert (stage() !is null, "stage null for: " ~ name());
-      if (this.isRand && stage() is s) {
-	return bddvec(buddy);
-	// return _domvec;
-      }
-      else if ((! this.isRand) ||
-	       this.isRand && stage().isSolved()) { // work with the value
-	if (_valvec.isNull()) {
-	  _valvec.buildVec(buddy, _val);
-	  assert(_valvec._buddy !is null);
-	}
-	return _valvec;
-      }
-      else {
-	assert (false, "Constraint evaluation in wrong stage");
-      }
-      // }
-    }
-    else {
-      if (_valvec.isNull()) {
-	_valvec.buildVec(buddy, _val);
-	assert(_valvec._buddy !is null);
-      }
-      return _valvec;
-    }
-  }
-
-  // bool getVal(ref long val) {
-  //   static if (HAS_RAND_ATTRIB) {
-  //     assert(stage() !is null);
-  //     if(! this.isRand || stage().isSolved()) {
-  // 	val = value();
-  // 	return true;
-  //     }
-  //     else {
-  // 	return false;
-  //     }
-  //   }
-  //   else {
-  //     val = value();
-  //     return true;
-  //   }
-  // }
-
-  // bool isResolved() {
-  //   return stage().isSolved();
-  // }
-  
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
     // this function will only be called when array lenght is
     // unconstrainted
     markSolved();
     _parent.buildElements(_parent.getLen());
     execCbs();
-  }
-  
-  override void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
-    assert (s is stage);
-    _esdl__doRandomize(randGen);
   }
   
   override bool isRand() {
@@ -1192,13 +978,6 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return this.to!string();
   }
 
-  // final override BDD getPrimBdd(Buddy buddy) {
-  //   if (_primBdd.isZero()) {
-  //     _primBdd = this.bddvec(buddy).lte(buddy.buildVec(_parent.maxArrLen));
-  //   }
-  //   return _primBdd;
-  // }
-  
   void iterVar(CstVecIterator!RV var) {
     _iterVar = var;
   }
@@ -1322,11 +1101,9 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     if (! this.isSolved()) {
       newVal = cast(uint)_parent.getLen();
       this.markSolved();
-      if (_valvec.isNull ||
-	  newVal != _shadowValue) {
+      if (newVal != _shadowValue) {
 	_shadowValue = cast(uint) newVal;
 	_valueChanged = true;
-	_valvec.buildVec(CstBddSolver.buddy, _shadowValue);
 	return true;
       }
       else {
@@ -1392,39 +1169,6 @@ class CstVecValue(T = int): CstValue
     return _val;
   }
 
-  // static class Allocator: CstValueAllocator {
-  //   CstVecValue!T[] container;
-  //   uint _index = 0;
-
-  //   uint _mark;
-
-  //   override void markIndex() {
-  //     _mark = _index;
-  //   }
-
-  //   override void resetIndex() {
-  //     for (uint i = _mark; i != _index; ++i) {
-  // 	container[i]._valvec.reset();
-  //     }
-  //     _index = _mark;
-      
-  //   }
-
-
-  //   CstVecValue!T allocate(T val) {
-  //     // return new CstVecValue!T(val);
-  //     if (_index >= container.length) {
-  //   	container.length += 1;
-  //   	container[$-1] = new CstVecValue!T(val);
-  //     }
-      
-  //     auto cstVal = container[_index];
-  //     cstVal._val = val;
-  //     _index++;
-  //     return cstVal;
-  //   }
-  // }
-
   import std.conv;
 
   // static Allocator _allocator;
@@ -1435,7 +1179,6 @@ class CstVecValue(T = int): CstValue
   // }
 
   T _val;			// the value of the constant
-  BddVec _valvec;
 
   string describe() {
     return _val.to!string();
@@ -1458,19 +1201,10 @@ class CstVecValue(T = int): CstValue
   }
 
   ~this() {
-    _valvec.free();
   }
 
   void visit(CstSolver solver) {
     solver.pushToEvalStack(this);
-  }
-
-  BddVec getBDD(CstStage stage, Buddy buddy) {
-    if (_valvec.isNull()) {
-      _valvec.buildVec(buddy, _val);
-      assert(_valvec._buddy !is null);
-    }
-    return _valvec;
   }
 
   const(T)* getRef() {
@@ -1509,9 +1243,6 @@ class CstVecValue(T = int): CstValue
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     vals ~= this;
-    // if (_valvec.isNull()) {
-    //   _valvec.buildVec(pred.getProxy().getBuddy(), _val);
-    // }
   }
 
   bool getIntRange(ref IntR rng) {
@@ -1593,49 +1324,6 @@ class CstVec2VecExpr: CstVecTerm
     _rhs.visit(solver);
     solver.processEvalStack(_op);
   }
-
-  BddVec getBDD(CstStage stage, Buddy buddy) {
-    final switch(_op) {
-    case CstBinaryOp.AND: return _lhs.getBDD(stage, buddy) &
-	_rhs.getBDD(stage, buddy);
-    case CstBinaryOp.OR:  return _lhs.getBDD(stage, buddy) |
-	_rhs.getBDD(stage, buddy);
-    case CstBinaryOp.XOR: return _lhs.getBDD(stage, buddy) ^
-	_rhs.getBDD(stage, buddy);
-    case CstBinaryOp.ADD: return _lhs.getBDD(stage, buddy) +
-	_rhs.getBDD(stage, buddy);
-    case CstBinaryOp.SUB: return _lhs.getBDD(stage, buddy) -
-	_rhs.getBDD(stage, buddy);
-    case CstBinaryOp.MUL:
-      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) *
-			   _rhs.evaluate();
-      if(_lhs.isConst()) return _lhs.evaluate() *
-			   _rhs.getBDD(stage, buddy);
-      return _lhs.getBDD(stage, buddy) * _rhs.getBDD(stage, buddy);
-    case CstBinaryOp.DIV:
-      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) /
-			   _rhs.evaluate();
-      return _lhs.getBDD(stage, buddy) / _rhs.getBDD(stage, buddy);
-    case CstBinaryOp.REM:
-      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) %
-			   _rhs.evaluate();
-      return _lhs.getBDD(stage, buddy) % _rhs.getBDD(stage, buddy);
-    case CstBinaryOp.LSH:
-      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) <<
-			   _rhs.evaluate();
-      return _lhs.getBDD(stage, buddy) << _rhs.getBDD(stage, buddy);
-    case CstBinaryOp.RSH:
-      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) >>
-			   _rhs.evaluate();
-      return _lhs.getBDD(stage, buddy) >> _rhs.getBDD(stage, buddy);
-    case CstBinaryOp.LRSH:
-      if(_rhs.isConst()) return _lhs.getBDD(stage, buddy) >>>
-			   _rhs.evaluate();
-      return _lhs.getBDD(stage, buddy) >>> _rhs.getBDD(stage, buddy);
-    }
-  }
-
-  // bool getVal(ref long val) {
 
   //   long lval;
   //   long rval;
@@ -1881,20 +1569,6 @@ class CstVecSliceExpr: CstVecTerm
     solver.processEvalStack(CstSliceOp.SLICE);
   }
 
-  BddVec getBDD(CstStage stage, Buddy buddy) {
-    assert(false);
-    // auto vec  = _vec.getBDD(stage, buddy);
-    // size_t lvec = cast(size_t) _range._lhs.evaluate();
-    // size_t rvec = lvec;
-    // if(_range._rhs is null) {
-    //   rvec = lvec + 1;
-    // }
-    // else {
-    //   rvec = cast(size_t) _range._rhs.evaluate();
-    // }
-    // return vec[lvec..rvec];
-  }
-
   // bool getVal(ref long val) {
   //   return false;
   // }
@@ -2000,10 +1674,6 @@ class CstNotVecExpr: CstVecTerm
     solver.processEvalStack(CstUnaryOp.NOT);
   }
 
-  BddVec getBDD(CstStage stage, Buddy buddy) {
-    return ~(_expr.getBDD(stage, buddy));
-  }
-
   // bool getVal(ref long val) {
   //   auto retval = _expr.getVal(val);
   //   val = ~val;
@@ -2091,10 +1761,6 @@ class CstNegVecExpr: CstVecTerm
     solver.processEvalStack(CstUnaryOp.NEG);
   }
 
-  BddVec getBDD(CstStage stage, Buddy buddy) {
-    return -(_expr.getBDD(stage, buddy));
-  }
-
   // bool getVal(ref long val) {
   //   auto retval = _expr.getVal(val);
   //   val = -val;
@@ -2174,9 +1840,9 @@ class CstLogic2LogicExpr: CstLogicTerm
 
   CstLogicExpr _lhs;
   CstLogicExpr _rhs;
-  CstLogicalOp _op;
+  CstLogicOp _op;
 
-  this(CstLogicExpr lhs, CstLogicExpr rhs, CstLogicalOp op) {
+  this(CstLogicExpr lhs, CstLogicExpr rhs, CstLogicOp op) {
     _lhs = lhs;
     _rhs = rhs;
     _op = op;
@@ -2190,20 +1856,6 @@ class CstLogic2LogicExpr: CstLogicTerm
     _lhs.visit(solver);
     _rhs.visit(solver);
     solver.processEvalStack(_op);
-  }
-
-  BDD getBDD(CstStage stage, Buddy buddy) {
-    auto lvec = _lhs.getBDD(stage, buddy);
-    auto rvec = _rhs.getBDD(stage, buddy);
-
-    BDD retval;
-    final switch(_op) {
-    case CstLogicalOp.LOGICAND: retval = lvec &  rvec; break;
-    case CstLogicalOp.LOGICOR:  retval = lvec |  rvec; break;
-    case CstLogicalOp.LOGICIMP: retval = lvec >> rvec; break;
-    case CstLogicalOp.LOGICNOT: assert(false);
-    }
-    return retval;
   }
 
   override CstLogic2LogicExpr unroll(CstIterator iter, uint n) {
@@ -2260,10 +1912,10 @@ class CstLogic2LogicExpr: CstLogicTerm
     if (_rhs.getUniRangeSet(rhs) is false) return false;
 
     final switch(_op) {
-    case CstLogicalOp.LOGICAND: lhs &= rhs; break;
-    case CstLogicalOp.LOGICOR:  lhs |= rhs; break;
-    case CstLogicalOp.LOGICIMP: return false;
-    case CstLogicalOp.LOGICNOT: assert(false);
+    case CstLogicOp.LOGICAND: lhs &= rhs; break;
+    case CstLogicOp.LOGICOR:  lhs |= rhs; break;
+    case CstLogicOp.LOGICIMP: return false;
+    case CstLogicOp.LOGICNOT: assert(false);
     }
 
     rs = lhs;
@@ -2281,10 +1933,10 @@ class CstLogic2LogicExpr: CstLogicTerm
     if (_rhs.getIntRangeSet(rhs) is false) return false;
 
     final switch(_op) {
-    case CstLogicalOp.LOGICAND: lhs &= rhs; break;
-    case CstLogicalOp.LOGICOR:  lhs |= rhs; break;
-    case CstLogicalOp.LOGICIMP: return false;
-    case CstLogicalOp.LOGICNOT: assert(false);
+    case CstLogicOp.LOGICAND: lhs &= rhs; break;
+    case CstLogicOp.LOGICOR:  lhs |= rhs; break;
+    case CstLogicOp.LOGICIMP: return false;
+    case CstLogicOp.LOGICNOT: assert(false);
     }
 
     rs = lhs;
@@ -2311,10 +1963,10 @@ class CstLogic2LogicExpr: CstLogicTerm
 }
 
 // TBD
-class CstIteBddExpr: CstLogicTerm
+class CstIteLogicExpr: CstLogicTerm
 {
   string describe() {
-    return "CstIteBddExpr";
+    return "CstIteLogicExpr";
   }
 
   void setDomainContext(CstPredicate pred,
@@ -2364,13 +2016,7 @@ class CstIteBddExpr: CstLogicTerm
     assert(false, "TBD");
   }
 
-  // abstract CstStage[] getStages();
-
   abstract void visit(CstSolver solver) {
-    assert(false, "TBD");
-  }
-
-  abstract BDD getBDD(CstStage stage, Buddy buddy) {
     assert(false, "TBD");
   }
 
@@ -2401,22 +2047,6 @@ class CstVec2LogicExpr: CstLogicTerm
     _lhs.visit(solver);
     _rhs.visit(solver);
     solver.processEvalStack(_op);
-  }
-
-  BDD getBDD(CstStage stage, Buddy buddy) {
-    auto lvec = _lhs.getBDD(stage, buddy);
-    auto rvec = _rhs.getBDD(stage, buddy);
-
-    BDD retval;
-    final switch(_op) {
-    case CstCompareOp.LTH: retval = lvec.lth(rvec); break;
-    case CstCompareOp.LTE: retval = lvec.lte(rvec); break;
-    case CstCompareOp.GTH: retval = lvec.gth(rvec); break;
-    case CstCompareOp.GTE: retval = lvec.gte(rvec); break;
-    case CstCompareOp.EQU: retval = lvec.equ(rvec); break;
-    case CstCompareOp.NEQ: retval = lvec.neq(rvec); break;
-    }
-    return retval;
   }
 
   override CstVec2LogicExpr unroll(CstIterator iter, uint n) {
@@ -2581,7 +2211,7 @@ class CstVec2LogicExpr: CstLogicTerm
 
 }
 
-class CstBddConst: CstLogicTerm
+class CstLogicConst: CstLogicTerm
 {
   immutable bool _expr;
 
@@ -2593,17 +2223,12 @@ class CstBddConst: CstLogicTerm
     solver.pushToEvalStack(_expr);
   }
 
-  BDD getBDD(CstStage stage, Buddy buddy) {
-    if(_expr) return buddy.one();
-    else return buddy.zero();
-  }
-
   string describe() {
     if(_expr) return "TRUE";
     else return "FALSE";
   }
 
-  override CstBddConst unroll(CstIterator iter, uint n) {
+  override CstLogicConst unroll(CstIterator iter, uint n) {
     return this;
   }
 
@@ -2620,7 +2245,7 @@ class CstBddConst: CstLogicTerm
 			ref CstDomain[] idxs,
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
-    // nothing for CstBddConst
+    // nothing for CstLogicConst
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
@@ -2653,7 +2278,7 @@ class CstBddConst: CstLogicTerm
   }
 }
 
-class CstNotBddExpr: CstLogicTerm
+class CstNotLogicExpr: CstLogicTerm
 {
   CstLogicExpr _expr;
 
@@ -2667,16 +2292,11 @@ class CstNotBddExpr: CstLogicTerm
 
   void visit(CstSolver solver) {
     _expr.visit(solver);
-    solver.processEvalStack(CstLogicalOp.LOGICNOT);
+    solver.processEvalStack(CstLogicOp.LOGICNOT);
   }
 
-  BDD getBDD(CstStage stage, Buddy buddy) {
-    auto bdd = _expr.getBDD(stage, buddy);
-    return (~ bdd);
-  }
-
-  override CstNotBddExpr unroll(CstIterator iter, uint n) {
-    return new CstNotBddExpr(_expr.unroll(iter, n));
+  override CstNotLogicExpr unroll(CstIterator iter, uint n) {
+    return new CstNotLogicExpr(_expr.unroll(iter, n));
   }
 
   uint resolveLap() {
@@ -2731,14 +2351,14 @@ class CstNotBddExpr: CstLogicTerm
 
 // CstLogic2LogicExpr logicOr(CstVecExpr other)
 // {
-//   return new CstLogic2LogicExpr(toBoolExpr(this), toBoolExpr(other), CstLogicalOp.LOGICOR);
+//   return new CstLogic2LogicExpr(toBoolExpr(this), toBoolExpr(other), CstLogicOp.LOGICOR);
 // }
 
 auto _esdl__logicOr(P, Q)(P p, Q q) {
   CstLogicTerm _p;
   CstLogicTerm _q;
   static if (is (P == bool)) {
-    _p = new CstBddConst(p);
+    _p = new CstLogicConst(p);
   }
   else static if (is (P: CstVecExpr)) {
     _p = toBoolExpr(p);
@@ -2747,7 +2367,7 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
     _p = p;
   }
   static if(is(Q == bool)) {
-    _q = new CstBddConst(q);
+    _q = new CstLogicConst(q);
   }
   else static if (is (Q: CstVecExpr)) {
     _q = toBoolExpr(q);
@@ -2762,7 +2382,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
   CstLogicTerm _p;
   CstLogicTerm _q;
   static if(is(P == bool)) {
-    _p = new CstBddConst(p);
+    _p = new CstLogicConst(p);
   }
   else static if (is (P: CstVecExpr)) {
     _p = toBoolExpr(p);
@@ -2771,7 +2391,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
     _p = p;
   }
   static if(is(Q == bool)) {
-    _q = new CstBddConst(q);
+    _q = new CstLogicConst(q);
   }
   else static if (is (Q: CstVecExpr)) {
     _q = toBoolExpr(q);
@@ -2792,7 +2412,7 @@ auto _esdl__lth(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstBddConst(p < q);
+    return new CstLogicConst(p < q);
   }
 }
 
@@ -2815,7 +2435,7 @@ auto _esdl__lte(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstBddConst(p <= q);
+    return new CstLogicConst(p <= q);
   }
 }
 
@@ -2838,7 +2458,7 @@ auto _esdl__gth(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstBddConst(p > q);
+    return new CstLogicConst(p > q);
   }
 }
 
@@ -2861,7 +2481,7 @@ auto _esdl__gte(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstBddConst(p >= q);
+    return new CstLogicConst(p >= q);
   }
 }
 
@@ -2884,7 +2504,7 @@ auto _esdl__equ(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstBddConst(p == q);
+    return new CstLogicConst(p == q);
   }
 }
 
@@ -2907,7 +2527,7 @@ auto _esdl__neq(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstBddConst(p != q);
+    return new CstLogicConst(p != q);
   }
 }
 CstVec2LogicExpr _esdl__neq_impl(Q)(CstVecExpr p, Q q)

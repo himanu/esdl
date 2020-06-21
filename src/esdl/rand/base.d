@@ -1,6 +1,5 @@
 module esdl.rand.base;
 
-import esdl.solver.obdd;
 import esdl.solver.base;
 import esdl.solver.buddy: CstBuddySolver;
 import esdl.solver.z3;
@@ -256,77 +255,6 @@ class CstScope {
   }
 }
 
-class CstStage {
-  CstSolver _solver;
-  // List of randomized variables associated with this stage. A
-  // variable can be associated with only one stage
-  CstDomain[] _domVars;
-
-  CstDomain[] _domains;
-  CstValue[]  _values;
-  // The Bdd expressions that apply to this stage
-  CstPredicate[] _predicates;
-  // These are the length variables that this stage will solve
-  
-  BDD _solveBDD;
-
-  double[uint] _bddDist;
-  
-  int _id = -1;
-
-  ~this() {
-    _solveBDD.reset();
-  }
-  
-  void copyFrom(CstStage from) {
-    _domains = from._domains;
-    _domVars = from._domVars;
-    _predicates = from._predicates;
-    _solveBDD = from._solveBDD;
-    _bddDist = from._bddDist;
-  }
-
-  // return true is _predicates match
-  bool compare(CstStage other) {
-    return other._predicates == _predicates;
-  }
-  
-  void id(uint i) {
-    _id = i;
-  }
-
-  uint id() {
-    return _id;
-  }
-
-  bool isSolved() {
-    if(_id != -1) return true;
-    else return false;
-  }
-
-
-}
-
-// abstract class CstValueAllocator {
-//   static CstValueAllocator[] allocators;
-
-//   static void mark() {
-//     foreach (allocator; allocators) {
-//       allocator.markIndex();
-//     }
-//   }
-  
-//   static void reset() {
-//     foreach (allocator; allocators) {
-//       allocator.resetIndex();
-//     }
-//   }
-  
-//   abstract void resetIndex();
-
-//   abstract void markIndex();
-// }
-
 abstract class CstDomain
 {
 
@@ -344,14 +272,10 @@ abstract class CstDomain
   uint         _varN = uint.max;
 
   abstract string name();
-  abstract ref BddVec bddvec(Buddy buddy);
-  // abstract void bddvec(BddVec b);
   // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
   abstract void setVal(ulong v);
   abstract bool solveRange(_esdl__RandGen randGen);
-  abstract CstStage stage();
-  abstract void stage(CstStage s);
   // abstract uint domIndex();
   // abstract void domIndex(uint s);
   abstract bool signed();
@@ -359,9 +283,7 @@ abstract class CstDomain
   abstract uint bitcount();
   abstract void reset();
   abstract _esdl__Proxy getProxyRoot();
-  // abstract BDD getPrimBdd(Buddy buddy);
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
-  abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   abstract CstDomain getResolved();
   abstract bool updateVal();
   abstract bool hasChanged();
@@ -477,7 +399,6 @@ interface CstVecPrim
 {
   abstract string name();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
-  abstract void _esdl__doRandomize(_esdl__RandGen randGen, CstStage stage);
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);
 }
@@ -511,8 +432,6 @@ interface CstVecExpr: CstExpr
   abstract bool isConst();
   abstract bool isIterator();
   
-  abstract BddVec getBDD(CstStage stage, Buddy buddy);
-
   abstract long evaluate();
 
   abstract CstVecExpr unroll(CstIterator iter, uint n);
@@ -537,8 +456,6 @@ interface CstLogicExpr: CstExpr
   abstract bool getUniRangeSet(ref ULongRS rs);
 
   abstract CstLogicExpr unroll(CstIterator iter, uint n);
-
-  abstract BDD getBDD(CstStage stage, Buddy buddy);
 
 }
 
@@ -1191,10 +1108,6 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
   }
 
-  void solve() {
-    // if (_group is null) {
-    // }
-  }
 }
 
 class CstBlock

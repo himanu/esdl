@@ -4,14 +4,12 @@ import esdl.data.bvec;
 import esdl.data.bstr;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-import esdl.solver.obdd;
-
 import esdl.solver.base: CstSolver;
 
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
-  CstIterator, DomType, CstStage, CstDomain,
+  CstIterator, DomType, CstDomain,
   CstPredicate, _esdl__Proxy, CstVecIntf, CstVecArrIntf;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue;
@@ -95,7 +93,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	_var = &var;
 	_parent = parent;
 	_root = _parent.getProxyRoot();
-	// _root.addDomain(this, HAS_RAND_ATTRIB);
       }
 
       final override bool isStatic() {
@@ -131,33 +128,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
       void visit(CstSolver solver) {
 	// assert (solver !is null);
 	solver.pushToEvalStack(this);
-      }
-
-      BddVec getBDD(CstStage s, Buddy buddy) {
-	static if (HAS_RAND_ATTRIB) {
-	  assert (stage(), "Stage not set for " ~ this.name());
-	  if (this.isRand && s is stage()) {
-	    return bddvec(buddy);
-	  }
-	  else if ((! this.isRand) ||
-		   this.isRand && stage().isSolved()) { // work with the value
-	    if (_valvec.isNull()) {
-	      _valvec.buildVec(buddy, this.evaluate());
-	      assert(_valvec._buddy !is null);
-	    }
-	    return _valvec;
-	  }
-	  else {
-	    assert (false, "Constraint evaluation in wrong stage: " ~ this.name());
-	  }
-	}
-	else {
-	  if (_valvec.isNull()) {
-	    _valvec.buildVec(buddy, this.evaluate());
-	    assert(_valvec._buddy !is null);
-	  }
-	  return _valvec;
-	}
       }
 
       bool isConst() {
@@ -272,9 +242,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	_pindex = index;
 	_root = _parent.getProxyRoot();
 	
-	// if (this.isStatic()) {
-	//   // _root.addDomain(this, HAS_RAND_ATTRIB);
-	// }
       }
 
       override bool opEquals(Object other) {
@@ -341,34 +308,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 
       void visit(CstSolver solver) {
 	solver.pushToEvalStack(this);
-      }
-
-      BddVec getBDD(CstStage s, Buddy buddy) {
-	static if (HAS_RAND_ATTRIB) {
-	  assert (_indexExpr is null);
-	  assert (stage(), "Stage not set for " ~ this.name());
-	  if (this.isRand && s is stage()) {
-	    return bddvec(buddy);
-	  }
-	  else if ((! this.isRand) ||
-		   this.isRand && stage().isSolved()) { // work with the value
-	    if (_valvec.isNull()) {
-	      _valvec.buildVec(buddy, this.evaluate());
-	      assert(_valvec._buddy !is null);
-	    }
-	    return _valvec;
-	  }
-	  else {
-	    assert (false, "Constraint evaluation in wrong stage");
-	  }
-	}
-	else {
-	  if (_valvec.isNull()) {
-	    _valvec.buildVec(buddy, this.evaluate());
-	    assert(_valvec._buddy !is null);
-	  }
-	  return _valvec;
-	}
       }
 
       bool isConst() {
@@ -611,11 +550,6 @@ mixin template CstVecArrMixin()
     else {
       assert (false);
     }
-  }
-
-  void _esdl__doRandomize(_esdl__RandGen randGen, CstStage s) {
-    // assert (stage is s);
-    _esdl__doRandomize(randGen);    
   }
 
   EV _esdl__elems() {

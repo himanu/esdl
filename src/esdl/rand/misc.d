@@ -397,7 +397,6 @@ class _esdl__RandGen
     }
 }
 
-// All the operations that produce a BddVec
 enum CstUnaryOp: byte
 {   NOT,
     NEG,
@@ -422,7 +421,6 @@ enum CstSliceOp: byte
   SLICE,
 }
 
-// All the operations that produce a Bdd
 enum CstCompareOp: byte
 {   LTH,
     LTE,
@@ -433,7 +431,7 @@ enum CstCompareOp: byte
     }
 
 
-enum CstLogicalOp: byte
+enum CstLogicOp: byte
 {   LOGICAND,
     LOGICOR,
     LOGICIMP,

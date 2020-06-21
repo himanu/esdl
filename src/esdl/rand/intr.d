@@ -4,7 +4,7 @@ import std.traits: isIntegral, isSigned;
 import std.container.array;
 import std.traits: Unsigned, Signed, isUnsigned, isSigned;
 import esdl.data.bvec;
-import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicalOp, _esdl__RandGen;
+import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp, _esdl__RandGen;
 
 T larger(T) (T a, T b) {
   if (a > b) return a;

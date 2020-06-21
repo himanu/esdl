@@ -460,25 +460,25 @@ class CstZ3Solver: CstSolver
     }
   }
 
-  override void processEvalStack(CstLogicalOp op) {
-    // writeln("eval: CstLogicalOp ", op);
+  override void processEvalStack(CstLogicOp op) {
+    // writeln("eval: CstLogicOp ", op);
     final switch (op) {
-    case CstLogicalOp.LOGICAND:
+    case CstLogicOp.LOGICAND:
       BoolExpr e = and(_evalStack[$-2].toBool(), _evalStack[$-1].toBool());
       _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
-    case CstLogicalOp.LOGICOR:
+    case CstLogicOp.LOGICOR:
       BoolExpr e = or(_evalStack[$-2].toBool(), _evalStack[$-1].toBool());
       _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
-    case CstLogicalOp.LOGICIMP:
+    case CstLogicOp.LOGICIMP:
       BoolExpr e = implies(_evalStack[$-2].toBool(), _evalStack[$-1].toBool());
       _evalStack.length = _evalStack.length - 2;
       _evalStack ~= Z3Term(e);
       break;
-    case CstLogicalOp.LOGICNOT:
+    case CstLogicOp.LOGICNOT:
       BoolExpr e = not(_evalStack[$-1].toBool());
       _evalStack.length = _evalStack.length - 1;
       _evalStack ~= Z3Term(e);
