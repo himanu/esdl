@@ -9,7 +9,6 @@
 module esdl.rand.meta;
 
 import esdl.solver.obdd;
-import esdl.solver.bdd;
 
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
   isDynamicArray, isSomeChar, PointerTarget;
@@ -411,7 +410,6 @@ class Randomizable {
 
 mixin template Randomization()
 {
-  import esdl.solver.bdd: CstBddSolver;
   alias _esdl__T = typeof(this);
   
   // While making _esdl__ProxyRand class non-static nested class

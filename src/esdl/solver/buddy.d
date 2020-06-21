@@ -1,4 +1,4 @@
-module esdl.solver.bdd;
+module esdl.solver.buddy;
 
 
 import std.container;
@@ -204,7 +204,7 @@ struct BvVar
     return _dom.equ(getValExpr());
   }
   
-  void update(CstDomain dom, CstBddSolver solver) {
+  void update(CstDomain dom, CstBuddySolver solver) {
     assert (dom.isSolved());
     long val = dom.value();
     if (_val != val) {
@@ -239,7 +239,7 @@ struct BvVar
   }
 }
 
-class CstBddSolver: CstSolver
+class CstBuddySolver: CstSolver
 {
   Buddy _esdl__buddy;
 

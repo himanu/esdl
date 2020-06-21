@@ -1,10 +1,9 @@
 module esdl.rand.expr;
 
 import esdl.rand.intr;
-import esdl.solver.obdd;
-import esdl.solver.base: CstSolver;
 
-import esdl.solver.bdd: CstBddSolver;
+import esdl.solver.base: CstSolver;
+import esdl.solver.obdd;
 
 import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst;
 import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicalOp,
@@ -19,7 +18,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
 interface CstVecTerm: CstVecExpr
 {
 
-  final CstLogicTerm toBdd() {
+  final CstLogicTerm toBoolExpr() {
     auto zero = new CstVecValue!int(0); // CstVecValue!int.allocate(0);
     return new CstVec2LogicExpr(this, zero, CstCompareOp.NEQ);
   }
@@ -172,7 +171,7 @@ interface CstVecTerm: CstVecExpr
 
   CstNotBddExpr opUnary(string op)() if(op == "*") {
     // static if(op == "*") {	// "!" in cstx is translated as "*"
-    return new CstNotBddExpr(this.toBdd());
+    return new CstNotBddExpr(this.toBoolExpr());
     // }
     // else {
     //   static assert(false);
@@ -888,7 +887,7 @@ interface CstLogicTerm: CstLogicExpr
 
   final CstLogicTerm implies(CstVecTerm other)
   {
-    return new CstLogic2LogicExpr(this, other.toBdd(), CstLogicalOp.LOGICIMP);
+    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicalOp.LOGICIMP);
   }
 
   final CstLogicTerm logicOr(CstLogicTerm other)
@@ -898,7 +897,7 @@ interface CstLogicTerm: CstLogicExpr
 
   final CstLogicTerm logicOr(CstVecTerm other)
   {
-    return new CstLogic2LogicExpr(this, other.toBdd(), CstLogicalOp.LOGICOR);
+    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicalOp.LOGICOR);
   }
 
   final CstLogicTerm logicAnd(CstLogicTerm other)
@@ -908,7 +907,7 @@ interface CstLogicTerm: CstLogicExpr
 
   final CstLogicTerm logicAnd(CstVecTerm other)
   {
-    return new CstLogic2LogicExpr(this, other.toBdd(), CstLogicalOp.LOGICAND);
+    return new CstLogic2LogicExpr(this, other.toBoolExpr(), CstLogicalOp.LOGICAND);
   }
 
 }
@@ -2732,7 +2731,7 @@ class CstNotBddExpr: CstLogicTerm
 
 // CstLogic2LogicExpr logicOr(CstVecExpr other)
 // {
-//   return new CstLogic2LogicExpr(toBdd(this), toBdd(other), CstLogicalOp.LOGICOR);
+//   return new CstLogic2LogicExpr(toBoolExpr(this), toBoolExpr(other), CstLogicalOp.LOGICOR);
 // }
 
 auto _esdl__logicOr(P, Q)(P p, Q q) {
@@ -2742,7 +2741,7 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
     _p = new CstBddConst(p);
   }
   else static if (is (P: CstVecExpr)) {
-    _p = toBdd(p);
+    _p = toBoolExpr(p);
   }
   else {
     _p = p;
@@ -2751,7 +2750,7 @@ auto _esdl__logicOr(P, Q)(P p, Q q) {
     _q = new CstBddConst(q);
   }
   else static if (is (Q: CstVecExpr)) {
-    _q = toBdd(q);
+    _q = toBoolExpr(q);
   }
   else {
     _q = q;
@@ -2766,7 +2765,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
     _p = new CstBddConst(p);
   }
   else static if (is (P: CstVecExpr)) {
-    _p = toBdd(p);
+    _p = toBoolExpr(p);
   }
   else {
     _p = p;
@@ -2775,7 +2774,7 @@ auto _esdl__logicAnd(P, Q)(P p, Q q) {
     _q = new CstBddConst(q);
   }
   else static if (is (Q: CstVecExpr)) {
-    _q = toBdd(q);
+    _q = toBoolExpr(q);
   }
   else {
     _q = q;

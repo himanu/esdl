@@ -2,7 +2,7 @@ module esdl.rand.base;
 
 import esdl.solver.obdd;
 import esdl.solver.base;
-import esdl.solver.bdd;
+import esdl.solver.buddy: CstBuddySolver;
 import esdl.solver.z3;
 
 import esdl.rand.intr;
@@ -727,7 +727,7 @@ class CstPredGroup			// group of related predicates
       else {
 	// import std.stdio;
 	// writeln(sig);
-	_solver = new CstBddSolver(sig, this);
+	_solver = new CstBuddySolver(sig, this);
 	_proxy._solvers[sig] = _solver;
       }
       foreach (var; _vars) {

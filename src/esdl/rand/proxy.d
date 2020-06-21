@@ -1,7 +1,6 @@
 module esdl.rand.proxy;
 import esdl.solver.obdd;
 import esdl.solver.base;
-import esdl.solver.bdd;
 
 import esdl.rand.base: CstVecPrim, CstStage, CstLogicExpr,
   CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup,
