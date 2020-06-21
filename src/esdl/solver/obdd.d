@@ -99,23 +99,6 @@ struct BddDomain // fdd.c:52
   }
 
 
-  // this(int index, long range) {
-  //   import std.conv;
-  //   long calcsize = 2;
-  //   if (range <= 0L) {
-  //     throw new BddException();
-  //   }
-  //   this._index = index;
-  //   this._realsize = range;
-  //   uint binsize = 1;
-  //   while(calcsize < range) {
-  //     binsize++;
-  //     calcsize <<= 1;
-  //   }
-  //   this._ivar._binsize = binsize;
-  // }
-
-
   // TODO -- explicit delete
   // ~this() {
   //   // import std.stdio;
@@ -136,7 +119,35 @@ struct BddDomain // fdd.c:52
   }
   
   @disable this();
-  
+
+  this(this) { }
+
+  this(ref BddDomain other) {
+    this._index = other._index;	// not in c version
+    this._realsize = other._realsize;
+    this._binsize = other._binsize;
+    this._ivar = other._ivar;
+    this._buddy = other._buddy;
+    this._var = other._var;
+  }
+
+  // this(int index, long range) {
+  //   import std.conv;
+  //   long calcsize = 2;
+  //   if (range <= 0L) {
+  //     throw new BddException();
+  //   }
+  //   this._index = index;
+  //   this._realsize = range;
+  //   uint binsize = 1;
+  //   while(calcsize < range) {
+  //     binsize++;
+  //     calcsize <<= 1;
+  //   }
+  //   this._ivar._binsize = binsize;
+  // }
+
+
   this(Buddy buddy, int index, uint bits) { // fdd.c:1033
     this._index = index;	// not in c version
     this._realsize = (cast(ulong) 2) ^^bits;
@@ -149,6 +160,17 @@ struct BddDomain // fdd.c:52
     this._var = buddy.one();
   }
 
+  ref BddDomain opAssign(ref return scope BddDomain other) {
+    assert (_buddy is null); 	// default constructor initialization
+    this._index = other._index;
+    this._realsize = other._realsize;
+    this._binsize = other._binsize;
+    this._ivar = other._ivar;
+    this._buddy = other._buddy;
+    this._var = other._var;
+    return this;
+  }
+  
   void reset() {
     _var.reset();
   }
@@ -429,6 +451,11 @@ struct BddVec
   import esdl.data.bvec: isBitVector;
   
   private bdd[] _bitvec;
+
+  // required for debug
+  bdd[] bitvec() {
+    return _bitvec;
+  }
   
   private bool _signed = false;
 
@@ -453,12 +480,17 @@ struct BddVec
 
   Buddy _buddy;
   
-  this(size_t bitnum, bool signed = false)
-  {
+  this(size_t bitnum, bool signed = false) {
     _signed = signed;
     _bitvec.length = bitnum;
   }
 
+  this(this) {
+    foreach (b; _bitvec) _buddy.addRef(b);
+  }
+
+  // this copy constructor does not get called,
+  // until the postblit is not removed
   this(ref BddVec other) {
     _buddy = other._buddy;
     _signed = other._signed;
@@ -471,11 +503,15 @@ struct BddVec
   }
 
   ref BddVec opAssign(ref BddVec other) {
+    if (_buddy !is null) {
+      foreach (b; _bitvec) _buddy.delRef(b);
+    }
     _buddy = other._buddy;
     _signed = other._signed;
-    foreach (b; _bitvec) _buddy.delRef(b);
     _bitvec = other._bitvec;
-    foreach (b; _bitvec) _buddy.addRef(b);
+    if (_buddy !is null) {
+      foreach (b; _bitvec) _buddy.addRef(b);
+    }
     return this;
   }
   
@@ -1624,8 +1660,7 @@ struct BDD
   // TODO -- explicit delete
   ~this()
   {
-    if (_index !is 0 &&
-    	_buddy !is null) {
+    if (_index !is 0 &&	_buddy !is null) {
       _buddy.delRef(_index);
     }
   }
@@ -1633,24 +1668,24 @@ struct BDD
   this(int index, Buddy buddy)
   {
     // writeln(count++);
+    assert (buddy !is null);
     this._index = index;
     this._buddy = buddy;
     _buddy.addRef(_index);
   }
 
-  this(this)
-  {
-    if(_index != 0 && _buddy !is null) {
-      _buddy.addRef(_index);
-    }
+  this(this) {
+    if (_index != 0 && _buddy !is null) _buddy.addRef(_index);
   }
     
+  // @disable this(this);
+
   // This does not get called -- instead this(this) gets called
   this(ref BDD other)
   {
     _buddy = other._buddy;
     _index = other._index;
-    if(_index != 0 && _buddy !is null) {
+    if (_index != 0 && _buddy !is null) {
       _buddy.addRef(_index);
     }
   }
@@ -1661,7 +1696,9 @@ struct BDD
     }
     this._buddy = that._buddy;
     this._index = that._index;
-    _buddy.addRef(_index);
+    if (_buddy !is null && _index !is 0) {
+      _buddy.addRef(_index);
+    }
   }
 
   BDD makeBdd(int index)
@@ -2615,7 +2652,7 @@ class Buddy
     union
     {
       mixin(bitfields!(uint, "levelAndMark", 22,
-		       uint, "refcount", 10));
+ 		       uint, "refcount", 10));
       mixin(bitfields!(uint, "level", 21,
 		       bool, "mark", 1,
 		       uint, "refcou", 10));
@@ -2625,6 +2662,15 @@ class Buddy
     uint high;
     uint hash;
     uint next;
+
+    this(this) {}
+
+    this(ref BddNode other) {
+      low = other.low;
+      high = other.high;
+      hash = other.hash;
+      next = other.next;
+    }
     // Do not know why this MAXVAR(actually "level") in original code
     // is a signed integer
 
@@ -2885,10 +2931,10 @@ class Buddy
     }
 
     // postblit
-    this(this)
-    {
-      this.table = this.table.dup;
-    }
+    // @disable this(this);
+    // {
+    //   this.table = this.table.dup;
+    // }
 
     // Do we need the next two functions
     BddCache copy()
@@ -9230,6 +9276,10 @@ class Buddy
 
     /* Create BDD variable tables */
     _domains ~= Domain_create(_fdvarnum, domainSize);
+    // _domains.length += 1;
+    // BddDomain newDomain = Domain_create(_fdvarnum, domainSize);
+    // _domains[$-1] = newDomain;
+
     assert (_domains.length == _fdvarnum + 1);
     uint extravars = _domains[_fdvarnum].varNum();
 
@@ -9742,7 +9792,7 @@ class Buddy
     INSTANCE._varSet = this._varSet.dup;
 
     // FIXMALLOC
-    INSTANCE._domains = this._domains.dup;
+    //INSTANCE._domains.length = this._domains.length;
     // void* mem = GC.malloc(BddDomain.sizeof * this._domainsLen);
     // memset(mem, 0, BddDomain.sizeof * this._domainsLen);
     // BddDomain* d2 = cast(BddDomain*) mem; // GC.malloc(BddDomain.sizeof * this._domainsLen);
@@ -9753,10 +9803,10 @@ class Buddy
     // INSTANCE._domains = d2;
 
     
-    // FIXMALLOC
     for(int i = 0; i < INSTANCE._domains.length; ++i) {
-      INSTANCE._domains[i] =
-	INSTANCE.Domain_create(i, this._domains[i]._binsize);
+      INSTANCE._domains ~= INSTANCE.Domain_create(i, this._domains[i]._binsize);
+      // auto newDomain = INSTANCE.Domain_create(i, this._domains[i]._binsize);
+      // INSTANCE._domains[i] = newDomain;
     }
     return INSTANCE;
   }

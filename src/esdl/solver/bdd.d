@@ -70,7 +70,7 @@ struct BuddyTerm
 {
   import std.conv: to;
 
-  enum Type: ubyte { BOOLEXPR, BVEXPR, ULONG }
+  enum Type: ubyte { INVALID, BOOLEXPR, BVEXPR, ULONG }
 
   BDD    _boolExpr;
   BddVec _bvExpr;
@@ -96,14 +96,35 @@ struct BuddyTerm
     return _ulong;
   }
 
-  
+  // ~this() {
+  //   import std.stdio;
+  //   if (_type == Type.BOOLEXPR) {
+  //     writeln("BuddyTerm Destroying: ", _index, " id: ", _id, " type: ", _type, " BDD: ", _boolExpr._index);
+  //   }
+    
+  //   if (_type == Type.BVEXPR) {
+  //     writeln("BuddyTerm Destroying: ", _index, " id: ", _id, " type: ", _type, " BddVec: ", _bvExpr.bitvec);
+  //   }
+  // }
 
+  // @disable this(this);
   // workaround for https://issues.dlang.org/show_bug.cgi?id=20876
-  this(ref BuddyTerm other) {
+
+  this(this) {}
+
+  // this(ref BuddyTerm other) {
+  //   _boolExpr = other._boolExpr;
+  //   _bvExpr = other._bvExpr;
+  //   _ulong = other._ulong;
+  //   _type = other._type;
+  // }
+
+  ref BuddyTerm opAssign(ref BuddyTerm other) {
     _boolExpr = other._boolExpr;
     _bvExpr = other._bvExpr;
     _ulong = other._ulong;
     _type = other._type;
+    return this;
   }
 
   this(ref BddVec expr) {
@@ -131,6 +152,25 @@ struct BuddyTerm
     _type = Type.ULONG;
   }
 
+  string toString() {
+    import std.string: format;
+    string str;
+    final switch (_type) {
+    case Type.INVALID: 
+      str = format("type: %s", _type);
+      break;
+    case Type.ULONG:
+      str = format("type: %s, val: %s", _type, _ulong);
+      break;
+    case Type.BVEXPR:
+      str = format("type: %s, val: %s", _type, _bvExpr.bitvec);
+      break;
+    case Type.BOOLEXPR:
+      str = format("type: %s, val: %s", _type, _boolExpr._index);
+      break;
+    }
+    return str;
+  }
 }
 
 struct BvVar
@@ -223,7 +263,7 @@ class CstBddSolver: CstSolver
 
   Buddy buddy() {
     if (_esdl__buddy is null) {
-      _esdl__buddy = new Buddy(400, 400);
+      _esdl__buddy = new Buddy(1000, 1000);
     }
     return _esdl__buddy;
   }
@@ -235,7 +275,7 @@ class CstBddSolver: CstSolver
     _proxy = group.getProxy();
 
     if (_esdl__buddy is null) {
-      _esdl__buddy = new Buddy(400, 400);
+      _esdl__buddy = new Buddy(1000, 1000);
     }
 
     _context = new Context(_esdl__buddy);
@@ -270,9 +310,11 @@ class CstBddSolver: CstSolver
 	assert (false, "Group Violation " ~ pred.name());
       }
       pred.visit(this);
-      assert(_evalStack.length == 1);
       _context.addRule(_evalStack[0].toBool());
-      _evalStack.length = 0;
+      popEvalStack(1);
+      assert(_evalStack.length == 0);
+      // writeln("We are here too");
+      // _evalStack.length = 0;
     }
 
     this.push();
@@ -377,22 +419,24 @@ class CstBddSolver: CstSolver
     // writeln("push: ", domain.name(), " annotation: ", n);
     // writeln("_domains has a length: ", _domains.length);
     if (domain.isSolved()) { // is a variable
-      _evalStack ~= BuddyTerm(_variables[n]);
+      pushToEvalStack(_variables[n]);
     }
     else {
-      _evalStack ~= BuddyTerm(_domains[n]);
+      pushToEvalStack(_domains[n]);
     }
   }
 
   override void pushToEvalStack(CstValue value) {
     // writeln("push: value ", value.value());
-    _evalStack ~= BuddyTerm(_esdl__buddy.buildVec(value.bitcount(),
-						  value.value(), value.signed));
+    BddVec v = _esdl__buddy.buildVec(value.bitcount(),
+				     value.value(), value.signed);
+    pushToEvalStack(v);
   }
 
   override void pushToEvalStack(ulong value) {
     // writeln("push: ", value);
-    _evalStack ~= BuddyTerm(value);
+    BuddyTerm e = BuddyTerm(value);
+    pushToEvalStack(e);
   }
 
   override void pushToEvalStack(bool value) {
@@ -405,13 +449,15 @@ class CstBddSolver: CstSolver
     final switch (op) {
     case CstUnaryOp.NOT:
       BddVec e = ~ (_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 1;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(1);
+      // _evalStack.length = _evalStack.length - 1;
+      pushToEvalStack(e);
       break;
     case CstUnaryOp.NEG:
       BddVec e = - (_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 1;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(1);
+      // _evalStack.length = _evalStack.length - 1;
+      pushToEvalStack(e);
       break;
     }
   }
@@ -420,58 +466,69 @@ class CstBddSolver: CstSolver
     final switch (op) {
     case CstBinaryOp.AND:
       BddVec e = _evalStack[$-2].toBv() & _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.OR:
       BddVec e = _evalStack[$-2].toBv() | _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.XOR:
       BddVec e = _evalStack[$-2].toBv() ^ _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.ADD:
       BddVec e = _evalStack[$-2].toBv() + _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.SUB:
       BddVec e = _evalStack[$-2].toBv() - _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.MUL:
       BddVec e = _evalStack[$-2].toBv() * _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.DIV:
       BddVec e = _evalStack[$-2].toBv() / _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.REM:
       BddVec e = _evalStack[$-2].toBv() % _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.LSH:
       BddVec e = _evalStack[$-2].toBv() << _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.RSH:			// Arith shift right ">>"
       BddVec e = _evalStack[$-2].toBv() >> _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstBinaryOp.LRSH:			// Logic shift right ">>>"
       BddVec e = _evalStack[$-2].toBv() >>> _evalStack[$-1].toBv();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     }
   }
@@ -481,33 +538,39 @@ class CstBddSolver: CstSolver
     final switch (op) {
     case CstCompareOp.LTH:
       BDD e = _evalStack[$-2].toBv().lth(_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstCompareOp.LTE:
       BDD e = _evalStack[$-2].toBv().lte(_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstCompareOp.GTH:
       BDD e = _evalStack[$-2].toBv().gth(_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstCompareOp.GTE:
       BDD e = _evalStack[$-2].toBv().gte(_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstCompareOp.EQU:
       BDD e = _evalStack[$-2].toBv().equ(_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstCompareOp.NEQ:
       BDD e = _evalStack[$-2].toBv().neq(_evalStack[$-1].toBv());
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     }
   }
@@ -516,23 +579,27 @@ class CstBddSolver: CstSolver
     final switch (op) {
     case CstLogicalOp.LOGICAND:
       BDD e = _evalStack[$-2].toBool() & _evalStack[$-1].toBool();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstLogicalOp.LOGICOR:
       BDD e = _evalStack[$-2].toBool() | _evalStack[$-1].toBool();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstLogicalOp.LOGICIMP:
       BDD e = _evalStack[$-2].toBool() >> _evalStack[$-1].toBool();
-      _evalStack.length = _evalStack.length - 2;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(2);
+      // _evalStack.length = _evalStack.length - 2;
+      pushToEvalStack(e);
       break;
     case CstLogicalOp.LOGICNOT:
       BDD e = ~ _evalStack[$-1].toBool();
-      _evalStack.length = _evalStack.length - 1;
-      _evalStack ~= BuddyTerm(e);
+      popEvalStack(1);
+      // _evalStack.length = _evalStack.length - 1;
+      pushToEvalStack(e);
       break;
     }
   }
@@ -541,8 +608,37 @@ class CstBddSolver: CstSolver
     assert (op == CstSliceOp.SLICE);
     BddVec e = _evalStack[$-3].toBv()[cast(uint) _evalStack[$-2].toUlong() ..
 				      cast(uint) _evalStack[$-1].toUlong()];
-    _evalStack.length = _evalStack.length - 3;
-    _evalStack ~= BuddyTerm(e);
+    popEvalStack(3);
+    // _evalStack.length = _evalStack.length - 3;
+    pushToEvalStack(e);
   }
-}
 
+
+  void popEvalStack(uint count) {
+    assert (_evalStack.length >= count);
+    for (size_t i=0; i!=count; ++i) {
+      // BuddyTerm invalid = BuddyTerm();
+      // _evalStack[$-1] = invalid;
+      _evalStack.length = _evalStack.length - 1;
+    }
+    // writeln("After POP _evalStack is of size: ", _evalStack.length);
+  }
+
+  void pushToEvalStack(ref BddVec vec) {
+    import std.stdio;
+    BuddyTerm term = BuddyTerm(vec);
+    pushToEvalStack(term);
+  }
+  
+  void pushToEvalStack(ref BDD b) {
+    BuddyTerm term = BuddyTerm(b);
+    pushToEvalStack(term);
+  }  
+
+  void pushToEvalStack(ref BuddyTerm term) {
+    // writeln("Pushing on _evalStack: ", term.toString());
+    _evalStack ~= term;
+    // writeln("After PUSH _evalStack is of size: ", _evalStack.length);
+  }
+  
+}

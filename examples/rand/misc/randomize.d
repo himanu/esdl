@@ -57,7 +57,7 @@ class Bar: Foo
 
   Constraint! q{
     foo /* + boo*/ + pop + mom == 64;
-    pop % 3 == 0;
+    // pop % 3 == 0;
 
     // foo + pop + mom == 64 ? pop > 40 : mom > 24;
 
@@ -132,5 +132,7 @@ void main() {
       foo.display();
     }
   }
+  import std.stdio;
+  writeln("DONE MAIN");
 }
 
