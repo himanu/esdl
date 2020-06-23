@@ -15,19 +15,6 @@ import std.algorithm.searching: canFind;
 private import std.typetuple: staticIndexOf, TypeTuple;
 private import std.traits: BaseClassesTuple; // required for staticIndexOf
 
-T StaticCast(T, F)(const F from)
-  if (is (F == class) && is (T == class)
-     // make sure that F is indeed amongst the base classes of T
-     && staticIndexOf!(F, BaseClassesTuple!T) != -1
-     )
-    in {
-      // assert statement will not be compiled for production release
-      assert((from is null) || cast(T)from !is null);
-    }
-body {
-  return cast(T) cast(void*) from;
- }
-
 class Context
 {
   BDD _bdd;
@@ -285,9 +272,8 @@ class CstBuddySolver: CstSolver
     _domains.length = doms.length;
 
     foreach (i, ref dom; _domains) {
-      import std.string: format;
       // import std.stdio;
-      // writeln("Adding Z3 Domain for @rand ", doms[i].name());
+      // writeln("Adding Buddy Domain for @rand ", doms[i].name(), " of size: ", doms[i].bitcount);
       auto d = _esdl__buddy.createDomVec(doms[i].bitcount, doms[i].signed());
       dom = d;
     }
@@ -296,9 +282,8 @@ class CstBuddySolver: CstSolver
     _variables.length = vars.length;
 
     foreach (i, ref var; _variables) {
-      import std.string: format;
       // import std.stdio;
-      // writeln("Adding Z3 Domain for variable ", vars[i].name());
+      // writeln("Adding Buddy Domain for variable ", vars[i].name(), " of length: ", vars[i].bitcount);
       auto d = _esdl__buddy.createDomVec(vars[i].bitcount, vars[i].signed());
       var = d;
     }

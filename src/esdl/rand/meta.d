@@ -45,6 +45,9 @@ body {
   return cast(T) cast(void*) from;
  }
 
+struct _esdl__VALUE {}
+struct _esdl__ARG {}
+
 template _esdl__RandProxyType(T, P, int I)
 {
   import std.traits;
@@ -363,7 +366,7 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
 
   t._esdl__initProxy();
   
-  if(withCst is null && t._esdl__proxyInst._esdl__cstWith !is null) {
+  if (withCst is null && t._esdl__proxyInst._esdl__cstWith !is null) {
     t._esdl__proxyInst._esdl__cstWith = withCst;
     t._esdl__proxyInst._esdl__cstWithChanged = true;
   }
@@ -376,6 +379,13 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
   }
 
   t._esdl__proxyInst.reset();
+
+  if (withCst !is null) {
+    foreach (pred; withCst.getCstBlock()._preds) {
+      t._esdl__proxyInst.addPredicate(pred);
+    }
+  }
+  
   t._esdl__proxyInst._esdl__doConstrain(t._esdl__proxyInst);
   t._esdl__proxyInst.solve();
   t._esdl__proxyInst._esdl__doRandomize(t._esdl__proxyInst._esdl__getRandGen);
@@ -612,8 +622,8 @@ mixin template _esdl__ProxyMixin()
       }
     }
 
-    this(ARGS...)(string name, ARGS args) {
-      super(this.outer, name);
+    this(ARGS...)(_esdl__ProxyRoot eng, string name, ARGS args) {
+      super(eng, name);
       // writeln("pointer: ", &(args[0]));
       foreach (i, arg; args) {
 	_withArgs[i] = arg;
@@ -635,7 +645,7 @@ mixin template _esdl__ProxyMixin()
   }
 
   void _esdl__with(string _esdl__CstString, string FILE, size_t LINE, ARGS...)(ARGS values) {
-    auto cstWith = new _esdl__ConstraintWith!(_esdl__CstString, FILE, LINE, ARGS)("randWith", values);
+    auto cstWith = new _esdl__ConstraintWith!(_esdl__CstString, FILE, LINE, ARGS)(this, "randWith", values);
     // cstWith.withArgs(values);
     _esdl__cstWith = cstWith;
   }
@@ -723,7 +733,7 @@ auto _esdl__rand_proxy(alias V, // string VS,
     static if (isLvalue!V) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVecIdx!(L, rand(true, true), 0, -1)(name, V, parent);
+      return new CstVecIdx!(L, rand(true, true), 0, _esdl__VALUE, -1)(name, V, parent);
     }
     else {
       return new CstVecValue!L(V); // CstVecValue!L.allocate(l);
@@ -749,6 +759,20 @@ auto _esdl__rand_proxy(alias V, // string VS,
     }
     return V;
     // return __traits(getMember, parent, VS);
+  }
+}
+
+auto _esdl__arg_proxy(L, S)(string name, ref L arg, S parent) {
+  import std.traits: isIntegral, isBoolean, isArray, isSomeChar;
+  // pragma(msg, L.stringof);
+  static if (isIntegral!L || isBitVector!L ||
+	     isBoolean!L || isSomeChar!L || is (L == enum)) {
+    // import std.stdio;
+    // writeln("Creating VarVec, ", name);
+    return new CstVecIdx!(L, rand(true, true), 0, _esdl__ARG, -1)(name, arg, parent);
+  }
+  else {
+    static assert(false);
   }
 }
 
@@ -793,15 +817,15 @@ template _esdl__ProxyBase(T) {
 }
 
 void randomizeWith(string C, string FILE=__FILE__, size_t LINE=__LINE__, T, ARGS...)(ref T t, ARGS values)
-  if(is(T == class) && allIntengral!ARGS) {
+  if (is (T == class) && allIntengral!ARGS) {
     t._esdl__initProxy();
     // The idea is that if the end-user has used the randomization
     // mixin then _esdl__RandType would be already available as an
     // alias and we can use virtual randomize method in such an
     // eventuality.
     // static if(is(typeof(t._esdl__RandType) == T)) {
-    if(t._esdl__proxyInst._esdl__cstWith is null ||
-       t._esdl__proxyInst._esdl__cstWith._constraint != C) {
+    if (t._esdl__proxyInst._esdl__cstWith is null ||
+	t._esdl__proxyInst._esdl__cstWith._constraint != C) {
       t._esdl__getProxy()._esdl__with!(C, FILE, LINE)(values);
       t._esdl__proxyInst._esdl__cstWithChanged = true;
       // auto withCst =

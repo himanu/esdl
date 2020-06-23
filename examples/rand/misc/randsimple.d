@@ -14,6 +14,8 @@ enum e2 {
 	 D = 3
 }
 
+int foo = 0x00;
+
 class Base {
   @rand uint a;
   @rand e1 xx;
@@ -27,9 +29,8 @@ class Simple: Base {
   mixin Randomization;
   @rand uint b = 42;
   Constraint! q{
-    a[0..4]  == 0;
+    a[0..4]  == foo;
     a < 128;
-    solve a before b;
   } csta;
 }
 
@@ -39,7 +40,16 @@ void main()
   for (size_t i=0; i!=4; ++i)
     {
       // simple.randomize();
-      simple.randomizeWith! q{b == @0;}(i);
+      simple.randomizeWith! q{b == #0;}(i*32);
       writeln(simple.a, " ", simple.b);
     }
 }
+
+
+
+
+
+
+
+
+

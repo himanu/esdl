@@ -623,7 +623,7 @@ class CstPredGroup			// group of related predicates
   CstSolver _solver;
 
   void solve() {
-    import std.stdio;
+    // import std.stdio;
     // writeln(this.describe());
     if (_state is State.NEEDSYNC) {
       _doms.reset();

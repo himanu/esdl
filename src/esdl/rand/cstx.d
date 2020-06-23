@@ -469,32 +469,32 @@ struct CstParser {
       }
     }
     else {
-      fill("_esdl__rand_proxy!(");
       srcTag = parseLiteral();
       if (srcCursor > srcTag) {
+	fill("_esdl__rand_proxy!(");
 	fill(CST[srcTag..srcCursor]);
 	fillDeclaration(CST[srcTag..srcCursor]);
-	// fill(", \"");
-	// fill(CST[srcTag..srcCursor]);
-	// fill("\"");
+	fill(")(\"");
+	fill(CST[start..srcCursor]);
+	fill("\", this.outer)");
       }
       else {
 	srcTag = parseWithArg();
 	if (srcCursor > srcTag) {
-	  fill("_esdl__arg!");
-	  fill(CST[srcTag+1..srcCursor]);
-	  // fill(", \"");
+	  fill("_esdl__arg_proxy(\"");
 	  // fill("_esdl__arg!");
 	  // fill(CST[srcTag+1..srcCursor]);
-	  // fill("\"");
+	  // fill("()");
+	  // fill(")(\"");
+	  fill(CST[start..srcCursor]);
+	  fill("\", _esdl__arg!");
+	  fill(CST[srcTag+1..srcCursor]);
+	  fill("(), this.outer)");
 	}
 	else {
 	  errorToken();
 	}
       }
-      fill(")(\"");
-      fill(CST[start..srcCursor]);
-      fill("\", this.outer)");
     }
     return start;
   }
@@ -661,7 +661,7 @@ struct CstParser {
   size_t parseWithArg() {
     size_t start = srcCursor;
     if (srcCursor < CST.length &&
-	CST[srcCursor == '@']) {
+	CST[srcCursor == '#']) {
       ++srcCursor;
     }
     else return start;
