@@ -2,7 +2,7 @@ module esdl.rand.base;
 
 import esdl.solver.base;
 import esdl.solver.buddy: CstBuddySolver;
-import esdl.solver.z3;
+import esdl.solver.z3: CstZ3Solver;
 
 import esdl.rand.intr;
 import esdl.rand.expr: CstValue;
@@ -644,7 +644,7 @@ class CstPredGroup			// group of related predicates
       else {
 	// import std.stdio;
 	// writeln(sig);
-	_solver = new CstBuddySolver(sig, this);
+	_solver = new CstZ3Solver(sig, this);
 	_proxy._solvers[sig] = _solver;
       }
       foreach (var; _vars) {
@@ -708,6 +708,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _unrollCycle;
   bool _markResolve = true;
 
+  uint _soft = 0;
+
+  uint getSoftWeight() {
+    return _soft;
+  }
+
   State _state = State.INIT;
 
   void reset() {
@@ -717,12 +723,14 @@ class CstPredicate: CstIterCallback, CstDepCallback
   Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
   
-  this(_esdl__ConstraintBase cst, uint stmt, _esdl__ProxyRoot proxy, CstLogicExpr expr,
-       CstPredicate parent=null, CstIterator unrollIter=null, uint unrollIterVal=0// ,
+  this(_esdl__ConstraintBase cst, uint stmt, _esdl__ProxyRoot proxy,
+       uint soft, CstLogicExpr expr, CstPredicate parent=null,
+       CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...
        ) {
     assert(proxy !is null);
     _constraint = cst;
+    _soft = soft;
     _statement = stmt;
     _proxy = proxy;
     _unrollIterVal = unrollIterVal;
@@ -805,8 +813,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
       // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
       for (uint i = cast(uint) _uwPreds.length;
 	   i != currLen; ++i) {
-	_uwPreds ~= new CstPredicate(_constraint, _statement, _proxy, _expr.unroll(iter, i),
-				     this, iter, i// ,
+	_uwPreds ~= new CstPredicate(_constraint, _statement, _proxy, _soft,
+				     _expr.unroll(iter, i), this, iter, i// ,
 				     // _iters[1..$].map!(tr => tr.unrollIterator(iter, i)).array
 				     );
       }

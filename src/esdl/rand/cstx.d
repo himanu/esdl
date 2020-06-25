@@ -79,6 +79,8 @@ struct CstParser {
   VarPair[] varMap = [];
 
   string[] iterators;
+
+  uint[] soft;
   
 
   // list of if conditions that are currently active
@@ -262,6 +264,59 @@ struct CstParser {
     }
     assert (false, "Unrecognized token: " ~ "'" ~
 	    CST[start..srcCursor] ~ "' -- at: " ~ srcCursor.to!string);
+  }
+
+  uint parseSoftAttr() {
+    import std.conv: to;
+    int softAttr = 0;
+    if (srcCursor < CST.length) {
+      char c = CST[srcCursor];
+      if (c == '@') {
+	++srcCursor;
+      }
+      else {
+	return 0;
+      }
+    }
+    size_t srcTag = parseIdentifier();
+    if (CST[srcTag..srcCursor] != "soft") {
+      import std.conv: to;
+      assert (false, "Unknown Attribute " ~ CST[srcTag..srcCursor] ~ " at " ~ srcTag.to!string);
+    }
+    else {
+      softAttr = 1;
+    }
+
+    srcTag = parseSpace();
+    // fill(CST[srcTag..srcCursor]);
+    
+    if (srcCursor < CST.length && CST[srcCursor] == '!') {
+      ++srcCursor;
+    
+      srcTag = parseSpace();
+
+      srcTag = srcCursor;
+
+      while (srcCursor < CST.length) {
+	char c = CST[srcCursor];
+	if ((c >= '0' && c <= '9') ||
+	    (c == '_')) {
+	  ++srcCursor;
+	}
+	else {
+	  break;
+	}
+      }
+
+      if (srcTag == srcCursor) {	// no number found
+	assert(false, "Expecting a numeral after @soft!");
+      }
+      else {
+	softAttr = CST[srcTag..srcCursor].to!uint;
+      }
+    }
+    
+    return softAttr;
   }
 
   size_t parseIdentifier() {
@@ -1435,13 +1490,23 @@ struct CstParser {
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
-    import std.conv;
+    import std.conv: to;
     fill("  _esdl__block ~= new CstPredicate(this, ");
     fill(stmtCount.to!string);
     stmtCount += 1;
     fill(", ");
     fill(_proxy);
     fill(", ");
+    uint softAttr = 0;
+    foreach_reverse(attr; soft) {
+      if (attr != 0) {
+	softAttr = attr;
+	break;
+      }
+    }
+    fill (softAttr.to!string);
+    fill(", ");
+    
     if (ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
       foreach (ifCond; ifConds[0..$-1]) {
@@ -1495,6 +1560,13 @@ struct CstParser {
     size_t srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
+    uint softAttr = parseSoftAttr();
+
+    soft ~= softAttr;
+    
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
     StmtToken stmtToken = nextStmtToken();
 
     final switch(stmtToken) {
@@ -1518,6 +1590,8 @@ struct CstParser {
     case StmtToken.STMT:
       procExprStmt();
     }
+
+    soft.length -= 1;
   }
   
   void procBlock() {

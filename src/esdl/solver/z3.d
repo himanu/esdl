@@ -228,7 +228,13 @@ class CstZ3Solver: CstSolver
       }
       pred.visit(this);
       assert(_evalStack.length == 1);
-      addRule(_solver, _evalStack[0].toBool());
+      uint softWeight = pred.getSoftWeight();
+      if (softWeight == 0) {
+	addRule(_solver, _evalStack[0].toBool());
+      }
+      else {
+	addRule(_solver, _evalStack[0].toBool(), softWeight);
+      }
       _evalStack.length = 0;
     }
 
