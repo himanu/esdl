@@ -1201,8 +1201,10 @@ struct BoolExpr
     _ast = AST(c);
   }
 
-  this(Context c, string name, uint size) {
-    Z3_ast r = Z3_mk_const(c, c.strSymbol(name), c.bvSort(size));
+  this(Context c, string name, bool fresh=false) {
+    Z3_ast r;
+    if (fresh) r = Z3_mk_fresh_const(c, name.toStringz(), c.boolSort());
+    else r = Z3_mk_const(c, c.strSymbol(name), c.boolSort());
     c.checkError();
     _ast = AST(c, r);
   }
@@ -1234,11 +1236,11 @@ struct BoolExpr
   Z3_error_code checkError()  {
     return _ast.checkError();
   }
-  // alias _ast this;
 
   T opCast(t)() if (is (T == Z3_ast)) {
     return _ast.m_ast;
   }
+
   Z3_ast getAST() {
     return _ast.m_ast;
   }
@@ -1486,6 +1488,12 @@ void addRule()(auto ref Solver solver, auto ref BoolExpr e) {
   solver.checkError();
 }
 
+void addRule()(auto ref Solver solver, auto ref BoolExpr e, uint weight) {
+  import std.conv: to;
+  Z3_solver_assert(solver.context(), solver, e.getAST);
+  solver.checkError();
+}
+
 void addRule()(auto ref Solver solver, auto ref BoolExpr e, auto ref BoolExpr p) {
   assert (p.isConst());
   Z3_solver_assert_and_track(context(), solver, e.getAST, p.getAST);
@@ -1512,10 +1520,39 @@ BoolExpr and()(auto ref BoolExpr a, auto ref BoolExpr b) {
   return BoolExpr(a.context(), r);
 }
   
+BoolExpr and(BoolExpr[] arr ...) {
+  // checkContext(a, b);
+  Z3_ast[] asts;
+  foreach (ref a; arr) {
+    asts ~= a.getAST;
+  }
+  Z3_ast r = Z3_mk_and(arr[0].context(), cast(uint) asts.length, asts.ptr);
+  arr[0].checkError();
+  return BoolExpr(arr[0].context(), r);
+}
+  
 BoolExpr or()(auto ref BoolExpr a, auto ref BoolExpr b) {
   checkContext(a, b);
   Z3_ast[2] args = [a.getAST, b.getAST];
   Z3_ast r = Z3_mk_or(a.context(), 2, args.ptr);
+  a.checkError();
+  return BoolExpr(a.context(), r);
+}
+  
+BoolExpr or(BoolExpr[] arr ...) {
+  // checkContext(a, b);
+  Z3_ast[] asts;
+  foreach (ref a; arr) {
+    asts ~= a.getAST;
+  }
+  Z3_ast r = Z3_mk_or(arr[0].context(), cast(uint) asts.length, asts.ptr);
+  arr[0].checkError();
+  return BoolExpr(arr[0].context(), r);
+}
+  
+BoolExpr xor()(auto ref BoolExpr a, auto ref BoolExpr b) {
+  checkContext(a, b);
+  Z3_ast r = Z3_mk_xor(a.context(), a.getAST, b.getAST);
   a.checkError();
   return BoolExpr(a.context(), r);
 }
@@ -1533,3 +1570,193 @@ BoolExpr implies()(auto ref BoolExpr a, auto ref BoolExpr b) {
   a.checkError();
   return BoolExpr(a.context(), r);
 }
+
+BoolExpr z3True(Context c) {
+  return BoolExpr(c, Z3_mk_true(c));
+}
+
+BoolExpr z3False(Context c) {
+  return BoolExpr(c, Z3_mk_false(c));
+}
+
+
+void fullAdder()(auto ref BoolExpr a, auto ref BoolExpr b, auto ref BoolExpr cin,
+		 out BoolExpr sum, out BoolExpr cout) {
+  BoolExpr cout_ = or(and(a, b), and(a, cin), and(b, cin));
+  BoolExpr sum_ = xor(xor(a, b), cin);
+  cout = cout_;
+  sum = sum_;
+}
+
+void adder(Context cxt, BoolExpr[] a, BoolExpr[] b, BoolExpr[] result) {
+  BoolExpr cin = z3False(cxt);
+  BoolExpr cout;
+
+  assert(a.length == b.length);
+
+  // result is assumed to be of right size
+  // result.length = a.length + 1;
+
+  for (size_t i=0; i!=a.length; ++i) {
+    fullAdder(a[i], b[i], cin, result[i], cout);
+    cin = cout;
+  }
+  result[$-1] = cout;
+}
+
+void addPairs(Context cxt, uint numBits, uint numIns, BoolExpr[] bits,
+	      ref uint outNum, BoolExpr[] outBits) {
+  uint outNumBits = numBits + 1;
+  size_t inCursor = 0;
+  size_t outCursor = 0;
+  outNum = (numIns + 1) / 2;
+  // assert (bits.length == numBits*numIns*2);
+  for (uint i=0; i != numIns/2; ++i) {
+    adder(cxt,
+	  bits[inCursor..inCursor+numBits], bits[inCursor+numBits..inCursor+2*numBits],
+	  outBits[outCursor..outCursor+outNumBits]);
+    inCursor += 2*numBits;
+    outCursor += outNumBits;
+  }
+  if (numIns % 2 != 0) {
+    for (uint i=0; i!=numBits; ++i) {
+      outBits[outCursor+i] = bits[inCursor+i];
+    }
+    BoolExpr false_ = z3False(cxt);
+    outBits[outCursor+numBits] = false_;
+  }
+}
+
+BoolExpr[] countOnes(Context cxt, BoolExpr[] lits) {
+  uint numIns = cast(uint) lits.length;
+  uint numBits = 1;
+  BoolExpr[] aux1;
+  BoolExpr[] aux2;
+  if (lits.length == 0) return [];
+
+  aux1 = lits.dup();
+  aux1.length = lits.length + 1;
+  aux2.length = lits.length + 1;
+
+  while (numIns > 1) {
+    uint newNumIns;
+    addPairs(cxt, numBits, numIns, aux1, newNumIns, aux2);
+    numIns = newNumIns;
+    numBits += 1;
+    debug(MAXSAT) {
+      import std.stdio;
+      writeln("numBits: ", numBits, " numIns: ", numIns);
+      for (size_t i=0; i!=numIns*numBits; ++i) {
+	writeln("bit ", i, ": ", aux2[i]._ast.toString()); 
+      }
+      wrintln("---------------------");
+    }
+    BoolExpr[] tmp = aux1;
+    aux1 = aux2;
+    aux2 = tmp;
+  }
+  
+  return aux1[0..numBits];
+}
+
+bool getBit(uint val, uint idx) {
+  uint mask = 1 << (idx & 31);
+  return (val & mask) != 0;
+}
+
+bool getBit(ulong val, uint idx) {
+  ulong mask = 1 << (idx & 63);
+  return (val & mask) != 0;
+}
+
+void le(Solver s, BoolExpr[] val, uint k) {
+  Context cxt = s.context();
+  
+  BoolExpr i1, i2, rule;
+
+  BoolExpr notVal = not(val[0]);
+  
+  BoolExpr true_ = z3True(cxt);
+  if (getBit(k, 0)) rule = true_;
+  else rule = notVal;
+
+  for (uint idx=0; idx!=val.length; ++idx) {
+    BoolExpr notVal_ = not(val[idx]);
+    notVal = notVal_;
+    if (getBit(k, idx)) {
+      i1 = notVal;
+      i2 = rule;
+    }
+    else {
+      BoolExpr false1 =  z3False(cxt);
+      BoolExpr false2 = z3False(cxt);
+      i1 = false1;
+      i2 = false2;
+    }
+    BoolExpr rule_ = or(i1, i2, and(notVal, rule));
+    rule = rule_;
+  }
+
+  s.addRule(rule);
+}
+
+void atMostK(Solver s, BoolExpr[] lits, uint k) {
+  if (k >= lits.length || lits.length <= 1) return;
+  BoolExpr[] count = countOnes(s.context(), lits);
+  le(s, count, k);
+}
+
+void atMost1(Solver s, BoolExpr[] lits) {
+  atMostK(s, lits, 1);
+}
+
+void testAtMost1() {
+  import std.stdio;
+
+  Config cfg = new Config();
+  cfg.set("MODEL", true);
+  Context ctx = new Context(cfg);
+
+  Solver s = Solver(ctx);
+
+  BoolExpr k1 = BoolExpr(ctx, "k1");
+  BoolExpr k2 = BoolExpr(ctx, "k2");
+  BoolExpr k3 = BoolExpr(ctx, "k3");
+  BoolExpr k4 = BoolExpr(ctx, "k4");
+  BoolExpr k5 = BoolExpr(ctx, "k5");
+  BoolExpr k6 = BoolExpr(ctx, "k6");
+
+  BoolExpr[] args1 = [k1, k2, k3, k4, k5];
+  BoolExpr[] args2 = [k4, k5, k6];
+  writeln("testing at-most-one constraint");
+
+  atMost1(s, args1);
+  atMost1(s, args2);
+
+  writeln("It must be sat...");
+
+  auto result = s.check();
+  writeln("result is: ", result);
+
+  auto model = s.getModel();
+  writeln("Model: ", model);
+
+  s.addRule(or(k2, k3));
+  s.addRule(or(k1, k6));
+
+  writeln("It must be sat...");
+
+  result = s.check();
+  writeln("result is: ", result);
+  
+  auto model2 = s.getModel();
+  writeln("Model: ", model2);
+
+  s.addRule(or(k4, k5));
+
+  writeln("It must be unsat...");
+
+  result = s.check();
+  writeln("result is: ", result);
+}
+
