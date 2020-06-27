@@ -765,6 +765,8 @@ struct AstVectorTpl(T)
     Z3_ast_vector_dec_ref(context(), _m_vector);
   }
 
+  alias length = size;
+  
   uint size() {
     return Z3_ast_vector_size(context(), _m_vector);
   }
@@ -1915,7 +1917,7 @@ struct Expr
      \pre is_app()
   */
   FuncDecl decl() {
-    Z3_func_decl f = Z3_get_app_decl(context(), cast(Z3_app) this);
+    Z3_func_decl f = Z3_get_app_decl(context(), Z3_to_app(context(), this.getAST));
     checkError();
     return FuncDecl(context(), f);
   }
@@ -1926,7 +1928,7 @@ struct Expr
      \pre is_app()
   */
   uint numArgs() {
-    uint r = Z3_get_app_num_args(context(), cast(Z3_app) this);
+    uint r = Z3_get_app_num_args(context(), Z3_to_app(context(), this.getAST));
     checkError();
     return r;
   }
@@ -1938,7 +1940,7 @@ struct Expr
      \pre i < num_args()
   */
   Expr arg(uint i) {
-    Z3_ast r = Z3_get_app_arg(context(), cast(Z3_app) this, i);
+    Z3_ast r = Z3_get_app_arg(context(), Z3_to_app(context(), this.getAST), i);
     checkError();
     return Expr(context(), r);
   }
@@ -3542,6 +3544,14 @@ struct Optimize
 					  weight.to!string.toStringz, null));
   }
 
+  handle add()(auto ref Expr e, uint weight, string id) {
+    import std.conv: to;
+    assert (e.isBool());
+    return handle(Z3_optimize_assert_soft(context(), _m_opt, e.getAST,
+					  weight.to!string.toStringz,
+					  context().strSymbol(id)));
+  }
+
   void add()(auto ref Expr e, auto ref Expr t) {
     assert (e.isBool());
     Z3_optimize_assert_and_track(context(), _m_opt, e.getAST, t.getAST);
@@ -4680,28 +4690,34 @@ Expr range()(auto ref Expr lo, auto ref Expr hi) {
 // The C API should be used for creating quantifiers with patterns, weights, many variables, etc.
 Expr forall()(auto ref Expr x, auto ref Expr b) {
   checkContext(x, b);
-  Z3_app[] vars = [cast(Z3_app) x];
+  Z3_app[] vars = [Z3_to_app(x.context(), x.getAST())];
   Z3_ast r = Z3_mk_forall_const(b.context(), 0, 1, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr forall()(auto ref Expr x1, auto ref Expr x2, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST())];
   Z3_ast r = Z3_mk_forall_const(b.context(), 0, 2, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr forall()(auto ref Expr x1, auto ref Expr x2, auto ref Expr x3, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b); checkContext(x3, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2, cast(Z3_app) x3];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST()),
+		   Z3_to_app(x3.context(), x3.getAST())];
   Z3_ast r = Z3_mk_forall_const(b.context(), 0, 3, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr forall()(auto ref Expr x1, auto ref Expr x2, auto ref Expr x3, auto ref Expr x4, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b); checkContext(x3, b); checkContext(x4, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2, cast(Z3_app) x3, cast(Z3_app) x4];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST()),
+		   Z3_to_app(x3.context(), x3.getAST()),
+		   Z3_to_app(x4.context(), x4.getAST())];
   Z3_ast r = Z3_mk_forall_const(b.context(), 0, 4, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
@@ -4714,28 +4730,34 @@ Expr forall()(auto ref ExprVector xs, auto ref Expr b) {
 }
 Expr exists()(auto ref Expr x, auto ref Expr b) {
   checkContext(x, b);
-  Z3_app[] vars = [cast(Z3_app) x];
+  Z3_app[] vars = [Z3_to_app(x.context(), x.getAST())];
   Z3_ast r = Z3_mk_exists_const(b.context(), 0, 1, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr exists()(auto ref Expr x1, auto ref Expr x2, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST())];
   Z3_ast r = Z3_mk_exists_const(b.context(), 0, 2, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr exists()(auto ref Expr x1, auto ref Expr x2, auto ref Expr x3, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b); checkContext(x3, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2, cast(Z3_app) x3];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST()),
+		   Z3_to_app(x3.context(), x3.getAST())];
   Z3_ast r = Z3_mk_exists_const(b.context(), 0, 3, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr exists()(auto ref Expr x1, auto ref Expr x2, auto ref Expr x3, auto ref Expr x4, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b); checkContext(x3, b); checkContext(x4, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2, cast(Z3_app) x3, cast(Z3_app) x4];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST()),
+		   Z3_to_app(x3.context(), x3.getAST()),
+		   Z3_to_app(x4.context(), x4.getAST())];
   Z3_ast r = Z3_mk_exists_const(b.context(), 0, 4, vars.ptr, 0, null, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
@@ -4748,28 +4770,34 @@ Expr exists()(auto ref ExprVector xs, auto ref Expr b) {
 }
 Expr lambda()(auto ref Expr x, auto ref Expr b) {
   checkContext(x, b);
-  Z3_app[] vars = [cast(Z3_app) x];
+  Z3_app[] vars = [Z3_to_app(x.context(), x.getAST())];
   Z3_ast r = Z3_mk_lambda_const(b.context(), 1, vars.ptr, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr lambda()(auto ref Expr x1, auto ref Expr x2, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST())];
   Z3_ast r = Z3_mk_lambda_const(b.context(), 2, vars.ptr, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr lambda()(auto ref Expr x1, auto ref Expr x2, auto ref Expr x3, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b); checkContext(x3, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2, cast(Z3_app) x3];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST()),
+		   Z3_to_app(x3.context(), x3.getAST())];
   Z3_ast r = Z3_mk_lambda_const(b.context(), 3, vars.ptr, b.getAST);
   b.checkError();
   return Expr(b.context(), r);
 }
 Expr lambda()(auto ref Expr x1, auto ref Expr x2, auto ref Expr x3, auto ref Expr x4, auto ref Expr b) {
   checkContext(x1, b); checkContext(x2, b); checkContext(x3, b); checkContext(x4, b);
-  Z3_app[] vars = [cast(Z3_app) x1, cast(Z3_app) x2, cast(Z3_app) x3, cast(Z3_app) x4];
+  Z3_app[] vars = [Z3_to_app(x1.context(), x1.getAST()),
+		   Z3_to_app(x2.context(), x2.getAST()),
+		   Z3_to_app(x3.context(), x3.getAST()),
+		   Z3_to_app(x4.context(), x4.getAST())];
   Z3_ast r = Z3_mk_lambda_const(b.context(), 4, vars.ptr, b.getAST);
   b.checkError();
   return Expr(b.context(), r);

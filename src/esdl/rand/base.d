@@ -7,7 +7,7 @@ import esdl.solver.z3: CstZ3Solver;
 import esdl.rand.intr;
 import esdl.rand.expr: CstValue;
 import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__ProxyRoot;
-import esdl.rand.misc: _esdl__RandGen, isVecSigned;
+import esdl.rand.misc: _esdl__RandGen, isVecSigned, writeHexString;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
 import esdl.data.charbuf;
@@ -487,13 +487,15 @@ class CstPredGroup			// group of related predicates
   // _cycle matches solver _cycle, that would mean this group is
   // already processed
   uint _cycle;
+
+  bool _hasSoftConstraints;
   
   // List of predicates permanently in this group
   Folder!(CstPredicate, "preds") _preds;
   Folder!(CstPredicate, "dynPreds") _dynPreds;
 
-  Folder!(CstPredicate, "preds") _predList;
-  Folder!(CstPredicate, "dynPreds") _dynPredList;
+  Folder!(CstPredicate, "predList") _predList;
+  Folder!(CstPredicate, "dynPredList") _dynPredList;
   
   CstPredicate[] predicates() {
     return _preds[];
@@ -555,17 +557,20 @@ class CstPredGroup			// group of related predicates
     if (_state is State.NEEDSYNC ||
 	_predList.length != _preds.length ||
 	_dynPredList.length != _dynPreds.length) {
+      _hasSoftConstraints = false;
       _state = State.NEEDSYNC;	// mark that we need to reassign a solver
       foreach (pred; _preds) pred._group = null;
       _preds.reset();
       foreach (pred; sort!((x, y) => x.name() < y.name())(_predList[])) {
 	pred._group = this;
+	if (pred._soft != 0) _hasSoftConstraints = true;
 	_preds ~= pred;
       }
       foreach (pred; _dynPreds) pred._group = null;
       _dynPreds.reset();
       foreach (pred; sort!((x, y) => x.name() < y.name())(_dynPredList[])) {
 	pred._group = this;
+	if (pred._soft != 0) _hasSoftConstraints = true;
 	_dynPreds ~= pred;
       }
     }
@@ -591,7 +596,7 @@ class CstPredGroup			// group of related predicates
     _sig.reset();
     _sig ~= "GROUP:\n";
     foreach (pred; _preds) {
-      pred._expr.writeExprString(_sig);
+      pred.writeSignature(_sig);
     }
     return _sig.toString();
   }
@@ -632,7 +637,7 @@ class CstPredGroup			// group of related predicates
       string sig = signature();
       debug (CSTSOLVER) {
 	import std.stdio;
-	writeln(group.describe());
+	writeln(describe());
 	writeln(sig);
       }
 
@@ -670,6 +675,12 @@ class CstPredGroup			// group of related predicates
 	foreach (pred; _dynPreds) {
 	  description ~= "    " ~ pred.name() ~ '\n';
 	}
+    }
+    if (_hasSoftConstraints) {
+      description ~= "  Has Soft Constraints: True\n";
+    }
+    else {
+      description ~= "  Has Soft Constraints: False\n";
     }
     return description;
   }
@@ -1116,6 +1127,15 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
   }
 
+  void writeSignature(ref Charbuf str) {
+    import std.conv: to;
+    if (_soft != 0) {
+      str ~= '!';
+      str ~= _soft.to!string();
+      str ~= ':';
+    }
+    _expr.writeExprString(str);
+  }
 }
 
 class CstBlock

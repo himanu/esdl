@@ -233,7 +233,7 @@ class CstZ3Solver: CstSolver
 	addRule(_solver, _evalStack[0].toBool());
       }
       else {
-	addRule(_solver, _evalStack[0].toBool(), softWeight);
+	addRule(_solver, _evalStack[0].toBool());
       }
       _evalStack.length = 0;
     }

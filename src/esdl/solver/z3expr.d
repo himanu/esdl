@@ -1488,12 +1488,6 @@ void addRule()(auto ref Solver solver, auto ref BoolExpr e) {
   solver.checkError();
 }
 
-void addRule()(auto ref Solver solver, auto ref BoolExpr e, uint weight) {
-  import std.conv: to;
-  Z3_solver_assert(solver.context(), solver, e.getAST);
-  solver.checkError();
-}
-
 void addRule()(auto ref Solver solver, auto ref BoolExpr e, auto ref BoolExpr p) {
   assert (p.isConst());
   Z3_solver_assert_and_track(context(), solver, e.getAST, p.getAST);
@@ -1502,6 +1496,37 @@ void addRule()(auto ref Solver solver, auto ref BoolExpr e, auto ref BoolExpr p)
 
 void addRule()(auto ref Solver solver, auto ref BoolExpr e, string p) {
   addRule(solver, e, solver.context().boolConst(p).byRef);
+}
+
+void addRule()(auto ref Optimize optimize, auto ref BoolExpr e) {
+  Z3_optimize_assert(optimize.context(), optimize, e.getAST);
+  optimize.checkError();
+}
+
+void addRule()(auto ref Optimize optimize, auto ref BoolExpr e, uint weight) {
+  import std.conv: to;
+  Z3_optimize_assert_soft(optimize.context(), optimize, e.getAST,
+			  weight.to!string.toStringz, null);
+  optimize.checkError();
+}
+
+void addRule()(auto ref Optimize optimize, auto ref BoolExpr e,
+	       uint weight, string id) {
+  import std.conv: to;
+  Z3_optimize_assert_soft(optimize.context(), optimize, e.getAST,
+			  weight.to!string.toStringz,
+			  optimize.context().strSymbol(id));
+  optimize.checkError();
+}
+
+void addRule()(auto ref Optimize optimize, auto ref BoolExpr e, auto ref BoolExpr p) {
+  assert (p.isConst());
+  Z3_optimize_assert_and_track(context(), optimize, e.getAST, p.getAST);
+  optimize.checkError();
+}
+
+void addRule()(auto ref Optimize optimize, auto ref BoolExpr e, string p) {
+  addRule(optimize, e, optimize.context().boolConst(p).byRef);
 }
 
 // friend expr ite(expr & c, expr & t, expr & e);
