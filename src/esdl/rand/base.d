@@ -489,6 +489,10 @@ class CstPredGroup			// group of related predicates
   uint _cycle;
 
   bool _hasSoftConstraints;
+
+  bool hasSoftConstraints() {
+    return _hasSoftConstraints;
+  }
   
   // List of predicates permanently in this group
   Folder!(CstPredicate, "preds") _preds;

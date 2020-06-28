@@ -1840,6 +1840,17 @@ struct Expr
     return result;
   }
 
+  double getNumeralDouble() {
+    assert(isNumeral());
+    double result = 0;
+    if (!isNumeral(result)) {
+      assert (context().enableExceptions());
+      if (!context().enableExceptions()) return 0;
+      throw new Z3Exception("numeral does not fit in machine double");
+    }
+    return result;
+  }
+
   Z3_lbool boolValue() {
     return Z3_get_bool_value(context(), getAST);
   }
@@ -2000,6 +2011,42 @@ struct Expr
   }
   bool isDistinct() {
     return isApp() && Z3_decl_kind.Z3_OP_DISTINCT == decl().declKind();
+  }
+  bool isAdd() {
+    return isApp() && Z3_decl_kind.Z3_OP_ADD == decl().declKind();
+  }
+  bool isSub() {
+    return isApp() && Z3_decl_kind.Z3_OP_SUB == decl().declKind();
+  }
+  bool isLe() {
+    return isApp() && Z3_decl_kind.Z3_OP_LE == decl().declKind();
+  }
+  bool isGe() {
+    return isApp() && Z3_decl_kind.Z3_OP_GE == decl().declKind();
+  }
+  bool isLt() {
+    return isApp() && Z3_decl_kind.Z3_OP_LT == decl().declKind();
+  }
+  bool isGt() {
+    return isApp() && Z3_decl_kind.Z3_OP_GT == decl().declKind();
+  }
+  bool isMul() {
+    return isApp() && Z3_decl_kind.Z3_OP_MUL == decl().declKind();
+  }
+  bool isDiv() {
+    return isApp() && Z3_decl_kind.Z3_OP_DIV == decl().declKind();
+  }
+  bool isIDiv() {
+    return isApp() && Z3_decl_kind.Z3_OP_IDIV == decl().declKind();
+  }
+  bool isRem() {
+    return isApp() && Z3_decl_kind.Z3_OP_REM == decl().declKind();
+  }
+  bool isMod() {
+    return isApp() && Z3_decl_kind.Z3_OP_MOD == decl().declKind();
+  }
+  bool isPower() {
+    return isApp() && Z3_decl_kind.Z3_OP_POWER == decl().declKind();
   }
 
 

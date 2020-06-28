@@ -1,5 +1,6 @@
 module esdl.solver.z3;
 import std.stdio;
+import std.conv: to;
 
 
 import std.container: Array;
@@ -92,10 +93,12 @@ struct Z3Term
 
 struct BvVar
 {
-  enum State: ubyte {INIT, CONST, VAR}
+  enum State: ubyte {INIT, STABLE, VARIABLE}
   BvExpr _dom;
   long   _val;
   State  _state;
+
+  BoolExpr _rule;
 
   alias _dom this;
   
@@ -122,8 +125,8 @@ struct BvVar
     return BvExpr(context, r, _dom.isSigned());
   }
 
-  BoolExpr getRule() {
-    return eq(_dom, getValExpr());
+  ref BoolExpr getRule() {
+    return _rule;
   }
   
   void update(CstDomain dom, CstZ3Solver solver) {
@@ -131,17 +134,19 @@ struct BvVar
     long val = dom.value();
     if (_val != val) {
       _val = val;
+      BoolExpr rule = eq(_dom, getValExpr());
+      _rule = rule;
       final switch (_state) {
       case State.INIT:
-	_state = State.CONST;
-	solver._count0 += 1;
+	_state = State.STABLE;
+	solver._countStable += 1;
 	break;
-      case State.CONST:
-	_state = State.VAR;
-	solver._count0 -= 1;
-	solver._count1 += 1;
+      case State.STABLE:
+	_state = State.VARIABLE;
+	solver._countStable -= 1;
+	solver._countVariable += 1;
 	break;
-      case State.VAR:
+      case State.VARIABLE:
 	solver._refreshVar = true;
 	break;
       }
@@ -149,12 +154,14 @@ struct BvVar
     else {
       final switch (_state) {
       case State.INIT:
-	_state = State.CONST;
-	solver._count0 += 1;
+	BoolExpr rule = eq(_dom, getValExpr());
+	_rule = rule;
+	_state = State.STABLE;
+	solver._countStable += 1;
 	break;
-      case State.CONST:
+      case State.STABLE:
 	break;
-      case State.VAR:
+      case State.VARIABLE:
 	break;
       }
     }
@@ -172,15 +179,18 @@ class CstZ3Solver: CstSolver
   Context _context;
 
   Solver _solver;
+  Optimize _optimize;
+  bool _needOptimize;
 
   _esdl__Proxy _proxy;
 
-  uint _count0;
-  uint _count1;
+  uint _countStable;
+  uint _countVariable;
 
   // whether some variables have changed and a refresh required
-  bool _refreshVar;	    // whether the variable values need refresh
-  ubyte _pushCount;	    // balance number of pushed z3 context has
+  bool _refreshVar;	   // whether the variable values need refresh
+  byte _pushSolverCount;   // balance number of pushed z3 context has
+  byte _pushOptimizeCount; // balance number of pushed z3 context has
 
   // the group is used only for the purpose of constructing the Z3 solver
   // otherwise the solver identifies with the signature only
@@ -217,8 +227,14 @@ class CstZ3Solver: CstSolver
       var = d;
     }
 
-    Solver s = Solver(_context);
-    _solver = s;
+    Solver solver = Solver(_context);
+    _solver = solver;
+
+    if (group.hasSoftConstraints()) {
+      _needOptimize = true;
+      Optimize optimize = Optimize(_context);
+      _optimize = optimize;
+    }
 
     foreach (pred; group.predicates()) {
       // import std.stdio;
@@ -231,15 +247,18 @@ class CstZ3Solver: CstSolver
       uint softWeight = pred.getSoftWeight();
       if (softWeight == 0) {
 	addRule(_solver, _evalStack[0].toBool());
+	if (_needOptimize) addRule(_optimize, _evalStack[0].toBool());
       }
       else {
-	addRule(_solver, _evalStack[0].toBool());
+	// ignore the soft constraint
+	assert (_needOptimize);
+	addRule(_optimize, _evalStack[0].toBool(), softWeight, "@soft");
       }
       _evalStack.length = 0;
     }
 
-
-    this.push();
+    // if (_needOptimize) this.pushOptimize();
+    // this.pushSolver();
 
     // writeln("auto_config: ", getParam("auto_config"));
     // writeln("smt.phase_selection: ", getParam("smt.phase_selection"));
@@ -249,23 +268,121 @@ class CstZ3Solver: CstSolver
     // writeln("sat.random_seed: ", getParam("sat.random_seed"));
   }
 
-  BvVar.State varState;
+  // BvVar.State varState;
 
-  void push() {
-    assert(_pushCount <= 2);
-    _pushCount += 1;
+  enum State: ubyte
+  {   NULL,			// Does not exist, no action          pop n push n
+      INIT,			// Did not exist, create now          pop n push y
+      NONE,			// exists, no action needed           pop n push n
+      PROD,			// exists, need to rework             pop y push y
+      TEAR,                     // exists, no longer required         pop y push n
+      DONE			// has been destroyed - end           pop n push n
+  }
+
+  ubyte pushLevel(State state) {
+    if (state <= State.NULL || state >= State.TEAR) return 0;
+    else return 1;
+  }
+
+  State _stableState;
+  State _variableState;
+  State _assumptionState;
+  
+  void pushOptimize() {
+    assert(_pushOptimizeCount <= 2);
+    _pushOptimizeCount += 1;
+    _optimize.push();
+  }
+
+  void pushSolver() {
+    assert(_pushSolverCount <= 2);
+    _pushSolverCount += 1;
     _solver.push();
   }
 
-  void pop() {
-    assert(_pushCount >= 0);
-    _pushCount -= 1;
+  void popOptimize() {
+    assert(_pushOptimizeCount >= 0);
+    _pushOptimizeCount -= 1;
+    _optimize.pop();
+  }
+
+  void popSolver() {
+    assert(_pushSolverCount >= 0);
+    _pushSolverCount -= 1;
     _solver.pop();
   }
 
+  bool[] _assumptionFlags;
+  
   override void solve(CstPredGroup group) {
+    Expr[] assumptions;
+    bool[] assumptionFlags;
     updateVars(group);
+    if (_needOptimize) {
+      if (updateOptimize()) {
+	_optimize.check();
+	Model model = _optimize.getModel();
+	assert (_optimize.objectives.size() == 1);
+	auto objective = _optimize.objectives[0];
+	assert (objective.isAdd);
+	for (uint i=0; i!=objective.numArgs(); ++i) {
+	  auto subObjective = objective.arg(i);
+	  assert (subObjective.isIte());
+	  // writeln("Objective: ", subObjective._ast.toString());
+	  // writeln("Assertion: ", subObjective.numArgs());
+	  // writeln("Objective: ", subObjective.arg(0)._ast.toString());
+	  // writeln(model.eval(subObjective)._ast.toString());
+	  if (model.eval(subObjective).getNumeralDouble() < 0.01) { // == 0.0
+	    assumptionFlags ~= true;
+	    Expr assumption = subObjective.arg(0);
+	    // writeln("Objective: ", assumption._ast.toString());
+	    assumptions ~= subObjective.arg(0);
+	  }
+	  else {
+	    assumptionFlags ~= false;
+	  }
+	}
+      }
+    }
 
+    if (_assumptionFlags != assumptionFlags) {
+      if (_assumptionFlags.length == 0) {
+	_assumptionState = State.INIT;
+      }
+      else {
+	_assumptionState = State.PROD;
+      }
+      _assumptionFlags = assumptionFlags;
+    }
+    else {
+      if (_assumptionFlags.length == 0) {
+	assert(_assumptionState == State.NULL);
+      }
+      else {
+	_assumptionState = State.NONE;
+      }
+    }
+    
+    updateSolver(assumptions);
+    updateVarState(_variableState);
+    updateVarState(_stableState);
+    updateVarState(_assumptionState);
+
+    assert (pushLevel(_variableState) + pushLevel(_stableState) +
+	    pushLevel(_assumptionState) == _pushSolverCount,
+	    "_variableState: " ~ _variableState.to!string() ~
+	    " _stableState: " ~ _stableState.to!string() ~
+	    " _assumptionState: " ~ _assumptionState.to!string() ~
+	    " _pushSolverCount: " ~ _pushSolverCount.to!string());
+    
+    if (_needOptimize) {
+      assert (pushLevel(_variableState) +
+	      pushLevel(_stableState) == _pushOptimizeCount,
+	      "_variableState: " ~ _variableState.to!string() ~
+	      " _stableState: " ~ _stableState.to!string() ~
+	      " _pushOptimizeCount: " ~ _pushSolverCount.to!string());
+    }
+    
     CstDomain[] doms = group.domains();
 
     debug (Z3SOLVER) {
@@ -292,35 +409,147 @@ class CstZ3Solver: CstSolver
 
   }
 
+  void updateVarState(ref State state) {
+    final switch (state) {
+    case State.NULL: break;
+    case State.INIT: state = State.NONE; break;
+    case State.NONE: break;
+    case State.PROD: state = State.NONE; break;
+    case State.TEAR: state = State.DONE; break;
+    case State.DONE: break;
+    }
+  }
+  
   void updateVars(CstPredGroup group) {
+    
     CstDomain[] vars = group.variables();
     _refreshVar = false;
-    uint pcount0 = _count0;
-    uint pcount1 = _count1;
+    uint pcountStable = _countStable;
+    uint pcountVariable = _countVariable;
     foreach (i, ref var; _variables) var.update(vars[i], this);
-    assert (_count0 + _count1 == _variables.length);
+    assert (_countStable + _countVariable == _variables.length);
     // import std.stdio;
     // writeln("refresh: ", _refreshVar,
-    // 	    " prev counts: ", pcount0, ", ", pcount1,
-    // 	    " now counts: ", _count0, ", ", _count1);
+    // 	    " prev counts: ", pcountStable, ", ", pcountVariable,
+    // 	    " now counts: ", _countStable, ", ", _countVariable);
 
-    if (_refreshVar || (pcount1 != 0 && pcount1 != _count1))
-      pop();			// for variables
-    if (pcount0 != 0 && pcount0 != _count0)
-      pop();			// for constants
+    if (pcountStable == 0) {
+      assert (_stableState is State.NULL || _stableState is State.DONE);
+      if (_countStable > 0) {
+	assert (_stableState is State.NULL);
+	_stableState = State.INIT;
+      }
+    }
+      
+    if (pcountStable != 0) {
+      assert (_stableState is State.NONE);
+      if (_countStable == 0) _stableState = State.TEAR;
+      else if (_countStable != pcountStable) {
+	assert (_countStable < pcountStable);
+	_stableState = State.PROD;
+      }
+    }
+
+    if (pcountVariable == 0) {
+      assert (_variableState is State.NULL);
+      if (_countVariable > 0) {
+	_variableState = State.INIT;
+      }
+    }
+      
+    if (pcountVariable != 0) {
+      assert (_variableState is State.NONE);
+      if (_countVariable == 0) {
+	assert (false);
+      }
+      else if (_refreshVar || _countVariable != pcountVariable) {
+	assert (_countVariable >= pcountVariable);
+	_variableState = State.PROD;
+      }
+    }
+  }
+
+  bool updateOptimize() {
+    bool hasUpdated;
+    if (_variableState == State.PROD) {
+      hasUpdated = true;
+      this.popOptimize();		// for variables
+    }
+    if (_stableState == State.PROD || _stableState == State.TEAR) {
+      hasUpdated = true;
+      this.popOptimize();		// for constants
+    }
 
     // process constants -- if required
-    if (pcount0 != _count0 && _count0 > 0) {
-      push();
+    if (_stableState == State.PROD || _stableState == State.INIT) {
+      hasUpdated = true;
+      this.pushOptimize();
       foreach (i, ref var; _variables) {
-	if (var._state == BvVar.State.CONST)
+	if (var._state == BvVar.State.STABLE)
+	  addRule(_optimize, var.getRule());
+      }
+    }
+    if (_variableState == State.PROD || _variableState == State.INIT) {
+      hasUpdated = true;
+      this.pushOptimize();
+      foreach (i, ref var; _variables) {
+	if (var._state == BvVar.State.VARIABLE)
+	  addRule(_optimize, var.getRule());
+      }
+    }
+    return hasUpdated;
+  }
+
+  void updateSolver(Expr[] assumptions) {
+    if (_variableState == State.PROD) {
+      this.popSolver();		// for variables
+    }
+    if (_stableState == State.PROD ||
+	_stableState == State.TEAR ||
+	_stableState == State.INIT) {
+      if (_assumptionState == State.PROD || _assumptionState == State.NONE) {
+	this.popSolver();	// for assumptions
+      }
+    }
+    else {
+      if (_assumptionState == State.PROD) {
+	this.popSolver();	// for assumptions
+      }
+    }
+    if (_stableState == State.PROD || _stableState == State.TEAR) {
+      this.popSolver();		// for constants
+    }
+
+    // process constants -- if required
+    if (_stableState == State.PROD || _stableState == State.INIT) {
+      this.pushSolver();
+      foreach (i, ref var; _variables) {
+	if (var._state == BvVar.State.STABLE)
 	  addRule(_solver, var.getRule());
       }
     }
-    if (_refreshVar || pcount1 != _count1) {
-      push();
+    if (_stableState == State.PROD || _stableState == State.TEAR ||
+	_stableState == State.INIT) {
+      if (_assumptionState != State.NULL) {
+	this.pushSolver();
+	foreach (assumption; assumptions) {
+	  _solver.add(assumption);
+	}
+      }
+    }
+    else {
+      if (_assumptionState == State.PROD || _assumptionState == State.INIT) {
+	this.pushSolver();
+	foreach (assumption; assumptions) {
+	  _solver.add(assumption);
+	}
+      }
+    }
+      
+    if (_variableState == State.INIT || _variableState == State.PROD) {
+      this.pushSolver();
       foreach (i, ref var; _variables) {
-	if (var._state == BvVar.State.VAR)
+	if (var._state == BvVar.State.VARIABLE)
 	  addRule(_solver, var.getRule());
       }
     }
