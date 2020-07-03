@@ -137,11 +137,11 @@ abstract class _esdl__Proxy
       auto proc = Procedure.self;
       if (proc !is null) {
 	Random procRgen = proc.getRandGen();
-	_esdl__seed = uniform!(uint)(procRgen);
+	_esdl__seed = 0; // uniform!(uint)(procRgen);
       }
       else {
 	// no active simulation -- use global rand generator
-	_esdl__seed = uniform!(uint)();
+	_esdl__seed = 0; // uniform!(uint)();
       }
     }
     _esdl__rGen = new _esdl__RandGen(_esdl__seed);
