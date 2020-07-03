@@ -34,6 +34,7 @@ class Simple: Base {
     a >= 64;
     @soft!4 a[0..4]  == 0;
     @soft a > 24;
+    a + b > 32;
   } csta;
 }
 

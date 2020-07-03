@@ -716,7 +716,7 @@ struct CstParser {
   size_t parseWithArg() {
     size_t start = srcCursor;
     if (srcCursor < CST.length &&
-	CST[srcCursor == '#']) {
+	CST[srcCursor == '$']) {
       ++srcCursor;
     }
     else return start;
