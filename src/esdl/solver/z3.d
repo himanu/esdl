@@ -266,6 +266,10 @@ class CstZ3Solver: CstSolver
     // if (_needOptimize) this.pushOptimize();
     // this.pushSolver();
 
+    // If there are no soft constraints and no variables, we still need a push
+    // to make sure that we get an SMT solver and we can rondomize results
+    _solver.push();
+
     // writeln("auto_config: ", getParam("auto_config"));
     // writeln("smt.phase_selection: ", getParam("smt.phase_selection"));
     // writeln("smt.arith.random_initial_value: ", getParam("smt.arith.random_initial_value"));
@@ -319,35 +323,49 @@ class CstZ3Solver: CstSolver
   }
 
   bool[] _assumptionFlags;
-  
-  override void solve(CstPredGroup group) {
+
+  bool _optimizeInit = false;
+
+  Expr[] optimize() {
     Expr[] assumptions;
     bool[] assumptionFlags;
-    updateVars(group);
-    if (_needOptimize) {
-      if (updateOptimize()) {
-	_optimize.check();
-	Model model = _optimize.getModel();
-	assert (_optimize.objectives.size() == 1);
-	auto objective = _optimize.objectives[0];
-	assert (objective.isAdd);
-	for (uint i=0; i!=objective.numArgs(); ++i) {
-	  auto subObjective = objective.arg(i);
-	  assert (subObjective.isIte());
-	  // writeln("Objective: ", subObjective._ast.toString());
-	  // writeln("Assertion: ", subObjective.numArgs());
-	  // writeln("Objective: ", subObjective.arg(0)._ast.toString());
-	  // writeln(model.eval(subObjective)._ast.toString());
-	  if (model.eval(subObjective).getNumeralDouble() < 0.01) { // == 0.0
-	    assumptionFlags ~= true;
-	    Expr assumption = subObjective.arg(0);
-	    // writeln("Objective: ", assumption._ast.toString());
-	    assumptions ~= subObjective.arg(0);
-	  }
-	  else {
-	    assumptionFlags ~= false;
-	  }
+    _optimize.check();
+    Model model = _optimize.getModel();
+    assert (_optimize.objectives.size() == 1);
+    auto objective = _optimize.objectives[0];
+    if (objective.isAdd) {	// multiple soft constraints
+      for (uint i=0; i!=objective.numArgs(); ++i) {
+	auto subObjective = objective.arg(i);
+	assert (subObjective.isIte());
+	// writeln("Objective: ", subObjective._ast.toString());
+	// writeln("Assertion: ", subObjective.numArgs());
+	// writeln("Objective: ", subObjective.arg(0)._ast.toString());
+	// writeln(model.eval(subObjective)._ast.toString());
+	if (model.eval(subObjective).getNumeralDouble() < 0.01) { // == 0.0
+	  assumptionFlags ~= true;
+	  Expr assumption = subObjective.arg(0);
+	  // writeln("Objective: ", assumption._ast.toString());
+	  assumptions ~= subObjective.arg(0);
 	}
+	else {
+	  assumptionFlags ~= false;
+	}
+      }
+    }
+    else {			// single soft constraint
+      assert (objective.isIte());
+      // writeln("Objective: ", subObjective._ast.toString());
+      // writeln("Assertion: ", subObjective.numArgs());
+      // writeln("Objective: ", subObjective.arg(0)._ast.toString());
+      // writeln(model.eval(subObjective)._ast.toString());
+      if (model.eval(objective).getNumeralDouble() < 0.01) { // == 0.0
+	assumptionFlags ~= true;
+	Expr assumption = objective.arg(0);
+	// writeln("Objective: ", assumption._ast.toString());
+	assumptions ~= objective.arg(0);
+      }
+      else {
+	assumptionFlags ~= false;
       }
     }
 
@@ -361,15 +379,24 @@ class CstZ3Solver: CstSolver
       _assumptionFlags = assumptionFlags;
     }
     else {
-      if (_assumptionFlags.length == 0) {
-	assert(_assumptionState == State.NULL);
-      }
-      else {
-	_assumptionState = State.NONE;
+      _assumptionState = State.NONE;
+    }
+    return assumptions[];
+  }
+  
+  override void solve(CstPredGroup group) {
+    updateVars(group);
+    if (_needOptimize) {
+      if (updateOptimize() || (_optimizeInit is false)) {
+	Expr[] assumptions = optimize();
+	_optimizeInit = true;
+	updateSolver(assumptions);
       }
     }
+    else {
+      updateSolver();
+    }
     
-    updateSolver(assumptions);
     updateVarState(_variableState);
     updateVarState(_stableState);
     updateVarState(_assumptionState);
@@ -505,7 +532,7 @@ class CstZ3Solver: CstSolver
     return hasUpdated;
   }
 
-  void updateSolver(Expr[] assumptions) {
+  void updateSolver(Expr[] assumptions=[]) {
     if (_variableState == State.PROD) {
       this.popSolver();		// for variables
     }
