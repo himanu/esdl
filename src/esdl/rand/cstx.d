@@ -190,6 +190,12 @@ struct CstParser {
       INSIDE,
   }
 
+  enum OpRangeToken: byte
+  {   NONE = 0,
+      RANGE,
+      RANGEINC,
+  }
+
   enum OpLogicToken: byte
   {   NONE = 0,
       LOGICIMP,		// Implication operator
@@ -269,6 +275,8 @@ struct CstParser {
       if (CST[srcCursor] == '/') tok = OpArithToken.DIV;
       if (CST[srcCursor] == '%') tok = OpArithToken.REM;
       if (CST[srcCursor] == '[') {
+	import std.stdio;
+	writeln("I am here");
 	size_t srcTag = srcCursor;
 	while (srcCursor < CST.length - 2) {
 	  if (CST[srcCursor..srcCursor+2] == "..") {
@@ -289,6 +297,25 @@ struct CstParser {
       }
     }
     if (tok !is OpArithToken.NONE) {
+      srcCursor += 1;
+      return tok;
+    }
+    return tok;			// None
+  }
+
+  OpRangeToken parseRangeOperator() {
+    OpRangeToken tok = OpRangeToken.NONE;
+    if (srcCursor <= CST.length - 2) {
+      if (CST[srcCursor] == '.' && CST[srcCursor+1] == '.') tok = OpRangeToken.RANGE;
+    }
+    if (tok !is OpRangeToken.NONE) {
+      srcCursor += 2;
+      return tok;
+    }
+    if (srcCursor <= CST.length - 1) {
+      if (CST[srcCursor] == ':') tok = OpRangeToken.RANGEINC;
+    }
+    if (tok !is OpRangeToken.NONE) {
       srcCursor += 1;
       return tok;
     }
@@ -515,7 +542,10 @@ struct CstParser {
       }
       srcTag = srcCursor;
       parseSpace();
-      if (CST[srcCursor] == '.') {
+      if (CST[srcCursor] == '.' &&
+	  srcCursor + 1 < CST.length &&
+	  CST[srcCursor+1] != '.' // that woucd be range expression
+	  ) {
 	fill(CST[srcTag..srcCursor]);
 	++srcCursor;
 	wTag = srcCursor;
@@ -650,7 +680,7 @@ struct CstParser {
 	if (CST[srcTag+idChain[2*i]] is '[') {
 	  indexTag ~= outCursor-1;
 	  ++numIndex;
-	  procSubExpr(srcTag+idChain[2*i]+1);
+	  procIndexExpr(srcTag+idChain[2*i]+1);
 	}
 	else {
 	  fill("null");
@@ -1433,14 +1463,14 @@ struct CstParser {
   }
 
 
-  void procSubExpr(size_t cursor) {
+  void procIndexExpr(size_t cursor) {
     auto savedCursor = srcCursor;
     auto savedNumIndex = numIndex;
     auto savedNumParen = numParen;
     srcCursor = cursor;
     numIndex = 0;
     numParen = 0;
-    procArithExpr();
+    procRangeExpr();
     numIndex = savedNumIndex;
     numParen = savedNumParen;
     srcCursor = savedCursor;
@@ -1449,6 +1479,7 @@ struct CstParser {
   void procArithExpr() {
     size_t startNumParen = numParen;
     size_t srcTag = 0;
+    size_t startAnchor = outCursor;
     // true in the beginning of the expression or just after a start of parenthesis
     bool unaryLegal = true;
     while (srcCursor < CST.length) {
@@ -1524,6 +1555,53 @@ struct CstParser {
       case OpArithToken.SLICE:
 	assert(false); // FIXME
       }
+    }
+  }
+
+  void procRangeExpr() {
+    size_t srcTag = 0;
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    // LHS
+    if (srcCursor < CST.length) {
+      // size_t openingParenAnchor = fill(" ");
+      size_t startAnchor = outCursor;
+      srcTag = srcCursor;
+      procArithExpr();
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting an expression, got none");
+      }
+
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+
+      srcTag = srcCursor;
+      OpRangeToken opToken = parseRangeOperator();
+
+      final switch(opToken) {
+      case OpRangeToken.RANGE:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__range(");
+	break;
+      case OpRangeToken.RANGEINC:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__rangeinc(");
+	break;
+      case OpRangeToken.NONE:
+	return;
+      }
+      // RHS
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+
+      srcTag = srcCursor;
+      procArithExpr();
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting an arithmatic expression on RHS, got none");
+      }
+      fill(")");
     }
   }
 

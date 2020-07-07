@@ -15,7 +15,7 @@ import std.algorithm.searching: canFind;
 private import std.typetuple: staticIndexOf, TypeTuple;
 private import std.traits: BaseClassesTuple; // required for staticIndexOf
 
-class Context
+class BuddyContext
 {
   BDD _bdd;
   Buddy _buddy;
@@ -236,7 +236,7 @@ class CstBuddySolver: CstSolver
 
   BvVar[] _variables;
 
-  Context _context;
+  BuddyContext _context;
 
   _esdl__Proxy _proxy;
 
@@ -265,7 +265,7 @@ class CstBuddySolver: CstSolver
       _esdl__buddy = new Buddy(1000, 1000);
     }
 
-    _context = new Context(_esdl__buddy);
+    _context = new BuddyContext(_esdl__buddy);
 
     CstDomain[] doms = group.domains();
 
@@ -590,12 +590,22 @@ class CstBuddySolver: CstSolver
   }
 
   override void processEvalStack(CstSliceOp op) {
-    assert (op == CstSliceOp.SLICE);
-    BddVec e = _evalStack[$-3].toBv()[cast(uint) _evalStack[$-2].toUlong() ..
-				      cast(uint) _evalStack[$-1].toUlong()];
-    popEvalStack(3);
-    // _evalStack.length = _evalStack.length - 3;
-    pushToEvalStack(e);
+    final switch (op) {
+    case CstSliceOp.SLICE:
+      BddVec e = _evalStack[$-3].toBv()[cast(uint) _evalStack[$-2].toUlong() ..
+					cast(uint) _evalStack[$-1].toUlong()];
+      popEvalStack(3);
+      // _evalStack.length = _evalStack.length - 3;
+      pushToEvalStack(e);
+      break;
+    case CstSliceOp.SLICEINC:
+      BddVec e = _evalStack[$-3].toBv()[cast(uint) _evalStack[$-2].toUlong() ..
+					cast(uint) _evalStack[$-1].toUlong() + 1];
+      popEvalStack(3);
+      // _evalStack.length = _evalStack.length - 3;
+      pushToEvalStack(e);
+      break;
+    }
   }
 
 

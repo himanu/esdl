@@ -148,8 +148,16 @@ interface CstVecTerm: CstVecExpr
 	}
       }
 
-  final CstVecSliceExpr opSlice(CstVecTerm lhs, CstVecTerm rhs) {
-    return new CstVecSliceExpr(this, lhs, rhs);
+  // final CstVecSliceExpr opSlice(CstVecTerm lhs, CstVecTerm rhs) {
+  //   return new CstVecSliceExpr(this, lhs, rhs);
+  // }
+
+  final CstVecSliceExpr opIndex(CstRangeExpr range) {
+    return new CstVecSliceExpr(this, range);
+  }
+
+  final CstVecIndexExpr opIndex(CstVecTerm index) {
+    return new CstVecIndexExpr(this, index);
   }
 
   CstNotLogicExpr opUnary(string op)() if(op == "*") {
@@ -1553,27 +1561,237 @@ class CstVec2VecExpr: CstVecTerm
   }
 }
 
+class CstRangeExpr: CstVecTerm
+{
+  import std.conv;
+
+  CstVecExpr _lhs;
+  CstVecExpr _rhs;
+
+  bool _inclusive = false;
+
+  string describe() {
+    if (_inclusive) return "( " ~ _lhs.describe ~ " : " ~ _rhs.describe ~ " )";
+    else return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
+  }
+
+  void visit(CstSolver solver) {
+    // assert (_lhs.isSolved());
+    // assert (_rhs.isSolved());
+    // solver.pushToEvalStack(_lhs.evaluate());
+    // solver.pushToEvalStack(_rhs.evaluate());
+    // if (_inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
+    // else solver.processEvalStack(CstSliceOp.SLICE);
+    assert (false);
+  }
+
+  long evaluate() {
+    assert (false);
+  }
+
+  override CstRangeExpr unroll(CstIterator iter, uint n) {
+    return new CstRangeExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _inclusive);
+  }
+
+  this(CstVecExpr lhs, CstVecExpr rhs, bool inclusive=false) {
+    _lhs = lhs;
+    _rhs = rhs;
+    _inclusive = inclusive;
+  }
+
+  uint resolveLap() {
+    // auto lhs = _lhs.resolveLap();
+    // auto rhs = _rhs.resolveLap();
+    // if (rhs > lhs) return rhs;
+    // else return lhs;
+    assert (false);
+  }
+
+  void resolveLap(uint lap) {
+    // _lhs.resolveLap(lap);
+    // _rhs.resolveLap(lap);
+    assert (false);
+  }
+  
+  bool isConst() {
+    return false;
+  }
+
+  bool isIterator() {
+    return false;
+  }
+
+  bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstDomain[] deps) {
+    _lhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  bool getUniRange(ref UniRange rng) {
+    assert (false);
+  }
+
+  bool getIntRange(ref IntR rng) {
+    assert (false);
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    assert (false);
+  }
+
+  override bool isSolved() {
+    return _lhs.isSolved() && _rhs.isSolved();
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    _lhs.writeExprString(str);
+    if (_inclusive) str ~= " : ";
+    else str ~= " .. ";
+    _rhs.writeExprString(str);
+  }
+}
+
+// class CstVecSliceExpr: CstVecTerm
+// {
+//   CstVecExpr _vec;
+//   CstVecExpr _lhs;
+//   CstVecExpr _rhs;
+  
+//   string describe() {
+//     if (_rhs is null)
+//       return _vec.describe() ~ "[ " ~ _lhs.describe() ~ " ]";
+//     else
+//       return _vec.describe() ~ "[ " ~ _lhs.describe() ~ " .. " ~ _rhs.describe() ~ " ]";
+//   }
+
+//   void visit(CstSolver solver) {
+//     _vec.visit(solver);
+//     assert (_lhs.isSolved());
+//     if (_rhs !is null) assert (_rhs.isSolved());
+//     solver.pushToEvalStack(_lhs.evaluate());
+//     if (_rhs is null) solver.pushToEvalStack(_lhs.evaluate() + 1);
+//     else solver.pushToEvalStack(_rhs.evaluate());
+//     solver.processEvalStack(CstSliceOp.SLICE);
+//   }
+
+//   // bool getVal(ref long val) {
+//   //   return false;
+//   // }
+
+//   long evaluate() {
+//     // auto vec  = _vec.evaluate();
+//     // auto lvec = _lhs.evaluate();
+//     // auto rvec = _range._rhs.evaluate();
+
+//     assert(false, "Can not evaluate a CstVecSliceExpr!");
+//   }
+
+//   override CstVecSliceExpr unroll(CstIterator iter, uint n) {
+//     if (_rhs is null)
+//       return new CstVecSliceExpr(_vec.unroll(iter, n),
+// 				 _lhs.unroll(iter, n), null);
+//     else 
+//       return new CstVecSliceExpr(_vec.unroll(iter, n),
+// 				 _lhs.unroll(iter, n), _rhs.unroll(iter, n));
+//   }
+
+//   this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs) {
+//     _vec = vec;
+//     _lhs = lhs;
+//     _rhs = rhs;
+//   }
+
+//   uint resolveLap() {
+//     return _vec.resolveLap();
+//   }
+
+//   void resolveLap(uint lap) {
+//     _vec.resolveLap(lap);
+//   }
+
+//   bool isConst() {
+//     return false;
+//   }
+
+//   bool isIterator() {
+//     return false;
+//   }
+
+//   bool isOrderingExpr() {
+//     return false;		// only CstVecOrderingExpr return true
+//   }
+
+//   void setDomainContext(CstPredicate pred,
+// 			ref CstDomain[] rnds,
+// 			ref CstDomain[] vars,
+// 			ref CstValue[] vals,
+// 			ref CstIterator[] iters,
+// 			ref CstDomain[] idxs,
+// 			ref CstDomain[] bitIdxs,
+// 			ref CstDomain[] deps) {
+//     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+//     _lhs.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+//     if (_rhs !is null)
+//       _rhs.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+//   }
+
+//   bool getIntRange(ref IntR rng) {
+//     return false;
+//   }
+
+//   bool getUniRange(ref UniRange rng) {
+//     return false;
+//   }
+
+//   bool getIntType(ref INTTYPE iType) {
+//     return false;
+//   }
+  
+//   override bool isSolved() {
+//     if (_rhs is null) return _lhs.isSolved() && _vec.isSolved();
+//     else return _lhs.isSolved() && _rhs.isSolved() && _vec.isSolved();
+//   }
+  
+//   override void writeExprString(ref Charbuf str) {
+//     _vec.writeExprString(str);
+//     str ~= '[';
+//     _lhs.writeExprString(str);
+//     if (_rhs !is null) {
+//       str ~= "..";
+//       _rhs.writeExprString(str);
+//     }
+//     str ~= ']';
+//   }
+// }
+
 class CstVecSliceExpr: CstVecTerm
 {
   CstVecExpr _vec;
-  CstVecExpr _lhs;
-  CstVecExpr _rhs;
+  CstRangeExpr _range;
   
   string describe() {
-    if (_rhs is null)
-      return _vec.describe() ~ "[ " ~ _lhs.describe() ~ " ]";
-    else
-      return _vec.describe() ~ "[ " ~ _lhs.describe() ~ " .. " ~ _rhs.describe() ~ " ]";
+    return _vec.describe() ~ "[ " ~ _range.describe() ~ " ]";
   }
 
   void visit(CstSolver solver) {
     _vec.visit(solver);
-    assert (_lhs.isSolved());
-    if (_rhs !is null) assert (_rhs.isSolved());
-    solver.pushToEvalStack(_lhs.evaluate());
-    if (_rhs is null) solver.pushToEvalStack(_lhs.evaluate() + 1);
-    else solver.pushToEvalStack(_rhs.evaluate());
-    solver.processEvalStack(CstSliceOp.SLICE);
+    // _range.visit(solver);
+    assert (_range._lhs.isSolved());
+    assert (_range._rhs.isSolved());
+    solver.pushToEvalStack(_range._lhs.evaluate());
+    solver.pushToEvalStack(_range._rhs.evaluate());
+    if (_range._inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
+    else solver.processEvalStack(CstSliceOp.SLICE);
   }
 
   // bool getVal(ref long val) {
@@ -1589,18 +1807,13 @@ class CstVecSliceExpr: CstVecTerm
   }
 
   override CstVecSliceExpr unroll(CstIterator iter, uint n) {
-    if (_rhs is null)
-      return new CstVecSliceExpr(_vec.unroll(iter, n),
-				 _lhs.unroll(iter, n), null);
-    else 
-      return new CstVecSliceExpr(_vec.unroll(iter, n),
-				 _lhs.unroll(iter, n), _rhs.unroll(iter, n));
+    return new CstVecSliceExpr(_vec.unroll(iter, n),
+			       _range.unroll(iter, n));
   }
 
-  this(CstVecExpr vec, CstVecExpr lhs, CstVecExpr rhs) {
+  this(CstVecExpr vec, CstRangeExpr range) {
     _vec = vec;
-    _lhs = lhs;
-    _rhs = rhs;
+    _range = range;
   }
 
   uint resolveLap() {
@@ -1632,9 +1845,7 @@ class CstVecSliceExpr: CstVecTerm
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _lhs.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
-    if (_rhs !is null)
-      _rhs.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+    _range.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
   }
 
   bool getIntRange(ref IntR rng) {
@@ -1650,18 +1861,104 @@ class CstVecSliceExpr: CstVecTerm
   }
   
   override bool isSolved() {
-    if (_rhs is null) return _lhs.isSolved() && _vec.isSolved();
-    else return _lhs.isSolved() && _rhs.isSolved() && _vec.isSolved();
+    return _range.isSolved() && _vec.isSolved();
   }
   
   override void writeExprString(ref Charbuf str) {
     _vec.writeExprString(str);
     str ~= '[';
-    _lhs.writeExprString(str);
-    if (_rhs !is null) {
-      str ~= "..";
-      _rhs.writeExprString(str);
-    }
+    _range.writeExprString(str);
+    str ~= ']';
+  }
+}
+
+class CstVecIndexExpr: CstVecTerm
+{
+  CstVecExpr _vec;
+  CstVecExpr _index;
+  
+  string describe() {
+    return _vec.describe() ~ "[ " ~ _index.describe() ~ " ]";
+  }
+
+  void visit(CstSolver solver) {
+    _vec.visit(solver);
+    assert (_index.isSolved());
+    solver.pushToEvalStack(_index.evaluate());
+    solver.pushToEvalStack(_index.evaluate() + 1);
+    solver.processEvalStack(CstSliceOp.SLICE);
+  }
+
+  // bool getVal(ref long val) {
+  //   return false;
+  // }
+
+  long evaluate() {
+    assert(false, "Can not evaluate a CstVecIndexExpr!");
+  }
+
+  override CstVecIndexExpr unroll(CstIterator iter, uint n) {
+    return new CstVecIndexExpr(_vec.unroll(iter, n),
+			       _index.unroll(iter, n));
+  }
+
+  this(CstVecExpr vec, CstVecExpr index) {
+    _vec = vec;
+    _index = index;
+  }
+
+  uint resolveLap() {
+    return _vec.resolveLap();
+  }
+
+  void resolveLap(uint lap) {
+    _vec.resolveLap(lap);
+  }
+
+  bool isConst() {
+    return false;
+  }
+
+  bool isIterator() {
+    return false;
+  }
+
+  bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstDomain[] deps) {
+    _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _index.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  bool getIntRange(ref IntR rng) {
+    return false;
+  }
+
+  bool getUniRange(ref UniRange rng) {
+    return false;
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    return false;
+  }
+  
+  override bool isSolved() {
+    return _index.isSolved() && _vec.isSolved();
+  }
+  
+  override void writeExprString(ref Charbuf str) {
+    _vec.writeExprString(str);
+    str ~= '[';
+    _index.writeExprString(str);
     str ~= ']';
   }
 }
@@ -2523,6 +2820,29 @@ CstVec2LogicExpr _esdl__equ_impl(Q)(CstVecExpr p, Q q)
 
 CstVec2LogicExpr _esdl__equ_impl(CstVecExpr p, CstVecExpr q) {
   return new CstVec2LogicExpr(p, q, CstCompareOp.EQU);
+}
+
+auto _esdl__range(P, Q)(P p, Q q) {
+  static if(is(P: CstVecExpr)) {
+    return _esdl__range_impl(p, q);
+  }
+  else static if(is(Q: CstVecExpr)) {
+    return _esdl__range_impl(q, p);
+  }
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
+    return new CstLogicConst(p == q);
+  }
+}
+
+CstRangeExpr _esdl__range_impl(Q)(CstVecExpr p, Q q)
+  if(isBitVector!Q || isIntegral!Q) {
+    auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
+    return _esdl__range_impl(p, qq);
+  }
+
+CstRangeExpr _esdl__range_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstRangeExpr(p, q);
 }
 
 auto _esdl__neq(P, Q)(P p, Q q) {

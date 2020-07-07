@@ -167,21 +167,29 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
       
-      auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
+      auto _esdl__rand_term_chain(string S, INDX)(INDX indx)
       {
 	static if (S == "") {
-	  return this.opSlice(indx, null);
+	  return this.opIndex(indx);
 	}
 	else static assert (false);
       }
 
-      auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
-      {
-	static if (S == "") {
-	  return this.opSlice(lhs, rhs);
-	}
-	else static assert (false);
-      }
+      // auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
+      // {
+      // 	static if (S == "") {
+      // 	  return this.opSlice(indx, null);
+      // 	}
+      // 	else static assert (false);
+      // }
+
+      // auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
+      // {
+      // 	static if (S == "") {
+      // 	  return this.opSlice(lhs, rhs);
+      // 	}
+      // 	else static assert (false);
+      // }
 
       auto _esdl__rand_term_chain(string S)()
       {
@@ -367,21 +375,29 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
 
-      auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
+      auto _esdl__rand_term_chain(string S, INDX)(INDX indx)
       {
 	static if (S == "") {
-	  return this.opSlice(indx, null);
+	  return this.opIndex(indx);
 	}
 	else static assert (false);
       }
 
-      auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
-      {
-	static if (S == "") {
-	  return this.opSlice(lhs, rhs);
-	}
-	else static assert (false);
-      }
+      // auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
+      // {
+      // 	static if (S == "") {
+      // 	  return this.opSlice(indx, null);
+      // 	}
+      // 	else static assert (false);
+      // }
+
+      // auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
+      // {
+      // 	static if (S == "") {
+      // 	  return this.opSlice(lhs, rhs);
+      // 	}
+      // 	else static assert (false);
+      // }
 
       auto _esdl__rand_term_chain(string S)()
       {

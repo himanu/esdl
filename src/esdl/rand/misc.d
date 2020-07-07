@@ -417,8 +417,8 @@ enum CstBinaryOp: byte
     }
 
 enum CstSliceOp: byte
-{
-  SLICE,
+{   SLICE,
+    SLICEINC,
 }
 
 enum CstCompareOp: byte

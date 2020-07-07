@@ -192,6 +192,8 @@ class CstZ3Solver: CstSolver
   byte _pushSolverCount;   // balance number of pushed z3 context has
   byte _pushOptimizeCount; // balance number of pushed z3 context has
 
+  uint _seed;
+
   // the group is used only for the purpose of constructing the Z3 solver
   // otherwise the solver identifies with the signature only
   this(string signature, CstPredGroup group) {
@@ -256,6 +258,10 @@ class CstZ3Solver: CstSolver
       }
       _evalStack.length = 0;
     }
+
+    _seed = _proxy._esdl__rGen.gen!uint();
+    _solver.set("random_seed", _seed);
+    
 
     // if (_needOptimize) this.pushOptimize();
     // this.pushSolver();
@@ -391,7 +397,6 @@ class CstZ3Solver: CstSolver
     }
     // writeln(_solver.check());
     // writeln(_solver.getModel());
-
     _solver.check();
     auto model = _solver.getModel();
     foreach (i, ref dom; _domains) {
@@ -722,11 +727,21 @@ class CstZ3Solver: CstSolver
   }
 
   override void processEvalStack(CstSliceOp op) {
-    assert (op == CstSliceOp.SLICE);
-    BvExpr e = _evalStack[$-3].toBv().extract(cast(uint) _evalStack[$-1].toUlong() - 1,
-					      cast(uint) _evalStack[$-2].toUlong());
-    _evalStack.length = _evalStack.length - 3;
-    _evalStack ~= Z3Term(e);
+    // assert (op == CstSliceOp.SLICE);
+    final switch (op) {
+    case CstSliceOp.SLICE:
+      BvExpr e = _evalStack[$-3].toBv().extract(cast(uint) _evalStack[$-1].toUlong() - 1,
+						cast(uint) _evalStack[$-2].toUlong());
+      _evalStack.length = _evalStack.length - 3;
+      _evalStack ~= Z3Term(e);
+      break;
+    case CstSliceOp.SLICEINC:
+      BvExpr e = _evalStack[$-3].toBv().extract(cast(uint) _evalStack[$-1].toUlong(),
+						cast(uint) _evalStack[$-2].toUlong());
+      _evalStack.length = _evalStack.length - 3;
+      _evalStack ~= Z3Term(e);
+      break;
+    }
   }
   
 }
