@@ -164,6 +164,40 @@ struct CstParser {
   //   return dup;
   // }
 
+  enum OpArithToken: byte
+  {   NONE = 0,
+      AND,
+      OR,
+      XOR,
+      ADD,
+      SUB,
+      MUL,
+      DIV,
+      REM,			// remainder
+      LSH,
+      RSH,
+      SLICE,
+      }
+
+  enum OpCmpToken: byte
+  {   NONE = 0,
+      EQU,
+      GTE,
+      LTE,
+      NEQ,
+      GTH,
+      LTH,
+      INSIDE,
+  }
+
+  enum OpLogicToken: byte
+  {   NONE = 0,
+      LOGICIMP,		// Implication operator
+      LOGICAND,
+      LOGICOR,
+      INDEX,
+      }
+  
   enum OpToken: byte
   {   NONE = 0,
       AND,
@@ -182,11 +216,12 @@ struct CstParser {
       NEQ,
       GTH,
       LTH,
-      LOGICIMP,		// Implication operator
+      LOGICIMP,			// Implication operator
       LOGICAND,
       LOGICOR,
-      // INDEX,
+      INDEX,
       SLICE,
+      SLICEINC,			// inclusive slice
       }
 
   enum OpUnaryToken: byte
@@ -204,6 +239,107 @@ struct CstParser {
       if (CST[srcCursor] == '-') tok = OpUnaryToken.NEG;
     }
     if (tok !is OpUnaryToken.NONE) {
+      srcCursor += 1;
+      return tok;
+    }
+    return tok;			// None
+  }
+
+  OpArithToken parseArithOperator() {
+    OpArithToken tok = OpArithToken.NONE;
+    if (srcCursor < CST.length - 1) {
+      if (CST[srcCursor] == '<' && CST[srcCursor+1] == '<') tok = OpArithToken.LSH;
+      if (CST[srcCursor] == '>' && CST[srcCursor+1] == '>') tok = OpArithToken.RSH;
+      // these are not arithmetic operators
+      if (CST[srcCursor] == '&' && CST[srcCursor+1] == '&') return tok;
+      if (CST[srcCursor] == '|' && CST[srcCursor+1] == '|') return tok;
+      if (CST[srcCursor] == '-' && CST[srcCursor+1] == '>') return tok;
+    }
+    if (tok !is OpArithToken.NONE) {
+      srcCursor += 2;
+      return tok;
+    }
+    if (srcCursor < CST.length) {
+      if (CST[srcCursor] == '&') tok = OpArithToken.AND;
+      if (CST[srcCursor] == '|') tok = OpArithToken.OR;
+      if (CST[srcCursor] == '^') tok = OpArithToken.XOR;
+      if (CST[srcCursor] == '+') tok = OpArithToken.ADD;
+      if (CST[srcCursor] == '-') tok = OpArithToken.SUB;
+      if (CST[srcCursor] == '*') tok = OpArithToken.MUL;
+      if (CST[srcCursor] == '/') tok = OpArithToken.DIV;
+      if (CST[srcCursor] == '%') tok = OpArithToken.REM;
+      if (CST[srcCursor] == '[') {
+	size_t srcTag = srcCursor;
+	while (srcCursor < CST.length - 2) {
+	  if (CST[srcCursor..srcCursor+2] == "..") {
+	    tok = OpArithToken.SLICE;
+	    srcCursor = srcTag;
+	    break;
+	  }
+	  if (CST[srcCursor] == ':') {
+	    tok = OpArithToken.SLICE;
+	    srcCursor = srcTag;
+	    break;
+	  }
+	  if (CST[srcCursor] == ']') {
+	    srcCursor = srcTag;	// TBD -- fixme for nested square brackets
+	    break;
+	  }
+	}
+      }
+    }
+    if (tok !is OpArithToken.NONE) {
+      srcCursor += 1;
+      return tok;
+    }
+    return tok;			// None
+  }
+
+  OpCmpToken parseCmpOperator() {
+    OpCmpToken tok = OpCmpToken.NONE;
+    if (srcCursor <= CST.length - 6) {
+      if (CST[srcCursor..srcCursor+6] == "inside") tok = OpCmpToken.INSIDE;
+    }
+    if (tok !is OpCmpToken.NONE) {
+      srcCursor += 6;
+      return tok;
+    }
+    if (srcCursor <= CST.length - 2) {
+      if (CST[srcCursor] == '=' && CST[srcCursor+1] == '=') tok = OpCmpToken.EQU;
+      if (CST[srcCursor] == '!' && CST[srcCursor+1] == '=') tok = OpCmpToken.NEQ;
+      if (CST[srcCursor] == '<' && CST[srcCursor+1] == '=') tok = OpCmpToken.LTE;
+      if (CST[srcCursor] == '>' && CST[srcCursor+1] == '=') tok = OpCmpToken.GTE;
+    }
+    if (tok !is OpCmpToken.NONE) {
+      srcCursor += 2;
+      return tok;
+    }
+    if (srcCursor <= CST.length - 1) {
+      if (CST[srcCursor] == '<') tok = OpCmpToken.LTH;
+      if (CST[srcCursor] == '>') tok = OpCmpToken.GTH;
+    }
+    if (tok !is OpCmpToken.NONE) {
+      srcCursor += 1;
+      return tok;
+    }
+    return tok;			// None
+  }
+
+  OpLogicToken parseLogicOperator() {
+    OpLogicToken tok = OpLogicToken.NONE;
+    if (srcCursor <= CST.length - 2) {
+      if (CST[srcCursor] == '-' && CST[srcCursor+1] == '>') tok = OpLogicToken.LOGICIMP;
+      if (CST[srcCursor] == '&' && CST[srcCursor+1] == '&') tok = OpLogicToken.LOGICAND;
+      if (CST[srcCursor] == '|' && CST[srcCursor+1] == '|') tok = OpLogicToken.LOGICOR;
+    }
+    if (tok !is OpLogicToken.NONE) {
+      srcCursor += 2;
+      return tok;
+    }
+    if (srcCursor <= CST.length - 1) {
+      if (CST[srcCursor] == '[') tok = OpLogicToken.INDEX;
+    }
+    if (tok !is OpLogicToken.NONE) {
       srcCursor += 1;
       return tok;
     }
@@ -498,6 +634,7 @@ struct CstParser {
 	if (i == 1) fill("\"");
 	else fill(", \"");
 	if (CST[srcTag+idChain[2*i]] is '[') {
+	  // in case of opIndex, empty string
 	}
 	else {
 	  fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
@@ -716,7 +853,7 @@ struct CstParser {
   size_t parseWithArg() {
     size_t start = srcCursor;
     if (srcCursor < CST.length &&
-	CST[srcCursor == '$']) {
+	CST[srcCursor] == '$') {
       ++srcCursor;
     }
     else return start;
@@ -783,6 +920,26 @@ struct CstParser {
     return start;
   }
 
+  // move all the characters in the output puffer forward by one position
+  // find the balanced paren -- upto the start anchor and insert a paren at
+  // that position
+  void insertOpeningParen(size_t startAnchor) {
+    fill(" ");			// to create an extra position
+    if (!dryRun) {
+      int parenCount = 0;
+      size_t cursor;
+      for (cursor=outCursor-1; cursor != startAnchor; --cursor) {
+	outBuffer[cursor] = outBuffer[cursor-1];
+	if (outBuffer[cursor] == '(' && parenCount == 0) {
+	  break;
+	}
+	if (outBuffer[cursor] == ')') parenCount += 1;
+	if (outBuffer[cursor] == '(') parenCount -= 1;
+      }
+      outBuffer[cursor] = '(';
+    }
+  }
+
   // Parse parenthesis on the right hand side. But stop if and when
   // the numParen has already hit zero. This is important since for if
   // conditional we want to know where to stop parsing.
@@ -822,7 +979,7 @@ struct CstParser {
     return start;
   }
 
-  size_t moveToRightParens() {
+  size_t moveToRightParens(size_t init=0) {
     auto start = srcCursor;
     while (srcCursor < CST.length) {
       auto srcTag = srcCursor;
@@ -838,7 +995,7 @@ struct CstParser {
       }
       else {
 	if (srcCursor < CST.length && CST[srcCursor] == ')') {
-	  if (numParen is 0) break;
+	  if (numParen is init) break;
 	  --numParen;
 	  ++srcCursor;
 	  fill(")");
@@ -888,13 +1045,9 @@ struct CstParser {
 
   char[] translate(string proxy, string name) {
     _proxy = proxy;
-
     translateBlock(name);
-
     setupBuffer();
-
     translateBlock(name);
-
     return outBuffer;
   }
 
@@ -923,13 +1076,6 @@ struct CstParser {
     procBlock();
     // fill("  " ~ blockName ~ " = _esdl__block;\n");
     fill("  return _esdl__block;\n}\n");
-  }
-
-  char[] translateExpr() {
-    procExpr();
-    setupBuffer();
-    procExpr();
-    return outBuffer;
   }
 
   int idMatch(string id) {
@@ -1132,7 +1278,7 @@ struct CstParser {
 
     fill("/* IF Block: ");
     auto outTag = outCursor;
-    procExpr();
+    procLogicExpr();
 
     if (dryRun) {
       dummy.length = outCursor-outTag;
@@ -1294,26 +1440,17 @@ struct CstParser {
     srcCursor = cursor;
     numIndex = 0;
     numParen = 0;
-    procExpr();
+    procArithExpr();
     numIndex = savedNumIndex;
     numParen = savedNumParen;
     srcCursor = savedCursor;
   }
 
-  void procExpr() {
-    bool cmpRHS;
-    bool andRHS;
-    bool orRHS;
-    bool impRHS;
-
+  void procArithExpr() {
+    size_t startNumParen = numParen;
     size_t srcTag = 0;
-
-    size_t cmpDstAnchor = fill(" ");
-    size_t andDstAnchor = fill(" ");
-    size_t orDstAnchor  = fill(" ");
-    size_t impDstAnchor = fill(" ");
-
-  loop:
+    // true in the beginning of the expression or just after a start of parenthesis
+    bool unaryLegal = true;
     while (srcCursor < CST.length) {
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
@@ -1322,16 +1459,21 @@ struct CstParser {
 
       // Parse any left braces now
       srcTag = parseLeftParens();
+      if (srcCursor > srcTag) unaryLegal = true;
       fill(CST[srcTag..srcCursor]);
 
       // Parse any unary operators
-      auto uTok = parseUnaryOperator();
-      final switch(uTok) {
-      case OpUnaryToken.NEG: fill("-"); continue loop;
-      case OpUnaryToken.NOT: fill("*"); continue loop;
-      case OpUnaryToken.INV: fill("~"); continue loop;
-      case OpUnaryToken.NONE: break;
+      if (unaryLegal) {
+	auto uTok = parseUnaryOperator();
+	final switch(uTok) {
+	case OpUnaryToken.NEG: fill("-"); break;
+	case OpUnaryToken.NOT: fill("*"); break;
+	case OpUnaryToken.INV: fill("~"); break;
+	case OpUnaryToken.NONE: break;
+	}
       }
+      unaryLegal = false;
+
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
       srcTag = procIdentifier();
@@ -1343,150 +1485,350 @@ struct CstParser {
       // fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
-      OpToken opToken = parseOperator();
+      OpArithToken opToken = parseArithOperator();
 
       final switch(opToken) {
-      case OpToken.NONE:
-	//   errorToken();
-	//   break;
-	// case OpToken.END:
-	if (cmpRHS is true) {
-	  fill(")");
-	  cmpRHS = false;
-	}
-	if (andRHS is true) {
-	  fill(")");
-	  andRHS = false;
-	}
-	if (orRHS is true) {
-	  fill(")");
-	  orRHS = false;
-	}
-	if (impRHS is true) {
-	  fill(")");
-	  impRHS = false;
-	}
+      case OpArithToken.NONE:
 	return;
 	// break;
-      case OpToken.LOGICIMP:
-	if (cmpRHS is true) {
-	  fill(")");
-	  cmpRHS = false;
-	}
-	if (andRHS is true) {
-	  fill(")");
-	  andRHS = false;
-	}
-	if (orRHS is true) {
-	  fill(")");
-	  orRHS = false;
-	}
-	place('(', impDstAnchor);
-	fill(").implies(");
-	cmpDstAnchor = fill(" ");
-	andDstAnchor = fill(" ");
-	orDstAnchor  = fill(" ");
-	impRHS = true;
-	break;
-      case OpToken.LOGICOR:		// take care of cmp/and
-	if (cmpRHS is true) {
-	  fill(")");
-	  cmpRHS = false;
-	}
-	if (andRHS is true) {
-	  fill(")");
-	  andRHS = false;
-	}
-	if (orRHS !is true) {
-	  place('(', orDstAnchor);
-	  orRHS = true;
-	}
-	fill(")._esdl__logicOr(");
-	cmpDstAnchor = fill(" ");
-	andDstAnchor = fill(" ");
-	break;
-      case OpToken.LOGICAND:		// take care of cmp
-	if (cmpRHS is true) {
-	  fill(")");
-	  cmpRHS = false;
-	}
-	if (andRHS !is true) {
-	  place('(', andDstAnchor);
-	  andRHS = true;
-	}
-	fill(") ._esdl__logicAnd(");
-	cmpDstAnchor = fill(" ");
-	break;
-      case OpToken.EQU:
-	place('(', cmpDstAnchor);
-	cmpRHS = true;
-	fill(")._esdl__equ (");
-	break;
-      case OpToken.NEQ:
-	place('(', cmpDstAnchor);
-	cmpRHS = true;
-	fill(")._esdl__neq (");
-	break;
-      case OpToken.LTE:
-	place('(', cmpDstAnchor);
-	cmpRHS = true;
-	fill(")._esdl__lte (");
-	break;
-      case OpToken.GTE:
-	place('(', cmpDstAnchor);
-	cmpRHS = true;
-	fill(")._esdl__gte (");
-	break;
-      case OpToken.LTH:
-	place('(', cmpDstAnchor);
-	cmpRHS = true;
-	fill(")._esdl__lth (");
-	break;
-      case OpToken.GTH:
-	place('(', cmpDstAnchor);
-	cmpRHS = true;
-	fill(")._esdl__gth (");
-	break;
-      case OpToken.AND:
+      case OpArithToken.AND:
 	fill(" & ");
 	break;
-      case OpToken.OR:
+      case OpArithToken.OR:
 	fill(" | ");
 	break;
-      case OpToken.XOR:
+      case OpArithToken.XOR:
 	fill(" ^ ");
 	break;
-      case OpToken.ADD:
+      case OpArithToken.ADD:
 	fill(" + ");
 	break;
-      case OpToken.SUB:
+      case OpArithToken.SUB:
 	fill(" - ");
 	break;
-      case OpToken.MUL:
+      case OpArithToken.MUL:
 	fill(" * ");
 	break;
-      case OpToken.DIV:
+      case OpArithToken.DIV:
 	fill(" / ");
 	break;
-      case OpToken.REM:
+      case OpArithToken.REM:
 	fill(" % ");
 	break;
-      case OpToken.LSH:
+      case OpArithToken.LSH:
 	fill(" << ");
 	break;
-      case OpToken.RSH:
+      case OpArithToken.RSH:
 	fill(" >> ");
 	break;
-      case OpToken.SLICE:
-	// if (!dryRun) {
-	//   size_t tag = indexTag[$-1];
-	//   outBuffer[tag..tag+8] = ".opSlice";
-	// }
-	fill(", ");
-	break;
+      case OpArithToken.SLICE:
+	assert(false); // FIXME
       }
     }
   }
+
+  void procCmpExpr() {
+    size_t srcTag = 0;
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    // LHS
+    if (srcCursor < CST.length) {
+      // size_t openingParenAnchor = fill(" ");
+      size_t startAnchor = outCursor;
+      srcTag = srcCursor;
+      procArithExpr();
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting an expression, got none");
+      }
+
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+
+      srcTag = srcCursor;
+      OpCmpToken opToken = parseCmpOperator();
+
+      final switch(opToken) {
+      case OpCmpToken.EQU:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__equ(");
+	break;
+      case OpCmpToken.NEQ:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__neq(");
+	break;
+      case OpCmpToken.LTE:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__lte(");
+	break;
+      case OpCmpToken.GTE:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__gte(");
+	break;
+      case OpCmpToken.LTH:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__lth(");
+	break;
+      case OpCmpToken.GTH:
+	insertOpeningParen(startAnchor);
+	fill(")._esdl__gth(");
+	break;
+      case OpCmpToken.INSIDE:
+	assert(false);
+      case OpCmpToken.NONE:
+	return;
+      }
+      // RHS
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+
+      srcTag = srcCursor;
+      procArithExpr();
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting an arithmatic expression on RHS, got none");
+      }
+      fill(")");
+    }
+  }
+
+  void procLogicExpr() {
+    size_t startNumParen = numParen;
+    size_t srcTag = 0;
+    // true in the beginning of the expression or just after a start of parenthesis
+    while (srcCursor < CST.length) {
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+
+      if (srcCursor == CST.length) break;
+
+      srcTag = srcCursor;
+      procCmpExpr();
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting an expression, got none");
+      }
+      
+      srcTag = srcCursor;
+      OpLogicToken opToken = parseLogicOperator();
+
+      final switch(opToken) {
+      case OpLogicToken.NONE:
+	return;
+	// break;
+      case OpLogicToken.LOGICIMP:
+	fill(" >>>= ");
+	break;
+      case OpLogicToken.LOGICAND:
+	fill(" & ");
+	break;
+      case OpLogicToken.LOGICOR:
+	fill(" | ");
+	break;
+      case OpLogicToken.INDEX:
+	assert(false); // FIXME
+      }
+    }
+  }
+
+  // void procExpr() {
+  //   bool impRHS;
+  //   bool orRHS;
+  //   bool andRHS;
+  //   bool cmpRHS;
+
+  //   size_t srcTag = 0;
+
+  //   size_t impDstAnchor = fill(" ");
+  //   size_t orDstAnchor  = fill(" ");
+  //   size_t andDstAnchor = fill(" ");
+  //   size_t cmpDstAnchor = fill(" ");
+
+  // loop:
+  //   while (srcCursor < CST.length) {
+  //     srcTag = parseSpace();
+  //     fill(CST[srcTag..srcCursor]);
+
+  //     if (srcCursor == CST.length) break;
+
+  //     // Parse any left braces now
+  //     srcTag = parseLeftParens();
+  //     fill(CST[srcTag..srcCursor]);
+
+  //     // Parse any unary operators
+  //     auto uTok = parseUnaryOperator();
+  //     final switch(uTok) {
+  //     case OpUnaryToken.NEG: fill("-"); continue loop;
+  //     case OpUnaryToken.NOT: fill("*"); continue loop;
+  //     case OpUnaryToken.INV: fill("~"); continue loop;
+  //     case OpUnaryToken.NONE: break;
+  //     }
+  //     srcTag = parseSpace();
+  //     fill(CST[srcTag..srcCursor]);
+  //     srcTag = procIdentifier();
+  //     // fillDeclaration(CST[srcTag..srcCursor]);
+  //     srcTag = parseSpace();
+  //     fill(CST[srcTag..srcCursor]);
+  //     srcTag = moveToRightParens();
+      
+  //     // fill(CST[srcTag..srcCursor]);
+
+  //     srcTag = srcCursor;
+  //     OpToken opToken = parseOperator();
+
+  //     final switch(opToken) {
+  //     case OpToken.NONE:
+  // 	//   errorToken();
+  // 	//   break;
+  // 	// case OpToken.END:
+  // 	if (cmpRHS is true) {
+  // 	  fill(")");
+  // 	  cmpRHS = false;
+  // 	}
+  // 	if (andRHS is true) {
+  // 	  fill(")");
+  // 	  andRHS = false;
+  // 	}
+  // 	if (orRHS is true) {
+  // 	  fill(")");
+  // 	  orRHS = false;
+  // 	}
+  // 	if (impRHS is true) {
+  // 	  fill(")");
+  // 	  impRHS = false;
+  // 	}
+  // 	return;
+  // 	// break;
+  //     case OpToken.LOGICIMP:
+  // 	if (cmpRHS is true) {
+  // 	  fill(")");
+  // 	  cmpRHS = false;
+  // 	}
+  // 	if (andRHS is true) {
+  // 	  fill(")");
+  // 	  andRHS = false;
+  // 	}
+  // 	if (orRHS is true) {
+  // 	  fill(")");
+  // 	  orRHS = false;
+  // 	}
+  // 	place('(', impDstAnchor);
+  // 	fill(").implies(");
+  // 	cmpDstAnchor = fill(" ");
+  // 	andDstAnchor = fill(" ");
+  // 	orDstAnchor  = fill(" ");
+  // 	impRHS = true;
+  // 	break;
+  //     case OpToken.LOGICOR:		// take care of cmp/and
+  // 	if (cmpRHS is true) {
+  // 	  fill(")");
+  // 	  cmpRHS = false;
+  // 	}
+  // 	if (andRHS is true) {
+  // 	  fill(")");
+  // 	  andRHS = false;
+  // 	}
+  // 	if (orRHS !is true) {
+  // 	  place('(', orDstAnchor);
+  // 	  orRHS = true;
+  // 	}
+  // 	fill(")._esdl__logicOr(");
+  // 	cmpDstAnchor = fill(" ");
+  // 	andDstAnchor = fill(" ");
+  // 	break;
+  //     case OpToken.LOGICAND:		// take care of cmp
+  // 	if (cmpRHS is true) {
+  // 	  fill(")");
+  // 	  cmpRHS = false;
+  // 	}
+  // 	if (andRHS !is true) {
+  // 	  place('(', andDstAnchor);
+  // 	  andRHS = true;
+  // 	}
+  // 	fill(") ._esdl__logicAnd(");
+  // 	cmpDstAnchor = fill(" ");
+  // 	break;
+  //     case OpToken.EQU:
+  // 	place('(', cmpDstAnchor);
+  // 	cmpRHS = true;
+  // 	fill(")._esdl__equ (");
+  // 	break;
+  //     case OpToken.NEQ:
+  // 	place('(', cmpDstAnchor);
+  // 	cmpRHS = true;
+  // 	fill(")._esdl__neq (");
+  // 	break;
+  //     case OpToken.LTE:
+  // 	place('(', cmpDstAnchor);
+  // 	cmpRHS = true;
+  // 	fill(")._esdl__lte (");
+  // 	break;
+  //     case OpToken.GTE:
+  // 	place('(', cmpDstAnchor);
+  // 	cmpRHS = true;
+  // 	fill(")._esdl__gte (");
+  // 	break;
+  //     case OpToken.LTH:
+  // 	place('(', cmpDstAnchor);
+  // 	cmpRHS = true;
+  // 	fill(")._esdl__lth (");
+  // 	break;
+  //     case OpToken.GTH:
+  // 	place('(', cmpDstAnchor);
+  // 	cmpRHS = true;
+  // 	fill(")._esdl__gth (");
+  // 	break;
+  //     case OpToken.AND:
+  // 	fill(" & ");
+  // 	break;
+  //     case OpToken.OR:
+  // 	fill(" | ");
+  // 	break;
+  //     case OpToken.XOR:
+  // 	fill(" ^ ");
+  // 	break;
+  //     case OpToken.ADD:
+  // 	fill(" + ");
+  // 	break;
+  //     case OpToken.SUB:
+  // 	fill(" - ");
+  // 	break;
+  //     case OpToken.MUL:
+  // 	fill(" * ");
+  // 	break;
+  //     case OpToken.DIV:
+  // 	fill(" / ");
+  // 	break;
+  //     case OpToken.REM:
+  // 	fill(" % ");
+  // 	break;
+  //     case OpToken.LSH:
+  // 	fill(" << ");
+  // 	break;
+  //     case OpToken.RSH:
+  // 	fill(" >> ");
+  // 	break;
+  //     case OpToken.SLICE:
+  // 	// if (!dryRun) {
+  // 	//   size_t tag = indexTag[$-1];
+  // 	//   outBuffer[tag..tag+8] = ".opSlice";
+  // 	// }
+  // 	fill(", ");
+  // 	break;
+  //     case OpToken.SLICEINC:
+  // 	// if (!dryRun) {
+  // 	//   size_t tag = indexTag[$-1];
+  // 	//   outBuffer[tag..tag+8] = ".opSlice";
+  // 	// }
+  // 	assert(false);
+  //     case OpToken.INDEX:
+  // 	// if (!dryRun) {
+  // 	//   size_t tag = indexTag[$-1];
+  // 	//   outBuffer[tag..tag+8] = ".opSlice";
+  // 	// }
+  // 	assert(false);
+  //     }
+  //   }
+  // }
 
   // translate the expression and also consume the semicolon thereafter
   void procExprStmt() {
@@ -1518,11 +1860,11 @@ struct CstParser {
       fill(ifConds[$-1].cond);
       fill(").implies( // End of Conditions\n");
       fill("       ( ");
-      procExpr();
+      procLogicExpr();
       fill(")");
     }
     else {
-      procExpr();
+      procLogicExpr();
     }
 
     if (numParen !is 0) {

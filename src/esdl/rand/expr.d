@@ -739,6 +739,13 @@ interface CstLogicTerm: CstLogicExpr
     }
   }
 
+  CstLogicTerm opOpAssign(string op)(CstLogicTerm other)
+  {
+    static if(op == ">>>") {
+      return new CstLogic2LogicExpr(this, other, CstLogicOp.LOGICIMP);
+    }
+  }
+  
   CstLogicTerm opUnary(string op)()
   {
     static if(op == "*") {	// "!" in cstx is translated as "*"

@@ -264,16 +264,16 @@ struct IntRange(T) if (isIntegral!T) {
 
   this(UniRange uRange) {
     if (uRange._type == INTTYPE.UINT) {
-      assert (is (T == uint));
+      assert (is (T == uint), "Type: " ~ T.stringof);
     }
     else if (uRange._type == INTTYPE.INT) {
-      assert (is (T == int));
+      assert (is (T == int), "Type: " ~ T.stringof);
     }
     else if (uRange._type == INTTYPE.ULONG) {
-      assert (is (T == ulong));
+      assert (is (T == ulong), "Type: " ~ T.stringof);
     }
     else if (uRange._type == INTTYPE.LONG) {
-      assert (is (T == long));
+      assert (is (T == long), "Type: " ~ T.stringof);
     }
     _min = cast(T) uRange._min;
     assert (_min == uRange._min);
