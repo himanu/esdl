@@ -651,9 +651,14 @@ class CstPredGroup			// group of related predicates
 	_solver = *solverp;
       }
       else {
-	// import std.stdio;
-	// writeln(sig);
-	_solver = new CstZ3Solver(sig, this);
+	if (_hasSoftConstraints) _solver = new CstZ3Solver(sig, this);
+	else {
+	  uint totalBits;
+	  foreach (dom; _doms) totalBits += dom.bitcount();
+	  foreach (var; _vars) totalBits += var.bitcount();
+	  if (totalBits > 32) _solver = new CstZ3Solver(sig, this);
+	  else _solver = new CstBuddySolver(sig, this);
+	}
 	_proxy._solvers[sig] = _solver;
       }
       foreach (var; _vars) {

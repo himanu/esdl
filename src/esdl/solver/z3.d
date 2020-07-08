@@ -388,6 +388,7 @@ class CstZ3Solver: CstSolver
     updateVars(group);
     if (_needOptimize) {
       if (updateOptimize() || (_optimizeInit is false)) {
+	_optimize.check();
 	Expr[] assumptions = optimize();
 	_optimizeInit = true;
 	updateSolver(assumptions);
