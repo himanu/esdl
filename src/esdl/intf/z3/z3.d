@@ -14,7 +14,7 @@ mixin template RvalueRef()
   static assert (is (T == struct));
 
   @nogc @safe
-  ref T byRef() const pure nothrow return
+  ref T byRef() pure nothrow return
   {
     return this;
   }
@@ -741,8 +741,8 @@ struct AstVectorTpl(T)
   alias _m_vector this;
   
   void init(Z3_ast_vector v) {
-    Z3_ast_vector_inc_ref(context(), v);
     _m_vector = v;
+    Z3_ast_vector_inc_ref(context(), _m_vector);
   }
 
   this(Context c) {
@@ -755,11 +755,16 @@ struct AstVectorTpl(T)
     init(v);
   }
 
-  this(ref AstVectorTpl!T rhs) {
-    setContext(rhs.context());
-    _m_vector = rhs._m_vector;
+  this(this) {
+    assert (context() !is null);
     Z3_ast_vector_inc_ref(context(), _m_vector);
   }
+    
+  // this(ref AstVectorTpl!T rhs) {
+  //   setContext(rhs.context());
+  //   _m_vector = rhs._m_vector;
+  //   Z3_ast_vector_inc_ref(context(), _m_vector);
+  // }
 
   ~this() {
     Z3_ast_vector_dec_ref(context(), _m_vector);
@@ -883,10 +888,16 @@ struct Symbol
     setContext(c);
     _m_sym = s;
   }
-  this(ref return scope Symbol rhs) {
-    setContext(rhs.context());
-    _m_sym = rhs._m_sym;
+
+  this(this) {
+    assert (context() !is null);
   }
+
+  // this(ref return scope Symbol rhs) {
+  //   setContext(rhs.context());
+  //   _m_sym = rhs._m_sym;
+  // }
+
   Symbol opAssign(ref return scope Symbol rhs) {
     setContext(rhs.context());
     _m_sym = rhs._m_sym;
@@ -922,11 +933,15 @@ struct ParamDescrs
     _m_descrs = d;
     Z3_param_descrs_inc_ref(context(), _m_descrs);
   }
-  this(ref return scope ParamDescrs rhs) {
-    setContext(rhs.context);
+  this(this) {
+    assert (context() !is null);
     Z3_param_descrs_inc_ref(context(), _m_descrs);
-    _m_descrs = rhs._m_descrs;
   }
+  // this(ref return scope ParamDescrs rhs) {
+  //   setContext(rhs.context);
+  //   _m_descrs = rhs._m_descrs;
+  //   Z3_param_descrs_inc_ref(context(), _m_descrs);
+  // }
   ParamDescrs opAssign(ref return scope ParamDescrs rhs) {
     Z3_param_descrs_inc_ref(rhs.context(), rhs._m_descrs);
     Z3_param_descrs_dec_ref(context(), _m_descrs);
@@ -974,11 +989,16 @@ struct Params
     _m_params = Z3_mk_params(c);
     Z3_params_inc_ref(context(), _m_params);
   }
-  this(ref return scope Params rhs) {
-    setContext(rhs.context());
-    Z3_params_inc_ref(context(), _m_params);
-    _m_params = rhs._m_params;
+  this(this) {
+    assert (context() !is null);
+    Z3_params_inc_ref(context(), _m_params);    
   }
+
+  // this(ref return scope Params rhs) {
+  //   setContext(rhs.context());
+  //   _m_params = rhs._m_params;
+  //   Z3_params_inc_ref(context(), _m_params);
+  // }
   Params opAssign(ref return scope Params rhs) {
     Z3_params_inc_ref(rhs.context(), rhs._m_params);
     Z3_params_dec_ref(context(), _m_params);
@@ -1044,11 +1064,16 @@ struct AST
     _m_ast = n;
     Z3_inc_ref(context(), _m_ast);
   }
-  this(ref scope return AST rhs) {
-    setContext(rhs.context());
-    _m_ast = rhs._m_ast;
-    Z3_inc_ref(context(), _m_ast);
+  this(this) {
+    if (context() !is null) {
+      Z3_inc_ref(context(), _m_ast);
+    }
   }
+  // this(ref scope return AST rhs) {
+  //   setContext(rhs.context());
+  //   _m_ast = rhs._m_ast;
+  //   Z3_inc_ref(context(), _m_ast);
+  // }
   ref AST opAssign(ref scope return AST rhs) {
     if (_m_ast !is null) Z3_dec_ref(context(), _m_ast);
     setContext(rhs.context());
@@ -1123,9 +1148,10 @@ struct Sort
   this(Context c, Z3_ast a) {
     _ast = AST(c, a);
   }
-  this(ref return scope Sort rhs) {
-    _ast = rhs._ast;
-  }
+  this(this) { }
+  // this(ref return scope Sort rhs) {
+  //   _ast = rhs._ast;
+  // }
   Sort opAssign(ref return scope Sort rhs) {
     _ast = rhs._ast;
     return this;
@@ -1314,9 +1340,10 @@ struct FuncDecl
   this(Context c, Z3_func_decl n) {
     _ast = AST(c, cast(Z3_ast) n);
   }
-  this(ref return scope FuncDecl rhs) {
-    _ast = rhs._ast;
-  }
+  this(this) { }    
+  // this(ref return scope FuncDecl rhs) {
+  //   _ast = rhs._ast;
+  // }
   FuncDecl opAssign(ref return scope FuncDecl rhs) {
     _ast = rhs._ast;
     return this;
@@ -1509,9 +1536,10 @@ struct Expr
     _ast = AST(c, n);
   }
 
-  this(ref return scope Expr rhs) {
-    _ast = AST(rhs._ast);
-  }
+  this(this) { }
+  // this(ref return scope Expr rhs) {
+  //   _ast = AST(rhs._ast);
+  // }
 
   Expr opAssign(ref return scope Expr rhs) {
     _ast = rhs._ast;
@@ -2410,13 +2438,19 @@ struct FuncEntry
 
   this(Context c, Z3_func_entry e) {
     setContext(c);
-    init(e);
+    _m_entry = e;
+    Z3_func_entry_inc_ref(context(), _m_entry);
   }
 
-  this(ref FuncEntry s) {
-    setContext(s.context());
-    init(s._m_entry);
+  this(this) {
+    assert (context() !is null);
+    Z3_func_entry_inc_ref(context(), _m_entry);
   }
+
+  // this(ref FuncEntry s) {
+  //   setContext(s.context());
+  //   init(s._m_entry);
+  // }
 
   ~this() {
     Z3_func_entry_dec_ref(context(), _m_entry);
@@ -2466,13 +2500,19 @@ struct FuncInterp
 
   this(Context c, Z3_func_interp e) {
     setContext(c);
-    init(e);
+    _m_interp = e;
+    Z3_func_interp_inc_ref(context(), _m_interp);
   }
 
-  this(ref FuncInterp s) {
-    setContext(s.context());
-    init(s._m_interp);
+  this(this) {
+    assert (context() !is null);
+    Z3_func_interp_inc_ref(context(), _m_interp);
   }
+
+  // this(ref FuncInterp s) {
+  //   setContext(s.context());
+  //   init(s._m_interp);
+  // }
 
   ~this() {
     Z3_func_interp_dec_ref(context(), _m_interp);
@@ -2526,7 +2566,7 @@ struct Model
   Z3_model _m_model;
   private void init(Z3_model m) {
     _m_model = m;
-    Z3_model_inc_ref(context(), m);
+    Z3_model_inc_ref(context(), _m_model);
   }
 
   struct translate {};
@@ -2538,17 +2578,25 @@ struct Model
 
   this(Context c, Z3_model m) {
     setContext(c);
-    init(m);
+    _m_model = m;
+    Z3_model_inc_ref(context(), _m_model);
   }
 
-  this(ref Model s) {
-    setContext(s.context());
-    init(s._m_model);
+  this(this) {
+    assert (context() !is null);
+    Z3_model_inc_ref(context(), _m_model);
   }
+
+  // this(ref Model s) {
+  //   setContext(s.context());
+  //   init(s._m_model);
+  // }
   
   this(ref Model src, Context dst, translate) {
     setContext(dst);
-    init(Z3_model_translate(src.context(), src, dst));
+    _m_model = Z3_model_translate(src.context(), src, dst);
+    Z3_model_inc_ref(context(), _m_model);
+    // init(Z3_model_translate(src.context(), src, dst));
   }
 
   ~this() {
@@ -2668,13 +2716,19 @@ struct Stats
 
   this(Context c, Z3_stats e) {
     setContext(c);
-    init(e);
+    _m_stats = e;
+    Z3_stats_inc_ref(context(), _m_stats);
   }
 
-  this(ref Stats s) {
-    setContext(s.context());
-    init(s._m_stats);
+  this(this) {
+    assert (context() !is null);
+    Z3_stats_inc_ref(context(), _m_stats);
   }
+
+  // this(ref Stats s) {
+  //   setContext(s.context());
+  //   init(s._m_stats);
+  // }
 
   ~this() {
     if (_m_stats) Z3_stats_dec_ref(context(), _m_stats);
@@ -2743,7 +2797,7 @@ struct Solver {
   Z3_solver _m_solver;
   private void init(Z3_solver s) {
     _m_solver = s;
-    Z3_solver_inc_ref(context(), s);
+    Z3_solver_inc_ref(context(), _m_solver);
   }
   struct simple {};
   struct translate {};
@@ -2767,10 +2821,14 @@ struct Solver {
     setContext(c);
     init(Z3_solver_translate(src.context(), src, c));
   }
-  this(ref Solver s) {
-    setContext(s.context());
-    init(s._m_solver);
+  this(this) {
+    assert (context() !is null);
+    Z3_solver_inc_ref(context(), _m_solver);
   }
+  // this(ref Solver s) {
+  //   setContext(s.context());
+  //   init(s._m_solver);
+  // }
   ~this() {
     Z3_solver_dec_ref(context(), _m_solver);
   }
@@ -3103,7 +3161,7 @@ struct Goal
 
   private void init(Z3_goal s) {
     _m_goal = s;
-    Z3_goal_inc_ref(context(), s);
+    Z3_goal_inc_ref(context(), _m_goal);
   }
 
   this(Context c, bool models=true, bool unsat_cores=false, bool proofs=false) {
@@ -3116,10 +3174,15 @@ struct Goal
     init(s);
   }
 
-  this(ref Goal s) {
-    setContext(s.context());
-    init(s._m_goal);
+  this(this) {
+    assert (context() !is null);
+    Z3_goal_inc_ref(context(), _m_goal);
   }
+
+  // this(ref Goal s) {
+  //   setContext(s.context());
+  //   init(s._m_goal);
+  // }
 
   ~this() {
     Z3_goal_dec_ref(context(), _m_goal);
@@ -3227,17 +3290,23 @@ struct ApplyResult
   Z3_apply_result _m_apply_result;
   private void init(Z3_apply_result s) {
     _m_apply_result = s;
-    Z3_apply_result_inc_ref(context(), s);
+    Z3_apply_result_inc_ref(context(), _m_apply_result);
   }
 
   this(Context c, Z3_apply_result s) {
     setContext(c);
     init(s);
   }
-  this(ref ApplyResult s) {
-    setContext(s.context);
-    init(s._m_apply_result);
+
+  this(this) {
+    assert (context() !is null);
+    Z3_apply_result_inc_ref(context(), _m_apply_result);
   }
+
+  // this(ref ApplyResult s) {
+  //   setContext(s.context);
+  //   init(s._m_apply_result);
+  // }
   ~this() {
     Z3_apply_result_dec_ref(context(), _m_apply_result);
   }
@@ -3278,7 +3347,7 @@ struct Tactic
   Z3_tactic _m_tactic;
   private void init(Z3_tactic s) {
     _m_tactic = s;
-    Z3_tactic_inc_ref(context(), s);
+    Z3_tactic_inc_ref(context(), _m_tactic);
   }
   this(Context c, string name) {
     setContext(c);
@@ -3289,10 +3358,14 @@ struct Tactic
     setContext(c);
     init(s);
   }
-  this(ref Tactic s) {
-    setContext(s.context());
-    init(s._m_tactic);
+  this(this) {
+    assert (context() !is null);
+    Z3_tactic_inc_ref(context(), _m_tactic);
   }
+  // this(ref Tactic s) {
+  //   setContext(s.context());
+  //   init(s._m_tactic);
+  // }
   ~this() {
     Z3_tactic_dec_ref(context(), _m_tactic);
   }
@@ -3393,7 +3466,7 @@ struct Probe
 
   private void init(Z3_probe s) {
     _m_probe = s;
-    Z3_probe_inc_ref(context(), s);
+    Z3_probe_inc_ref(context(), _m_probe);
   }
 
   this(Context c, string name) {
@@ -3412,10 +3485,14 @@ struct Probe
     setContext(c);
     init(s);
   }
-  this(ref Probe s) {
-    setContext(s.context());
-    init(s._m_probe);
+  this(this) {
+    assert (context() !is null);
+    Z3_probe_inc_ref(context(), _m_probe);
   }
+  // this(ref Probe s) {
+  //   setContext(s.context());
+  //   init(s._m_probe);
+  // }
   ~this() {
     Z3_probe_dec_ref(context(), _m_probe);
   }
@@ -3556,11 +3633,16 @@ struct Optimize
     Z3_optimize_inc_ref(c, _m_opt);
   }
 
-  this(ref Optimize o)  {
-    setContext(o.context);
-    Z3_optimize_inc_ref(o.context(), o._m_opt);
-    _m_opt = o._m_opt;
+  this(this) {
+    assert (context() !is null);
+    Z3_optimize_inc_ref(context(), _m_opt);
   }
+
+  // this(ref Optimize o)  {
+  //   setContext(o.context);
+  //   Z3_optimize_inc_ref(o.context(), o._m_opt);
+  //   _m_opt = o._m_opt;
+  // }
 
   ref Optimize opAssign(ref Optimize o) {
     Z3_optimize_inc_ref(o.context(), o._m_opt);

@@ -57,12 +57,13 @@ struct Z3Term
   }
 
   // workaround for https://issues.dlang.org/show_bug.cgi?id=20876
-  this(ref Z3Term other) {
-    _boolExpr = other._boolExpr;
-    _bvExpr = other._bvExpr;
-    _ulong = other._ulong;
-    _type = other._type;
-  }
+  this(this) { }
+  // this(ref Z3Term other) {
+  //   _boolExpr = other._boolExpr;
+  //   _bvExpr = other._bvExpr;
+  //   _ulong = other._ulong;
+  //   _type = other._type;
+  // }
 
   this(ref BvExpr expr) {
     _bvExpr = expr;

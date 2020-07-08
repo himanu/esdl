@@ -44,10 +44,12 @@ struct BvExpr
     _ast = AST(c, n);
   }
 
-  this(ref return scope BvExpr rhs) {
-    _signed = rhs._signed;
-    _ast = rhs._ast;
-  }
+  this(this) { }
+
+  // this(ref return scope BvExpr rhs) {
+  //   _signed = rhs._signed;
+  //   _ast = rhs._ast;
+  // }
 
   bool isNull() {
     return _ast.isNull();
@@ -1213,9 +1215,11 @@ struct BoolExpr
     _ast = AST(c, n);
   }
 
-  this(ref return scope BoolExpr rhs) {
-    _ast = AST(rhs._ast);
-  }
+  this(this) { }
+  
+  // this(ref return scope BoolExpr rhs) {
+  //   _ast = AST(rhs._ast);
+  // }
 
   bool isNull() {
     return _ast.isNull();
