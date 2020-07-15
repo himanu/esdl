@@ -11,7 +11,7 @@ import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__ProxyRoot;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstVecIterator;
+  CstVecTerm, CstVecIterator, CstValue;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve;
@@ -372,7 +372,7 @@ mixin template CstObjArrMixin()
       return _elems[index];
     }
     else {
-      return new EV(name ~ "[" ~ indexExpr.name() ~ "]", this, indexExpr);
+      return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
     }
   }
 
