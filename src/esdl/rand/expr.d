@@ -169,6 +169,19 @@ interface CstVecTerm: CstVecExpr
   CstNegVecExpr opUnary(string op)() if(op == "-") {
     return new CstNegVecExpr(this);
   }
+
+  final CstLogicTerm inside(CstRangeExpr range) {
+    if (range._rhs is null) {
+      return new CstVec2LogicExpr(this, range._lhs, CstCompareOp.EQU);
+    }
+    else {
+      CstLogicTerm lhs = new CstVec2LogicExpr(this, range._lhs, CstCompareOp.GTE);
+      CstLogicTerm rhs;
+      if (range._inclusive) rhs = new CstVec2LogicExpr(this, range._rhs, CstCompareOp.LTE);
+      else rhs = new CstVec2LogicExpr(this, range._rhs, CstCompareOp.LTH);
+      return lhs & rhs;
+    }
+  }
 }
 
 class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
@@ -754,9 +767,16 @@ interface CstLogicTerm: CstLogicExpr
     }
   }
   
-  CstLogicTerm opUnary(string op)()
+  CstLogicTerm opUnary(string op)() if(op == "*")
   {
     static if(op == "*") {	// "!" in cstx is translated as "*"
+      return new CstNotLogicExpr(this);
+    }
+  }
+
+  CstLogicTerm opUnary(string op)() if(op == "~")
+  {
+    static if(op == "~") {	// "!" in cstx is translated as "*"
       return new CstNotLogicExpr(this);
     }
   }
@@ -1571,8 +1591,12 @@ class CstRangeExpr: CstVecTerm
   bool _inclusive = false;
 
   string describe() {
-    if (_inclusive) return "( " ~ _lhs.describe ~ " : " ~ _rhs.describe ~ " )";
-    else return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
+    if (_rhs is null)
+      return "( " ~ _lhs.describe ~ " )";
+    else if (_inclusive)
+      return "( " ~ _lhs.describe ~ " : " ~ _rhs.describe ~ " )";
+    else
+      return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
   }
 
   void visit(CstSolver solver) {
@@ -1590,7 +1614,11 @@ class CstRangeExpr: CstVecTerm
   }
 
   override CstRangeExpr unroll(CstIterator iter, uint n) {
-    return new CstRangeExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _inclusive);
+    if (_rhs is null)
+      return new CstRangeExpr(_lhs.unroll(iter, n), null, _inclusive);
+    else
+      return new CstRangeExpr(_lhs.unroll(iter, n),
+			      _rhs.unroll(iter, n), _inclusive);
   }
 
   this(CstVecExpr lhs, CstVecExpr rhs, bool inclusive=false) {
@@ -1634,7 +1662,8 @@ class CstRangeExpr: CstVecTerm
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
     _lhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    if (_rhs !is null)
+      _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
   }
 
   bool getUniRange(ref UniRange rng) {
@@ -1650,14 +1679,16 @@ class CstRangeExpr: CstVecTerm
   }
 
   override bool isSolved() {
-    return _lhs.isSolved() && _rhs.isSolved();
+    return _lhs.isSolved() && (_rhs is null || _rhs.isSolved());
   }
 
   override void writeExprString(ref Charbuf str) {
     _lhs.writeExprString(str);
-    if (_inclusive) str ~= " : ";
-    else str ~= " .. ";
-    _rhs.writeExprString(str);
+    if (_rhs !is null) {
+      if (_inclusive) str ~= " : ";
+      else str ~= " .. ";
+      _rhs.writeExprString(str);
+    }
   }
 }
 
@@ -1787,9 +1818,12 @@ class CstVecSliceExpr: CstVecTerm
     _vec.visit(solver);
     // _range.visit(solver);
     assert (_range._lhs.isSolved());
-    assert (_range._rhs.isSolved());
+    if (_range._rhs !is null) assert (_range._rhs.isSolved());
     solver.pushToEvalStack(_range._lhs.evaluate());
-    solver.pushToEvalStack(_range._rhs.evaluate());
+    if (_range._rhs is null)
+      solver.pushToEvalStack(_range._lhs.evaluate()+1);
+    else
+      solver.pushToEvalStack(_range._rhs.evaluate());
     if (_range._inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
     else solver.processEvalStack(CstSliceOp.SLICE);
   }
@@ -2836,13 +2870,37 @@ auto _esdl__range(P, Q)(P p, Q q) {
 }
 
 CstRangeExpr _esdl__range_impl(Q)(CstVecExpr p, Q q)
-  if(isBitVector!Q || isIntegral!Q) {
+  if (isBitVector!Q || isIntegral!Q) {
+    if (q is null) return _esdl__range_impl(p, q);
     auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
     return _esdl__range_impl(p, qq);
   }
 
 CstRangeExpr _esdl__range_impl(CstVecExpr p, CstVecExpr q) {
   return new CstRangeExpr(p, q);
+}
+
+auto _esdl__rangeinc(P, Q)(P p, Q q) {
+  static if(is(P: CstVecExpr)) {
+    return _esdl__rangeinc_impl(p, q);
+  }
+  else static if(is(Q: CstVecExpr)) {
+    return _esdl__rangeinc_impl(q, p);
+  }
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
+    return new CstLogicConst(p == q);
+  }
+}
+
+CstRangeExpr _esdl__rangeinc_impl(Q)(CstVecExpr p, Q q)
+  if(isBitVector!Q || isIntegral!Q) {
+    auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
+    return _esdl__rangeinc_impl(p, qq);
+  }
+
+CstRangeExpr _esdl__rangeinc_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstRangeExpr(p, q, true);
 }
 
 auto _esdl__neq(P, Q)(P p, Q q) {
@@ -2867,3 +2925,10 @@ CstVec2LogicExpr _esdl__neq_impl(CstVecExpr p, CstVecExpr q) {
   return new CstVec2LogicExpr(p, q, CstCompareOp.NEQ);
 }
 
+CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr first, CstRangeExpr[] ranges...) {
+  CstLogicTerm result = vec.inside(first);
+  foreach (r; ranges) {
+    result = result | vec.inside(r);
+  }
+  return result;
+}
