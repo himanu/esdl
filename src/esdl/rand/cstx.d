@@ -188,6 +188,7 @@ struct CstParser {
       GTH,
       LTH,
       INSIDE,
+      DIST,
   }
 
   enum OpRangeToken: byte
@@ -237,6 +238,12 @@ struct CstParser {
       NOT,
       }
 
+  enum OpDistToken: byte
+  {   NONE = 0,
+      ITEMWISE,
+      RANGEWISE,
+  }
+
   OpUnaryToken parseUnaryOperator() {
     OpUnaryToken tok = OpUnaryToken.NONE;
     if (srcCursor < CST.length) {
@@ -249,6 +256,18 @@ struct CstParser {
       return tok;
     }
     return tok;			// None
+  }
+
+  OpDistToken parseDistOperator() {
+    OpDistToken tok = OpDistToken.NONE;
+    if (srcCursor < CST.length - 1) {
+      if (CST[srcCursor] == ':' && CST[srcCursor+1] == '=') tok = OpDistToken.ITEMWISE;
+      if (CST[srcCursor] == ':' && CST[srcCursor+1] == '/') tok = OpDistToken.RANGEWISE;
+    }
+    if (tok !is OpDistToken.NONE) {
+      srcCursor += 2;
+    }
+    return tok;
   }
 
   OpArithToken parseArithOperator() {
@@ -275,8 +294,6 @@ struct CstParser {
       if (CST[srcCursor] == '/') tok = OpArithToken.DIV;
       if (CST[srcCursor] == '%') tok = OpArithToken.REM;
       if (CST[srcCursor] == '[') {
-	import std.stdio;
-	writeln("I am here");
 	size_t srcTag = srcCursor;
 	while (srcCursor < CST.length - 2) {
 	  if (CST[srcCursor..srcCursor+2] == "..") {
@@ -329,6 +346,13 @@ struct CstParser {
     }
     if (tok !is OpCmpToken.NONE) {
       srcCursor += 6;
+      return tok;
+    }
+    if (srcCursor <= CST.length - 4) {
+      if (CST[srcCursor..srcCursor+4] == "dist") tok = OpCmpToken.DIST;
+    }
+    if (tok !is OpCmpToken.NONE) {
+      srcCursor += 4;
       return tok;
     }
     if (srcCursor <= CST.length - 2) {
@@ -1463,6 +1487,26 @@ struct CstParser {
   }
 
 
+  void procArithSubExpr() {
+    auto savedNumIndex = numIndex;
+    auto savedNumParen = numParen;
+    numIndex = 0;
+    numParen = 0;
+    procArithExpr();
+    numIndex = savedNumIndex;
+    numParen = savedNumParen;
+  }
+
+  void procSetRangeExpr() {
+    auto savedNumIndex = numIndex;
+    auto savedNumParen = numParen;
+    numIndex = 0;
+    numParen = 0;
+    procRangeExpr();
+    numIndex = savedNumIndex;
+    numParen = savedNumParen;
+  }
+
   void procIndexExpr(size_t cursor) {
     auto savedCursor = srcCursor;
     auto savedNumIndex = numIndex;
@@ -1481,7 +1525,7 @@ struct CstParser {
     size_t srcTag = 0;
     size_t startAnchor = outCursor;
     // true in the beginning of the expression or just after a start of parenthesis
-    bool unaryLegal = true;
+    // bool unaryLegal = true;
     while (srcCursor < CST.length) {
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
@@ -1490,20 +1534,20 @@ struct CstParser {
 
       // Parse any left braces now
       srcTag = parseLeftParens();
-      if (srcCursor > srcTag) unaryLegal = true;
+      // if (srcCursor > srcTag) unaryLegal = true;
       fill(CST[srcTag..srcCursor]);
 
       // Parse any unary operators
-      if (unaryLegal) {
-	auto uTok = parseUnaryOperator();
-	final switch(uTok) {
-	case OpUnaryToken.NEG: fill("-"); break;
-	case OpUnaryToken.NOT: fill("*"); break;
-	case OpUnaryToken.INV: fill("~"); break;
-	case OpUnaryToken.NONE: break;
-	}
+      // if (unaryLegal) {
+      auto uTok = parseUnaryOperator();
+      final switch(uTok) {
+      case OpUnaryToken.NEG: fill("-"); break;
+      case OpUnaryToken.NOT: fill("*"); break;
+      case OpUnaryToken.INV: fill("~"); break;
+      case OpUnaryToken.NONE: break;
       }
-      unaryLegal = false;
+      // }
+      // unaryLegal = false;
 
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
@@ -1580,16 +1624,17 @@ struct CstParser {
       srcTag = srcCursor;
       OpRangeToken opToken = parseRangeOperator();
 
+      insertOpeningParen(startAnchor);
+
       final switch(opToken) {
       case OpRangeToken.RANGE:
-	insertOpeningParen(startAnchor);
 	fill(")._esdl__range(");
 	break;
       case OpRangeToken.RANGEINC:
-	insertOpeningParen(startAnchor);
 	fill(")._esdl__rangeinc(");
 	break;
       case OpRangeToken.NONE:
+	fill(")._esdl__range(null)");
 	return;
       }
       // RHS
@@ -1605,8 +1650,93 @@ struct CstParser {
     }
   }
 
+  void procDistContainer() {
+    import std.stdio;
+    writeln("I an here");
+    size_t srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if (srcCursor < CST.length && CST[srcCursor] == '[') {
+      srcCursor += 1;
+      while (srcCursor < CST.length) {
+	procSetRangeExpr();
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	OpDistToken token = parseDistOperator();
+	final switch(token) {
+	case OpDistToken.ITEMWISE:
+	  fill("._esdl__itemWeight(");
+	  break;
+	case OpDistToken.RANGEWISE:
+	  fill("._esdl__rangeWeight(");
+	  break;
+	case OpDistToken.NONE:
+	  assert(false, "Expected dist weight operator in dist constraint");
+	}
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	srcTag = srcCursor;
+	procArithSubExpr();
+	if (srcTag == srcCursor) {
+	  assert(false, "Expecting a weight value in dist expression, got none");
+	}
+	fill(")");
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	if (srcCursor < CST.length && CST[srcCursor] == ',') {
+	  srcCursor += 1;
+	  fill(",");
+	  continue;
+	}
+	else if (srcCursor < CST.length && CST[srcCursor] == ']') {
+	  srcCursor += 1;
+	  break;
+	}
+	else {
+	  assert (false, "Unexpected token found: " ~ CST[srcCursor]);
+	}
+      }
+    }
+    else {
+      assert (false, "[ expected after 'inside', found: " ~ CST[srcCursor]);
+    }
+  }
+  
+  void procSetContainer() {
+    size_t srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if (srcCursor < CST.length && CST[srcCursor] == '[') {
+      srcCursor += 1;
+      while (srcCursor < CST.length) {
+	procSetRangeExpr();
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	if (srcCursor < CST.length && CST[srcCursor] == ',') {
+	  srcCursor += 1;
+	  fill(",");
+	  continue;
+	}
+	else if (srcCursor < CST.length && CST[srcCursor] == ']') {
+	  srcCursor += 1;
+	  break;
+	}
+	else {
+	  assert (false, "Unexpected token found: " ~ CST[srcCursor]);
+	}
+      }
+    }
+    else {
+      assert (false, "[ expected after 'inside', found: " ~ CST[srcCursor]);
+    }
+  }
+
+  enum VEC2BOOL: byte  {COMPARE, INSIDE, DIST}
+  
   void procCmpExpr() {
     size_t srcTag = 0;
+
+    VEC2BOOL opType = VEC2BOOL.COMPARE;
 
     srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
@@ -1653,7 +1783,15 @@ struct CstParser {
 	fill(")._esdl__gth(");
 	break;
       case OpCmpToken.INSIDE:
-	assert(false);
+	insertOpeningParen(startAnchor);
+	opType = VEC2BOOL.INSIDE;
+	fill(")._esdl__inside(");
+	break;
+      case OpCmpToken.DIST:
+	insertOpeningParen(startAnchor);
+	opType = VEC2BOOL.DIST;
+	fill(")._esdl__dist(");
+	break;
       case OpCmpToken.NONE:
 	return;
       }
@@ -1662,9 +1800,25 @@ struct CstParser {
       fill(CST[srcTag..srcCursor]);
 
       srcTag = srcCursor;
-      procArithExpr();
-      if (srcTag == srcCursor) {
-	assert(false, "Expecting an arithmatic expression on RHS, got none");
+      final switch(opType) {
+      case VEC2BOOL.COMPARE:
+	procArithExpr();
+	if (srcTag == srcCursor) {
+	  assert(false, "Expecting an arithmatic expression on RHS, got none");
+	}
+	break;
+      case VEC2BOOL.INSIDE:
+	procSetContainer();
+	if (srcTag == srcCursor) {
+	  assert(false, "Expecting a set container on RHS, got none");
+	}
+	break;
+      case VEC2BOOL.DIST:
+	procDistContainer();
+	if (srcTag == srcCursor) {
+	  assert(false, "Expecting a dist container on RHS, got none");
+	}
+	break;
       }
       fill(")");
     }
