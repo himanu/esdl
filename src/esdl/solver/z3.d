@@ -420,7 +420,7 @@ class CstZ3Solver: CstSolver
     
     CstDomain[] doms = group.domains();
 
-    debug (Z3SOLVER) {
+    if (_proxy._esdl__debugSolver()) {
       import std.stdio;
       writeln(_solver);
     }

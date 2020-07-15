@@ -671,6 +671,16 @@ mixin template _esdl__ProxyMixin()
     _esdl__doSetOuterElems(this, changed);
   }
 
+  debug(CSTSOLVER) {
+    enum bool _esdl__DEBUGSOVER = true;
+  }
+  else {
+    enum bool _esdl__DEBUGSOVER = false;
+  }
+
+  override bool _esdl__debugSolver() {
+    return _esdl__DEBUGSOVER;
+  }
 }
 
 auto ref _esdl__rand_proxy(L)(ref L l, string name,

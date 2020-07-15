@@ -198,6 +198,7 @@ abstract class _esdl__Proxy
     _cstVecPrimes[ptr] = p;
   }
 
+  abstract bool _esdl__debugSolver();
 }
 
 class CstScope {
