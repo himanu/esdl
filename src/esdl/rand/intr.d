@@ -26,18 +26,19 @@ alias LongRS = IntRangeSet!long;
 alias ULongR = IntRange!ulong;
 alias ULongRS = IntRangeSet!ulong;
 
-interface IntegralRangeSet
-{
-}
+// interface IntegralRangeSet
+// {
+// }
 
 
 enum INTTYPE: ubyte { UINT, INT, ULONG, LONG }
 
 struct UniRange
 {
-  INTTYPE _type;
   ulong _min;
   ulong _max;
+
+  INTTYPE _type;
   bool _full;
 
   this(bool full, INTTYPE iType) {
@@ -1145,5 +1146,168 @@ struct UniRangeMod
       ur = UniRange(ir);
       break;
     }
+  }
+}
+
+struct DistRange(T)
+{
+  T _min;
+  T _max;
+  T [] _purgeList;		// this should be sorted
+  uint _weight;			// per item weight
+  bool _perItem;
+  
+  uint _adjTotalWeight;
+
+  this(T min, T max, uint weight, bool perItem=false) {
+    _min = min;
+    _max = max;
+    _perItem = perItem;
+    if (_perItem) {
+      _weight = weight;
+      _adjTotalWeight = _weight * (_max - _min + 1);
+    }
+    else {
+      _weight = weight;
+      _adjTotalWeight = _weight;
+    }
+  }
+  
+  uint getWeight() {
+    return _adjTotalWeight;
+  }
+
+  void reset() {
+    _purgeList.length = 0;
+    if (_perItem) {
+      _adjTotalWeight = _weight * (_max - _min + 1);
+    }
+    else {
+      _adjTotalWeight = _weight;
+    }
+  }
+  
+  bool purge(T elem) {
+    import std.algorithm.searching: countUntil;
+    if (elem >= _min && elem <= _max) {
+      ptrdiff_t pos = countUntil!((a, b) {return a >= b;})(_purgeList, elem);
+      if (pos == -1) {
+	_purgeList ~= elem;
+      }
+      else if (_purgeList[pos] != elem) {
+	_purgeList.length += 1;
+	for (size_t i=_purgeList.length-1; i!=pos; --i) {
+	  _purgeList[i] = _purgeList[i-1];
+	}
+	_purgeList[pos] = elem;
+      }
+      if (_perItem) {
+	_adjTotalWeight = _weight *
+	  (_max - _min + 1 - cast(uint) _purgeList.length);
+      }
+      else {
+	if (_max - _min + 1 == _purgeList.length) _adjTotalWeight = 0;
+      }
+      return true;
+    }
+    else return false;
+  }
+
+  string describe() {
+    import std.conv: to;
+    string str;
+    str ~= "Min: " ~ _min.to!string;
+    str ~= "\nMax: " ~ _max.to!string;
+    str ~= "\nPurge: " ~ _purgeList.to!string;
+    str ~= "\nWeight: " ~ _weight.to!string;
+    str ~= "\nPer Item: " ~ _perItem.to!string;
+    str ~= "\nTotal Adjusted Weight: " ~ _adjTotalWeight.to!string;
+    return str;
+  }
+
+  bool setVal(ref T var, ref double select) {
+    if (select >= _adjTotalWeight) {
+      select -= _adjTotalWeight;
+      return false;
+    }
+    else {
+      import std.stdio;
+      T index = cast(T)
+	((_max - _min + 1 - cast (T) _purgeList.length) * select) /
+	_adjTotalWeight;
+      foreach (elem; _purgeList) {
+	T eindex = elem - _min;
+	if (eindex <= index) index += 1;
+	else break;
+      }
+      var = _min + index;
+      select = -1;
+      return true;
+    }
+  }
+}
+
+
+struct DistRangeSet(T)
+{
+  import std.random: uniform, rndGen, Random;
+
+  DistRange!T [] _set;
+
+  void opOpAssign(string op)(DistRange!T dist) if(op == "~") {
+    import std.algorithm.searching: countUntil;
+    ptrdiff_t pos = countUntil!((a, b) {return a._min >= b._min;})(_set, dist);
+    if (pos == -1) {
+      if (_set.length > 0 && _set[$-1]._max >= dist._min) {
+	assert(false, "Overlapping 'dist' constraint");
+      }
+      else {
+	_set ~= dist;
+      }
+    }
+    else {
+      // if (_purgeList[pos] != elem) {
+      if (_set[pos]._min <= dist._max) {
+	assert(false, "Overlapping 'dist' constraint");
+      }
+      if (pos != 0 && _set[pos-1]._max >= dist._min) {
+	assert(false, "Overlapping 'dist' constraint");
+      }
+      _set.length += 1;
+      for (size_t i=_set.length-1; i!=pos; --i) {
+	_set[i] = _set[i-1];
+      }
+      _set[pos] = dist;
+    }
+  }
+
+  uint getTotalWeight() {
+    uint weight = 0;
+    foreach (ref dist; _set) {
+      weight += dist.getWeight();
+    }
+    return weight;
+  }
+
+  void purge(T elem) {
+    foreach (ref dist; _set) {
+      if (dist.purge(elem)) break;
+    }
+  }
+
+  void reset() {
+    foreach (ref dist; _set) {
+      dist.reset();
+    }
+  }
+
+  T uniform(ref Random gen = rndGen()) {
+    double select = getTotalWeight() * uniform(0.0, 1.0, gen);
+    T var;
+    foreach (ref dist; _set) {
+      if (dist.setVal(var, select)) break;
+    }
+    assert(select <  0);
+    return var;
   }
 }
