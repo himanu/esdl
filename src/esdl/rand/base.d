@@ -293,7 +293,6 @@ abstract class CstDomain
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
-  abstract void annotate(CstPredGroup group);
   
   abstract long value();
   
@@ -354,6 +353,9 @@ abstract class CstDomain
     }
   }
 
+  abstract void annotate(CstPredGroup group);
+  abstract bool visitDomain(CstSolver solver);
+  
   // init value has to be different from proxy._cycle init value
   uint _cycle = -1;
   State _state;
@@ -640,7 +642,8 @@ class CstPredGroup			// group of related predicates
       _vars.reset();
       annotate();
       string sig = signature();
-      debug (CSTSOLVER) {
+
+    if (_proxy._esdl__debugSolver()) {
 	import std.stdio;
 	writeln(describe());
 	writeln(sig);

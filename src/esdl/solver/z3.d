@@ -239,6 +239,15 @@ class CstZ3Solver: CstSolver
       _optimize = optimize;
     }
 
+    foreach (dom; doms) {
+      if (dom.visitDomain(this)) {
+	assert(_evalStack.length == 1);
+	addRule(_solver, _evalStack[0].toBool());
+	if (_needOptimize) addRule(_optimize, _evalStack[0].toBool());
+	_evalStack.length = 0;
+      }
+    }
+    
     foreach (pred; group.predicates()) {
       // import std.stdio;
       // writeln("Working on: ", pred.name());
@@ -603,17 +612,22 @@ class CstZ3Solver: CstSolver
 
   override void pushToEvalStack(CstValue value) {
     // writeln("push: value ", value.value());
-    _evalStack ~= Z3Term(bvNumVal(_context, value.value(), value.bitcount()));
+    _evalStack ~= Z3Term(bvNumVal(_context, value.value(),
+				  value.bitcount(), value.signed()));
   }
 
-  override void pushToEvalStack(ulong value) {
-    // writeln("push: ", value);
-    _evalStack ~= Z3Term(value);
+  override void pushToEvalStack(ulong value, uint bitcount, bool signed) {
+    _evalStack ~= Z3Term(bvNumVal(_context, value, bitcount, signed));
   }
 
   override void pushToEvalStack(bool value) {
     // writeln("push: ", value);
     assert(false);
+  }
+
+  override void pushIndexToEvalStack(ulong value) {
+    // writeln("push: ", value);
+    _evalStack ~= Z3Term(value);
   }
 
   override void processEvalStack(CstUnaryOp op) {

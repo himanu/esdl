@@ -125,11 +125,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	return cast (long) (*_var);
       }
 
-      void visit(CstSolver solver) {
-	// assert (solver !is null);
-	solver.pushToEvalStack(this);
-      }
-
       bool isConst() {
 	return false;
       }
@@ -312,10 +307,6 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
       	else {
       	  return *(_parent.getRef(this._pindex));
       	}
-      }
-
-      void visit(CstSolver solver) {
-	solver.pushToEvalStack(this);
       }
 
       bool isConst() {

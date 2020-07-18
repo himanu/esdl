@@ -9730,12 +9730,12 @@ class Buddy
     return buildVec(bitnum, val_, signed);
   }
 
-  BddVec buildVec(size_t bitnum, int offset, int step, bool signed = false)
-  {
-    BddVec v = BddVec(bitnum, signed);
-    v.initialize(this, offset, step);
-    return v;
-  }
+  // BddVec buildVec(size_t bitnum, int offset, int step, bool signed = false)
+  // {
+  //   BddVec v = BddVec(bitnum, signed);
+  //   v.initialize(this, offset, step);
+  //   return v;
+  // }
 
   BddVec buildVec(BddDomain d, bool signed = false)
   {

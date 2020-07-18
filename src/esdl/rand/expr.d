@@ -12,7 +12,7 @@ import esdl.rand.base;
 import esdl.data.bvec: isBitVector, toBitVec;
 import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
-  isDynamicArray, isSomeChar;
+  isDynamicArray, isSomeChar, EnumMembers, isSigned;
 
 interface CstVecTerm: CstVecExpr
 {
@@ -213,6 +213,74 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
+  static if (is (T == enum)) {
+    T[] _enumSortedVals;
+
+    void _enumSortedValsPopulate() {
+      import std.algorithm.sorting: sort;
+      _enumSortedVals = cast(T[]) [EnumMembers!T];
+      _enumSortedVals.sort();
+    }
+  }
+
+  private void addRangeConstraint(CstSolver solver, T min, T max) {
+    if (min == max) {
+      solver.pushToEvalStack(this);
+      solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
+      solver.processEvalStack(CstCompareOp.EQU);
+    }
+    else {
+      solver.pushToEvalStack(this);
+      solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
+      solver.processEvalStack(CstCompareOp.GTE);
+      solver.pushToEvalStack(this);
+      solver.pushToEvalStack(max, T.sizeof*8, isSigned!T);
+      solver.processEvalStack(CstCompareOp.LTE);
+      solver.processEvalStack(CstLogicOp.LOGICAND);
+    }
+  }
+  
+  override bool visitDomain(CstSolver solver) {
+    static if (is (T == enum)) {
+      uint count;
+      if (_enumSortedVals.length == 0) {
+	_enumSortedValsPopulate();
+      }
+      T min;
+      T max;
+      foreach (i, val; _enumSortedVals) {
+	if (i == 0) {
+	  min = val;
+	  max = val;
+	}
+	else {
+	  if (val - max == 1) {
+	    max = val;
+	  }
+	  else {
+	    addRangeConstraint(solver, min, max);
+	    count += 1;
+	    min = val;
+	    max = val;
+	  }
+	}
+      }
+      addRangeConstraint(solver, min, max);
+      for (uint i=0; i!=count; ++i) {
+	solver.processEvalStack(CstLogicOp.LOGICOR);
+      }
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  override void visit(CstSolver solver) {
+    // assert (solver !is null);
+    solver.pushToEvalStack(this);
+  }
+
   void writeExprString(ref Charbuf str) {
     if (this.isSolved()) {
       str ~= 'V';
@@ -226,29 +294,33 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
       str ~= 'R';
       if (_domN < 256) (cast(ubyte) _domN).writeHexString(str);
       else (cast(ushort) _domN).writeHexString(str);
-      static if (isBitVector!T) {
-	static if (T.ISSIGNED) {
-	  str ~= 'S';
-	}
-	else {
-	  str ~= 'U';
-	}
-	if (T.SIZE < 256) (cast(ubyte) T.SIZE).writeHexString(str);
-	else (cast(ushort) T.SIZE).writeHexString(str);
-      }
-      static if (isIntegral!T) {
-	static if (isSigned!T) {
-	  str ~= 'S';
-	}
-	else {
-	  str ~= 'U';
-	}
-	(cast(ubyte) (T.sizeof * 8)).writeHexString(str);
-      }
-      static if (isBoolean!T) {
-	str ~= 'U';
-	(cast(ubyte) 1).writeHexString(str);
-      }
+      str ~= T.stringof;
+      // static if (isBitVector!T) {
+      // 	static if (T.ISSIGNED) {
+      // 	  str ~= 'S';
+      // 	}
+      // 	else {
+      // 	  str ~= 'U';
+      // 	}
+      // 	if (T.SIZE < 256) (cast(ubyte) T.SIZE).writeHexString(str);
+      // 	else (cast(ushort) T.SIZE).writeHexString(str);
+      // }
+      // else static if (is (T == enum)) {
+      // 	str ~= T.stringof;
+      // }
+      // else static if (isIntegral!T) {
+      // 	static if (isSigned!T) {
+      // 	  str ~= 'S';
+      // 	}
+      // 	else {
+      // 	  str ~= 'U';
+      // 	}
+      // 	(cast(ubyte) (T.sizeof * 8)).writeHexString(str);
+      // }
+      // else static if (isBoolean!T) {
+      // 	str ~= 'U';
+      // 	(cast(ubyte) 1).writeHexString(str);
+      // }
     }
   }
 
@@ -975,7 +1047,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return this;
   }
 
-  void visit(CstSolver solver) {
+  override void visit(CstSolver solver) {
     solver.pushToEvalStack(this);
   }
 
@@ -1602,8 +1674,8 @@ class CstRangeExpr: CstVecTerm
   void visit(CstSolver solver) {
     // assert (_lhs.isSolved());
     // assert (_rhs.isSolved());
-    // solver.pushToEvalStack(_lhs.evaluate());
-    // solver.pushToEvalStack(_rhs.evaluate());
+    // solver.pushIndexToEvalStack(_lhs.evaluate());
+    // solver.pushIndexToEvalStack(_rhs.evaluate());
     // if (_inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
     // else solver.processEvalStack(CstSliceOp.SLICE);
     assert (false);
@@ -1709,9 +1781,9 @@ class CstRangeExpr: CstVecTerm
 //     _vec.visit(solver);
 //     assert (_lhs.isSolved());
 //     if (_rhs !is null) assert (_rhs.isSolved());
-//     solver.pushToEvalStack(_lhs.evaluate());
-//     if (_rhs is null) solver.pushToEvalStack(_lhs.evaluate() + 1);
-//     else solver.pushToEvalStack(_rhs.evaluate());
+//     solver.pushIndexToEvalStack(_lhs.evaluate());
+//     if (_rhs is null) solver.pushIndexToEvalStack(_lhs.evaluate() + 1);
+//     else solver.pushIndexToEvalStack(_rhs.evaluate());
 //     solver.processEvalStack(CstSliceOp.SLICE);
 //   }
 
@@ -1819,11 +1891,11 @@ class CstVecSliceExpr: CstVecTerm
     // _range.visit(solver);
     assert (_range._lhs.isSolved());
     if (_range._rhs !is null) assert (_range._rhs.isSolved());
-    solver.pushToEvalStack(_range._lhs.evaluate());
+    solver.pushIndexToEvalStack(_range._lhs.evaluate());
     if (_range._rhs is null)
-      solver.pushToEvalStack(_range._lhs.evaluate()+1);
+      solver.pushIndexToEvalStack(_range._lhs.evaluate()+1);
     else
-      solver.pushToEvalStack(_range._rhs.evaluate());
+      solver.pushIndexToEvalStack(_range._rhs.evaluate());
     if (_range._inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
     else solver.processEvalStack(CstSliceOp.SLICE);
   }
@@ -1918,8 +1990,8 @@ class CstVecIndexExpr: CstVecTerm
   void visit(CstSolver solver) {
     _vec.visit(solver);
     assert (_index.isSolved());
-    solver.pushToEvalStack(_index.evaluate());
-    solver.pushToEvalStack(_index.evaluate() + 1);
+    solver.pushIndexToEvalStack(_index.evaluate());
+    solver.pushIndexToEvalStack(_index.evaluate() + 1);
     solver.processEvalStack(CstSliceOp.SLICE);
   }
 

@@ -636,25 +636,24 @@ struct BvExpr
 }
 
 
-BvExpr bvNumVal(T)(Context c, T n, uint bitcount = T.sizeof * 8) {
-  import std.traits: isSigned;
-  enum SIGNED = isSigned!T;
+BvExpr bvNumVal(Context c, long n, uint bitcount, bool signed) {
   Sort s = c.bvSort(bitcount);
-  static if (T.sizeof <= 4) {
-    static if (SIGNED) Z3_ast r = Z3_mk_int(c, n, s);
-    else Z3_ast r = Z3_mk_unsigned_int(c, n, s);
+  Z3_ast r;
+  if (bitcount <= 32) {
+    if (signed) r = Z3_mk_int(c, cast(int) n, s);
+    else r = Z3_mk_unsigned_int(c, cast(uint) n, s);
   }
-  else static if (T.sizeof <= 8) {
-    static if (SIGNED) Z3_ast r = Z3_mk_int64(c, n, s);
-    else Z3_ast r = Z3_mk_unsigned_int64(c, n, s);
+  else if (bitcount <= 64) {
+    if (signed) r = Z3_mk_int64(c, n, s);
+    else r = Z3_mk_unsigned_int64(c, cast(ulong) n, s);
   }
   else {
     // use the following API for BV
     // extern(C) Z3_ast Z3_mk_bv_numeral (Z3_context c, uint sz, const(bool)* bits);
-    static assert (false, "BitVector needs to be implemented");
+    assert (false, "TBD: BitVector needs to be implemented");
   }
   c.checkError();
-  return BvExpr(c, r, SIGNED);
+  return BvExpr(c, r, signed);
 }
 
 bool promoteToCommonType(ref BvExpr a, ref BvExpr b,

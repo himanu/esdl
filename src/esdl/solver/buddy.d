@@ -288,6 +288,14 @@ class CstBuddySolver: CstSolver
       var = d;
     }
 
+    foreach (dom; doms) {
+      if (dom.visitDomain(this)) {
+	assert(_evalStack.length == 1);
+	_context.addRule(_evalStack[0].toBool());
+	_evalStack.length = 0;
+      }
+    }
+
     foreach (pred; group.predicates()) {
       // import std.stdio;
       // writeln("Working on: ", pred.name());
@@ -418,15 +426,20 @@ class CstBuddySolver: CstSolver
     pushToEvalStack(v);
   }
 
-  override void pushToEvalStack(ulong value) {
-    // writeln("push: ", value);
-    BuddyTerm e = BuddyTerm(value);
-    pushToEvalStack(e);
+  override void pushToEvalStack(ulong value, uint bitcount, bool signed) {
+    BddVec v = _esdl__buddy.buildVec(bitcount, value, signed);
+    pushToEvalStack(v);
   }
 
   override void pushToEvalStack(bool value) {
     // writeln("push: ", value);
     assert(false);
+  }
+
+  override void pushIndexToEvalStack(ulong value) {
+    // writeln("push: ", value);
+    BuddyTerm e = BuddyTerm(value);
+    pushToEvalStack(e);
   }
 
   override void processEvalStack(CstUnaryOp op) {
