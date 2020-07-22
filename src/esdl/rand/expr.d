@@ -199,8 +199,8 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   bool _isDist;
-  bool isDist() { return _isDist; }
-  void isDist(bool b) { _isDist = b; }
+  override bool isDist() { return _isDist; }
+  override void isDist(bool b) { _isDist = b; }
 
   uint         _domIndex = uint.max;
   uint         _resolveLap = 0;
