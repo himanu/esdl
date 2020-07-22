@@ -293,6 +293,8 @@ abstract class CstDomain
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
+  abstract bool isDist();
+  abstract void isDist(bool b);
   
   abstract long value();
   
@@ -1149,6 +1151,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     _expr.writeExprString(str);
   }
+
+  bool _isDist;
+  bool isDist() { return _isDist; }
+  void isDist(bool b) { _isDist = b; }
+
 }
 
 class CstBlock

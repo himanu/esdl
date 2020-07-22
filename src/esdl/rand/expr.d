@@ -198,6 +198,10 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     return _name;
   }
 
+  bool _isDist;
+  bool isDist() { return _isDist; }
+  void isDist(bool b) { _isDist = b; }
+
   uint         _domIndex = uint.max;
   uint         _resolveLap = 0;
   
@@ -1764,6 +1768,186 @@ class CstRangeExpr: CstVecTerm
   }
 }
 
+class CstDistRangeExpr: CstVecTerm
+{
+  import std.conv;
+
+  CstRangeExpr _range;
+  CstVecExpr   _weight;
+  bool         _perItem = false;
+
+  string describe() {
+    string str = "( " ~ _range.describe;
+    if (_perItem) str ~= " := ";
+    else str ~= " :/ ";
+    str ~= _weight.describe() ~ " )";
+    return str;
+  }
+
+  void visit(CstSolver solver) {
+    assert (false);
+  }
+
+  long evaluate() {
+    assert (false);
+  }
+
+  override CstDistRangeExpr unroll(CstIterator iter, uint n) {
+    return this;
+  }
+
+  this(CstRangeExpr range, CstVecExpr weight, bool perItem=false) {
+    _range = range;
+    _weight = weight;
+    _perItem = perItem;
+  }
+
+  uint resolveLap() {
+    assert (false);
+  }
+
+  void resolveLap(uint lap) {
+    assert (false);
+  }
+  
+  bool isConst() {
+    return false;
+  }
+
+  bool isIterator() {
+    return false;
+  }
+
+  bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstDomain[] deps) { }
+
+  bool getUniRange(ref UniRange rng) {
+    assert (false);
+  }
+
+  bool getIntRange(ref IntR rng) {
+    assert (false);
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    assert (false);
+  }
+
+  override bool isSolved() {
+    return _range.isSolved() && _weight.isSolved();
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    import std.conv: to;
+    _range.writeExprString(str);
+    if (_perItem) str ~= " := ";
+    else str ~= " :/ ";
+    str ~= _weight.evaluate().to!string;
+  }
+}
+
+class CstDistExpr: CstLogicTerm
+{
+  import std.conv;
+
+  CstVecExpr _vec;
+  CstDistRangeExpr[] _dists;
+
+  this(CstVecExpr vec, CstDistRangeExpr[] dists) {
+    _vec = vec;
+    _dists = dists;
+  }
+
+  string describe() {
+    string str = "( " ~ _vec.describe() ~ " dist ";
+    foreach (dist; _dists) {
+      str ~= dist.describe() ~ ", ";
+    }
+    str ~= " )";
+    return str;
+  }
+
+  void visit(CstSolver solver) {
+    assert (false);
+  }
+
+  override CstDistExpr unroll(CstIterator iter, uint n) {
+    // import std.stdio;
+    // writeln(_lhs.describe() ~ " " ~ _op.to!string ~ " " ~ _rhs.describe() ~ " Getting unwound!");
+    // writeln("RHS: ", _rhs.unroll(iter, n).describe());
+    // writeln("LHS: ", _lhs.unroll(iter, n).describe());
+    return new CstDistExpr(_vec.unroll(iter, n), _dists);
+  }
+
+  uint resolveLap() {
+    return _vec.resolveLap();
+  }
+  
+  void resolveLap(uint lap) {
+    _vec.resolveLap(lap);
+  }
+
+
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstDomain[] deps) {
+    // _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    assert (false);
+  }
+  
+  override bool getUniRangeSet(ref IntRS rs) {
+    assert (false);
+  }
+    
+  override bool getUniRangeSet(ref UIntRS rs) {
+    assert (false);
+  }
+    
+  override bool getUniRangeSet(ref LongRS rs) {
+    assert (false);
+  }
+    
+  override bool getUniRangeSet(ref ULongRS rs) {
+    assert (false);
+  }
+    
+  bool getUniRangeSetImpl(RS)(ref RS rs) {
+    assert (false);
+  }
+
+  override bool getIntRangeSet(ref IntRS rs) {
+    assert (false);
+  }
+
+  override bool isSolved() {
+    return _vec.isSolved();
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    assert(false);
+  }
+
+}
+
+
 // class CstVecSliceExpr: CstVecTerm
 // {
 //   CstVecExpr _vec;
@@ -3003,4 +3187,16 @@ CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr first, CstRangeExpr[] ra
     result = result | vec.inside(r);
   }
   return result;
+}
+
+CstDistRangeExpr _esdl__rangeWeight(CstRangeExpr range, CstVecExpr weight) {
+  return new CstDistRangeExpr(range, weight, false);
+}
+
+CstDistRangeExpr _esdl__itemWeight(CstRangeExpr range, CstVecExpr weight) {
+  return new CstDistRangeExpr(range, weight, true);
+}
+
+CstDistExpr _esdl__dist(CstVecTerm vec, CstDistRangeExpr[] ranges...) {
+  return new CstDistExpr(vec, ranges);
 }
