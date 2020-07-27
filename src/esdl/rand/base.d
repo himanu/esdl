@@ -298,14 +298,12 @@ abstract class CstDomain
   
   abstract long value();
   
-  final void _esdl__doRandomize() {
-    this._esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
-  }
-
   final void randIfNoCst() {
     if (! isSolved()) {
       if (_rndPreds.length == 0) {
-	_esdl__doRandomize();
+	_esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
+	markSolved();
+	execCbs();
       }
     }
   }
@@ -403,7 +401,6 @@ interface CstDepCallback
 interface CstVecPrim
 {
   abstract string name();
-  abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract void solveBefore(CstVecPrim other);
   abstract void addPreRequisite(CstVecPrim other);
 }

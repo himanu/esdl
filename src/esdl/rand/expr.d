@@ -596,8 +596,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 	else {
 	  _valueChanged = false;
 	}
-	markSolved();
-	execCbs();
       }
     }
     else {
@@ -1081,9 +1079,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
     // this function will only be called when array lenght is
     // unconstrainted
-    markSolved();
     _parent.buildElements(_parent.getLen());
-    execCbs();
   }
   
   override bool isRand() {

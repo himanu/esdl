@@ -549,6 +549,9 @@ mixin template CstVecArrMixin()
   void _esdl__doRandomize(_esdl__RandGen randGen) {
     static if (HAS_RAND_ATTRIB) {
       assert (arrLen !is null);
+      // if there is no constraint on the length of the array,
+      // do not try to randomize it, since it will probably create a
+      // big array which might lead to memory allocation issues
       buildElements(getLen());
       for (size_t i=0; i != arrLen.evaluate(); ++i) {
 	this[i]._esdl__doRandomize(randGen);
