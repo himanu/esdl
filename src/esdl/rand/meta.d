@@ -47,6 +47,7 @@ body {
 
 struct _esdl__VALUE {}
 struct _esdl__ARG {}
+enum _esdl__UNDEFINED;
 
 template _esdl__RandProxyType(T, P, int I)
 {
@@ -72,6 +73,9 @@ template _esdl__RandProxyType(T, P, int I)
   else static if (is (L == class) || is (L == struct) ||
 		  (is (L == U*, U) && is (U == struct))) {
     alias _esdl__RandProxyType = CstObjIdx!(L, RAND, 0, P, I);
+  }
+  else {
+    alias _esdl__RandProxyType = _esdl__UNDEFINED;
   }
 }
 
@@ -239,16 +243,18 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
   }
 }
 
-template _esdl__RandDeclVars(T, int I=0)
+template _esdl__RandDeclVars(T, PT, int I=0)
 {
-  static if(I == T.tupleof.length) {
+  static if (I == T.tupleof.length) {
     enum _esdl__RandDeclVars = "";
   }
   else {
     enum rand RAND = getRandAttr!(T, I);
     static if ((! RAND.hasProxy()) ||
-	       is (typeof(T.tupleof[I]): _esdl__Norand)) {
-      enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, I+1);
+	       is (typeof(T.tupleof[I]): _esdl__Norand) ||
+	       is (_esdl__RandProxyType!(T, PT, I) == _esdl__UNDEFINED)
+	       ) {
+      enum string _esdl__RandDeclVars = _esdl__RandDeclVars!(T, PT, I+1);
     }
     else {
       // pragma(msg, I);
@@ -256,7 +262,7 @@ template _esdl__RandDeclVars(T, int I=0)
       enum string _esdl__RandDeclVars =
 	"  _esdl__RandProxyType!(_esdl__T, _esdl__PROXYT, " ~ I.stringof ~ ") " ~
 	__traits(identifier, T.tupleof[I]) ~ ";\n" ~
-	_esdl__RandDeclVars!(T, I+1);
+	_esdl__RandDeclVars!(T, PT, I+1);
     }
   }
 }
@@ -399,11 +405,11 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
 
 // generates the code for rand structure inside the class object getting
 // randomized
-string _esdl__randsMixin(T, ST)() {
+string _esdl__randsMixin(T, PT)() {
   // T t;
   // string rand_decls = _esdl__RandDeclFuncs!T ~ _esdl__RandDeclVars!T;
 
-  string rand_decls = _esdl__RandDeclVars!(T);
+  string rand_decls = _esdl__RandDeclVars!(T, PT);
   string cst_decls = _esdl__ConstraintsDefDecl!T ~ _esdl__ConstraintsDecl!T;
 
 

@@ -227,21 +227,44 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
-  private void addRangeConstraint(CstSolver solver, T min, T max) {
-    if (min == max) {
-      solver.pushToEvalStack(this);
-      solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
-      solver.processEvalStack(CstCompareOp.EQU);
+  static if (isIntegral!T) {
+    private void addRangeConstraint(CstSolver solver, T min, T max) {
+      if (min == max) {
+	solver.pushToEvalStack(this);
+	solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
+	solver.processEvalStack(CstCompareOp.EQU);
+      }
+      else {
+	solver.pushToEvalStack(this);
+	solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
+	solver.processEvalStack(CstCompareOp.GTE);
+	solver.pushToEvalStack(this);
+	solver.pushToEvalStack(max, T.sizeof*8, isSigned!T);
+	solver.processEvalStack(CstCompareOp.LTE);
+	solver.processEvalStack(CstLogicOp.LOGICAND);
+      }
     }
-    else {
-      solver.pushToEvalStack(this);
-      solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
-      solver.processEvalStack(CstCompareOp.GTE);
-      solver.pushToEvalStack(this);
-      solver.pushToEvalStack(max, T.sizeof*8, isSigned!T);
-      solver.processEvalStack(CstCompareOp.LTE);
-      solver.processEvalStack(CstLogicOp.LOGICAND);
+  }
+  else static if (isBitVector!T && T.SIZE <= 64) {
+    private void addRangeConstraint(CstSolver solver, T min, T max) {
+      if (min == max) {
+	solver.pushToEvalStack(this);
+	solver.pushToEvalStack(cast(ulong) min, T.SIZE, T.ISSIGNED);
+	solver.processEvalStack(CstCompareOp.EQU);
+      }
+      else {
+	solver.pushToEvalStack(this);
+	solver.pushToEvalStack(cast(ulong) min, T.SIZE, T.ISSIGNED);
+	solver.processEvalStack(CstCompareOp.GTE);
+	solver.pushToEvalStack(this);
+	solver.pushToEvalStack(cast(ulong) max, T.SIZE, T.ISSIGNED);
+	solver.processEvalStack(CstCompareOp.LTE);
+	solver.processEvalStack(CstLogicOp.LOGICAND);
+      }
     }
+  }
+  else {
+    static assert (false);
   }
   
   override bool visitDomain(CstSolver solver) {
