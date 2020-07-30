@@ -12,7 +12,7 @@ import esdl.rand.base;
 import esdl.data.bvec: isBitVector, toBitVec;
 import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
-  isDynamicArray, isSomeChar, EnumMembers, isSigned;
+  isDynamicArray, isSomeChar, EnumMembers, isSigned, OriginalType;
 
 interface CstVecTerm: CstVecExpr
 {
@@ -218,6 +218,8 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
   }
 
   static if (is (T == enum)) {
+    alias OT = OriginalType!T;
+
     T[] _enumSortedVals;
 
     void _enumSortedValsPopulate() {
@@ -225,48 +227,52 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
       _enumSortedVals = cast(T[]) [EnumMembers!T];
       _enumSortedVals.sort();
     }
+
+
+    static if (isIntegral!OT) {
+      private void _addRangeConstraint(CstSolver solver, OT min, OT max) {
+	if (min == max) {
+	  solver.pushToEvalStack(this);
+	  solver.pushToEvalStack(min, OT.sizeof*8, isSigned!OT);
+	  solver.processEvalStack(CstCompareOp.EQU);
+	}
+	else {
+	  solver.pushToEvalStack(this);
+	  solver.pushToEvalStack(min, OT.sizeof*8, isSigned!OT);
+	  solver.processEvalStack(CstCompareOp.GTE);
+	  solver.pushToEvalStack(this);
+	  solver.pushToEvalStack(max, OT.sizeof*8, isSigned!OT);
+	  solver.processEvalStack(CstCompareOp.LTE);
+	  solver.processEvalStack(CstLogicOp.LOGICAND);
+	}
+      }
+    }
+    else static if (isBitVector!OT && OT.SIZE <= 64) {
+      private void _addRangeConstraint(CstSolver solver, OT min, OT max) {
+	if (min == max) {
+	  solver.pushToEvalStack(this);
+	  solver.pushToEvalStack(cast(ulong) min, OT.SIZE, OT.ISSIGNED);
+	  solver.processEvalStack(CstCompareOp.EQU);
+	}
+	else {
+	  solver.pushToEvalStack(this);
+	  solver.pushToEvalStack(cast(ulong) min, OT.SIZE, OT.ISSIGNED);
+	  solver.processEvalStack(CstCompareOp.GTE);
+	  solver.pushToEvalStack(this);
+	  solver.pushToEvalStack(cast(ulong) max, OT.SIZE, OT.ISSIGNED);
+	  solver.processEvalStack(CstCompareOp.LTE);
+	  solver.processEvalStack(CstLogicOp.LOGICAND);
+	}
+      }
+    }
+    else {
+      private void _addRangeConstraint(CstSolver solver, OT min, OT max) {
+	assert (false);
+      }
+    }
   }
 
-  static if (isIntegral!T) {
-    private void addRangeConstraint(CstSolver solver, T min, T max) {
-      if (min == max) {
-	solver.pushToEvalStack(this);
-	solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
-	solver.processEvalStack(CstCompareOp.EQU);
-      }
-      else {
-	solver.pushToEvalStack(this);
-	solver.pushToEvalStack(min, T.sizeof*8, isSigned!T);
-	solver.processEvalStack(CstCompareOp.GTE);
-	solver.pushToEvalStack(this);
-	solver.pushToEvalStack(max, T.sizeof*8, isSigned!T);
-	solver.processEvalStack(CstCompareOp.LTE);
-	solver.processEvalStack(CstLogicOp.LOGICAND);
-      }
-    }
-  }
-  else static if (isBitVector!T && T.SIZE <= 64) {
-    private void addRangeConstraint(CstSolver solver, T min, T max) {
-      if (min == max) {
-	solver.pushToEvalStack(this);
-	solver.pushToEvalStack(cast(ulong) min, T.SIZE, T.ISSIGNED);
-	solver.processEvalStack(CstCompareOp.EQU);
-      }
-      else {
-	solver.pushToEvalStack(this);
-	solver.pushToEvalStack(cast(ulong) min, T.SIZE, T.ISSIGNED);
-	solver.processEvalStack(CstCompareOp.GTE);
-	solver.pushToEvalStack(this);
-	solver.pushToEvalStack(cast(ulong) max, T.SIZE, T.ISSIGNED);
-	solver.processEvalStack(CstCompareOp.LTE);
-	solver.processEvalStack(CstLogicOp.LOGICAND);
-      }
-    }
-  }
-  else {
-    static assert (false);
-  }
-  
+
   override bool visitDomain(CstSolver solver) {
     static if (is (T == enum)) {
       uint count;
@@ -285,14 +291,14 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
 	    max = val;
 	  }
 	  else {
-	    addRangeConstraint(solver, min, max);
+	    _addRangeConstraint(solver, min, max);
 	    count += 1;
 	    min = val;
 	    max = val;
 	  }
 	}
       }
-      addRangeConstraint(solver, min, max);
+      _addRangeConstraint(solver, min, max);
       for (uint i=0; i!=count; ++i) {
 	solver.processEvalStack(CstLogicOp.LOGICOR);
       }
