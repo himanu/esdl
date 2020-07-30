@@ -3420,7 +3420,7 @@ class EventQueueObj: EventObj
 {
   package EventQueueObj _eventObj = void;
 
-  package final ref EventQueueObj _esdl__objRef() {
+  package final ref EventQueueObj _esdl__objRef() return {
     return _eventObj;
   }
 
@@ -10551,11 +10551,11 @@ void withdrawCaveat() {
   root.withdrawCaveat(proc.getParentEntity());
 }
 
-void simulate(T)(string name, string[] argv = []) {
+ubyte simulate(T)(string name, string[] argv = []) {
   auto root = new Root!T();
   root.multicore();
   root.elaborate(name, argv);
-  root.simulate();
+  return root.simulate();
 }
 
 auto elaborate(T)(string name, string[] argv = []) {

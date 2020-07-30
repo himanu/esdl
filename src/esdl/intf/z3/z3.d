@@ -2463,7 +2463,7 @@ struct FuncEntry
   alias native this;
   //operator Z3_func_entry() const { return _m_entry; }
 
-  ref FuncEntry opAssign(ref FuncEntry s) {
+  ref FuncEntry opAssign(ref FuncEntry s) return {
     Z3_func_entry_inc_ref(s.context(), s._m_entry);
     Z3_func_entry_dec_ref(context(), _m_entry);
     setContext(s.context());
@@ -2522,7 +2522,7 @@ struct FuncInterp
   }
   alias native this;
 
-  ref FuncInterp opAssign(ref FuncInterp s) {
+  ref FuncInterp opAssign(ref FuncInterp s) return {
     Z3_func_interp_inc_ref(s.context(), s._m_interp);
     Z3_func_interp_dec_ref(context(), _m_interp);
     setContext(s.context());
@@ -2608,7 +2608,7 @@ struct Model
   }
   alias native this;
 
-  ref Model opAssign(ref Model s) {
+  ref Model opAssign(ref Model s) return {
     Z3_model_inc_ref(s.context(), s._m_model);
     Z3_model_dec_ref(context(), _m_model);
     setContext(s.context());
@@ -2739,7 +2739,7 @@ struct Stats
   }
   alias native this;
   
-  ref Stats opAssign(ref Stats s) {
+  ref Stats opAssign(ref Stats s) return {
     Z3_stats_inc_ref(s.context(), s._m_stats);
     if (_m_stats) Z3_stats_dec_ref(context(), _m_stats);
     setContext(s.context());
@@ -2838,7 +2838,7 @@ struct Solver {
 
   alias native this;
   
-  ref Solver opAssign(ref Solver s) {
+  ref Solver opAssign(ref Solver s) return {
     Z3_solver_inc_ref(s.context(), s._m_solver);
     Z3_solver_dec_ref(context(), _m_solver);
     setContext(s.context());
@@ -3193,7 +3193,7 @@ struct Goal
   }
   alias native this;
 
-  ref Goal opAssign(ref Goal s) {
+  ref Goal opAssign(ref Goal s) return {
     Z3_goal_inc_ref(s.context(), s._m_goal);
     Z3_goal_dec_ref(context(), _m_goal);
     setContext(s.context());
@@ -3314,7 +3314,7 @@ struct ApplyResult
     return _m_apply_result;
   }
   alias native this;
-  ref ApplyResult opAssign(ref ApplyResult s) {
+  ref ApplyResult opAssign(ref ApplyResult s) return {
     Z3_apply_result_inc_ref(s.context(), s._m_apply_result);
     Z3_apply_result_dec_ref(context(), _m_apply_result);
     setContext(s.context());
@@ -3373,7 +3373,7 @@ struct Tactic
     return _m_tactic;
   }
   alias native this;
-  ref Tactic opAssign(ref Tactic s) {
+  ref Tactic opAssign(ref Tactic s) return {
     Z3_tactic_inc_ref(s.context(), s._m_tactic);
     Z3_tactic_dec_ref(context(), _m_tactic);
     setContext(s.context());
@@ -3501,7 +3501,7 @@ struct Probe
   }
   alias native this;
   
-  ref Probe opAssign(ref Probe s) {
+  ref Probe opAssign(ref Probe s) return {
     Z3_probe_inc_ref(s.context(), s._m_probe);
     Z3_probe_dec_ref(context(), _m_probe);
     setContext(s.context());
@@ -3644,7 +3644,7 @@ struct Optimize
   //   _m_opt = o._m_opt;
   // }
 
-  ref Optimize opAssign(ref Optimize o) {
+  ref Optimize opAssign(ref Optimize o) return {
     Z3_optimize_inc_ref(o.context(), o._m_opt);
     Z3_optimize_dec_ref(context(), _m_opt);
     _m_opt = o._m_opt;

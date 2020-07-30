@@ -65,13 +65,13 @@ struct BuddyTerm
 
   Type _type;
 
-  ref BddVec toBv() {
+  ref BddVec toBv() return {
     if (_type != Type.BVEXPR) assert(false, "Expected a BVEXPR, got "
 				     ~ _type.to!string);
     return _bvExpr;
   }
 
-  ref BDD toBool() {
+  ref BDD toBool() return {
     if (_type != Type.BOOLEXPR) assert(false, "Expected a BOOLEXPR, got "
 				       ~ _type.to!string);
     return _boolExpr;
@@ -106,7 +106,7 @@ struct BuddyTerm
   //   _type = other._type;
   // }
 
-  ref BuddyTerm opAssign(ref BuddyTerm other) {
+  ref BuddyTerm opAssign(ref BuddyTerm other) return {
     _boolExpr = other._boolExpr;
     _bvExpr = other._bvExpr;
     _ulong = other._ulong;
@@ -175,7 +175,7 @@ struct BvVar
     _state = State.INIT;
   }
 
-  ref BvVar opAssign(ref BddVec dom) {
+  ref BvVar opAssign(ref BddVec dom) return {
     assert (_dom.isNull());
     _dom = dom;
     _val = 0;

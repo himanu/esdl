@@ -38,13 +38,13 @@ struct Z3Term
     assert (false);
   }
 
-  ref BvExpr toBv() {
+  ref BvExpr toBv() return {
     if (_type != Type.BVEXPR) assert(false, "Expected a BVEXPR, got "
 				     ~ _type.to!string);
     return _bvExpr;
   }
 
-  ref BoolExpr toBool() {
+  ref BoolExpr toBool() return {
     if (_type != Type.BOOLEXPR) assert(false, "Expected a BOOLEXPR, got "
 				       ~ _type.to!string);
     return _boolExpr;
@@ -109,7 +109,7 @@ struct BvVar
     _state = State.INIT;
   }
 
-  ref BvVar opAssign(ref BvExpr dom) {
+  ref BvVar opAssign(ref BvExpr dom) return {
     assert (_dom.isNull());
     _dom = dom;
     _val = 0;
@@ -126,7 +126,7 @@ struct BvVar
     return BvExpr(context, r, _dom.isSigned());
   }
 
-  ref BoolExpr getRule() {
+  ref BoolExpr getRule() return {
     return _rule;
   }
   
@@ -339,7 +339,6 @@ class CstZ3Solver: CstSolver
   Expr[] optimize() {
     Expr[] assumptions;
     bool[] assumptionFlags;
-    _optimize.check();
     Model model = _optimize.getModel();
     assert (_optimize.objectives.size() == 1);
     auto objective = _optimize.objectives[0];
@@ -398,6 +397,10 @@ class CstZ3Solver: CstSolver
     updateVars(group);
     if (_needOptimize) {
       if (updateOptimize() || (_optimizeInit is false)) {
+	if (_proxy._esdl__debugSolver()) {
+	  import std.stdio;
+	  writeln(_optimize);
+	}
 	_optimize.check();
 	Expr[] assumptions = optimize();
 	_optimizeInit = true;

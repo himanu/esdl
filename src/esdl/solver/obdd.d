@@ -502,7 +502,7 @@ struct BddVec
     }
   }
 
-  ref BddVec opAssign(ref BddVec other) {
+  ref BddVec opAssign(ref BddVec other) return {
     if (_buddy !is null) {
       foreach (b; _bitvec) _buddy.delRef(b);
     }
