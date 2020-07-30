@@ -423,103 +423,102 @@ struct IntRange(T) if (isIntegral!T) {
     return result;
   }
     
-  int opBinary(string op)(ref IntRange other)
-    if (op == "&") {
-      int rcount;
-      if (this._full) {
-	this = other;
-	rcount = 1;
+  int opBinary(string op)(ref IntRange other) if (op == "&") {
+    int rcount;
+    if (this._full) {
+      this = other;
+      rcount = 1;
+    }
+    else if (other._full) {
+      rcount = 1;
+    }
+    else if (this._min == this._max) {
+      assert(false);
+      // rcount = 0;
+    }
+    else if (other._min == other._max) {
+      assert(false);
+      // rcount = 0;
+    }
+    // both ranges normal
+    else if (this._min < this._max && other._min < other._max) {
+      if (this._max <= other._min || other._max <= this._min) {
+	rcount = 0;
       }
-      else if (other._full) {
-	rcount = 1;
-      }
-      else if (this._min == this._max) {
-	assert(false);
-	// rcount = 0;
-      }
-      else if (other._min == other._max) {
-	assert(false);
-	// rcount = 0;
-      }
-      // both ranges normal
-      else if (this._min < this._max && other._min < other._max) {
-	if (this._max <= other._min || other._max <= this._min) {
-	  rcount = 0;
-	}
-	else {
-	  this._min = larger(this._min, other._min);
-	  this._max = smaller(this._max, other._max);
-	  rcount = 1;
-	}
-      }
-      else if (this._min > this._max && other._min < other._max) {
-	IntRange!T s1;
-	IntRange!T s2;
-	int count;
-	if (other._min < this._max) {
-	  s1._min = other._min;
-	  s1._max = smaller(other._max, this._max);
-	  count += 1;
-	}
-	if (other._max > this._min) {
-	  if (count == 0) {
-	    s1._max = other._max;
-	    s1._min = larger(other._min, this._min);
-	    count += 1;
-	  }
-	  else if (count == 1) {
-	    s2._max = other._max;
-	    s2._min = larger(other._min, this._min);
-	    count += 1;
-	  }
-	}
-	if (count == 1) {
-	  this = s1;
-	}
-	if (count == 2) {
-	  this = s1;
-	  other = s2;
-	}
-	rcount = count;
-      }
-      //  [96, 512) ,[256, 32)
-      else if (other._min > other._max && this._min < this._max) {
-	IntRange!T s1;
-	IntRange!T s2;
-	int count;
-	if (this._min < other._max) {
-	  s1._min = this._min;
-	  s1._max = smaller(this._max, other._max);
-	  count += 1;
-	}
-	if (this._max > other._min) {
-	  if (count == 0) {
-	    s1._max = this._max;
-	    s1._min = larger(this._min, other._min);
-	    count += 1;
-	  }
-	  else if (count == 1) {
-	    s2._max = this._max;
-	    s2._min = larger(this._min, other._min);
-	    count += 1;
-	  }
-	}
-	if (count == 1) {
-	  this = s1;
-	}
-	if (count == 2) {
-	  this = s1;
-	  other = s2;
-	}
-	rcount = count;
-      }
-      else if (this._min > this._max && other._min > other._max) {
+      else {
 	this._min = larger(this._min, other._min);
 	this._max = smaller(this._max, other._max);
 	rcount = 1;
       }
-      return rcount;
     }
+    else if (this._min > this._max && other._min < other._max) {
+      IntRange!T s1;
+      IntRange!T s2;
+      int count;
+      if (other._min < this._max) {
+	s1._min = other._min;
+	s1._max = smaller(other._max, this._max);
+	count += 1;
+      }
+      if (other._max > this._min) {
+	if (count == 0) {
+	  s1._max = other._max;
+	  s1._min = larger(other._min, this._min);
+	  count += 1;
+	}
+	else if (count == 1) {
+	  s2._max = other._max;
+	  s2._min = larger(other._min, this._min);
+	  count += 1;
+	}
+      }
+      if (count == 1) {
+	this = s1;
+      }
+      if (count == 2) {
+	this = s1;
+	other = s2;
+      }
+      rcount = count;
+    }
+    //  [96, 512) ,[256, 32)
+    else if (other._min > other._max && this._min < this._max) {
+      IntRange!T s1;
+      IntRange!T s2;
+      int count;
+      if (this._min < other._max) {
+	s1._min = this._min;
+	s1._max = smaller(this._max, other._max);
+	count += 1;
+      }
+      if (this._max > other._min) {
+	if (count == 0) {
+	  s1._max = this._max;
+	  s1._min = larger(this._min, other._min);
+	  count += 1;
+	}
+	else if (count == 1) {
+	  s2._max = this._max;
+	  s2._min = larger(this._min, other._min);
+	  count += 1;
+	}
+      }
+      if (count == 1) {
+	this = s1;
+      }
+      if (count == 2) {
+	this = s1;
+	other = s2;
+      }
+      rcount = count;
+    }
+    else if (this._min > this._max && other._min > other._max) {
+      this._min = larger(this._min, other._min);
+      this._max = smaller(this._max, other._max);
+      rcount = 1;
+    }
+    return rcount;
+  }
 
   string toString() {
     import std.string;
@@ -1024,42 +1023,42 @@ struct IntRangeSet(T)
   }
 }
 
-template IntRangeType(V)
-{
-  static if (isIntegral!V)
-    {
-      enum N = V.sizeof * 8;
-      enum S = isSigned!V;
-    }
-  else static if (isBitVector!V)
-    {
-      enum N = V.SIZE;
-      enum S = V.ISSIGNED;
-    }
-  else static if (isBoolean!V)
-    {
-      enum N = 1;
-      enum S = false;
-    }
+// template IntRangeType(V)
+// {
+//   static if (isIntegral!V)
+//     {
+//       enum N = V.sizeof * 8;
+//       enum S = isSigned!V;
+//     }
+//   else static if (isBitVector!V)
+//     {
+//       enum N = V.SIZE;
+//       enum S = V.ISSIGNED;
+//     }
+//   else static if (isBoolean!V)
+//     {
+//       enum N = 1;
+//       enum S = false;
+//     }
 
-  static if (N >= 32) {
-    static if (S) alias IntRangeType = long;
-    else alias IntRangeType = ulong;
-  }
-  else // static if (N > 16)
-    {
-      static if (S) alias IntRangeType = int;
-      else alias IntRangeType = uint;
-    }
-  // else static if (N > 8) {
-  //   static if (S) alias IntRangeType = short;
-  //   else alias IntRangeType = ushort;
-  // }
-  // else {
-  //   static if (S) alias IntRangeType = byte;
-  //   else alias IntRangeType = ubyte;
-  // }
-}
+//   static if (N >= 32) {
+//     static if (S) alias IntRangeType = long;
+//     else alias IntRangeType = ulong;
+//   }
+//   else // static if (N > 16)
+//     {
+//       static if (S) alias IntRangeType = int;
+//       else alias IntRangeType = uint;
+//     }
+//   // else static if (N > 8) {
+//   //   static if (S) alias IntRangeType = short;
+//   //   else alias IntRangeType = ushort;
+//   // }
+//   // else {
+//   //   static if (S) alias IntRangeType = byte;
+//   //   else alias IntRangeType = ubyte;
+//   // }
+// }
 
 enum IntRangeModOp: byte {ADD, SUB, SUBD, MULT, DIV, DIVD}
 
