@@ -654,12 +654,26 @@ class CstPredGroup			// group of related predicates
 	_solver = *solverp;
       }
       else {
-	if (_hasSoftConstraints) _solver = new CstZ3Solver(sig, this);
+	if (_hasSoftConstraints) {
+	  if (_proxy._esdl__debugSolver()) {
+	    import std.stdio;
+	    writeln("Invoking Z3 because of Soft Constraints");
+	    writeln(describe());
+	  }
+	  _solver = new CstZ3Solver(sig, this);
+	}
 	else {
 	  uint totalBits;
 	  foreach (dom; _doms) totalBits += dom.bitcount();
 	  foreach (var; _vars) totalBits += var.bitcount();
-	  if (totalBits > 32) _solver = new CstZ3Solver(sig, this);
+	  if (totalBits > 32) {
+	    if (_proxy._esdl__debugSolver()) {
+	      import std.stdio;
+	      writeln("Invoking Z3 because of > 32 bits");
+	      writeln(describe());
+	    }
+	    _solver = new CstZ3Solver(sig, this);
+	  }
 	  else _solver = new CstBuddySolver(sig, this);
 	}
 	_proxy._solvers[sig] = _solver;
