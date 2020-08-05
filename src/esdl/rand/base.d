@@ -5,7 +5,7 @@ import esdl.solver.buddy: CstBuddySolver;
 import esdl.solver.z3: CstZ3Solver;
 
 import esdl.rand.intr;
-import esdl.rand.expr: CstValue;
+import esdl.rand.expr: CstValue, CstVecTerm;
 import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__ProxyRoot;
 import esdl.rand.misc: _esdl__RandGen, isVecSigned, writeHexString;
 import esdl.data.bvec: isBitVector;
@@ -256,7 +256,7 @@ class CstScope {
   }
 }
 
-abstract class CstDomain
+abstract class CstDomain: CstVecTerm
 {
 
   public enum State: ubyte

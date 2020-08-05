@@ -184,7 +184,7 @@ interface CstVecTerm: CstVecExpr
   }
 }
 
-class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
+class CstVecDomain(T, rand RAND_ATTR): CstDomain
 {
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
 
@@ -309,7 +309,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain, CstVecTerm
     }
   }
 
-  override void visit(CstSolver solver) {
+  void visit(CstSolver solver) {
     // assert (solver !is null);
     solver.pushToEvalStack(this);
   }
@@ -1931,6 +1931,11 @@ class CstDistExpr: CstLogicTerm
 			ref CstDomain[] idxs,
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
+    pred.isDist(true);
+    auto distDomain = cast (CstDomain) _vec;
+    assert (distDomain !is null, "LHS of a distributed constraint has to be a primary domain");
+    distDomain.isDist(true);
+    
     // _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
   }
 
