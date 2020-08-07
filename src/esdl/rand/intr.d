@@ -1235,11 +1235,11 @@ struct DistRange(T)
 	((_max - _min + 1 - cast (T) _purgeList.length) * select) /
 	_adjTotalWeight;
       foreach (elem; _purgeList) {
-	T eindex = elem - _min;
+	T eindex = cast(T) (elem - _min);
 	if (eindex <= index) index += 1;
 	else break;
       }
-      var = _min + index;
+      var = cast(T) (_min + index);
       select = -1;
       return true;
     }

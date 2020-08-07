@@ -330,7 +330,8 @@ struct CstParser {
       return tok;
     }
     if (srcCursor <= CST.length - 1) {
-      if (CST[srcCursor] == ':') tok = OpRangeToken.RANGEINC;
+      if (CST[srcCursor] == ':' &&
+	  CST[srcCursor+1] != '=') tok = OpRangeToken.RANGEINC;
     }
     if (tok !is OpRangeToken.NONE) {
       srcCursor += 1;
@@ -1651,8 +1652,6 @@ struct CstParser {
   }
 
   void procDistContainer() {
-    import std.stdio;
-    writeln("I an here");
     size_t srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 

@@ -132,6 +132,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     _unresolvedPreds.reset();
     _toUnresolvedPreds.reset();
 
+    _resolvedDistPreds.reset();
     _resolvedMonoPreds.reset();
 
     _solvedDomains.reset();
@@ -143,11 +144,17 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     assert(_root is this);
     this._cycle += 1;
     
-    while (_resolvedMonoPreds.length > 0 ||
+    while (_resolvedDistPreds.length > 0 ||
+	   _resolvedMonoPreds.length > 0 ||
 	   _resolvedDynPreds.length > 0 ||
 	   _resolvedPreds.length > 0 ||
 	   _unresolvedPreds.length > 0 ||
 	   _toRolledPreds.length > 0) {
+
+      foreach (pred; _resolvedDistPreds) {
+	pred._expr.solveDist(_esdl__getRandGen());
+      }
+      _resolvedDistPreds.reset();
       // import std.stdio;
 
       // if (_resolvedMonoPreds.length > 0) {
@@ -286,7 +293,10 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 
   void procResolved(CstPredicate pred) {
     assert (pred._rnds.length > 0);
-    if (pred._rnds.length == 1 &&
+    if (pred.isDist()) {
+      _resolvedDistPreds ~= pred;
+    }
+    else if (pred._rnds.length == 1 &&
 	pred._rnds[0]._type <= DomType.LAZYMONO) {
       _resolvedMonoPreds ~= pred;
       // procMonoDomain(pred._rnds[0], pred);

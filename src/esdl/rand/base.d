@@ -59,6 +59,7 @@ abstract class _esdl__Proxy
   Folder!(CstPredicate, "unresolvedPreds") _unresolvedPreds;
   Folder!(CstPredicate, "toResolvedPreds") _toUnresolvedPreds;
 
+  Folder!(CstPredicate, "resolvedDistPreds") _resolvedDistPreds;
   Folder!(CstPredicate, "resolvedMonoPreds") _resolvedMonoPreds;
 
   Folder!(CstDomain, "solvedDomains") _solvedDomains;
@@ -293,9 +294,11 @@ abstract class CstDomain: CstVecTerm
   abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
-  abstract bool isDist();
-  abstract void isDist(bool b);
-  
+
+  bool _isDist;
+  final bool isDist() { return _isDist; }
+  final void isDist(bool b) { _isDist = b; }
+
   abstract long value();
   
   final void randIfNoCst() {
@@ -456,6 +459,7 @@ interface CstLogicExpr: CstExpr
   abstract bool getUniRangeSet(ref UIntRS rs);
   abstract bool getUniRangeSet(ref LongRS rs);
   abstract bool getUniRangeSet(ref ULongRS rs);
+  abstract void solveDist(_esdl__RandGen randGen);
 
   abstract CstLogicExpr unroll(CstIterator iter, uint n);
 
@@ -1010,7 +1014,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	rnd._type = DomType.MULTI;
       }
     }
-    else {
+    else if (! this.isDist()) {
       assert(_rnds.length == 1);
       auto rnd = _rnds[0];
       if (rnd._type == DomType.TRUEMONO) {

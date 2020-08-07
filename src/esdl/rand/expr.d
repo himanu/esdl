@@ -198,10 +198,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
     return _name;
   }
 
-  bool _isDist;
-  override bool isDist() { return _isDist; }
-  override void isDist(bool b) { _isDist = b; }
-
   uint         _domIndex = uint.max;
   uint         _resolveLap = 0;
   
@@ -764,7 +760,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
 	  return;
 	}
       }
-      if (_type !is DomType.MULTI) {
+      if (_type !is DomType.MULTI && !rndPred.isDist()) {
 
 	IntRangeSet!RangeT rs;
 	if (rndPred._vars.length == 0) {
@@ -1881,21 +1877,41 @@ class CstDistRangeExpr: CstVecTerm
   }
 }
 
-class CstDistExpr: CstLogicTerm
+class CstDistExpr(T): CstLogicTerm
 {
   import std.conv;
 
-  CstVecExpr _vec;
+  CstDomain _vec;
   CstDistRangeExpr[] _dists;
 
-  this(CstVecExpr vec, CstDistRangeExpr[] dists) {
+  DistRangeSet!T _rs;
+  
+  this(CstDomain vec, CstDistRangeExpr[] dists) {
     _vec = vec;
     _dists = dists;
+    foreach (dist; _dists) {
+      T lhs = cast(T) dist._range._lhs.evaluate();
+      T rhs;
+      if (dist._range._rhs is null) {
+	rhs = lhs;
+      }
+      else {
+	rhs = cast(T) dist._range._rhs.evaluate();
+      }
+      int weight = cast(int) dist._weight.evaluate();
+      bool perItem = dist._perItem;
+      _rs ~= DistRange!T(lhs, rhs, weight, perItem);
+    }
+  }
+
+  override void solveDist(_esdl__RandGen randGen) {
+    _vec.setVal(_rs.uniform());
   }
 
   string describe() {
     string str = "( " ~ _vec.describe() ~ " dist ";
     foreach (dist; _dists) {
+      assert (dist !is null);
       str ~= dist.describe() ~ ", ";
     }
     str ~= " )";
@@ -1903,15 +1919,15 @@ class CstDistExpr: CstLogicTerm
   }
 
   void visit(CstSolver solver) {
-    assert (false);
+    assert (false, "Can not visit Dist Constraint: " ~ describe());
   }
 
-  override CstDistExpr unroll(CstIterator iter, uint n) {
+  override CstDistExpr!T unroll(CstIterator iter, uint n) {
     // import std.stdio;
     // writeln(_lhs.describe() ~ " " ~ _op.to!string ~ " " ~ _rhs.describe() ~ " Getting unwound!");
     // writeln("RHS: ", _rhs.unroll(iter, n).describe());
     // writeln("LHS: ", _lhs.unroll(iter, n).describe());
-    return new CstDistExpr(_vec.unroll(iter, n), _dists);
+    return new CstDistExpr!T(cast (CstDomain) (_vec.unroll(iter, n)), _dists);
   }
 
   uint resolveLap() {
@@ -1931,12 +1947,9 @@ class CstDistExpr: CstLogicTerm
 			ref CstDomain[] idxs,
 			ref CstDomain[] bitIdxs,
 			ref CstDomain[] deps) {
+    rnds ~= _vec;
     pred.isDist(true);
-    auto distDomain = cast (CstDomain) _vec;
-    assert (distDomain !is null, "LHS of a distributed constraint has to be a primary domain");
-    distDomain.isDist(true);
-    
-    // _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _vec.isDist(true);
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -2584,6 +2597,10 @@ class CstLogic2LogicExpr: CstLogicTerm
     _rhs.writeExprString(str);
     str ~= ")\n";
   }
+
+  override void solveDist(_esdl__RandGen randGen) {
+    assert (false);
+  }
 }
 
 // TBD
@@ -2646,6 +2663,10 @@ class CstIteLogicExpr: CstLogicTerm
 
   override bool isSolved() {
     assert(false, "TBD");
+  }
+
+  override void solveDist(_esdl__RandGen randGen) {
+    assert (false);
   }
 }
 
@@ -2833,6 +2854,9 @@ class CstVec2LogicExpr: CstLogicTerm
     str ~= ")\n";
   }
 
+  override void solveDist(_esdl__RandGen randGen) {
+    assert (false);
+  }
 }
 
 class CstLogicConst: CstLogicTerm
@@ -2899,6 +2923,10 @@ class CstLogicConst: CstLogicTerm
   override void writeExprString(ref Charbuf str) {
     if (_expr) str ~= "TRUE";
     else str ~= "FALSE";
+  }
+
+  override void solveDist(_esdl__RandGen randGen) {
+    assert (false);
   }
 }
 
@@ -2971,6 +2999,9 @@ class CstNotLogicExpr: CstLogicTerm
     str ~= ")\n";
   }
   
+  override void solveDist(_esdl__RandGen randGen) {
+    assert (false);
+  }
 }
 
 // CstLogic2LogicExpr logicOr(CstVecExpr other)
@@ -3151,7 +3182,7 @@ auto _esdl__range(P, Q)(P p, Q q) {
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
-    return new CstLogicConst(p == q);
+    static assert (false);
   }
 }
 
@@ -3227,6 +3258,7 @@ CstDistRangeExpr _esdl__itemWeight(CstRangeExpr range, CstVecExpr weight) {
   return new CstDistRangeExpr(range, weight, true);
 }
 
-CstDistExpr _esdl__dist(CstVecTerm vec, CstDistRangeExpr[] ranges...) {
-  return new CstDistExpr(vec, ranges);
+auto _esdl__dist(T, rand RAND)(CstVecDomain!(T, RAND) vec,
+				      CstDistRangeExpr[] ranges...) {
+  return new CstDistExpr!T(vec, ranges.dup);
 }
