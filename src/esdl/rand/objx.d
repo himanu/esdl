@@ -28,22 +28,19 @@ mixin template CstObjMixin() {
     return _name;
   }
 
-  S to(S)()
-    if (is (S == string)) {
-      import std.conv;
-      return "";
-      // static if (HAS_RAND_ATTRIB) {
-      // 	if (isRand) {
-      // 	  return "RAND#" ~ _name ~ ":" ~ value().to!string();
-      // 	}
-      // 	else {
-      // 	  return "VAL#" ~ _name ~ ":" ~ value().to!string();
-      // 	}
-      // }
-      // else {
-      // 	return "VAR#" ~ _name ~ ":" ~ value().to!string();
-      // }
+  S to(S)() if (is (S == string)) {
+    static if (HAS_RAND_ATTRIB) {
+      if (isRand) {
+	return "RAND#" ~ _name;
+      }
+      else {
+	return "VAL#" ~ _name;
+      }
     }
+    else {
+      return "VAR#" ~ _name;
+    }
+  }
 
   override string toString() {
     return this.to!string();

@@ -1905,7 +1905,7 @@ class CstDistExpr(T): CstLogicTerm
   }
 
   override void solveDist(_esdl__RandGen randGen) {
-    _vec.setVal(_rs.uniform());
+    _vec.setVal(_rs.uniform(randGen));
   }
 
   string describe() {
@@ -3242,7 +3242,7 @@ CstVec2LogicExpr _esdl__neq_impl(CstVecExpr p, CstVecExpr q) {
   return new CstVec2LogicExpr(p, q, CstCompareOp.NEQ);
 }
 
-CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr first, CstRangeExpr[] ranges...) {
+CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr first, CstRangeExpr[] ranges) {
   CstLogicTerm result = vec.inside(first);
   foreach (r; ranges) {
     result = result | vec.inside(r);
@@ -3259,6 +3259,6 @@ CstDistRangeExpr _esdl__itemWeight(CstRangeExpr range, CstVecExpr weight) {
 }
 
 auto _esdl__dist(T, rand RAND)(CstVecDomain!(T, RAND) vec,
-				      CstDistRangeExpr[] ranges...) {
-  return new CstDistExpr!T(vec, ranges.dup);
+			       CstDistRangeExpr[] ranges) {
+  return new CstDistExpr!T(vec, ranges);
 }

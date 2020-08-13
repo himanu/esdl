@@ -1309,4 +1309,14 @@ struct DistRangeSet(T)
     assert(select <  0);
     return var;
   }
+
+  T uniform(_esdl__RandGen rgen) {
+    double select = getTotalWeight() * rgen.get();
+    T var;
+    foreach (ref dist; _set) {
+      if (dist.setVal(var, select)) break;
+    }
+    assert(select <  0);
+    return var;
+  }
 }

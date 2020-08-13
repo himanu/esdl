@@ -111,6 +111,15 @@ struct CstParser {
     return start;
   }
   
+  size_t fill(in char c) {
+    size_t start = outCursor;
+    if (! dryRun) {
+      outBuffer[outCursor] = c;
+    }
+    outCursor += 1;
+    return start;
+  }
+
   size_t fill(in string source) {
     size_t start = outCursor;
     if (! dryRun) {
@@ -686,7 +695,7 @@ struct CstParser {
       }
       for (size_t i=1; i != MaxHierDepth-1; ++i) {
 	if (idChain[2*i] == -1) break;
-	if (i == 1) fill("\"");
+	if (i == 1) fill('"');
 	else fill(", \"");
 	if (CST[srcTag+idChain[2*i]] is '[') {
 	  // in case of opIndex, empty string
@@ -694,7 +703,7 @@ struct CstParser {
 	else {
 	  fill(CST[srcTag+idChain[2*i]..srcTag+idChain[2*i+1]]);
 	}
-	fill("\"");
+	fill('"');
       }
       if (idChain[2] != -1) {
 	fill(")(");
@@ -712,7 +721,7 @@ struct CstParser {
 	}
       }
       if (idChain[2] != -1) {
-	fill(")");
+	fill(')');
       }
     }
     else {
@@ -979,7 +988,7 @@ struct CstParser {
   // find the balanced paren -- upto the start anchor and insert a paren at
   // that position
   void insertOpeningParen(size_t startAnchor) {
-    fill(" ");			// to create an extra position
+    fill(' ');			// to create an extra position
     if (!dryRun) {
       int parenCount = 0;
       size_t cursor;
@@ -1053,14 +1062,14 @@ struct CstParser {
 	  if (numParen is init) break;
 	  --numParen;
 	  ++srcCursor;
-	  fill(")");
+	  fill(')');
 	  continue;
 	}
 	if (srcCursor < CST.length && CST[srcCursor] == ']') {
 	  if (numIndex is 0) break;
 	  --numIndex;
 	  ++srcCursor;
-	  fill(")");
+	  fill(')');
 	  continue;
 	}
 	else {
@@ -1542,9 +1551,9 @@ struct CstParser {
       // if (unaryLegal) {
       auto uTok = parseUnaryOperator();
       final switch(uTok) {
-      case OpUnaryToken.NEG: fill("-"); break;
-      case OpUnaryToken.NOT: fill("*"); break;
-      case OpUnaryToken.INV: fill("~"); break;
+      case OpUnaryToken.NEG: fill('-'); break;
+      case OpUnaryToken.NOT: fill('*'); break;
+      case OpUnaryToken.INV: fill('~'); break;
       case OpUnaryToken.NONE: break;
       }
       // }
@@ -1611,7 +1620,7 @@ struct CstParser {
 
     // LHS
     if (srcCursor < CST.length) {
-      // size_t openingParenAnchor = fill(" ");
+      // size_t openingParenAnchor = fill(' ');
       size_t startAnchor = outCursor;
       srcTag = srcCursor;
       procArithExpr();
@@ -1647,7 +1656,7 @@ struct CstParser {
       if (srcTag == srcCursor) {
 	assert(false, "Expecting an arithmatic expression on RHS, got none");
       }
-      fill(")");
+      fill(')');
     }
   }
 
@@ -1656,6 +1665,7 @@ struct CstParser {
     fill(CST[srcTag..srcCursor]);
 
     if (srcCursor < CST.length && CST[srcCursor] == '[') {
+      fill('[');
       srcCursor += 1;
       while (srcCursor < CST.length) {
 	procSetRangeExpr();
@@ -1679,15 +1689,16 @@ struct CstParser {
 	if (srcTag == srcCursor) {
 	  assert(false, "Expecting a weight value in dist expression, got none");
 	}
-	fill(")");
+	fill(')');
 	srcTag = parseSpace();
 	fill(CST[srcTag..srcCursor]);
 	if (srcCursor < CST.length && CST[srcCursor] == ',') {
 	  srcCursor += 1;
-	  fill(",");
+	  fill(',');
 	  continue;
 	}
 	else if (srcCursor < CST.length && CST[srcCursor] == ']') {
+	  fill(']');
 	  srcCursor += 1;
 	  break;
 	}
@@ -1706,6 +1717,7 @@ struct CstParser {
     fill(CST[srcTag..srcCursor]);
 
     if (srcCursor < CST.length && CST[srcCursor] == '[') {
+      fill('[');
       srcCursor += 1;
       while (srcCursor < CST.length) {
 	procSetRangeExpr();
@@ -1713,10 +1725,11 @@ struct CstParser {
 	fill(CST[srcTag..srcCursor]);
 	if (srcCursor < CST.length && CST[srcCursor] == ',') {
 	  srcCursor += 1;
-	  fill(",");
+	  fill(',');
 	  continue;
 	}
 	else if (srcCursor < CST.length && CST[srcCursor] == ']') {
+	  fill(']');
 	  srcCursor += 1;
 	  break;
 	}
@@ -1742,7 +1755,7 @@ struct CstParser {
 
     // LHS
     if (srcCursor < CST.length) {
-      // size_t openingParenAnchor = fill(" ");
+      // size_t openingParenAnchor = fill(' ');
       size_t startAnchor = outCursor;
       srcTag = srcCursor;
       procArithExpr();
@@ -1819,7 +1832,7 @@ struct CstParser {
 	}
 	break;
       }
-      fill(")");
+      fill(')');
     }
   }
 
@@ -1869,10 +1882,10 @@ struct CstParser {
 
   //   size_t srcTag = 0;
 
-  //   size_t impDstAnchor = fill(" ");
-  //   size_t orDstAnchor  = fill(" ");
-  //   size_t andDstAnchor = fill(" ");
-  //   size_t cmpDstAnchor = fill(" ");
+  //   size_t impDstAnchor = fill(' ');
+  //   size_t orDstAnchor  = fill(' ');
+  //   size_t andDstAnchor = fill(' ');
+  //   size_t cmpDstAnchor = fill(' ');
 
   // loop:
   //   while (srcCursor < CST.length) {
@@ -1888,9 +1901,9 @@ struct CstParser {
   //     // Parse any unary operators
   //     auto uTok = parseUnaryOperator();
   //     final switch(uTok) {
-  //     case OpUnaryToken.NEG: fill("-"); continue loop;
-  //     case OpUnaryToken.NOT: fill("*"); continue loop;
-  //     case OpUnaryToken.INV: fill("~"); continue loop;
+  //     case OpUnaryToken.NEG: fill('-'); continue loop;
+  //     case OpUnaryToken.NOT: fill('*'); continue loop;
+  //     case OpUnaryToken.INV: fill('~'); continue loop;
   //     case OpUnaryToken.NONE: break;
   //     }
   //     srcTag = parseSpace();
@@ -1912,50 +1925,50 @@ struct CstParser {
   // 	//   break;
   // 	// case OpToken.END:
   // 	if (cmpRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  cmpRHS = false;
   // 	}
   // 	if (andRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  andRHS = false;
   // 	}
   // 	if (orRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  orRHS = false;
   // 	}
   // 	if (impRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  impRHS = false;
   // 	}
   // 	return;
   // 	// break;
   //     case OpToken.LOGICIMP:
   // 	if (cmpRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  cmpRHS = false;
   // 	}
   // 	if (andRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  andRHS = false;
   // 	}
   // 	if (orRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  orRHS = false;
   // 	}
   // 	place('(', impDstAnchor);
   // 	fill(").implies(");
-  // 	cmpDstAnchor = fill(" ");
-  // 	andDstAnchor = fill(" ");
-  // 	orDstAnchor  = fill(" ");
+  // 	cmpDstAnchor = fill(' ');
+  // 	andDstAnchor = fill(' ');
+  // 	orDstAnchor  = fill(' ');
   // 	impRHS = true;
   // 	break;
   //     case OpToken.LOGICOR:		// take care of cmp/and
   // 	if (cmpRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  cmpRHS = false;
   // 	}
   // 	if (andRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  andRHS = false;
   // 	}
   // 	if (orRHS !is true) {
@@ -1963,12 +1976,12 @@ struct CstParser {
   // 	  orRHS = true;
   // 	}
   // 	fill(")._esdl__logicOr(");
-  // 	cmpDstAnchor = fill(" ");
-  // 	andDstAnchor = fill(" ");
+  // 	cmpDstAnchor = fill(' ');
+  // 	andDstAnchor = fill(' ');
   // 	break;
   //     case OpToken.LOGICAND:		// take care of cmp
   // 	if (cmpRHS is true) {
-  // 	  fill(")");
+  // 	  fill(')');
   // 	  cmpRHS = false;
   // 	}
   // 	if (andRHS !is true) {
@@ -1976,7 +1989,7 @@ struct CstParser {
   // 	  andRHS = true;
   // 	}
   // 	fill(") ._esdl__logicAnd(");
-  // 	cmpDstAnchor = fill(" ");
+  // 	cmpDstAnchor = fill(' ');
   // 	break;
   //     case OpToken.EQU:
   // 	place('(', cmpDstAnchor);
@@ -2083,16 +2096,16 @@ struct CstParser {
     if (ifConds.length !is 0) {
       fill("// Conditions \n        ( ");
       foreach (ifCond; ifConds[0..$-1]) {
-	if (ifCond.isInverse()) fill("*");
+	if (ifCond.isInverse()) fill('*');
 	fill(ifCond.cond);
 	fill(" &\n          ");
       }
-      if (ifConds[$-1].isInverse()) fill("*");
+      if (ifConds[$-1].isInverse()) fill('*');
       fill(ifConds[$-1].cond);
       fill(").implies( // End of Conditions\n");
       fill("       ( ");
       procLogicExpr();
-      fill(")");
+      fill(')');
     }
     else {
       procLogicExpr();
@@ -2112,7 +2125,7 @@ struct CstParser {
 	      srcCursor.to!string);
     }
     if (ifConds.length !is 0) {
-      fill(")");
+      fill(')');
     }
 
     // no parent CstPredicate
