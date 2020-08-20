@@ -12,7 +12,7 @@ import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIterator, DomType, CstDomain,
   CstPredicate, _esdl__Proxy, CstVecIntf, CstVecArrIntf;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstVecIterator, CstValue;
+  CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve;
@@ -162,38 +162,20 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
       
-      auto _esdl__rand_term_chain(string S, INDX)(INDX indx)
+      auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
       {
-	static if (S == "") {
-	  return this.opIndex(indx);
+	static if (S.length == 0) {
+	  assert (indx.length == 0);
+	  return this;
 	}
-	else static assert (false);
-      }
-
-      // auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
-      // {
-      // 	static if (S == "") {
-      // 	  return this.opSlice(indx, null);
-      // 	}
-      // 	else static assert (false);
-      // }
-
-      // auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
-      // {
-      // 	static if (S == "") {
-      // 	  return this.opSlice(lhs, rhs);
-      // 	}
-      // 	else static assert (false);
-      // }
-
-      auto _esdl__rand_term_chain(string S)()
-      {
-	return __traits(getMember, this, S);
-      }
-
-      auto _esdl__rand_term_chain()()
-      {
-	return this;
+	else static if (S[0] == "") {
+	  assert (indx.length == 1);
+	  return this.opIndex(indx[0]);
+	}
+	else {
+	  static assert (S.length == 1);
+	  return __traits(getMember, this, S[0]);
+	}
       }
     }
 
@@ -366,40 +348,21 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 	}
       }
 
-      auto _esdl__rand_term_chain(string S, INDX)(INDX indx)
+      auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
       {
-	static if (S == "") {
-	  return this.opIndex(indx);
+	static if (S.length == 0) {
+	  assert (indx.length == 0);
+	  return this;
 	}
-	else static assert (false);
+	else static if (S[0] == "") {
+	  assert (indx.length == 1);
+	  return this.opIndex(indx[0]);
+	}
+	else {
+	  static assert (S.length == 1);
+	  return __traits(getMember, this, S[0]);
+	}
       }
-
-      // auto _esdl__rand_term_chain(string S)(CstVecTerm indx)
-      // {
-      // 	static if (S == "") {
-      // 	  return this.opSlice(indx, null);
-      // 	}
-      // 	else static assert (false);
-      // }
-
-      // auto _esdl__rand_term_chain(string S)(CstVecTerm lhs,  CstVecTerm rhs)
-      // {
-      // 	static if (S == "") {
-      // 	  return this.opSlice(lhs, rhs);
-      // 	}
-      // 	else static assert (false);
-      // }
-
-      auto _esdl__rand_term_chain(string S)()
-      {
-	return __traits(getMember, this, S);
-      }
-
-      auto _esdl__rand_term_chain()()
-      {
-	return this;
-      }
-
     }
 
 // Arrays (Multidimensional arrays as well)
@@ -470,7 +433,7 @@ mixin template CstVecArrMixin()
   }
 
   static if (HAS_RAND_ATTRIB) {
-    static private void setLenTmp(A, N...)(ref A arr, size_t v, N indx)
+    static private void _setLen(A, N...)(ref A arr, size_t v, N indx)
       if(isArray!A) {
 	static if(N.length == 0) {
 	  static if(isDynamicArray!A) {
@@ -485,7 +448,7 @@ mixin template CstVecArrMixin()
 	else {
 	  // import std.stdio;
 	  // writeln(arr, " indx: ", N.length);
-	  setLenTmp(arr[indx[0]], v, indx[1..$]);
+	  _setLen(arr[indx[0]], v, indx[1..$]);
 	}
       }
 
@@ -666,7 +629,10 @@ class CstVecArr(V, rand RAND_ATTR, int N)
 
   void setLen(N...)(size_t v, N indx) {
     static if (HAS_RAND_ATTRIB) {
-      setLenTmp(*_var, v, indx);
+      _setLen(*_var, v, indx);
+    }
+    else {
+      assert (false);
     }
   }
 
@@ -706,7 +672,7 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     }
   }
 
-  auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
+  auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
   {
     static if (S.length == 0) return this;
     else static if (S[0] == "") {
@@ -866,7 +832,7 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     }
   }
 
-  auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
+  auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
   {
     static if (S.length == 0) return this;
     else static if (S[0] == "") {

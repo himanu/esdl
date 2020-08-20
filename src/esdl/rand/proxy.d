@@ -3,11 +3,13 @@ import esdl.solver.base;
 
 import esdl.rand.base: CstVecPrim, CstLogicExpr,
   CstDomain, CstPredicate, CstBlock, _esdl__Proxy, CstPredGroup,
-  DomType;
+  DomType, CstVecExpr;
 
 import esdl.rand.misc;
 import esdl.data.folder;
 import esdl.data.charbuf;
+import esdl.rand.dist: DistRangeSetBase;
+
 import std.container: Array;
 import std.array;
 
@@ -150,9 +152,28 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	   _resolvedPreds.length > 0 ||
 	   _unresolvedPreds.length > 0 ||
 	   _toRolledPreds.length > 0) {
-
+      bool solvedSome = false;
       foreach (pred; _resolvedDistPreds) {
-	pred._expr.solveDist(_esdl__getRandGen());
+	CstDomain[] distVars = pred.getRnds();
+	assert (distVars.length == 1);
+	CstDomain distDom = distVars[0];
+	CstPredicate[] distPreds = distDom.getRandPreds();
+	// long[] toRemove;
+	DistRangeSetBase dist = pred._expr.getDist();
+	dist.reset();
+	foreach (predicate; distPreds){
+	  CstVecExpr ex = predicate._expr.isNot(distDom);
+	  // isNot returns rhs if the predicate is of != type,
+	  // otherwise it returns null
+	  if (predicate.getRnds().length == 1 && ! predicate.isDist()) {
+	    if (ex is null) {
+	      assert (false, "can only use != operator on distributed domains");
+	    }
+	    dist.purge(ex.evaluate());
+	  }
+	}
+	dist.uniform(distDom, _esdl__getRandGen());
+	solvedSome = true;
       }
       _resolvedDistPreds.reset();
       // import std.stdio;
@@ -198,6 +219,9 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	  // writeln("Mono Unsolved: ", pred.name());
 	  _resolvedPreds ~= pred;
 	}
+	else {
+	  solvedSome = true;
+	}
       }
       _toSolvePreds.reset();
       
@@ -211,6 +235,9 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	else {
 	  if (! procMaybeMonoDomain(pred)) {
 	    _solvePreds ~= pred;
+	  }
+	  else {
+	    solvedSome = true;
 	  }
 	}
       }
@@ -241,7 +268,37 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 	  group.setGroupContext(pred);
 	  group.solve();
 	  _solvedGroups ~= group;
+	  solvedSome = true;
 	}
+      }
+
+      if (solvedSome is false) {
+	import std.stdio;
+	if (_resolvedDistPreds.length > 0) {
+	  stderr.writeln("_resolvedDistPreds: ");
+	  foreach (pred; _resolvedDistPreds) stderr.writeln(pred.describe());
+	}
+	if (_resolvedMonoPreds.length > 0) {
+	  stderr.writeln("_resolvedMonoPreds: ");
+	  foreach (pred; _resolvedMonoPreds) stderr.writeln(pred.describe());
+	}
+	if (_resolvedDynPreds.length > 0) {
+	  stderr.writeln("_resolvedDynPreds: ");
+	  foreach (pred; _resolvedDynPreds) stderr.writeln(pred.describe());
+	}
+	if (_resolvedPreds.length > 0) {
+	  stderr.writeln("_resolvedPreds: ");
+	  foreach (pred; _resolvedPreds) stderr.writeln(pred.describe());
+	}
+	if (_unresolvedPreds.length > 0) {
+	  stderr.writeln("_unresolvedPreds: ");
+	  foreach (pred; _unresolvedPreds) stderr.writeln(pred.describe());
+	}
+	if (_toRolledPreds.length > 0) {
+	  stderr.writeln("_toRolledPreds: ");
+	  foreach (pred; _toRolledPreds) stderr.writeln(pred.describe());
+	}
+	assert (false, "Infinite loop in constraint solver");
       }
 
       _solvePreds.reset();

@@ -706,7 +706,7 @@ struct CstParser {
 	fill('"');
       }
       if (idChain[2] != -1) {
-	fill(")(");
+	fill(")([");
       }
       for (size_t i=1; i != MaxHierDepth-1; ++i) {
 	if (idChain[2*i] == -1) break;
@@ -716,12 +716,12 @@ struct CstParser {
 	  ++numIndex;
 	  procIndexExpr(srcTag+idChain[2*i]+1);
 	}
-	else {
-	  fill("null");
-	}
+	// else {
+	//   fill("null");
+	// }
       }
       if (idChain[2] != -1) {
-	fill(')');
+	fill("])");
       }
     }
     else {

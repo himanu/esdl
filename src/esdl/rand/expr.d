@@ -1,6 +1,7 @@
 module esdl.rand.expr;
 
 import esdl.rand.intr;
+import esdl.rand.dist;
 
 import esdl.solver.base: CstSolver;
 
@@ -156,9 +157,9 @@ interface CstVecTerm: CstVecExpr
     return new CstVecSliceExpr(this, range);
   }
 
-  final CstVecIndexExpr opIndex(CstVecTerm index) {
-    return new CstVecIndexExpr(this, index);
-  }
+  // final CstVecIndexExpr opIndex(CstVecTerm index) {
+  //   return new CstVecIndexExpr(this, index);
+  // }
 
   CstNotLogicExpr opUnary(string op)() if(op == "*") {
     return new CstNotLogicExpr(this.toBoolExpr());
@@ -1889,6 +1890,7 @@ class CstDistExpr(T): CstLogicTerm
   this(CstDomain vec, CstDistRangeExpr[] dists) {
     _vec = vec;
     _dists = dists;
+    _rs = new DistRangeSet!T;
     foreach (dist; _dists) {
       T lhs = cast(T) dist._range._lhs.evaluate();
       T rhs;
@@ -1904,8 +1906,8 @@ class CstDistExpr(T): CstLogicTerm
     }
   }
 
-  override void solveDist(_esdl__RandGen randGen) {
-    _vec.setVal(_rs.uniform(randGen));
+  override DistRangeSetBase getDist() {
+    return _rs;
   }
 
   string describe() {
@@ -1987,7 +1989,9 @@ class CstDistExpr(T): CstLogicTerm
   override void writeExprString(ref Charbuf str) {
     assert(false);
   }
-
+  override CstVecExpr isNot(CstDomain A){
+    return null;
+  }
 }
 
 
@@ -2205,96 +2209,96 @@ class CstVecSliceExpr: CstVecTerm
   }
 }
 
-class CstVecIndexExpr: CstVecTerm
-{
-  CstVecExpr _vec;
-  CstVecExpr _index;
+// class CstVecIndexExpr: CstVecTerm
+// {
+//   CstVecExpr _vec;
+//   CstVecExpr _index;
   
-  string describe() {
-    return _vec.describe() ~ "[ " ~ _index.describe() ~ " ]";
-  }
+//   string describe() {
+//     return _vec.describe() ~ "[ " ~ _index.describe() ~ " ]";
+//   }
 
-  void visit(CstSolver solver) {
-    _vec.visit(solver);
-    assert (_index.isSolved());
-    solver.pushIndexToEvalStack(_index.evaluate());
-    solver.pushIndexToEvalStack(_index.evaluate() + 1);
-    solver.processEvalStack(CstSliceOp.SLICE);
-  }
+//   void visit(CstSolver solver) {
+//     _vec.visit(solver);
+//     assert (_index.isSolved());
+//     solver.pushIndexToEvalStack(_index.evaluate());
+//     solver.pushIndexToEvalStack(_index.evaluate() + 1);
+//     solver.processEvalStack(CstSliceOp.SLICE);
+//   }
 
-  // bool getVal(ref long val) {
-  //   return false;
-  // }
+//   // bool getVal(ref long val) {
+//   //   return false;
+//   // }
 
-  long evaluate() {
-    assert(false, "Can not evaluate a CstVecIndexExpr!");
-  }
+//   long evaluate() {
+//     assert(false, "Can not evaluate a CstVecIndexExpr!");
+//   }
 
-  override CstVecIndexExpr unroll(CstIterator iter, uint n) {
-    return new CstVecIndexExpr(_vec.unroll(iter, n),
-			       _index.unroll(iter, n));
-  }
+//   override CstVecIndexExpr unroll(CstIterator iter, uint n) {
+//     return new CstVecIndexExpr(_vec.unroll(iter, n),
+// 			       _index.unroll(iter, n));
+//   }
 
-  this(CstVecExpr vec, CstVecExpr index) {
-    _vec = vec;
-    _index = index;
-  }
+//   this(CstVecExpr vec, CstVecExpr index) {
+//     _vec = vec;
+//     _index = index;
+//   }
 
-  uint resolveLap() {
-    return _vec.resolveLap();
-  }
+//   uint resolveLap() {
+//     return _vec.resolveLap();
+//   }
 
-  void resolveLap(uint lap) {
-    _vec.resolveLap(lap);
-  }
+//   void resolveLap(uint lap) {
+//     _vec.resolveLap(lap);
+//   }
 
-  bool isConst() {
-    return false;
-  }
+//   bool isConst() {
+//     return false;
+//   }
 
-  bool isIterator() {
-    return false;
-  }
+//   bool isIterator() {
+//     return false;
+//   }
 
-  bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
+//   bool isOrderingExpr() {
+//     return false;		// only CstVecOrderingExpr return true
+//   }
 
-  void setDomainContext(CstPredicate pred,
-			ref CstDomain[] rnds,
-			ref CstDomain[] vars,
-			ref CstValue[] vals,
-			ref CstIterator[] iters,
-			ref CstDomain[] idxs,
-			ref CstDomain[] bitIdxs,
-			ref CstDomain[] deps) {
-    _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _index.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
-  }
+//   void setDomainContext(CstPredicate pred,
+// 			ref CstDomain[] rnds,
+// 			ref CstDomain[] vars,
+// 			ref CstValue[] vals,
+// 			ref CstIterator[] iters,
+// 			ref CstDomain[] idxs,
+// 			ref CstDomain[] bitIdxs,
+// 			ref CstDomain[] deps) {
+//     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+//     _index.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+//   }
 
-  bool getIntRange(ref IntR rng) {
-    return false;
-  }
+//   bool getIntRange(ref IntR rng) {
+//     return false;
+//   }
 
-  bool getUniRange(ref UniRange rng) {
-    return false;
-  }
+//   bool getUniRange(ref UniRange rng) {
+//     return false;
+//   }
 
-  bool getIntType(ref INTTYPE iType) {
-    return false;
-  }
+//   bool getIntType(ref INTTYPE iType) {
+//     return false;
+//   }
   
-  override bool isSolved() {
-    return _index.isSolved() && _vec.isSolved();
-  }
+//   override bool isSolved() {
+//     return _index.isSolved() && _vec.isSolved();
+//   }
   
-  override void writeExprString(ref Charbuf str) {
-    _vec.writeExprString(str);
-    str ~= '[';
-    _index.writeExprString(str);
-    str ~= ']';
-  }
-}
+//   override void writeExprString(ref Charbuf str) {
+//     _vec.writeExprString(str);
+//     str ~= '[';
+//     _index.writeExprString(str);
+//     str ~= ']';
+//   }
+// }
 
 class CstNotVecExpr: CstVecTerm
 {
@@ -2537,7 +2541,11 @@ class CstLogic2LogicExpr: CstLogicTerm
   override bool getUniRangeSet(ref ULongRS rs) {
     return getUniRangeSetImpl(rs);
   }
-    
+  
+  override CstVecExpr isNot(CstDomain A){
+    return null;
+  }
+  
   bool getUniRangeSetImpl(T)(ref T rs) {
     assert(! _lhs.isSolved(), this.describe());
     assert(! _rhs.isSolved(), this.describe());
@@ -2598,7 +2606,7 @@ class CstLogic2LogicExpr: CstLogicTerm
     str ~= ")\n";
   }
 
-  override void solveDist(_esdl__RandGen randGen) {
+  override DistRangeSetBase getDist() {
     assert (false);
   }
 }
@@ -2640,6 +2648,10 @@ class CstIteLogicExpr: CstLogicTerm
   override bool getIntRangeSet(ref IntRS rs) {
     return false;
   }
+  
+  override CstVecExpr isNot(CstDomain A){
+    return null;
+  }
 
   bool cstExprIsNop() {
     return false;
@@ -2665,7 +2677,7 @@ class CstIteLogicExpr: CstLogicTerm
     assert(false, "TBD");
   }
 
-  override void solveDist(_esdl__RandGen randGen) {
+  override DistRangeSetBase getDist() {
     assert (false);
   }
 }
@@ -2780,6 +2792,17 @@ class CstVec2LogicExpr: CstLogicTerm
   override bool getUniRangeSet(ref ULongRS rs) {
     return getUniRangeSetImpl(rs);
   }
+  
+  override CstVecExpr isNot(CstDomain A){
+    if (_op is CstCompareOp.NEQ) {
+      if (_lhs !is A) {
+	assert(false, "Constraint " ~ describe() ~ " not allowed since " ~ A.name()
+	       ~ " is dist");
+      }
+      return _rhs;
+    }
+    return null;
+  }
     
   bool getUniRangeSetImpl(RS)(ref RS rs) {
     static if (is (RS == IntRangeSet!T, T)) {
@@ -2854,7 +2877,7 @@ class CstVec2LogicExpr: CstLogicTerm
     str ~= ")\n";
   }
 
-  override void solveDist(_esdl__RandGen randGen) {
+  override DistRangeSetBase getDist() {
     assert (false);
   }
 }
@@ -2915,6 +2938,10 @@ class CstLogicConst: CstLogicTerm
   override bool getIntRangeSet(ref IntRS rng) {
     return false;
   }
+  
+  override CstVecExpr isNot(CstDomain A){
+    return null;
+  }
 
   override bool isSolved() {
     return true;
@@ -2925,7 +2952,7 @@ class CstLogicConst: CstLogicTerm
     else str ~= "FALSE";
   }
 
-  override void solveDist(_esdl__RandGen randGen) {
+  override DistRangeSetBase getDist() {
     assert (false);
   }
 }
@@ -2988,6 +3015,10 @@ class CstNotLogicExpr: CstLogicTerm
   override bool getIntRangeSet(ref IntRS rng) {
     return false;
   }
+  
+  override CstVecExpr isNot(CstDomain A){
+    return null;
+  }
 
   override bool isSolved() {
     return _expr.isSolved();
@@ -2999,7 +3030,7 @@ class CstNotLogicExpr: CstLogicTerm
     str ~= ")\n";
   }
   
-  override void solveDist(_esdl__RandGen randGen) {
+  override DistRangeSetBase getDist() {
     assert (false);
   }
 }
