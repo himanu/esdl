@@ -98,8 +98,9 @@ void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__ProxyRoot proxy) {
 	proxy.addPredicate(pred);
       }
     }
-    static if (is (Q: CstObjIntf) ||
-	       is (Q: CstObjArrIntf)) {
+    static if (is (Q: CstObjIntf)//  ||
+	       // is (Q: CstObjArrIntf)
+	       ) {
       static if (P.tupleof[I]._esdl__ISRAND) {
 	if (p.tupleof[I].isRand())
 	  p.tupleof[I]._esdl__doConstrain(proxy);
@@ -441,7 +442,7 @@ mixin template Randomization()
     }
     this(string name, _esdl__T outer,
 	 _esdl__Proxy parent) {
-      assert (outer !is null);
+      // assert (outer !is null);
       _esdl__outer = outer;
       // static if(_esdl__baseHasRandomization!_esdl__T) {
       super(name, outer, parent);

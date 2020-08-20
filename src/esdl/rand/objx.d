@@ -11,7 +11,7 @@ import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__ProxyRoot;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstVecIterator, CstValue;
+  CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve;
@@ -89,6 +89,7 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  // import std.stdio;
 	  // writeln("New obj ", name);
 	  super(name, var, parent);
+	  _root = getProxyRoot();
 	  // _var = &var;
 	  // _parent = parent;
 	}
@@ -104,7 +105,7 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
 
-      auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...)
+      auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) return this;
 	else static if (S[0] == "") {
@@ -125,10 +126,6 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _root;
       }
 
-      // override RV getResolved() {
-      // 	return this;
-      // }
-
       // // RV
       // CstVecExpr unroll(CstIterator iter, uint n) {
       // 	return this;
@@ -138,160 +135,146 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       // 	return _var;
       // }
 
-      // void setDomainContext(CstPredicate pred,
-      // 			 ref CstDomain[] rnds,
-      // 			 ref CstDomain[] vars,
-      // 			 ref CstValue[] vals,
-      // 			 ref CstIterator[] iters,
-      // 			 ref CstDomain[] idxs,
-      // 			 ref CstDomain[] deps) {
-      // 	static if (is (R: _esdl__norand)) {
-      // 	  if (! canFind(vars, this)) vars ~= this;
-      // 	}
-      // 	else {
-      // 	  if (! canFind(rnds, this)) rnds ~= this;
-      // 	}
-      // }
+    }
 
-      // final override void markAsUnresolved(uint lap) {
-      // 	if (_unresolveLap != lap) {
-      // 	  _unresolveLap = lap;
-      // 	  foreach (pred; _rndPreds) {
-      // 	    pred.markAsUnresolved(lap);
-      // 	  }
-      // 	}
-      // }
+class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  _esdl__ProxyResolve!(LeafElementType!V), CstObjIntf
+    {
+      import std.traits;
+      import std.range;
+      import esdl.data.bvec;
+
+      mixin CstObjMixin;
       
-    }
+      alias RV = typeof(this);
+      alias P = CstObjArr!(V, R, N-1);
+      P _parent;
 
-class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0): CstObjIntf
-  {
-    import std.traits;
-    import std.range;
-    import esdl.data.bvec;
+      _esdl__Proxy _root;
 
-    mixin CstObjMixin;
+      CstVecExpr _indexExpr = null;
+      int _pindex = 0;
+
+      uint _resolvedCycle;	// cycle for which indexExpr has been resolved
+      RV _resolvedObj;
+
+      this(string name, P parent, CstVecExpr indexExpr) {
+	super(name, null, parent.getProxyRoot());
+	// import std.stdio;
+	// writeln("New ", name);
+	assert (parent !is null);
+	_parent = parent;
+	_indexExpr = indexExpr;
+	// _root = _parent.getProxyRoot();
+	// only concrete elements need be added
+	// getProxyRoot().addRndDomain(this);
+      }
+
+      this(string name, P parent, uint index) {
+	super(name, null, parent.getProxyRoot());
+	// import std.stdio;
+	// writeln("New ", name);
+	assert (parent !is null);
+	// super(parent.getProxyRoot());
+	_parent = parent;
+	// _indexExpr = _esdl__cstVal(index);
+	_pindex = index;
+      }
+
+      override bool opEquals(Object other) {
+	auto rhs = cast (RV) other;
+	if (rhs is null) return false;
+	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
+      }
       
-    alias RV = typeof(this);
-    alias P = CstObjArr!(V, R, N-1);
-    P _parent;
+      final bool isStatic() {
+	return ((_indexExpr is null ||
+		 _indexExpr.isIterator ||
+		 _indexExpr.isConst) &&
+		_parent.isStatic());
+      }
 
-    _esdl__Proxy _root;
+      _esdl__Proxy getProxyRoot()() {
+	assert (_root !is null);
+	return _root;
+      }
 
-    CstVecExpr _indexExpr = null;
-    int _pindex = 0;
+      RV getResolved() {
+	// if (_resolvedCycle != getProxyRoot()._cycle) {
+	// 	auto parent = _parent.getResolved();
+	// 	if (_indexExpr) {
+	// 	  _resolvedObj = parent[cast(size_t) _indexExpr.evaluate()];
+	// 	}
+	// 	else {
+	// 	  _resolvedObj = parent[_pindex];
+	// 	}
+	// 	_resolvedCycle = getProxyRoot()._cycle;
+	// }
+	return _resolvedObj;
+      }
 
-    uint _resolvedCycle;	// cycle for which indexExpr has been resolved
-    RV _resolvedObj;
-
-    this(string name, P parent, CstVecExpr indexExpr) {
-      // import std.stdio;
-      // writeln("New ", name);
-      assert (parent !is null);
-      // super(parent.getProxyRoot());
-      _parent = parent;
-      _indexExpr = indexExpr;
-      // _root = _parent.getProxyRoot();
-      // only concrete elements need be added
-      // getProxyRoot().addRndDomain(this);
-    }
-
-    this(string name, P parent, uint index) {
-      // import std.stdio;
-      // writeln("New ", name);
-      assert (parent !is null);
-      // super(parent.getProxyRoot());
-      _parent = parent;
-      // _indexExpr = _esdl__cstVal(index);
-      _pindex = index;
-    }
-
-    override bool opEquals(Object other) {
-      auto rhs = cast (RV) other;
-      if (rhs is null) return false;
-      else return (_parent == rhs._parent && _indexExpr == _indexExpr);
-    }
+      // RV
+      auto unroll(CstIterator iter, uint n) {
+	if (_indexExpr) {
+	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
+	}
+	else {
+	  return _parent.unroll(iter,n)[_pindex];
+	}
+      }
       
-    final bool isStatic() {
-      return ((_indexExpr is null ||
-	       _indexExpr.isIterator ||
-	       _indexExpr.isConst) &&
-	      _parent.isStatic());
-    }
+      LEAF* getRef() {
+	if (_indexExpr) {
+	  return _parent.getRef(cast(size_t) _indexExpr.evaluate());
+	}
+	else {
+	  return _parent.getRef(this._pindex);
+	}
+      }
 
-    _esdl__Proxy getProxyRoot()() {
-      assert (_root !is null);
-      return _root;
-    }
+      void setDomainContext(CstPredicate pred,
+			    ref CstDomain[] rnds,
+			    ref CstDomain[] vars,
+			    ref CstValue[] vals,
+			    ref CstIterator[] iters,
+			    ref CstDomain[] idxs,
+			    ref CstDomain[] bitIdxs,
+			    ref CstDomain[] deps) {
+	static if (R.isRand()) {
+	  // 	if (! canFind(rnds, this)) rnds ~= this;
+	  // }
+	  // else {
+	  // 	if (! canFind(vars, this)) vars ~= this;
+	}
+	if (_parent.isStatic()) {
+	  deps ~= _parent._arrLen;
+	}
+	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
 
-    RV getResolved() {
-      // if (_resolvedCycle != getProxyRoot()._cycle) {
-      // 	auto parent = _parent.getResolved();
-      // 	if (_indexExpr) {
-      // 	  _resolvedObj = parent[cast(size_t) _indexExpr.evaluate()];
-      // 	}
-      // 	else {
-      // 	  _resolvedObj = parent[_pindex];
-      // 	}
-      // 	_resolvedCycle = getProxyRoot()._cycle;
-      // }
-      return _resolvedObj;
-    }
+	if (_indexExpr !is null) {
+	  // Here we need to put the parent as a dep for the pred
+	  // and since this prim needs resolution, the constituents of
+	  // the indexExpr need to trigger a function that finds out
+	  // whether the _indexExpr has been fully resolved or
+	  // not. When the indexExpr gets resolved, it should inform
+	  // the parent about resolution which in turn should inform
+	  // the pred that it can go ahead
+	  _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
+	}
+      }
 
-    // RV
-    auto unroll(CstIterator iter, uint n) {
-      if (_indexExpr) {
-	return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
-      }
-      else {
-	return _parent.unroll(iter,n)[_pindex];
-      }
-    }
-      
-    LEAF* getRef() {
-      if (_indexExpr) {
-	return _parent.getRef(cast(size_t) _indexExpr.evaluate());
-      }
-      else {
-	return _parent.getRef(this._pindex);
+      auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
+      {
+	static if (S.length == 0) return this;
+	else static if (S[0] == "") {
+	  return this.opIndex(indx[0])._esdl__rand_term_chain!(S[1..$])(indx[1..$]);
+	}
+	else {
+	  static assert (S.length == 1);
+	  return __traits(getMember, this, S[0]);
+	}
       }
     }
-
-    void setDomainContext(CstPredicate pred,
-		       ref CstDomain[] rnds,
-		       ref CstDomain[] vars,
-		       ref CstValue[] vals,
-		       ref CstIterator[] iters,
-		       ref CstDomain[] idxs,
-		       ref CstDomain[] bitIdxs,
-		       ref CstDomain[] deps) {
-      static if (R.isRand()) {
-      // 	if (! canFind(rnds, this)) rnds ~= this;
-      // }
-      // else {
-      // 	if (! canFind(vars, this)) vars ~= this;
-      }
-      if (_parent.isStatic()) {
-	deps ~= _parent._arrLen;
-      }
-      _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-
-      if (_indexExpr !is null) {
-	// Here we need to put the parent as a dep for the pred
-	// and since this prim needs resolution, the constituents of
-	// the indexExpr need to trigger a function that finds out
-	// whether the _indexExpr has been fully resolved or
-	// not. When the indexExpr gets resolved, it should inform
-	// the parent about resolution which in turn should inform
-	// the pred that it can go ahead
-	_indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
-      }
-    }
-
-    auto _esdl__rand_term_chain(S ...)(CstVecTerm[] indx ...) {
-      return new CstObjTerm!(RV, S)(this, indx);
-    }
-}
 
 // Arrays (Multidimensional arrays as well)
 // template CstVecArrMixin(T, int I, int N=0)
@@ -432,6 +415,39 @@ mixin template CstObjArrMixin()
     }
   }
 
+  auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
+  {
+    static if (S.length == 0) return this;
+    else static if (S[0] == "") {
+      return this.opIndex(indx[0])._esdl__rand_term_chain!(S[1..$])(indx[1..$]);
+    }
+    else {
+      static assert (S.length == 1);
+      return __traits(getMember, this, S[0]);
+    }
+  }
+
+  static if (HAS_RAND_ATTRIB) {
+    static private void _setLen(A, N...)(ref A arr, size_t v, N indx)
+      if(isArray!A) {
+	static if(N.length == 0) {
+	  static if(isDynamicArray!A) {
+	    arr.length = v;
+	    // import std.stdio;
+	    // writeln(arr, " indx: ", N.length);
+	  }
+	  else {
+	    assert(false, "Can not set length of a fixed length array");
+	  }
+	}
+	else {
+	  // import std.stdio;
+	  // writeln(arr, " indx: ", N.length);
+	  _setLen(arr[indx[0]], v, indx[1..$]);
+	}
+      }
+
+  }
 }
 
 // template CstObjArr(T, int I, int N=0)
@@ -471,7 +487,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     _name = name;
     _var = &var;
     _parent = parent;
-    // _root = _parent.getProxyRoot();
+    _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
   }
 
@@ -506,7 +522,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
 
   void setLen(N...)(size_t v, N indx) {
     static if (HAS_RAND_ATTRIB) {
-      setLenTmp(*_var, v, indx);
+      _setLen(*_var, v, indx);
     }
   }
 
@@ -574,7 +590,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _name = name;
     _parent = parent;
     _indexExpr = indexExpr;
-    // _root = _parent.getProxyRoot();
+    _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
   }
 
@@ -586,7 +602,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _parent = parent;
     // _indexExpr = _esdl__cstVal(index);
     _pindex = index;
-    // _root = _parent.getProxyRoot();
+    _root = _parent.getProxyRoot();
     _arrLen = new CstVecLen!RV(name ~ ".len", this);
   }
 
@@ -704,10 +720,10 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
 
 // T is any of the above defines classes
 // S is a series of strings identifying the member object
-class CstObjTerm(T, S ...): CstVecTerm
-{
-  T _objArr;
+// class CstObjTerm(T, S ...): CstVecTerm
+// {
+//   T _objArr;
 
-  this(T, S ...)(T objArr, CstVecTerm[] indx ...) {
-  }
-}
+//   this(T, S ...)(T objArr, CstRangeExpr[] indx ...) {
+//   }
+// }
