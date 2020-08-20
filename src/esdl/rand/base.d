@@ -5,6 +5,7 @@ import esdl.solver.buddy: CstBuddySolver;
 import esdl.solver.z3: CstZ3Solver;
 
 import esdl.rand.intr;
+import esdl.rand.dist;
 import esdl.rand.expr: CstValue, CstVecTerm;
 import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__ProxyRoot;
 import esdl.rand.misc: _esdl__RandGen, isVecSigned, writeHexString;
@@ -335,7 +336,9 @@ abstract class CstDomain: CstVecTerm
   CstPredicate[] _varPreds;
 
   IntRS _rangeSet;
-
+  CstPredicate [] getRandPreds(){
+    return _rndPreds;
+  }
   Folder!(CstPredicate, "tempPreds") _tempPreds;
 
   // CstPredGroup _group;
@@ -459,8 +462,8 @@ interface CstLogicExpr: CstExpr
   abstract bool getUniRangeSet(ref UIntRS rs);
   abstract bool getUniRangeSet(ref LongRS rs);
   abstract bool getUniRangeSet(ref ULongRS rs);
-  abstract void solveDist(_esdl__RandGen randGen);
-
+  abstract DistRangeSetBase getDist();
+  abstract CstVecExpr isNot(CstDomain A);
   abstract CstLogicExpr unroll(CstIterator iter, uint n);
 
 }
