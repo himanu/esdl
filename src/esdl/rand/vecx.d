@@ -27,6 +27,10 @@ mixin template CstVecMixin() {
     CstVecPrim[] _preReqs;
   }
 
+  override string name() {
+    return _name;
+  }
+
   override bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
@@ -60,7 +64,7 @@ mixin template CstVecMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
 
-class CstVecIdx(V, rand RAND_ATTR, int N, P, int IDX): CstVec!(V, RAND_ATTR, N)
+class CstVecIdx(V, rand RAND_ATTR, int N, int IDX, P): CstVec!(V, RAND_ATTR, N)
 {
   enum _esdl__ISRAND = RAND_ATTR.isRand();
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
@@ -95,6 +99,12 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
 	_root = _parent.getProxyRoot();
       }
 
+      final override string fullName() {
+	if (_parent is _root) return _name;
+	else  
+	  return _parent.fullName() ~ "." ~ name();
+      }
+      
       final override bool isStatic() {
 	return true;		// N == 0
       }
@@ -242,6 +252,10 @@ class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0
 		_parent.isStatic());
       }
 
+      final override string fullName() {
+	return _parent.fullName() ~ "." ~ name();
+      }
+      
       override _esdl__Proxy getProxyRoot() {
 	assert (_root !is null);
 	return _root;
@@ -566,7 +580,7 @@ mixin template CstVecArrMixin()
 
 // Arrays (Multidimensional arrays as well)
 
-class CstVecArrIdx(V, rand RAND_ATTR, int N, P, int IDX): CstVecArr!(V, RAND_ATTR, N)
+class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX, P): CstVecArr!(V, RAND_ATTR, N)
 {
   enum _esdl__ISRAND = RAND_ATTR.isRand();
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
@@ -600,13 +614,19 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     _var = &var;
     _parent = parent;
     _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ ".len", this);
+    _arrLen = new CstVecLen!RV(name ~ "->length", this);
   }
 
   final bool isStatic() {
     return true; 		// N == 0
   }
 
+  final string fullName() {
+    if (_parent is _root) return _name;
+    else  
+      return _parent.fullName() ~ "." ~ name();
+  }
+      
   RV getResolved() {
     return this;
   }
@@ -715,7 +735,7 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     _parent = parent;
     _indexExpr = indexExpr;
     _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ ".len", this);
+    _arrLen = new CstVecLen!RV(name ~ "->length", this);
   }
 
   this(string name, P parent, uint index) {
@@ -727,7 +747,7 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     // _indexExpr = _esdl__cstVal(index);
     _pindex = index;
     _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ ".len", this);
+    _arrLen = new CstVecLen!RV(name ~ "->length", this);
   }
 
   override bool opEquals(Object other) {
@@ -743,6 +763,10 @@ class CstVecArr(V, rand RAND_ATTR, int N)
 	    _parent.isStatic());
   }
 
+  final string fullName() {
+    return _parent.fullName() ~ "." ~ name();
+  }
+      
   RV getResolved() {
     if (_resolvedCycle != getProxyRoot()._cycle) {
       auto parent = _parent.getResolved();

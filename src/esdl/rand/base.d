@@ -47,6 +47,10 @@ abstract class _esdl__Proxy
   _esdl__Proxy _parent;
   _esdl__Proxy _root;
 
+  // only the root proxy gets a null name, other component proxies override
+  string fullName() {return "";}
+  string name() {return "";}
+
   CstSolver[string] _solvers;
   
   Folder!(CstPredicate, "rolledPreds") _rolledPreds;
@@ -275,6 +279,7 @@ abstract class CstDomain: CstVecTerm
   uint         _varN = uint.max;
 
   abstract string name();
+  abstract string fullName();
   // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
   abstract void setVal(ulong v);
@@ -483,6 +488,7 @@ abstract class CstIterator
   }
   abstract uint size();
   abstract string name();
+  abstract string fullName();
   abstract CstIterator unrollIterator(CstIterator iter, uint n);
   abstract CstDomain getLenVec();
   final bool isUnrollable() {
@@ -1088,25 +1094,25 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (_iters.length > 0) {
       description ~= "    Iterators: \n";
       foreach (iter; _iters) {
-	description ~= "\t" ~ iter.name() ~ "\n";
+	description ~= "\t" ~ iter.fullName() ~ "\n";
       }
     }
     if (_rnds.length > 0) {
       description ~= "    Domains: \n";
       foreach (rnd; _rnds) {
-	description ~= "\t" ~ rnd.name() ~ "\n";
+	description ~= "\t" ~ rnd.fullName() ~ "\n";
       }
     }
     if (_dynRnds.length > 0) {
       description ~= "    Dyn Domains: \n";
       foreach (rnd; _dynRnds) {
-	description ~= "\t" ~ rnd.name() ~ "\n";
+	description ~= "\t" ~ rnd.fullName() ~ "\n";
       }
     }
     if (_vars.length > 0) {
       description ~= "    Variables: \n";
       foreach (var; _vars) {
-	description ~= "\t" ~ var.name() ~ "\n";
+	description ~= "\t" ~ var.fullName() ~ "\n";
       }
     }
     if (_vals.length > 0) {
@@ -1118,19 +1124,19 @@ class CstPredicate: CstIterCallback, CstDepCallback
     if (_idxs.length > 0) {
       description ~= "    Indexes: \n";
       foreach (idx; _idxs) {
-	description ~= "\t" ~ idx.name() ~ "\n";
+	description ~= "\t" ~ idx.fullName() ~ "\n";
       }
     }
     if (_bitIdxs.length > 0) {
       description ~= "    Bit Indexes: \n";
       foreach (idx; _bitIdxs) {
-	description ~= "\t" ~ idx.name() ~ "\n";
+	description ~= "\t" ~ idx.fullName() ~ "\n";
       }
     }
     if (_deps.length > 0) {
       description ~= "    Depends: \n";
       foreach (dep; _deps) {
-	description ~= "\t" ~ dep.name() ~ "\n";
+	description ~= "\t" ~ dep.fullName() ~ "\n";
       }
     }
     description ~= "\n";

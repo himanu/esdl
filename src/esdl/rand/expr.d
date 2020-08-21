@@ -945,8 +945,13 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
   }
 
   override string name() {
-    string n = _arrVar.arrLen.name();
-    return n[0..$-3] ~ "iter";
+    string n = _arrVar.name();
+    return n ~ "->iterator";
+  }
+
+  override string fullName() {
+    string n = _arrVar.fullName();
+    return n ~ "->iterator";
   }
 
   override string describe() {
@@ -1055,6 +1060,10 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override string name() {
     return _name;
+  }
+
+  override string fullName() {
+    return _parent.fullName() ~ "->length";
   }
 
   this(string name, RV parent) {

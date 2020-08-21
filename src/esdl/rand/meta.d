@@ -60,19 +60,19 @@ template _esdl__RandProxyType(T, P, int I)
 			   isBoolean!E ||
 			   isSomeChar!E ||
 			   is (E == enum))) {
-    alias _esdl__RandProxyType = CstVecArrIdx!(L, RAND, 0, P, I);
+    alias _esdl__RandProxyType = CstVecArrIdx!(L, RAND, 0, I, P);
   }
   else static if (isBitVector!L || isIntegral!L ||
 		  isBoolean!L || isSomeChar!L || is (L == enum)) {
-    alias _esdl__RandProxyType = CstVecIdx!(L, RAND, 0, P, I);
+    alias _esdl__RandProxyType = CstVecIdx!(L, RAND, 0, I, P);
   }
   else static if(isArray!L && (is (E == class) || is (E == struct) ||
 			       (is (E == U*, U) && is (U == struct)))) {
-    alias _esdl__RandProxyType = CstObjArrIdx!(L, RAND, 0, P, I);
+    alias _esdl__RandProxyType = CstObjArrIdx!(L, RAND, 0, I, P);
   }
   else static if (is (L == class) || is (L == struct) ||
 		  (is (L == U*, U) && is (U == struct))) {
-    alias _esdl__RandProxyType = CstObjIdx!(L, RAND, 0, P, I);
+    alias _esdl__RandProxyType = CstObjIdx!(L, RAND, 0, I, P);
   }
   else {
     alias _esdl__RandProxyType = _esdl__UNDEFINED;
@@ -201,16 +201,16 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
   }
   else {
     alias Q = typeof (P.tupleof[I]);
-    static if (is (Q == CstVecIdx!(L, RAND, N, P, IDX),
-		   L, rand RAND, int N, P, int IDX)) {
+    static if (is (Q == CstVecIdx!(L, RAND, N, IDX, P),
+		   L, rand RAND, int N, int IDX, P)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
 	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
 	}
       }
     }
-    static if (is (Q == CstObjIdx!(L, RAND, N, P, IDX),
-		   L, rand RAND, int N, P, int IDX)) {
+    static if (is (Q == CstObjIdx!(L, RAND, N, IDX, P),
+		   L, rand RAND, int N, int IDX, P)) {
       static if (Q._esdl__HASPROXY) {
 	static if (is (L == U*, U) && is(U == struct)) {
 	  if (p.tupleof[I] !is null) {
@@ -224,16 +224,16 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
 	}
       }
     }
-    static if (is (Q == CstVecArrIdx!(L, RAND, N, P, IDX),
-		   L, rand RAND, int N, P, int IDX)) {
+    static if (is (Q == CstVecArrIdx!(L, RAND, N, IDX, P),
+		   L, rand RAND, int N, int IDX, P)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
 	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
 	}
       }
     }
-    static if (is (Q == CstObjArrIdx!(L, RAND, N, IDX),
-		   L, rand RAND, int N, int IDX)) {
+    static if (is (Q == CstObjArrIdx!(L, RAND, N, IDX, P),
+		   L, rand RAND, int N, int IDX, P)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
 	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
@@ -697,12 +697,12 @@ auto ref _esdl__rand_proxy(L)(ref L l, string name,
 	     isBoolean!L || isSomeChar!L || is (L == enum)) {
     // import std.stdio;
     // writeln("Creating VarVec, ", name);
-    return new CstVecIdx!(L, rand(true, true), 0, -1)(name, l, parent);
+    return new CstVecIdx!(L, rand(true, true), 0, -1, _esdl__VALUE)(name, l, parent);
   }
   else static if (isArray!L) {
     // import std.stdio;
     // writeln("Creating VarVecArr, ", name);
-    return new CstVecArrIdx!(L, rand(true, true), 0, -1)(name, l, parent);
+    return new CstVecArrIdx!(L, rand(true, true), 0, -1, _esdl__VALUE)(name, l, parent);
   }
   else {
     if (l is null) {
@@ -750,7 +750,7 @@ auto _esdl__rand_proxy(alias V, // string VS,
     static if (isLvalue!V) {
       // import std.stdio;
       // writeln("Creating VarVec, ", name);
-      return new CstVecIdx!(L, rand(true, true), 0, _esdl__VALUE, -1)(name, V, parent);
+      return new CstVecIdx!(L, rand(true, true), 0, -1, _esdl__VALUE)(name, V, parent);
     }
     else {
       return new CstVecValue!L(V); // CstVecValue!L.allocate(l);
@@ -759,7 +759,7 @@ auto _esdl__rand_proxy(alias V, // string VS,
   else static if (isArray!L) {
     // import std.stdio;
     // writeln("Creating VarVecArr, ", name);
-    return new CstVecArrIdx!(L, rand(true, true), 0, -1)(name, V, parent);
+    return new CstVecArrIdx!(L, rand(true, true), 0, -1, _esdl__VALUE)(name, V, parent);
   }
   else {
     // import std.stdio;
