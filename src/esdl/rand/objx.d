@@ -60,7 +60,8 @@ mixin template CstObjMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstObj represents
 
-class CstObjIdx(V, rand R, int N, int IDX, P): CstObj!(V, R, N)
+class CstObjIdx(V, rand R, int N, int IDX,
+		P, int PIDX): CstObj!(V, R, N)
 {
   enum _esdl__ISRAND = R.isRand();
   enum _esdl__HASPROXY = R.hasProxy();
@@ -69,6 +70,18 @@ class CstObjIdx(V, rand R, int N, int IDX, P): CstObj!(V, R, N)
   this(string name, ref V var, _esdl__ProxyRoot parent) {
     super(name, var, parent);
   }
+
+  override _esdl__Proxy unroll(CstIterator iter, uint n) {
+    if (_parent !is _root) {
+      P uparent = cast(P)(_parent.unroll(iter, n));
+      assert (uparent !is null);
+      return uparent.tupleof[PIDX];
+    }
+    else {
+      return this;
+    }
+  }
+
 }
 
 class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
@@ -89,20 +102,22 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	this(string name, ref V var, _esdl__ProxyRoot parent) {
 	  // import std.stdio;
 	  // writeln("New obj ", name);
-	  super(name, var, parent);
+	  super(var, parent);
+	  _name = name;
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
 	  // _var = &var;
-	  // _parent = parent;
 	}
       }
       else {
 	this(string name, V var, _esdl__ProxyRoot parent) {
 	  // import std.stdio;
 	  // writeln("New obj ", name);
-	  super(name, var, parent);
+	  super(var, parent);
+	  _name = name;
+	  _parent = parent;
+	  _root = _parent.getProxyRoot();
 	  // _var = &var;
-	  // _parent = parent;
 	}
       }
 
@@ -134,10 +149,14 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return _root;
       }
 
-      // // RV
-      // CstVecExpr unroll(CstIterator iter, uint n) {
-      // 	return this;
-      // }
+      final override bool isStatic() {
+	return _parent.isStatic();
+      }
+
+      // RV
+      override _esdl__Proxy unroll(CstIterator iter, uint n) {
+	return this;
+      }
 
       // override LEAF* getRef() {
       // 	return _var;
@@ -167,10 +186,11 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       RV _resolvedObj;
 
       this(string name, P parent, CstVecExpr indexExpr) {
-	super(name, null, parent.getProxyRoot());
+	super(null, parent.getProxyRoot());
 	// import std.stdio;
 	// writeln("New ", name);
 	assert (parent !is null);
+	_name = name;
 	_parent = parent;
 	_indexExpr = indexExpr;
 	_root = _parent.getProxyRoot();
@@ -179,14 +199,16 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       this(string name, P parent, uint index) {
-	super(name, null, parent.getProxyRoot());
+	super(null, parent.getProxyRoot());
 	// import std.stdio;
 	// writeln("New ", name);
 	assert (parent !is null);
 	// super(parent.getProxyRoot());
+	_name = name;
 	_parent = parent;
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
+	_root = _parent.getProxyRoot();
       }
 
       override bool opEquals(Object other) {
@@ -195,7 +217,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
       }
       
-      final bool isStatic() {
+      final override bool isStatic() {
 	return ((_indexExpr is null ||
 		 _indexExpr.isIterator ||
 		 _indexExpr.isConst) &&
@@ -226,7 +248,7 @@ class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
       }
 
       // RV
-      auto unroll(CstIterator iter, uint n) {
+      override _esdl__Proxy unroll(CstIterator iter, uint n) {
 	if (_indexExpr) {
 	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
@@ -355,6 +377,15 @@ mixin template CstObjArrMixin()
 			   this, cast(uint) i);
       }
     }
+    static if (is (EV: CstObjIntf)) {
+      if (_parent.isStatic()) {
+	import std.stdio;
+	writeln("Need to call setOuter in these CstObj's:");
+	foreach (elem; _elems) {
+	  writeln("    ", elem.fullName());
+	}
+      }
+    }
   }
 
   EV opIndex(CstVecExpr indexExpr) {
@@ -474,7 +505,8 @@ mixin template CstObjArrMixin()
 // }
 
 // Arrays (Multidimensional arrays as well)
-class CstObjArrIdx(V, rand R, int N, int IDX, P): CstObjArr!(V, R, N)
+class CstObjArrIdx(V, rand R, int N, int IDX,
+		   P, int PIDX): CstObjArr!(V, R, N)
 {
   enum _esdl__ISRAND = R.isRand();
   enum _esdl__HASPROXY = R.hasProxy();
@@ -482,6 +514,16 @@ class CstObjArrIdx(V, rand R, int N, int IDX, P): CstObjArr!(V, R, N)
   enum int _esdl__INDEX = IDX;
   this(string name, ref V var, _esdl__Proxy parent) {
     super(name, var, parent);
+  }
+  override CstObjArr!(V, R, N) unroll(CstIterator iter, uint n) {
+    if (_parent !is _root) {
+      P uparent = cast(P)(_parent.unroll(iter, n));
+      assert (uparent !is null);
+      return uparent.tupleof[PIDX];
+    }
+    else {
+      return this;
+    }
   }
 }
 
@@ -514,7 +556,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
   }
 
   final bool isStatic() {
-    return true; 		// N == 0
+    return _parent.isStatic();
   }
 
   final string fullName() {

@@ -15,9 +15,11 @@ import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
-import esdl.rand.meta: _esdl__ProxyResolve;
+import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
 
 import std.algorithm.searching: canFind;
+import std.typetuple: staticIndexOf, TypeTuple;
+import std.traits: BaseClassesTuple; // required for staticIndexOf
 
 mixin template CstVecMixin() {
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
@@ -64,7 +66,8 @@ mixin template CstVecMixin() {
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVec represents
 
-class CstVecIdx(V, rand RAND_ATTR, int N, int IDX, P): CstVec!(V, RAND_ATTR, N)
+class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
+		P, int PIDX): CstVec!(V, RAND_ATTR, N)
 {
   enum _esdl__ISRAND = RAND_ATTR.isRand();
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
@@ -73,6 +76,18 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX, P): CstVec!(V, RAND_ATTR, N)
   this(string name, ref V var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
+
+  override CstVecExpr unroll(CstIterator iter, uint n) {
+    if (_parent !is _root) {
+      P uparent = cast(P)(_parent.unroll(iter, n));
+      assert (uparent !is null);
+      return uparent.tupleof[PIDX];
+    }
+    else {
+      return this;
+    }
+  }
+
 }
 
 // Primary Vector -- not an element of any array
@@ -580,14 +595,26 @@ mixin template CstVecArrMixin()
 
 // Arrays (Multidimensional arrays as well)
 
-class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX, P): CstVecArr!(V, RAND_ATTR, N)
+class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
+		   P, int PIDX): CstVecArr!(V, RAND_ATTR, N)
 {
+  // static assert (is (typeof(this) == P.tupleof[PIDX]));
   enum _esdl__ISRAND = RAND_ATTR.isRand();
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
+  enum int _esdl__PINDEX = PIDX;
   this(string name, ref V var, _esdl__Proxy parent) {
     super(name, var, parent);
+  }
+
+  override RV unroll(CstIterator iter, uint n) {
+    import std.stdio;
+    P parent = cast(P)(_parent);
+    assert (parent !is null);
+    assert (this is parent.tupleof[PIDX]);
+    writeln("Unrolling: ", parent.tupleof[PIDX].stringof);
+    return this;
   }
 }
 

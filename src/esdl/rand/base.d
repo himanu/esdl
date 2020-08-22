@@ -133,7 +133,7 @@ abstract class _esdl__Proxy
     _esdl__rGen.seed(seed);    
   }
   
-  this(string name, _esdl__Proxy parent) {
+  this(_esdl__Proxy parent) {
     import std.random: Random, uniform;
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");
@@ -205,6 +205,15 @@ abstract class _esdl__Proxy
   }
 
   abstract bool _esdl__debugSolver();
+
+  _esdl__Proxy unroll(CstIterator iter, uint n) {
+    return this;
+  }
+
+  // the root proxy is always static
+  bool isStatic() {
+    return true;
+  }
 }
 
 class CstScope {

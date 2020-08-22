@@ -98,17 +98,10 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
 
   CstBlock _esdl__cstExprs;
 
-  Array!ulong _solveValue;
+  // Array!ulong _solveValue;
   
-  this(string name, Object outer, _esdl__Proxy parent) {
-    super(name, parent);
-    if (parent is null) {
-      _esdl__cstExprs = new CstBlock();
-    }
-  }
-
-  this(string name, _esdl__Proxy parent) { // for structs
-    super(name, parent);
+  this(_esdl__Proxy parent) { // for structs
+    super(parent);
     if (parent is null) {
       _esdl__cstExprs = new CstBlock();
     }
