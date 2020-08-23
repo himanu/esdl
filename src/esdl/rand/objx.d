@@ -1,4 +1,4 @@
-module esdl.rand.objx;
+ module esdl.rand.objx;
 
 import esdl.data.bvec;
 import esdl.data.bstr;
@@ -7,8 +7,8 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
-  CstIterator, DomType, CstDomain,
-  CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjIntf, CstObjArrIntf;
+  CstIterator, DomType, CstDomain, CstObjIntf,
+  CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjectIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__ProxyRoot;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
@@ -54,14 +54,16 @@ mixin template CstObjMixin() {
       return false;
     }
   }
+  final bool _esdl__isObjArray() {return false;}
+  final CstIterator _esdl__iter() {return null;}
 }
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
-// for the elements this CstObj represents
+// for the elements this CstObject represents
 
 class CstObjIdx(V, rand R, int N, int IDX,
-		P, int PIDX): CstObj!(V, R, N)
+		P, int PIDX): CstObject!(V, R, N)
 {
   enum _esdl__ISRAND = R.isRand();
   enum _esdl__HASPROXY = R.hasProxy();
@@ -84,8 +86,8 @@ class CstObjIdx(V, rand R, int N, int IDX,
 
 }
 
-class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  _esdl__ProxyResolve!V, CstObjIntf
+class CstObject(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  _esdl__ProxyResolve!V
     {
       import std.traits;
       import std.range;
@@ -164,8 +166,8 @@ class CstObj(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 
     }
 
-class CstObj(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  _esdl__ProxyResolve!(LeafElementType!V), CstObjIntf
+class CstObject(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  _esdl__ProxyResolve!(LeafElementType!V)
     {
       import std.traits;
       import std.range;
@@ -327,7 +329,7 @@ mixin template CstObjArrMixin()
   alias E = ElementTypeN!(V, N+1);
 
   static if (_esdl__ArrOrder!(V, N+1) == 0) {
-    alias EV = CstObj!(V, R, N+1);
+    alias EV = CstObject!(V, R, N+1);
   }
   else {
     alias EV = CstObjArr!(V, R, N+1);
@@ -377,10 +379,10 @@ mixin template CstObjArrMixin()
 			   this, cast(uint) i);
       }
     }
-    static if (is (EV: CstObjIntf)) {
+    static if (is (EV: CstObjectIntf)) {
       if (_parent.isStatic()) {
 	import std.stdio;
-	writeln("Need to call setOuter in these CstObj's:");
+	writeln("Need to call setOuter in these CstObject's:");
 	foreach (elem; _elems) {
 	  writeln("    ", elem.fullName());
 	}
@@ -434,11 +436,6 @@ mixin template CstObjArrMixin()
 
   EV _esdl__elems() {
     return this[_esdl__iter()];
-  }
-
-  CstVecIterator!RV _esdl__iter() {
-    CstVecIterator!RV iter = arrLen.makeIterVar();
-    return iter;
   }
 
   CstVecLen!RV length() {
@@ -496,6 +493,11 @@ mixin template CstObjArrMixin()
       }
 
   }
+  final bool _esdl__isObjArray() {return true;}
+  final CstIterator _esdl__iter() {
+    CstVecIterator!RV iter = arrLen.makeIterVar();
+    return iter;
+  }
 }
 
 // template CstObjArr(T, int I, int N=0)
@@ -527,7 +529,8 @@ class CstObjArrIdx(V, rand R, int N, int IDX,
   }
 }
 
-class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): CstObjArrIntf
+class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
+  CstObjArrIntf
 {
   mixin CstObjArrMixin;
   CstVecLen!RV _arrLen;
@@ -550,7 +553,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
     _arrLen = new CstVecLen!RV(name ~ "->length", this);
   }
 
-  _esdl__Proxy getProxyRoot()() {
+  _esdl__Proxy getProxyRoot() {
     assert (_root !is null);
     return _root;
   }
@@ -620,13 +623,6 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0): Cs
 
     // no parent
   }
-
-  // void markAsUnresolved(uint lap) {
-  //   foreach (elem; _elems) {
-  //     elem.markAsUnresolved(lap);
-  //   }
-  // }
-
 }
 
 class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim, CstObjArrIntf
@@ -775,25 +771,12 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     }
   }
 
-  // void markAsUnresolved(uint lap) {
-  //   if (isStatic()) {
-  //     foreach (elem; _elems) {
-  // 	elem.markAsUnresolved(lap);
-  //     }
-  //   }
-  //   else {
-  //     _parent.markAsUnresolved(lap);
-  //   }
-  // }
-
 }
 
-// T is any of the above defines classes
-// S is a series of strings identifying the member object
-// class CstObjTerm(T, S ...): CstVecTerm
-// {
-//   T _objArr;
+class CstObjVisitor {
+  CstObjIntf _parent;
 
-//   this(T, S ...)(T objArr, CstRangeExpr[] indx ...) {
-//   }
-// }
+  this(CstObjIntf parent) {
+    _parent = parent;
+  }
+}
