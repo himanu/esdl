@@ -19,13 +19,21 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 
 interface CstVarIntf {
   bool isRand();
+  _esdl__Proxy getProxyRoot();
 }
 
 interface CstVecIntf: CstVarIntf {}
-interface CstVecArrIntf: CstVarIntf {}
 
-interface CstObjIntf: CstVarIntf {}
-interface CstObjArrIntf: CstVarIntf {}
+interface CstVectorIntf: CstVecIntf {}
+interface CstVecArrIntf: CstVecIntf {}
+
+interface CstObjIntf {
+  bool _esdl__isObjArray();
+  CstIterator _esdl__iter();
+}
+
+interface CstObjectIntf: CstVarIntf, CstObjIntf {}
+interface CstObjArrIntf: CstVarIntf, CstObjIntf {}
 
 
 enum DomType: ubyte
@@ -36,7 +44,7 @@ enum DomType: ubyte
     MULTI = 5
     }
 
-abstract class _esdl__Proxy
+abstract class _esdl__Proxy: CstObjectIntf
 {
   // static Buddy _esdl__buddy;
 
@@ -271,7 +279,7 @@ class CstScope {
   }
 }
 
-abstract class CstDomain: CstVecTerm
+abstract class CstDomain: CstVecTerm, CstVectorIntf
 {
 
   public enum State: ubyte
@@ -484,7 +492,7 @@ interface CstLogicExpr: CstExpr
 
 
 // This class represents an unwound Foreach iter at vec level
-abstract class CstIterator
+abstract class CstIterator: CstVecTerm
 {
   CstIterCallback[] _cbs;
   void registerRolled(CstIterCallback cb) {
@@ -502,6 +510,27 @@ abstract class CstIterator
   abstract CstDomain getLenVec();
   final bool isUnrollable() {
     return getLenVec().isSolved();
+  }
+  override bool isConst() {
+    return false;
+  }
+  override bool isIterator() {
+    return true;
+  }
+  override long evaluate() {
+    assert(false, "Can not evaluate an Iterator: " ~ this.name());
+  }
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+  override bool getIntRange(ref IntR rng) {
+    return false;
+  }
+  override bool getUniRange(ref UniRange rng) {
+    return false;
+  }
+  override bool getIntType(ref INTTYPE iType) {
+    return false;
   }
 }
 

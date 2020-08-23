@@ -987,18 +987,6 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
 
   override void resolveLap(uint lap) {}
 
-  override bool isConst() {
-    return false;
-  }
-
-  override bool isIterator() {
-    return true;
-  }
-
-  override bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
-
   override void visit(CstSolver solver) {
     assert (false, "Can not visit an Iter Variable without unrolling");
   }
@@ -1006,10 +994,6 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
   // override bool getVal(ref long val) {
   //   return false;
   // }
-
-  override long evaluate() {
-    assert(false, "Can not evaluate an Iterator: " ~ this.name());
-  }
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
@@ -1021,18 +1005,6 @@ class CstVecIterator(RV): CstIterator, CstVecTerm
 				 ref CstDomain[] deps) {
     deps ~= getLenVec();
     iters ~= this;
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    return false;
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    return false;
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    return false;
   }
 
   override bool isSolved() {

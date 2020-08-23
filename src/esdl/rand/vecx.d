@@ -10,7 +10,7 @@ import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIterator, DomType, CstDomain,
-  CstPredicate, _esdl__Proxy, CstVecIntf, CstVecArrIntf;
+  CstPredicate, _esdl__Proxy, CstVectorIntf, CstVecArrIntf;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
 
@@ -64,10 +64,10 @@ mixin template CstVecMixin() {
 
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
-// for the elements this CstVec represents
+// for the elements this CstVector represents
 
 class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
-		P, int PIDX): CstVec!(V, RAND_ATTR, N)
+		P, int PIDX): CstVector!(V, RAND_ATTR, N)
 {
   enum _esdl__ISRAND = RAND_ATTR.isRand();
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
@@ -91,8 +91,8 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
 }
 
 // Primary Vector -- not an element of any array
-class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim, CstVecIntf
+class CstVector(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim
     {
       import std.traits;
       import std.range;
@@ -205,8 +205,8 @@ class CstVec(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0
     }
 
 // Array Element
-class CstVec(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim, CstVecIntf
+class CstVector(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
+  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim
     {
       import std.traits;
       import std.range;
@@ -411,7 +411,7 @@ mixin template CstVecArrMixin()
   alias E = ElementTypeN!(V, N+1);
 
   static if (_esdl__ArrOrder!(V, N+1) == 0) {
-    alias EV = CstVec!(V, RAND_ATTR, N+1);
+    alias EV = CstVector!(V, RAND_ATTR, N+1);
   }
   else {
     alias EV = CstVecArr!(V, RAND_ATTR, N+1);
@@ -558,7 +558,7 @@ mixin template CstVecArrMixin()
     return this[_esdl__iter()];
   }
 
-  CstVecIterator!RV _esdl__iter() {
+  CstIterator _esdl__iter() {
     CstVecIterator!RV iter = arrLen.makeIterVar();
     return iter;
   }

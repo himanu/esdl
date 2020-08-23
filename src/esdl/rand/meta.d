@@ -19,7 +19,7 @@ import std.range: ElementType;
 import esdl.rand.misc;
 import esdl.rand.expr: CstVecValue;
 import esdl.rand.base: CstBlock, _esdl__Proxy, CstVecPrim, CstPredicate,
-  CstVarIntf, CstObjIntf, CstObjArrIntf;
+  CstVarIntf, CstObjectIntf, CstObjArrIntf;
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
 import esdl.rand.proxy;
@@ -98,7 +98,7 @@ void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__ProxyRoot proxy) {
 	proxy.addPredicate(pred);
       }
     }
-    static if (is (Q: CstObjIntf)//  ||
+    static if (is (Q: CstObjectIntf)//  ||
 	       // is (Q: CstObjArrIntf)
 	       ) {
       static if (P.tupleof[I]._esdl__ISRAND) {
@@ -715,20 +715,15 @@ struct _esdl__rand_type_proxy(T, P)
     _parent = parent;
   }
   
-  auto _esdl__rand_term_chain(string S)(Object dummy) {
-    return _esdl__rand_proxy!(__traits(getMember, T, S))(S, _parent);
-  }
 }
 
 // V is a type
-auto _esdl__rand_proxy(V, // string VS,
-		       S)(string name, S parent) {
+auto _esdl__rand_proxy(V, S)(string name, S parent) {
   return _esdl__rand_type_proxy!(V, S)(name, parent);
 }
 
 // or else
-auto _esdl__rand_proxy(alias V, // string VS,
-		       S)(string name, S parent) {
+auto _esdl__rand_proxy(alias V, S)(string name, S parent) {
   alias L = typeof(V);
   import std.traits: isIntegral, isBoolean, isArray, isSomeChar;
   static if (isIntegral!L || isBitVector!L ||
