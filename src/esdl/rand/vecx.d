@@ -609,11 +609,11 @@ class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
   }
 
   override RV unroll(CstIterator iter, uint n) {
-    import std.stdio;
+    // import std.stdio;
     P parent = cast(P)(_parent);
     assert (parent !is null);
     assert (this is parent.tupleof[PIDX]);
-    writeln("Unrolling: ", parent.tupleof[PIDX].stringof);
+    // writeln("Unrolling: ", parent.tupleof[PIDX].stringof);
     return this;
   }
 }

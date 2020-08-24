@@ -48,12 +48,12 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
 
   final CstBlock getCstBlock() {
     if (_cstBlock is null) {
-      _cstBlock = getParsedCstBlock();
+      _cstBlock = makeCstBlock();
     }
     return _cstBlock;
   }
 
-  abstract CstBlock getParsedCstBlock();
+  abstract CstBlock makeCstBlock();
 }
 
 static char[] constraintXlate(string PROXY, string CST,
@@ -119,6 +119,9 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     }
 
     // reset all bins
+    _newPreds.reset();
+    _unrolledPreds.reset();
+    
     _rolledPreds.reset();
     _toRolledPreds.reset();
     _resolvedPreds.reset();
@@ -139,14 +142,27 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     assert(_root is this);
     this._cycle += 1;
     
-    while (_resolvedDistPreds.length > 0 ||
-	   _resolvedMonoPreds.length > 0 ||
+    while (_newPreds.length > 0 ||
+	   _unrolledPreds.length > 0 ||
+	   // _resolvedDistPreds.length > 0 ||
+	   // _resolvedMonoPreds.length > 0 ||
 	   _resolvedDynPreds.length > 0 ||
 	   _resolvedPreds.length > 0 ||
 	   _unresolvedPreds.length > 0 ||
 	   _toRolledPreds.length > 0) {
       bool solvedSome = false;
+
+      foreach (pred; _newPreds) procNewPredicate(pred);
+      _newPreds.reset();
+
+      foreach (pred; _unrolledPreds) procUnrolledPredicate(pred);
+      _unrolledPreds.reset();
+      
       foreach (pred; _resolvedDistPreds) {
+	if (_esdl__debugSolver) {
+	  import std.stdio;
+	  writeln("Solving Dist Predicate: ", pred.describe());
+	}
 	CstDomain[] distVars = pred.getRnds();
 	assert (distVars.length == 1);
 	CstDomain distDom = distVars[0];
@@ -208,6 +224,10 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _resolvedMonoPreds.swap(_toSolvePreds);
 
       foreach (pred; _toSolvePreds) {
+	if (_esdl__debugSolver) {
+	  import std.stdio;
+	  writeln("Solving Mono Predicate: ", pred.describe());
+	}
 	if (! procMonoDomain(pred)) {
 	  // writeln("Mono Unsolved: ", pred.name());
 	  _resolvedPreds ~= pred;
@@ -222,6 +242,10 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
       _resolvedDynPreds.swap(_toSolvePreds);
 
       foreach (pred; _toSolvePreds) {
+	if (_esdl__debugSolver) {
+	  import std.stdio;
+	  writeln("Solving Maybe Mono Predicate: ", pred.describe());
+	}
 	if (pred.isMarkedUnresolved(_lap)) {
 	  _resolvedDynPreds ~= pred;
 	}
@@ -342,7 +366,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
   }
 
   void procResolved(CstPredicate pred) {
-    assert (pred._rnds.length > 0);
+    assert (pred._rnds.length > 0, pred.describe());
     if (pred.isDist()) {
       _resolvedDistPreds ~= pred;
     }
@@ -363,9 +387,15 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     }
   }
 
-  void addPredicate(CstPredicate pred) {
-    // import std.stdio;
-    // writeln("Adding Predicate: ", pred.name());
+  void addNewPredicate(CstPredicate pred) {
+    _newPreds ~= pred;
+  }
+
+  void addUnrolledPredicate(CstPredicate pred) {
+    _unrolledPreds ~= pred;
+  }
+  
+  void procNewPredicate(CstPredicate pred) {
     pred.randomizeDeps();
     if (pred._iters.length > 0) {
       _toRolledPreds ~= pred;
@@ -378,7 +408,7 @@ abstract class _esdl__ProxyRoot: _esdl__Proxy
     }
   }
 
-  void addUnrolledPredicate(CstPredicate pred) {
+  void procUnrolledPredicate(CstPredicate pred) {
     pred.randomizeDeps();
     if (pred._iters.length == 0) {
       if (pred.isResolved(true)) {

@@ -1975,7 +1975,6 @@ class CstDistExpr(T): CstLogicTerm
   }
 }
 
-
 // class CstVecSliceExpr: CstVecTerm
 // {
 //   CstVecExpr _vec;
@@ -2789,7 +2788,7 @@ class CstVec2LogicExpr: CstLogicTerm
     static if (is (RS == IntRangeSet!T, T)) {
       if (_rhs.isSolved()) {
 	INTTYPE iType;
-	assert(! _lhs.isSolved(), "Expression: " ~ _lhs.describe());
+	assert(! _lhs.isSolved(), this.describe());
 	bool valid = this.getIntType(iType);
 	if (valid) {
 	  ulong rhs = cast(int) _rhs.evaluate();
@@ -2802,7 +2801,7 @@ class CstVec2LogicExpr: CstLogicTerm
       }
       else if (_lhs.isSolved()) {
 	INTTYPE iType;
-	assert(! _rhs.isSolved(), "Expression: " ~ _rhs.describe());
+	assert(! _rhs.isSolved(), this.describe());
 	bool valid = this.getIntType(iType);
 	if (valid) {
 	  ulong lhs = cast(int) _lhs.evaluate();
@@ -3015,6 +3014,100 @@ class CstNotLogicExpr: CstLogicTerm
     assert (false);
   }
 }
+
+class CstObjVisitorExpr: CstLogicTerm
+{
+  CstObjIntf _obj;
+
+  this(CstObjIntf obj) {
+    _obj = obj;
+  }
+
+  string describe() {
+    return "Visitor: " ~ _obj.fullName();
+  }
+
+  void visit(CstSolver solver) {
+    assert (false);
+  }
+
+  override CstObjVisitorExpr unroll(CstIterator i, uint n) {
+    CstIterator iter = _obj._esdl__iter();
+    if (iter is i) {
+      return new CstObjVisitorExpr(_obj._esdl__getChild(n));
+    }
+    else {
+      return this;
+    }
+  }
+
+  uint resolveLap() {
+    assert (false);
+  }
+
+  void resolveLap(uint lap) {
+    assert (false);
+  }
+  
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstDomain[] deps) {
+    CstIterator iter = _obj._esdl__iter();
+    if (iter !is null) {
+      iter.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    }
+  }
+
+  bool getIntType(ref INTTYPE iType) {
+    assert (false);
+  }
+  
+  override bool getUniRangeSet(ref IntRS rs) {
+    assert (false);
+  }
+    
+  override bool getUniRangeSet(ref UIntRS rs) {
+    assert (false);
+  }
+    
+  override bool getUniRangeSet(ref LongRS rs) {
+    assert (false);
+  }
+    
+  override bool getUniRangeSet(ref ULongRS rs) {
+    assert (false);
+  }
+    
+  bool getUniRangeSetImpl(RS)(ref RS rs) {
+    assert (false);
+  }
+
+  override bool getIntRangeSet(ref IntRS rs) {
+    assert (false);
+  }
+
+  override bool isSolved() {
+    return false;
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    str ~= this.describe();
+  }
+
+  override CstVecExpr isNot(CstDomain A){
+    return null;
+  }
+
+  override DistRangeSetBase getDist() {
+    assert (false);
+  }
+}
+
 
 // CstLogic2LogicExpr logicOr(CstVecExpr other)
 // {

@@ -20,6 +20,8 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray
 interface CstVarIntf {
   bool isRand();
   _esdl__Proxy getProxyRoot();
+  string name();
+  string fullName();
 }
 
 interface CstVecIntf: CstVarIntf {}
@@ -27,13 +29,14 @@ interface CstVecIntf: CstVarIntf {}
 interface CstVectorIntf: CstVecIntf {}
 interface CstVecArrIntf: CstVecIntf {}
 
-interface CstObjIntf {
+interface CstObjIntf: CstVarIntf {
   bool _esdl__isObjArray();
   CstIterator _esdl__iter();
+  CstObjIntf _esdl__getChild(uint n);
 }
 
-interface CstObjectIntf: CstVarIntf, CstObjIntf {}
-interface CstObjArrIntf: CstVarIntf, CstObjIntf {}
+interface CstObjectIntf: CstObjIntf {}
+interface CstObjArrIntf: CstObjIntf {}
 
 
 enum DomType: ubyte
@@ -60,6 +63,9 @@ abstract class _esdl__Proxy: CstObjectIntf
   string name() {return "";}
 
   CstSolver[string] _solvers;
+
+  Folder!(CstPredicate, "newPreds") _newPreds;
+  Folder!(CstPredicate, "unrolledPreds") _unrolledPreds;
   
   Folder!(CstPredicate, "rolledPreds") _rolledPreds;
   Folder!(CstPredicate, "toRolledPreds") _toRolledPreds;
@@ -337,7 +343,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   void markSolved() {
     debug(CSTDOMAINS) {
       import std.stdio;
-      stderr.writeln(this.describe());
+      stderr.writeln("Marking ", this.name(), " as SOLVED");
     }
     _tempPreds.reset();
     _state = State.SOLVED;
@@ -453,6 +459,7 @@ interface CstExpr
 
   abstract void visit(CstSolver solver);
 
+  // abstract void visit();	// used for CstObjVisitorExpr
 
   abstract void writeExprString(ref Charbuf str);
 }
@@ -775,6 +782,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
   }
 
+  bool isVisitor() {
+    return false;
+  }
+
   void visit(CstSolver solver) {
     _expr.visit(solver);
   }
@@ -1055,22 +1066,24 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     foreach (var; _vars) var.registerVarPred(this);
 
-    assert(_rnds.length != 0);
-    if (_rnds.length > 1) {
-      foreach (rnd; _rnds) {
-	rnd._type = DomType.MULTI;
-      }
-    }
-    else if (! this.isDist()) {
-      assert(_rnds.length == 1);
-      auto rnd = _rnds[0];
-      if (rnd._type == DomType.TRUEMONO) {
-	if (_vars.length > 0) {
-	  rnd._type = DomType.LAZYMONO;
+    if (! this.isVisitor()) {
+      assert (_rnds.length != 0, this.describe());
+      if (_rnds.length > 1) {
+	foreach (rnd; _rnds) {
+	  rnd._type = DomType.MULTI;
 	}
-	if (_idxs.length > 0) {
-	  assert(! rnd.isStatic());
-	  rnd._type = DomType.INDEXEDMONO;
+      }
+      else if (! this.isDist()) {
+	assert(_rnds.length == 1);
+	auto rnd = _rnds[0];
+	if (rnd._type == DomType.TRUEMONO) {
+	  if (_vars.length > 0) {
+	    rnd._type = DomType.LAZYMONO;
+	  }
+	  if (_idxs.length > 0) {
+	    assert(! rnd.isStatic());
+	    rnd._type = DomType.INDEXEDMONO;
+	  }
 	}
       }
     }
@@ -1093,9 +1106,14 @@ class CstPredicate: CstIterCallback, CstDepCallback
     // as well
     // _iters = pasredIters.filter!(itr =>
     // 				 canFind(varIters, itr)).array;
-    _iters = _parsedIters.filter!(itr =>
-				  canFind!((CstIterator a, CstIterator b) => a == b)
-				  (varIters, itr)).array;
+    if (isVisitor()) {
+      _iters = varIters;
+    }
+    else {
+      _iters = _parsedIters.filter!(itr =>
+				    canFind!((CstIterator a, CstIterator b) => a == b)
+				    (varIters, itr)).array;
+    }
     
     if (_iters.length != 0) _iters[0].registerRolled(this);
   }
@@ -1218,6 +1236,63 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool isDist() { return _isDist; }
   void isDist(bool b) { _isDist = b; }
 
+}
+
+class CstVisitorPredicate: CstPredicate
+{
+  this(_esdl__ConstraintBase cst, uint stmt, _esdl__ProxyRoot proxy,
+       uint soft, CstLogicExpr expr, CstPredicate parent=null,
+       CstIterator unrollIter=null, uint unrollIterVal=0// ,
+       // CstIterator[] iters ...
+       ) {
+    import std.stdio;
+    writeln("Creating a visitor predicate: ", cst.name());
+    super(cst, stmt, proxy, soft, expr, parent, unrollIter, unrollIterVal);
+  }
+
+  override bool isVisitor() {
+    return true;
+  }
+
+  override void unroll(CstIterator iter) {
+    import std.stdio;
+    writeln("Unrolling Visitor");
+    assert (iter is _iters[0]);
+
+    if (! iter.isUnrollable()) {
+      assert (false, "CstIterator is not unrollabe yet: "
+	     ~ this.describe());
+    }
+    auto currLen = iter.size();
+    // import std.stdio;
+    // writeln("size is ", currLen);
+
+    if (currLen > _uwPreds.length) {
+      // import std.stdio;
+      // writeln("Need to unroll ", currLen - _uwPreds.length, " times");
+      for (uint i = cast(uint) _uwPreds.length;
+	   i != currLen; ++i) {
+	_uwPreds ~= new CstVisitorPredicate(_constraint, _statement, _proxy, _soft,
+					    _expr.unroll(iter, i), this, iter, i// ,
+					    // _iters[1..$].map!(tr => tr.unrollIterator(iter, i)).array
+					    );
+      }
+    }
+
+    // Do not use foreach here since we may have more elements in the
+    // array than the current value of currLen
+    for (size_t i=0; i!=currLen; ++i) {
+      if (_uwPreds[i]._iters.length == 0) { // completely unrolled
+	import std.stdio;
+	writeln("Collecting constraints from: ", _uwPreds[i]._expr.describe());
+      }
+      else {
+	_proxy.addUnrolledPredicate(_uwPreds[i]);
+      }
+    }
+
+    _uwLength = currLen;
+  }
 }
 
 class CstBlock

@@ -17,9 +17,9 @@ import std.exception: enforce;
 import std.range: ElementType;
 
 import esdl.rand.misc;
-import esdl.rand.expr: CstVecValue;
+import esdl.rand.expr: CstVecValue, CstObjVisitorExpr;
 import esdl.rand.base: CstBlock, _esdl__Proxy, CstVecPrim, CstPredicate,
-  CstVarIntf, CstObjectIntf, CstObjArrIntf;
+  CstVarIntf, CstObjectIntf, CstObjArrIntf, CstVisitorPredicate;
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
 import esdl.rand.proxy;
@@ -66,7 +66,7 @@ template _esdl__RandProxyType(T, int I, P, int PI)
 		  isBoolean!L || isSomeChar!L || is (L == enum)) {
     alias _esdl__RandProxyType = CstVecIdx!(L, RAND, 0, I, P, PI);
   }
-  else static if(isArray!L && (is (E == class) || is (E == struct) ||
+  else static if (isArray!L && (is (E == class) || is (E == struct) ||
 			       (is (E == U*, U) && is (U == struct)))) {
     alias _esdl__RandProxyType = CstObjArrIdx!(L, RAND, 0, I, P, PI);
   }
@@ -92,10 +92,14 @@ void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__ProxyRoot proxy) {
   }
   else {
     alias Q = typeof (P.tupleof[I]);
-    static if (is (Q == Constraint!(C, F, N),
-		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
-      foreach (pred; p.tupleof[I].getCstBlock()._preds) {
-	proxy.addPredicate(pred);
+    static if (is (Q: _esdl__ConstraintBase)) {
+      static if (p.tupleof[I].stringof != "p._esdl__cstWith") {
+	// import std.stdio;
+	// writeln("Adding constraint: ", p.tupleof[I].stringof);
+	foreach (pred; p.tupleof[I].getCstBlock()._preds) {
+	  // writeln("Adding predicate: ", pred.name());
+	  proxy.addNewPredicate(pred);
+	}
       }
     }
     static if (is (Q: CstObjectIntf)//  ||
@@ -179,10 +183,8 @@ void _esdl__doInitCstsElems(P, int I=0)(P p) {
   else {
     alias Q = typeof (P.tupleof[I]);
     // pragma(msg, Q.stringof);
-    static if (is (Q == Constraint!(C, F, N),
-		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
-      p.tupleof[I] = p.new p._esdl__Constraint!(C, F, N)
-	(p, p.tupleof[I].stringof[2..$]);
+    static if (is (Q: _esdl__ConstraintBase)) {
+      p.tupleof[I] = p.new Q(p, p.tupleof[I].stringof[2..$]);
     }
     _esdl__doInitCstsElems!(P, I+1)(p);
   }
@@ -269,10 +271,69 @@ template _esdl__RandDeclVars(T, int I, PT, int PI)
   }
 }
 
+template _esdl__ConstraintsDecl(T, int I=0)
+{
+  static if(I == T.tupleof.length) {
+    enum _esdl__ConstraintsDecl = "";
+  }
+  else {
+    alias L = typeof(T.tupleof[I]);
+    enum NAME = __traits(identifier, T.tupleof[I]);
+    // skip the constraints and _esdl__ variables
+    static if (is (L f == Constraint!(C, F, N),
+		   immutable (char)[] C, immutable (char)[] F, size_t N)) {
+      enum CONSTRAINT = _esdl__constraintParams!(T, I).CONSTRAINT;
+      enum FILE = _esdl__constraintParams!(T, I).FILE;
+      enum LINE = _esdl__constraintParams!(T, I).LINE;
+      enum _esdl__ConstraintsDecl =
+	"  enum string _esdl__CONSTRAINT_" ~ NAME ~
+	" = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").CONSTRAINT;\n" ~
+	"  enum string _esdl__FILE_" ~ NAME ~
+	" = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").FILE;\n" ~
+	"  enum size_t _esdl__LINE_" ~ NAME ~
+	" = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").LINE;\n" ~
+	// "  CstBlock _esdl__cst_block_" ~ NAME ~ ";\n" ~
+	// cast(string) constraintXlate("this", CONSTRAINT, FILE, LINE, NAME) ~
+	"  _esdl__Constraint!(_esdl__CONSTRAINT_" ~ NAME ~
+	", _esdl__FILE_" ~ NAME ~ ", _esdl__LINE_" ~ NAME ~ ") " ~
+	NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
+    }
+    else static if (isArray!L) {
+      alias E = LeafElementType!L;
+      static if (is (E == class) || is (E == struct) ||
+		 (is (E == U*, U) && is (U == struct))) {
+	enum _esdl__ConstraintsDecl =
+	  "  _esdl__Constraint!(\"" ~ NAME ~ "\") _esdl__visitorCst_"
+	  ~ NAME ~ ";\n"  ~ _esdl__ConstraintsDecl!(T, I+1);
+      }
+      else {
+	enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
+      }
+    }
+    else {
+      enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
+    }
+  }
+}
+
+template _esdl__constraintParams(T, int I)
+{
+  alias L = typeof(T.tupleof[I]);
+  static if(is(L f == Constraint!(C, F, N),
+	       immutable (char)[] C, immutable (char)[] F, size_t N)) {
+    enum string CONSTRAINT = C;
+    enum string FILE = F;
+    enum size_t LINE = N;
+  }
+  else {
+    static assert(false);
+  }
+}
+
 template _esdl__ConstraintsDefDecl(T)
 {
   enum _esdl__ConstraintsDefDecl =
-    "  Constraint!(_esdl__ConstraintDefaults!(_esdl__T, 0), \"#DEFAULT#\", 0) _esdl__defaultConstraint;\n";
+    "  _esdl__Constraint!(_esdl__ConstraintDefaults!(_esdl__T, 0), \"#DEFAULT#\", 0) _esdl__defaultConstraint;\n";
 }
 
 template _esdl__ConstraintDefaults(T, int I=0)
@@ -323,53 +384,6 @@ template _esdl__ConstraintDefaults(string NAME, int I, rand RAND) {
   }
 }
 
-template _esdl__ConstraintsDecl(T, int I=0)
-{
-  static if(I == T.tupleof.length) {
-    enum _esdl__ConstraintsDecl = "";
-  }
-  else {
-    alias L = typeof(T.tupleof[I]);
-    enum NAME = __traits(identifier, T.tupleof[I]);
-    // skip the constraints and _esdl__ variables
-    static if(is(L f == Constraint!(C, F, N),
-		 immutable (char)[] C, immutable (char)[] F, size_t N)) {
-      enum CONSTRAINT = _esdl__constraintParams!(T, I).CONSTRAINT;
-      enum FILE = _esdl__constraintParams!(T, I).FILE;
-      enum LINE = _esdl__constraintParams!(T, I).LINE;
-      enum _esdl__ConstraintsDecl =
-	"  enum string _esdl__CONSTRAINT_" ~ NAME ~
-	" = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").CONSTRAINT;\n" ~
-	"  enum string _esdl__FILE_" ~ NAME ~
-	" = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").FILE;\n" ~
-	"  enum size_t _esdl__LINE_" ~ NAME ~
-	" = _esdl__constraintParams!(_esdl__T, " ~ I.stringof ~ ").LINE;\n" ~
-	// "  CstBlock _esdl__cst_block_" ~ NAME ~ ";\n" ~
-	// cast(string) constraintXlate("this", CONSTRAINT, FILE, LINE, NAME) ~
-	"  Constraint!(_esdl__CONSTRAINT_" ~ NAME ~
-	", _esdl__FILE_" ~ NAME ~ ", _esdl__LINE_" ~ NAME ~ ") " ~
-	NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
-    }
-    else {
-      enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
-    }
-  }
-}
-
-template _esdl__constraintParams(T, int I)
-{
-  alias L = typeof(T.tupleof[I]);
-  static if(is(L f == Constraint!(C, F, N),
-	       immutable (char)[] C, immutable (char)[] F, size_t N)) {
-    enum string CONSTRAINT = C;
-    enum string FILE = F;
-    enum size_t LINE = N;
-  }
-  else {
-    static assert(false);
-  }
-}
-
 void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
 
   t._esdl__initProxy();
@@ -390,7 +404,7 @@ void _esdl__randomize(T) (T t, _esdl__ConstraintBase withCst = null) {
 
   if (withCst !is null) {
     foreach (pred; withCst.getCstBlock()._preds) {
-      t._esdl__proxyInst.addPredicate(pred);
+      t._esdl__proxyInst.addNewPredicate(pred);
     }
   }
   
@@ -594,6 +608,21 @@ mixin template _esdl__ProxyMixin()
   }
 
   mixin(_esdl__randsMixin!(_esdl__T, _esdl__PROXYT));
+
+  class _esdl__Constraint(string OBJ): _esdl__ConstraintBase
+  {
+    this(_esdl__ProxyRoot eng, string name) {
+      // import std.stdio;
+      // writeln("Creating a Visitor Constraint for: ", OBJ, " named: ", name);
+      super(eng, name, OBJ);
+    }
+    override CstBlock makeCstBlock() {
+      CstBlock _esdl__block = new CstBlock();
+      _esdl__block ~= new CstVisitorPredicate(this, 0, this.outer, 0,
+					      new CstObjVisitorExpr(mixin(OBJ)));
+      return _esdl__block;
+    }
+  }
 
   class _esdl__Constraint(string _esdl__CstString, string FILE, size_t LINE):
     Constraint!(_esdl__CstString, FILE, LINE)

@@ -56,6 +56,9 @@ mixin template CstObjMixin() {
   }
   final bool _esdl__isObjArray() {return false;}
   final CstIterator _esdl__iter() {return null;}
+  final CstObjIntf _esdl__getChild(uint n) {
+    assert (false);
+  }
 }
 
 // T represents the type of the declared array/non-array member
@@ -379,15 +382,15 @@ mixin template CstObjArrMixin()
 			   this, cast(uint) i);
       }
     }
-    static if (is (EV: CstObjectIntf)) {
-      if (_parent.isStatic()) {
-	import std.stdio;
-	writeln("Need to call setOuter in these CstObject's:");
-	foreach (elem; _elems) {
-	  writeln("    ", elem.fullName());
-	}
-      }
-    }
+    // static if (is (EV: CstObjectIntf)) {
+    //   if (_parent.isStatic()) {
+    // 	import std.stdio;
+    // 	writeln("Need to call setOuter in these CstObject's:");
+    // 	foreach (elem; _elems) {
+    // 	  writeln("    ", elem.fullName());
+    // 	}
+    //   }
+    // }
   }
 
   EV opIndex(CstVecExpr indexExpr) {
@@ -497,6 +500,9 @@ mixin template CstObjArrMixin()
   final CstIterator _esdl__iter() {
     CstVecIterator!RV iter = arrLen.makeIterVar();
     return iter;
+  }
+  final CstObjIntf _esdl__getChild(uint n) {
+    return this[n];
   }
 }
 
@@ -771,12 +777,4 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     }
   }
 
-}
-
-class CstObjVisitor {
-  CstObjIntf _parent;
-
-  this(CstObjIntf parent) {
-    _parent = parent;
-  }
 }
