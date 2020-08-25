@@ -138,7 +138,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) =
       }
 
       // RV
-      CstVecExpr unroll(CstIterator iter, uint n) {
+      override CstVecExpr unroll(CstIterator iter, uint n) {
 	return this;
       }
 
@@ -150,26 +150,26 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) =
 	return cast (long) (*_var);
       }
 
-      bool isConst() {
+      override bool isConst() {
 	return false;
       }
 
-      bool isIterator() {
+      override bool isIterator() {
 	return false;
       }
 
-      bool isOrderingExpr() {
+      override bool isOrderingExpr() {
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setDomainContext(CstPredicate pred,
-			    ref CstDomain[] rnds,
-			    ref CstDomain[] vars,
-			    ref CstValue[] vals,
-			    ref CstIterator[] iters,
-			    ref CstDomain[] idxs,
-			    ref CstDomain[] bitIdxs,
-			    ref CstDomain[] deps) {
+      override void setDomainContext(CstPredicate pred,
+				     ref CstDomain[] rnds,
+				     ref CstDomain[] vars,
+				     ref CstValue[] vals,
+				     ref CstIterator[] iters,
+				     ref CstDomain[] idxs,
+				     ref CstDomain[] bitIdxs,
+				     ref CstDomain[] deps) {
 	static if (RAND_ATTR.isRand()) {
 	  if (! canFind(rnds, this)) rnds ~= this;
 	}
@@ -293,7 +293,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) =
       }
 
       // RV
-      CstVecExpr unroll(CstIterator iter, uint n) {
+      override CstVecExpr unroll(CstIterator iter, uint n) {
 	if (_indexExpr) {
 	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}
@@ -320,26 +320,26 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) =
       	}
       }
 
-      bool isConst() {
+      override bool isConst() {
 	return false;
       }
 
-      bool isIterator() {
+      override bool isIterator() {
 	return false;
       }
 
-      bool isOrderingExpr() {
+      override bool isOrderingExpr() {
 	return false;		// only CstVecOrderingExpr return true
       }
 
-      void setDomainContext(CstPredicate pred,
-			    ref CstDomain[] rnds,
-			    ref CstDomain[] vars,
-			    ref CstValue[] vals,
-			    ref CstIterator[] iters,
-			    ref CstDomain[] idxs,
-			    ref CstDomain[] bitIdxs,
-			    ref CstDomain[] deps) {
+      override void setDomainContext(CstPredicate pred,
+				     ref CstDomain[] rnds,
+				     ref CstDomain[] vars,
+				     ref CstValue[] vals,
+				     ref CstIterator[] iters,
+				     ref CstDomain[] idxs,
+				     ref CstDomain[] bitIdxs,
+				     ref CstDomain[] deps) {
 	static if (RAND_ATTR.isRand()) {
 	  if (! this.isStatic()) {
 	    if (_type <= DomType.LAZYMONO) _type = DomType.MAYBEMONO;

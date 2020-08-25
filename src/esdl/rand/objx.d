@@ -46,7 +46,7 @@ mixin template CstObjMixin() {
     return this.to!string();
   }
 
-  bool isRand() {
+  override bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
     }
@@ -54,10 +54,9 @@ mixin template CstObjMixin() {
       return false;
     }
   }
-  final bool _esdl__isObjArray() {return false;}
-  final CstIterator _esdl__iter() {return null;}
-  final CstObjIntf _esdl__getChild(uint n) {
-    assert (false);
+  final override void visit() {
+    import std.stdio;
+    writeln("Visiting: ", this.fullName());
   }
 }
 
@@ -163,10 +162,20 @@ class CstObject(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	return this;
       }
 
-      // override LEAF* getRef() {
-      // 	return _var;
-      // }
-
+      static if (is (LEAF == struct)) {
+	LEAF* getRef() {
+	  return _esdl__getRef();
+	}
+      }
+      else static if (is (LEAF == class) ||
+		      (is (LEAF == U*, U) && is (U == struct))) {
+	LEAF getRef() {
+	  return _esdl__getRef();
+	}
+      }
+      else {
+	static assert (false);
+      }
     }
 
 class CstObject(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
@@ -262,13 +271,28 @@ class CstObject(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
       
-      LEAF* getRef() {
-	if (_indexExpr) {
-	  return _parent.getRef(cast(size_t) _indexExpr.evaluate());
+      static if (is (LEAF == struct)) {
+	LEAF* getRef() {
+	  if (_indexExpr) {
+	    return _parent.getRef(cast(size_t) _indexExpr.evaluate());
+	  }
+	  else {
+	    return _parent.getRef(this._pindex);
+	  }
 	}
-	else {
-	  return _parent.getRef(this._pindex);
+      }
+      else static if (is (LEAF == class)) {
+	LEAF getRef() {
+	  if (_indexExpr) {
+	    return _parent.getRef(cast(size_t) _indexExpr.evaluate());
+	  }
+	  else {
+	    return _parent.getRef(this._pindex);
+	  }
 	}
+      }
+      else {
+	static assert (false);
       }
 
       void setDomainContext(CstPredicate pred,
@@ -503,6 +527,10 @@ mixin template CstObjArrMixin()
   }
   final CstObjIntf _esdl__getChild(uint n) {
     return this[n];
+  }
+  final void visit() {
+    import std.stdio;
+    writeln("Visiting: ", this.fullName());
   }
 }
 

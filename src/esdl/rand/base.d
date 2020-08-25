@@ -33,6 +33,7 @@ interface CstObjIntf: CstVarIntf {
   bool _esdl__isObjArray();
   CstIterator _esdl__iter();
   CstObjIntf _esdl__getChild(uint n);
+  void visit();			// when an object is unrolled
 }
 
 interface CstObjectIntf: CstObjIntf {}
@@ -61,6 +62,16 @@ abstract class _esdl__Proxy: CstObjectIntf
   // only the root proxy gets a null name, other component proxies override
   string fullName() {return "";}
   string name() {return "";}
+  bool _esdl__isObjArray() {return false;}
+  CstIterator _esdl__iter() {return null;}
+  CstObjIntf _esdl__getChild(uint n) {assert (false);}
+  void visit() {}		// when an object is unrolled
+  bool isRand() {assert (false);}		// when an object is unrolled
+
+  _esdl__Proxy getProxyRoot() {
+    if (_root is null) {return this;}
+    else return _root;
+  }
 
   CstSolver[string] _solvers;
 
@@ -110,10 +121,6 @@ abstract class _esdl__Proxy: CstObjectIntf
     }
   }
   
-  _esdl__Proxy getProxyRoot()() {
-    return _root;
-  }
-
   _esdl__RandGen _esdl__rGen;
 
   _esdl__RandGen _esdl__getRandGen() {
@@ -349,7 +356,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
     _state = State.SOLVED;
   }
 
-  final bool isSolved() {
+  override final bool isSolved() {
     if (isRand()) {
       if (_state == State.SOLVED) return true;
       else return false;
@@ -418,7 +425,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
     }
   }
 
-  abstract string describe();
+  override abstract string describe();
 }
 
 // The client keeps a list of agents that when resolved makes the client happy
@@ -439,7 +446,7 @@ interface CstVecPrim
   abstract void addPreRequisite(CstVecPrim other);
 }
 
-interface CstExpr
+abstract class CstExpr
 {
   string describe();
 
@@ -456,15 +463,12 @@ interface CstExpr
 				 ref CstDomain[] deps);
 
   abstract bool isSolved();
-
   abstract void visit(CstSolver solver);
-
-  // abstract void visit();	// used for CstObjVisitorExpr
-
+  void visit() {}		// used for CstObjVisitorExpr
   abstract void writeExprString(ref Charbuf str);
 }
 
-interface CstVecExpr: CstExpr
+abstract class CstVecExpr: CstExpr
 {
   abstract bool isConst();
   abstract bool isIterator();
@@ -483,7 +487,7 @@ interface CstVecExpr: CstExpr
 
 }
 
-interface CstLogicExpr: CstExpr
+abstract class CstLogicExpr: CstExpr
 {
   abstract bool getIntRangeSet(ref IntRS iRangeSet);
 
@@ -1283,8 +1287,9 @@ class CstVisitorPredicate: CstPredicate
     // array than the current value of currLen
     for (size_t i=0; i!=currLen; ++i) {
       if (_uwPreds[i]._iters.length == 0) { // completely unrolled
-	import std.stdio;
-	writeln("Collecting constraints from: ", _uwPreds[i]._expr.describe());
+	_uwPreds[i]._expr.visit();
+	// import std.stdio;
+	// writeln("Collecting constraints from: ", _uwPreds[i]._expr.describe());
       }
       else {
 	_proxy.addUnrolledPredicate(_uwPreds[i]);
