@@ -18,7 +18,7 @@ import std.range: ElementType;
 
 import esdl.rand.misc;
 import esdl.rand.expr: CstVecValue, CstObjVisitorExpr;
-import esdl.rand.base: CstBlock, _esdl__Proxy, CstVecPrim, CstPredicate,
+import esdl.rand.base: CstBlock, CstVecPrim, CstPredicate,
   CstVarIntf, CstObjectIntf, CstObjArrIntf, CstVisitorPredicate;
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
@@ -79,13 +79,15 @@ template _esdl__RandProxyType(T, int I, P, int PI)
   }
 }
 
-void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__ProxyRoot proxy) {
+void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__Proxy proxy) {
   static if (I == 0 &&
 	     is (P B == super) &&
-	     is (B[0] : _esdl__ProxyRoot) &&
+	     is (B[0]: _esdl__Proxy) &&
 	     is (B[0] == class)) {
-    B[0] b = p;			// super object
-    _esdl__doConstrainElems(b, proxy);
+    static if (! is (B[0] == _esdl__Proxy)) {
+      B[0] b = p;			// super object
+      _esdl__doConstrainElems(b, proxy);
+    }
   }
   static if (I == P.tupleof.length) {
     return;
@@ -117,10 +119,12 @@ void _esdl__doConstrainElems(P, int I=0)(P p, _esdl__ProxyRoot proxy) {
 void _esdl__doRandomizeElems(P, int I=0)(P p, _esdl__RandGen randGen) {
   static if (I == 0 &&
 	     is (P B == super) &&
-	     is (B[0] : _esdl__ProxyRoot) &&
+	     is (B[0]: _esdl__Proxy) &&
 	     is (B[0] == class)) {
-    B[0] b = p;			// super object
-    _esdl__doRandomizeElems(b, randGen);
+    static if (! is (B[0] == _esdl__Proxy)) {
+      B[0] b = p;			// super object
+      _esdl__doRandomizeElems(b, randGen);
+    }
   }
   static if (I == P.tupleof.length) {
     return;
@@ -140,7 +144,7 @@ void _esdl__doRandomizeElems(P, int I=0)(P p, _esdl__RandGen randGen) {
 void _esdl__doInitRandsElems(P, int I=0)(P p) {
   // static if (I == 0 &&
   // 	     is (P B == super) &&
-  // 	     is (B[0] : _esdl__ProxyRoot) &&
+  // 	     is (B[0]: _esdl__Proxy) &&
   // 	     is (B[0] == class)) {
   //   B[0] b = p;			// super object
   //   _esdl__doInitRandsElems(b);
@@ -172,7 +176,7 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
 void _esdl__doInitCstsElems(P, int I=0)(P p) {
   // static if (I == 0 &&
   // 	     is (P B == super) &&
-  // 	     is (B[0] : _esdl__ProxyRoot) &&
+  // 	     is (B[0]: _esdl__Proxy) &&
   // 	     is (B[0] == class)) {
   //   B[0] b = p;			// super object
   //   _esdl__doInitCstsElems(b);
@@ -193,10 +197,12 @@ void _esdl__doInitCstsElems(P, int I=0)(P p) {
 void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
   static if (I == 0 &&
 	     is (P B == super) &&
-	     is (B[0] : _esdl__ProxyRoot) &&
+	     is (B[0]: _esdl__Proxy) &&
 	     is (B[0] == class)) {
-    B[0] b = p;			// super object
-    _esdl__doSetOuterElems(b, changed);
+    static if (! is (B[0] == _esdl__Proxy)) {
+      B[0] b = p;			// super object
+      _esdl__doSetOuterElems(b, changed);
+    }
   }
   static if (I == P.tupleof.length) {
     return;
@@ -480,7 +486,7 @@ mixin template Randomization()
     }
     this(_esdl__T outer, _esdl__Proxy parent) {
       _esdl__outer = outer;
-      static if (is (_esdl__BASEPT == _esdl__ProxyRoot))
+      static if (is (_esdl__BASEPT == _esdl__Proxy))
 	super(parent);
       else
 	super(outer, parent);
@@ -526,7 +532,7 @@ mixin template Randomization()
     }
   }
   else {
-    @rand(false) _esdl__ProxyRoot _esdl__proxyInst;
+    @rand(false) _esdl__Proxy _esdl__proxyInst;
     _esdl__ProxyType _esdl__getProxy()() {
       return _esdl__staticCast!_esdl__ProxyType(_esdl__proxyInst);
     }
@@ -590,7 +596,7 @@ class _esdl__ProxyNoRand(_esdl__T)
 	}
 	this(_esdl__T outer, _esdl__Proxy parent) {
 	  _esdl__outer = outer;
-	  static if (is (_esdl__ProxyBase!_esdl__T == _esdl__ProxyRoot))
+	  static if (is (_esdl__ProxyBase!_esdl__T == _esdl__Proxy))
 	    super(parent);
 	  else
 	    super(outer, parent);
@@ -639,7 +645,7 @@ mixin template _esdl__ProxyMixin()
 
   class _esdl__Constraint(string OBJ): _esdl__ConstraintBase
   {
-    this(_esdl__ProxyRoot eng, string name) {
+    this(_esdl__Proxy eng, string name) {
       // import std.stdio;
       // writeln("Creating a Visitor Constraint for: ", OBJ, " named: ", name);
       super(eng, name, OBJ);
@@ -655,7 +661,7 @@ mixin template _esdl__ProxyMixin()
   class _esdl__Constraint(string _esdl__CstString, string FILE, size_t LINE):
     Constraint!(_esdl__CstString, FILE, LINE)
   {
-    this(_esdl__ProxyRoot eng, string name) {
+    this(_esdl__Proxy eng, string name) {
       super(eng, name);
     }
     debug(CSTPARSER) {
@@ -680,7 +686,7 @@ mixin template _esdl__ProxyMixin()
       }
     }
 
-    this(ARGS...)(_esdl__ProxyRoot eng, string name, ARGS args) {
+    this(ARGS...)(_esdl__Proxy eng, string name, ARGS args) {
       super(eng, name);
       // writeln("pointer: ", &(args[0]));
       foreach (i, arg; args) {
@@ -709,7 +715,7 @@ mixin template _esdl__ProxyMixin()
   }
 
 
-  override void _esdl__doConstrain(_esdl__ProxyRoot proxy) {
+  override void _esdl__doConstrain(_esdl__Proxy proxy) {
     _esdl__doConstrainElems(this, proxy);
   }
 
@@ -848,7 +854,7 @@ template _esdl__ProxyResolve(T) {
 
 // For a given class, this template returns the Proxy for first
 // class in the ancestory that has Randomization mixin -- if there is
-// none, returns _esdl__ProxyRoot
+// none, returns _esdl__Proxy
 template _esdl__ProxyBase(T) {
   static if (is (T == class) &&
 	     is (T B == super) &&
@@ -867,7 +873,7 @@ template _esdl__ProxyBase(T) {
     // }
   }
   else {
-    alias _esdl__ProxyBase = _esdl__ProxyRoot;
+    alias _esdl__ProxyBase = _esdl__Proxy;
   }
 }
 

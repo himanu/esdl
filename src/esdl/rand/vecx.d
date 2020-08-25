@@ -8,9 +8,9 @@ import esdl.solver.base: CstSolver;
 
 import esdl.rand.misc;
 import esdl.rand.intr;
-import esdl.rand.base: CstVecPrim, CstVecExpr,
-  CstIterator, DomType, CstDomain,
-  CstPredicate, _esdl__Proxy, CstVectorIntf, CstVecArrIntf;
+import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
+  CstDomain, CstPredicate, CstVectorIntf, CstVecArrIntf;
+import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
 

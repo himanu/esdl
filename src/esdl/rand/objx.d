@@ -8,8 +8,8 @@ import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr,
   CstIterator, DomType, CstDomain, CstObjIntf,
-  CstLogicExpr, CstPredicate, _esdl__Proxy, CstObjectIntf, CstObjArrIntf;
-import esdl.rand.proxy: _esdl__ProxyRoot;
+  CstLogicExpr, CstPredicate, CstObjectIntf, CstObjArrIntf;
+import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
 
@@ -57,7 +57,7 @@ mixin template CstObjMixin() {
   final override void visit() {
     assert (this.getRef() !is null);
     _esdl__setValRef(this.getRef());
-    _esdl__doConstrain(cast (_esdl__ProxyRoot) getProxyRoot());
+    _esdl__doConstrain(getProxyRoot());
   }
 }
 
@@ -72,7 +72,7 @@ class CstObjIdx(V, rand R, int N, int IDX,
   enum _esdl__HASPROXY = R.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  this(string name, ref V var, _esdl__ProxyRoot parent) {
+  this(string name, ref V var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
 
@@ -104,7 +104,7 @@ class CstObject(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
       _esdl__Proxy _parent;
       
       static if (is (V == struct)) {
-	this(string name, ref V var, _esdl__ProxyRoot parent) {
+	this(string name, ref V var, _esdl__Proxy parent) {
 	  // import std.stdio;
 	  // writeln("New obj ", name);
 	  super(var, parent);
@@ -115,7 +115,7 @@ class CstObject(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	}
       }
       else {
-	this(string name, V var, _esdl__ProxyRoot parent) {
+	this(string name, V var, _esdl__Proxy parent) {
 	  // import std.stdio;
 	  // writeln("New obj ", name);
 	  super(var, parent);

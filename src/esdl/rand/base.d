@@ -7,7 +7,7 @@ import esdl.solver.z3: CstZ3Solver;
 import esdl.rand.intr;
 import esdl.rand.dist;
 import esdl.rand.expr: CstValue, CstVecTerm;
-import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__ProxyRoot;
+import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__Proxy;
 import esdl.rand.misc: _esdl__RandGen, isVecSigned, writeHexString;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
@@ -47,195 +47,6 @@ enum DomType: ubyte
     INDEXEDMONO = 4,
     MULTI = 5
     }
-
-abstract class _esdl__Proxy: CstObjectIntf
-{
-  // static Buddy _esdl__buddy;
-
-  // CstDomain[] _cstRndDomains;
-  CstDomain[] _cstValDomains;
-
-  // compositional parent -- not inheritance based
-  _esdl__Proxy _parent;
-  _esdl__Proxy _root;
-
-  // only the root proxy gets a null name, other component proxies override
-  string fullName() {return "";}
-  string name() {return "";}
-  bool _esdl__isObjArray() {return false;}
-  CstIterator _esdl__iter() {return null;}
-  CstObjIntf _esdl__getChild(uint n) {assert (false);}
-  void visit() {}		// when an object is unrolled
-  bool isRand() {assert (false);}		// when an object is unrolled
-
-  _esdl__Proxy getProxyRoot() {
-    if (_root is null) {return this;}
-    else return _root;
-  }
-
-  CstSolver[string] _solvers;
-
-  Folder!(CstPredicate, "newPreds") _newPreds;
-  Folder!(CstPredicate, "unrolledPreds") _unrolledPreds;
-  
-  Folder!(CstPredicate, "rolledPreds") _rolledPreds;
-  Folder!(CstPredicate, "toRolledPreds") _toRolledPreds;
-  Folder!(CstPredicate, "resolvedPreds") _resolvedPreds;
-  Folder!(CstPredicate, "resolvedDynPreds") _resolvedDynPreds;
-  Folder!(CstPredicate, "toSolvePreds") _toSolvePreds;
-
-  Folder!(CstPredicate, "_solvePreds") _solvePreds;
-
-  Folder!(CstPredicate, "unresolvedPreds") _unresolvedPreds;
-  Folder!(CstPredicate, "toResolvedPreds") _toUnresolvedPreds;
-
-  Folder!(CstPredicate, "resolvedDistPreds") _resolvedDistPreds;
-  Folder!(CstPredicate, "resolvedMonoPreds") _resolvedMonoPreds;
-
-  Folder!(CstDomain, "solvedDomains") _solvedDomains;
-  Folder!(CstPredGroup, "solvedGroups") _solvedGroups;
-
-  // the integer variable _lap is incremented everytime a set of @rand
-  // variables is made available for constraint solving. This 
-  // variable is used for:
-  // 1. marking the predicates that have unresolved dependencies
-  //    and/or have a relation with such predicates. When some
-  //    predicated are resolved it may lead to some of these
-  //    predicates becoming available
-  uint _lap;
-  // _cycle is incremented once everytime randomize function is
-  // called. The use of this variable within a @rand variable is to
-  // indicate that the variable has been solved. Within a predicate,
-  // this variable indicates that the predicate has been solved for
-  // the indiated randomization cycle. There are two more places where
-  // this variable is used:
-  // 1. To indicate that iterator has been unrolled for a vec array in
-  //    a given randomization cycle.
-  // 2. To indicate that the index expression has been resolved for a
-  //    vec/vec-array for the indicated randomization cycle
-  uint _cycle;
-
-  void updateValDomains() {
-    foreach (dom; _cstValDomains) {
-      dom.updateVal();
-    }
-  }
-  
-  _esdl__RandGen _esdl__rGen;
-
-  _esdl__RandGen _esdl__getRandGen() {
-    assert(_root is this);
-    return _root._esdl__rGen;
-  }
-
-  uint _esdl__seed;
-  uint _esdl__varN;
-
-  uint indexVar() {
-    return _esdl__varN++;
-  }
-  
-  bool _esdl__seeded = false;
-
-  uint getRandomSeed() {
-    assert(_root is this);
-    return _esdl__seed;
-  }
-
-  bool isRandomSeeded() {
-    assert(_root is this);
-    return _esdl__seeded;
-  }
-
-  void seedRandom(uint seed) {
-    assert(_root is this);
-    _esdl__seeded = true;
-    _esdl__seed = seed;
-    _esdl__rGen.seed(seed);    
-  }
-  
-  this(_esdl__Proxy parent) {
-    import std.random: Random, uniform;
-    debug(NOCONSTRAINTS) {
-      assert(false, "Constraint engine started");
-    }
-    else {
-      import esdl.base.core: Procedure;
-      auto proc = Procedure.self;
-      if (proc !is null) {
-	Random procRgen = proc.getRandGen();
-	_esdl__seed = 0; // uniform!(uint)(procRgen);
-      }
-      else {
-	// no active simulation -- use global rand generator
-	_esdl__seed = 0; // uniform!(uint)();
-      }
-    }
-    _esdl__rGen = new _esdl__RandGen(_esdl__seed);
-
-    if(parent is null) {
-      // if (_esdl__buddy is null) {
-      // 	_esdl__buddy = new Buddy(400, 400);
-      // }
-      _root = this;
-    }
-    else {
-      _parent = parent;
-      _root = _parent.getProxyRoot();
-      // _esdl__buddy = _root._esdl__buddy;
-    }
-    // scopes for constraint parsing
-    _rootScope = new CstScope(null, null);
-    _currentScope = _rootScope;
-  }
-
-  
-  // void addToUnrolled(CstPredicate pred) {
-  //   _toUnrolledPreds ~= pred;
-  // }
-  
-  // Scope for foreach
-  CstScope _rootScope;
-  CstScope _currentScope;
-
-  void pushScope(CstIterator iter) {
-    assert (_currentScope !is null);
-    _currentScope = _currentScope.push(iter);
-  }
-
-  void popScope() {
-    assert (_currentScope !is null);
-    assert (_currentScope !is _rootScope);
-    _currentScope = _currentScope.pop();
-  }
-
-  CstScope currentScope() {
-    assert (_currentScope !is null);
-    return _currentScope;
-  }
-
-  CstVecPrim[void*] _cstVecPrimes;
-
-  CstVecPrim getVecPrime(void* ptr) {
-    CstVecPrim* p = ptr in _cstVecPrimes;
-    return (p !is null) ? *p : null;
-  }
-  
-  void addVecPrime(void* ptr, CstVecPrim p) {
-    _cstVecPrimes[ptr] = p;
-  }
-
-  abstract bool _esdl__debugSolver();
-
-  _esdl__Proxy unroll(CstIterator iter, uint n) {
-    return this;
-  }
-
-  // the root proxy is always static
-  bool isStatic() {
-    return true;
-  }
-}
 
 class CstScope {
   this(CstScope parent, CstIterator iter) {
@@ -803,7 +614,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   _esdl__ConstraintBase _constraint;
   uint _statement;
-  _esdl__ProxyRoot _proxy;
+  _esdl__Proxy _proxy;
   CstScope _scope;
   CstLogicExpr _expr;
   CstPredicate _parent;
@@ -826,7 +637,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
   
-  this(_esdl__ConstraintBase cst, uint stmt, _esdl__ProxyRoot proxy,
+  this(_esdl__ConstraintBase cst, uint stmt, _esdl__Proxy proxy,
        uint soft, CstLogicExpr expr, CstPredicate parent=null,
        CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...
@@ -1244,7 +1055,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
 class CstVisitorPredicate: CstPredicate
 {
-  this(_esdl__ConstraintBase cst, uint stmt, _esdl__ProxyRoot proxy,
+  this(_esdl__ConstraintBase cst, uint stmt, _esdl__Proxy proxy,
        uint soft, CstLogicExpr expr, CstPredicate parent=null,
        CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...

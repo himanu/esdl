@@ -10,6 +10,7 @@ import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp,
   CstUnaryOp, CstSliceOp, writeHexString;
 
 import esdl.rand.base;
+import esdl.rand.proxy: _esdl__Proxy;
 import esdl.data.bvec: isBitVector, toBitVec;
 import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
