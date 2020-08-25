@@ -203,20 +203,20 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
   }
   else {
     alias Q = typeof (P.tupleof[I]);
-    static if (is (Q == CstVecIdx!(L, RAND, N, IDX, P),
-		   L, rand RAND, int N, int IDX, P)) {
+    static if (is (Q == CstVecIdx!(L, RAND, N, IDX, P, PIDX),
+		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
 	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
 	}
       }
     }
-    static if (is (Q == CstObjIdx!(L, RAND, N, IDX, P),
-		   L, rand RAND, int N, int IDX, P)) {
+    static if (is (Q == CstObjIdx!(L, RAND, N, IDX, P, PIDX),
+		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
-	static if (is (L == U*, U) && is(U == struct)) {
+	static if (is (L == struct)) {
 	  if (p.tupleof[I] !is null) {
-	    p.tupleof[I]._esdl__setValRef(* (p._esdl__outer.tupleof[IDX]));
+	    p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
 	  }
 	}
 	else {
@@ -226,16 +226,16 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
 	}
       }
     }
-    static if (is (Q == CstVecArrIdx!(L, RAND, N, IDX, P),
-		   L, rand RAND, int N, int IDX, P)) {
+    static if (is (Q == CstVecArrIdx!(L, RAND, N, IDX, P, PIDX),
+		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
 	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
 	}
       }
     }
-    static if (is (Q == CstObjArrIdx!(L, RAND, N, IDX, P),
-		   L, rand RAND, int N, int IDX, P)) {
+    static if (is (Q == CstObjArrIdx!(L, RAND, N, IDX, P, PIDX),
+		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
 	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);

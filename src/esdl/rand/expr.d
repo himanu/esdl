@@ -571,7 +571,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
       else {
 	newVal._setNthWord(val, 0);
       }
-
+      assert (getRef() !is null);
       if (newVal != *(getRef())) {
 	_valueChanged = true;
       }

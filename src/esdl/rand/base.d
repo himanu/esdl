@@ -1249,8 +1249,8 @@ class CstVisitorPredicate: CstPredicate
        CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...
        ) {
-    import std.stdio;
-    writeln("Creating a visitor predicate: ", cst.name());
+    // import std.stdio;
+    // writeln("Creating a visitor predicate: ", cst.name());
     super(cst, stmt, proxy, soft, expr, parent, unrollIter, unrollIterVal);
   }
 
@@ -1259,8 +1259,8 @@ class CstVisitorPredicate: CstPredicate
   }
 
   override void unroll(CstIterator iter) {
-    import std.stdio;
-    writeln("Unrolling Visitor");
+    // import std.stdio;
+    // writeln("Unrolling Visitor");
     assert (iter is _iters[0]);
 
     if (! iter.isUnrollable()) {

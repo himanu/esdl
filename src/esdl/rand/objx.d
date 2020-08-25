@@ -1,4 +1,4 @@
- module esdl.rand.objx;
+module esdl.rand.objx;
 
 import esdl.data.bvec;
 import esdl.data.bstr;
@@ -55,8 +55,9 @@ mixin template CstObjMixin() {
     }
   }
   final override void visit() {
-    import std.stdio;
-    writeln("Visiting: ", this.fullName());
+    assert (this.getRef() !is null);
+    _esdl__setValRef(this.getRef());
+    _esdl__doConstrain(cast (_esdl__ProxyRoot) getProxyRoot());
   }
 }
 
@@ -167,14 +168,10 @@ class CstObject(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
 	  return _esdl__getRef();
 	}
       }
-      else static if (is (LEAF == class) ||
-		      (is (LEAF == U*, U) && is (U == struct))) {
-	LEAF getRef() {
+      else {
+	LEAF getRef() {	// 
 	  return _esdl__getRef();
 	}
-      }
-      else {
-	static assert (false);
       }
     }
 
@@ -281,7 +278,7 @@ class CstObject(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	  }
 	}
       }
-      else static if (is (LEAF == class)) {
+      else {
 	LEAF getRef() {
 	  if (_indexExpr) {
 	    return _parent.getRef(cast(size_t) _indexExpr.evaluate());
@@ -290,9 +287,6 @@ class CstObject(V, rand R, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
 	    return _parent.getRef(this._pindex);
 	  }
 	}
-      }
-      else {
-	static assert (false);
       }
 
       void setDomainContext(CstPredicate pred,
@@ -612,14 +606,21 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
 
   static private auto getRef(A, N...)(ref A arr, N indx)
     if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
-      static if (N.length == 1) return &(arr[indx[0]]);
+      static if (N.length == 1) {
+	static if (is (LEAF == struct)) {
+	  return &(arr[cast(size_t) (indx[0])]);
+	}
+	else {
+	  return (arr[cast(size_t) (indx[0])]);
+	}
+      }
       else {
-	return getRef(arr[indx[0]], indx[1..$]);
+	return getRef(arr[cast(size_t) (indx[0])], indx[1..$]);
       }
     }
 
   auto getRef(J...)(J indx) if(isIntegral!(J[0])) {
-    return getRef(*_var, cast(size_t) indx);
+    return getRef(*_var, indx);
   }
 
   void setLen(N...)(size_t v, N indx) {
@@ -766,7 +767,14 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
 
   static private auto getRef(A, N...)(ref A arr, N indx)
     if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
-      static if (N.length == 1) return &(arr[indx[0]]);
+      static if (N.length == 1) {
+	static if (is (LEAF == struct)) {
+	  return &(arr[indx[0]]);
+	}
+	else {
+	  return (arr[indx[0]]);
+	}
+      }
       else {
 	return getRef(arr[indx[0]], indx[1..$]);
       }
@@ -783,13 +791,13 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
   }
 
   void setDomainContext(CstPredicate pred,
-		     ref CstDomain[] rnds,
-		     ref CstDomain[] vars,
-		     ref CstValue[] vals,
-		     ref CstIterator[] iters,
-		     ref CstDomain[] idxs,
-		     ref CstDomain[] bitIdxs,
-		     ref CstDomain[] deps) {
+			ref CstDomain[] rnds,
+			ref CstDomain[] vars,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstDomain[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstDomain[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
     // when indexExpr is not contant, but an expression)
