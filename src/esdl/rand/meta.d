@@ -830,7 +830,7 @@ auto _esdl__arg_proxy(L, S)(string name, ref L arg, S parent) {
 	     isBoolean!L || isSomeChar!L || is (L == enum)) {
     // import std.stdio;
     // writeln("Creating VarVec, ", name);
-    return new CstVecIdx!(L, rand(true, true), 0, _esdl__ARG, -1)(name, arg, parent);
+    return new CstVecIdx!(L, rand(true, true), 0, -1, _esdl__ARG, -1)(name, arg, parent);
   }
   else {
     static assert(false);

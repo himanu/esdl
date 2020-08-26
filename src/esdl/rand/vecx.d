@@ -77,14 +77,16 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
     super(name, var, parent);
   }
 
-  override CstVecExpr unroll(CstIterator iter, uint n) {
-    if (_parent !is _root) {
-      P uparent = cast(P)(_parent.unroll(iter, n));
-      assert (uparent !is null);
-      return uparent.tupleof[PIDX];
-    }
-    else {
-      return this;
+  static if (PIDX >= 0) {	// exclude randomize_with
+    override CstVecExpr unroll(CstIterator iter, uint n) {
+      if (_parent !is _root) {
+	P uparent = cast(P)(_parent.unroll(iter, n));
+	assert (uparent !is null);
+	return uparent.tupleof[PIDX];
+      }
+      else {
+	return this;
+      }
     }
   }
 
