@@ -136,6 +136,10 @@ abstract class _esdl__Proxy: CstObjectIntf
   Folder!(CstDomain, "solvedDomains") _solvedDomains;
   Folder!(CstPredGroup, "solvedGroups") _solvedGroups;
 
+  void addSolvedDomain(CstDomain domain) {
+    _solvedDomains ~= domain;
+  }
+
   // the integer variable _lap is incremented everytime a set of @rand
   // variables is made available for constraint solving. This 
   // variable is used for:
@@ -579,7 +583,7 @@ abstract class _esdl__Proxy: CstObjectIntf
   }
   
   void procNewPredicate(CstPredicate pred) {
-    pred.randomizeDeps();
+    pred.randomizeDeps(this);
     if (pred._iters.length > 0) {
       _toRolledPreds ~= pred;
     }
@@ -592,7 +596,7 @@ abstract class _esdl__Proxy: CstObjectIntf
   }
 
   void procUnrolledPredicate(CstPredicate pred) {
-    pred.randomizeDeps();
+    pred.randomizeDeps(this);
     if (pred._iters.length == 0) {
       if (pred.isResolved(true)) {
 	procResolved(pred);

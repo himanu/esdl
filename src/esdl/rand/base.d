@@ -148,11 +148,12 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
 
   abstract long value();
   
-  final void randIfNoCst() {
+  final void randomizeIfUnconstrained(_esdl__Proxy proxy) {
     if (! isSolved()) {
       if (_rndPreds.length == 0) {
 	_esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
 	markSolved();
+	proxy.addSolvedDomain(this);
 	execCbs();
       }
     }
@@ -798,11 +799,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return _rnds;
   }
 
-  final void randomizeDepsRolled() {
-    for (size_t i=0; i!=_uwLength; ++i) {
-      _uwPreds[i].randomizeDeps();
-    }
-  }
+  // final void randomizeDepsRolled() {
+  //   for (size_t i=0; i!=_uwLength; ++i) {
+  //     _uwPreds[i].randomizeDeps();
+  //   }
+  // }
 
   // final void markAsUnresolvedRolled(uint lap) {
   //   if (this.isRolled()) {
@@ -937,10 +938,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
     return _expr;
   }
 
-  void randomizeDeps() {
-    foreach (dep; _deps ~ _idxs) {
-      dep.randIfNoCst();
-    }
+  void randomizeDeps(_esdl__Proxy proxy) {
+    foreach (dep; _deps) dep.randomizeIfUnconstrained(proxy);
+    foreach (dep; _idxs) dep.randomizeIfUnconstrained(proxy);
   }
 
   bool hasUpdate() {

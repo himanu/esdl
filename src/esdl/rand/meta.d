@@ -614,9 +614,15 @@ class _esdl__ProxyNoRand(_esdl__T)
 
 	_esdl__T* _esdl__outer;
 	_esdl__T* _esdl__getRef() {return _esdl__outer;}
-	void _esdl__setValRef(ref _esdl__T outer) {
+	void _esdl__setValRef()(ref _esdl__T outer) {
 	  if (_esdl__outer !is &outer) {
 	    _esdl__outer = &outer;
+	    this._esdl__doSetOuter(true);
+	  }
+	}
+	void _esdl__setValRef()(_esdl__T* outer) {
+	  if (_esdl__outer !is outer) {
+	    _esdl__outer = outer;
 	    this._esdl__doSetOuter(true);
 	  }
 	}

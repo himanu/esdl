@@ -386,10 +386,11 @@ mixin template CstObjArrMixin()
       }
     }
     else if (v < _forcedLength) {
-      import std.string: format;
-      assert(false,
-	     format("Trying to set length %d, while it should be a minimum %d",
-		    v, _forcedLength));
+      return;
+      // import std.string: format;
+      // assert(false,
+      // 	     format("Trying to set length %d, while it should be a minimum %d",
+      // 		    v, _forcedLength));
     }
     size_t currLen = _elems.length;
     if (currLen < v) {
