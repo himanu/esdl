@@ -662,7 +662,7 @@ struct CstParser {
     int mappedCursor = 0;
     int mappedPrevCursor = 0;
     if (idChain[0] != -1) {
-      fill("_esdl__rand_proxy!(");
+      fill("_esdl__sym!(");
       int indx = idMatch(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
       if (indx == -1) {
 	fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
@@ -685,13 +685,13 @@ struct CstParser {
       fill(CST[srcTag+idChain[0]..srcTag+idChain[1]]);
       fill("\", this.outer)");
       while (parseMappedChain(mapped, mappedCursor)) {
-	fill("._esdl__rand_term_chain!(\"");
+	fill("._esdl__sym!(\"");
 	fill(mapped[mappedPrevCursor..mappedCursor]);
 	fill("\")");
 	mappedPrevCursor = ++mappedCursor;
       }
       if (idChain[2] != -1) {
-	fill("._esdl__rand_term_chain!(");
+	fill("._esdl__sym!(");
       }
       for (size_t i=1; i != MaxHierDepth-1; ++i) {
 	if (idChain[2*i] == -1) break;
@@ -727,7 +727,7 @@ struct CstParser {
     else {
       srcTag = parseLiteral();
       if (srcCursor > srcTag) {
-	fill("_esdl__rand_proxy!(");
+	fill("_esdl__sym!(");
 	fill(CST[srcTag..srcCursor]);
 	fillDeclaration(CST[srcTag..srcCursor]);
 	fill(")(\"");

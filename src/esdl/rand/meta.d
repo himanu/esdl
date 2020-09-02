@@ -279,7 +279,7 @@ template _esdl__RandDeclVars(T, int I, PT, int PI)
 	enum string _esdl__RandDeclVars =
 	  "  _esdl__RandProxyType!(_esdl__T, " ~ I.stringof ~
 	  ", _esdl__PROXYT, " ~ PI.stringof ~ ") " ~
-	  __traits(identifier, T.tupleof[I]) ~ ";\n" ~
+          __traits(identifier, T.tupleof[I]) ~ ";\n" ~
 	  _esdl__RandDeclVars!(T, I+1, PT, PI+1);
       }
     }
@@ -745,7 +745,7 @@ mixin template _esdl__ProxyMixin()
   }
 }
 
-auto ref _esdl__rand_proxy(L)(ref L l, string name,
+auto ref _esdl__sym(L)(ref L l, string name,
 			      _esdl__Proxy parent) {
   import std.traits: isIntegral, isBoolean, isArray, isSomeChar;
   static if (isIntegral!L || isBitVector!L ||
@@ -767,7 +767,7 @@ auto ref _esdl__rand_proxy(L)(ref L l, string name,
   }
 }
 
-auto _esdl__rand_proxy(L)(L l, string name,
+auto _esdl__sym(L)(L l, string name,
 			  _esdl__Proxy parent)
   if (isIntegral!L || isBitVector!L ||
       isBoolean!L || isSomeChar!L || is (L == enum)) {
@@ -787,12 +787,12 @@ struct _esdl__rand_type_proxy(T, P)
 }
 
 // V is a type
-auto _esdl__rand_proxy(V, S)(string name, S parent) {
+auto _esdl__sym(V, S)(string name, S parent) {
   return _esdl__rand_type_proxy!(V, S)(name, parent);
 }
 
 // or else
-auto _esdl__rand_proxy(alias V, S)(string name, S parent) {
+auto _esdl__sym(alias V, S)(string name, S parent) {
   alias L = typeof(V);
   import std.traits: isIntegral, isBoolean, isArray, isSomeChar;
   static if (isIntegral!L || isBitVector!L ||

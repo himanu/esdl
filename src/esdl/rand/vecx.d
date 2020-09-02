@@ -189,7 +189,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) =
 	}
       }
       
-      auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
+      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) {
 	  assert (indx.length == 0);
@@ -379,7 +379,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) =
 	}
       }
 
-      auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
+      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) {
 	  assert (indx.length == 0);
@@ -722,11 +722,11 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     }
   }
 
-  auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
+  auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
   {
     static if (S.length == 0) return this;
     else static if (S[0] == "") {
-      return this.opIndex(indx[0])._esdl__rand_term_chain!(S[1..$])(indx[1..$]);
+      return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
     }
     else {
       static assert (S.length == 1);
@@ -886,11 +886,11 @@ class CstVecArr(V, rand RAND_ATTR, int N)
     }
   }
 
-  auto _esdl__rand_term_chain(S ...)(CstRangeExpr[] indx=[])
+  auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
   {
     static if (S.length == 0) return this;
     else static if (S[0] == "") {
-      return this.opIndex(indx[0])._esdl__rand_term_chain!(S[1..$])(indx[1..$]);
+      return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
     }
     else {
       static assert (S.length == 1);
