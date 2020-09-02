@@ -561,9 +561,13 @@ mixin template CstVecArrMixin()
     return this[_esdl__iter()];
   }
 
-  CstIterator _esdl__iter() {
+  final bool _esdl__isVecArray() {return true;}
+  final CstIterator _esdl__iter() {
     CstVecIterator!RV iter = arrLen.makeIterVar();
     return iter;
+  }
+  final CstVecIntf _esdl__getChild(uint n) {
+    return this[n];
   }
 
   CstVecLen!RV length() {

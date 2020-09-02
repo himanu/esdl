@@ -782,14 +782,14 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
     }
   }
   
-  override void registerVarPred(CstPredicate varPred) {
-    foreach (pred; _varPreds) {
-      if (pred is varPred) {
-	return;
-      }
-    }
-    _varPreds ~= varPred;
-  }
+  // override void registerVarPred(CstPredicate varPred) {
+  //   foreach (pred; _varPreds) {
+  //     if (pred is varPred) {
+  // 	return;
+  //     }
+  //   }
+  //   _varPreds ~= varPred;
+  // }
   
   override void registerDepPred(CstDepCallback depCb) {
     foreach (cb; _depCbs) {

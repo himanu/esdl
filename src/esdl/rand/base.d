@@ -24,7 +24,12 @@ interface CstVarIntf {
   string fullName();
 }
 
-interface CstVecIntf: CstVarIntf {}
+interface CstVecIntf: CstVarIntf {
+  bool _esdl__isVecArray();
+  CstIterator _esdl__iter();
+  CstVecIntf _esdl__getChild(uint n);
+  // void visit();			// when an object is unrolled
+}
 
 interface CstVectorIntf: CstVecIntf {}
 interface CstVecArrIntf: CstVecIntf {}
@@ -138,9 +143,14 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool hasChanged();
   abstract bool isStatic();
   abstract void registerRndPred(CstPredicate rndPred);  
-  abstract void registerVarPred(CstPredicate varPred);  
+  // abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
+
+  // CstVecIntf
+  final bool _esdl__isVecArray() {return false;}
+  final CstIterator _esdl__iter() {return null;}
+  final CstVecIntf _esdl__getChild(uint n) {assert (false);}
 
   bool _isDist;
   final bool isDist() { return _isDist; }
@@ -180,7 +190,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   CstDepCallback[] _depCbs;
 
   CstPredicate[] _rndPreds;
-  CstPredicate[] _varPreds;
+  // CstPredicate[] _varPreds;
 
   IntRS _rangeSet;
   CstPredicate [] getRandPreds(){
@@ -880,7 +890,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	_dynRnds ~= rnd;
       }
     }
-    foreach (var; _vars) var.registerVarPred(this);
+    // foreach (var; _vars) var.registerVarPred(this);
 
     if (! this.isVisitor()) {
       assert (_rnds.length != 0, this.describe());

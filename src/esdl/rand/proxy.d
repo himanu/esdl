@@ -103,16 +103,18 @@ abstract class _esdl__Proxy: CstObjectIntf
   // only the root proxy gets a null name, other component proxies override
   string fullName() {return "";}
   string name() {return "";}
-  bool _esdl__isObjArray() {return false;}
-  CstIterator _esdl__iter() {return null;}
-  CstObjIntf _esdl__getChild(uint n) {assert (false);}
-  void visit() {}		// when an object is unrolled
   bool isRand() {assert (false);}		// when an object is unrolled
 
   _esdl__Proxy getProxyRoot() {
     if (_root is null) {return this;}
     else return _root;
   }
+
+  // CstObjIntf
+  final bool _esdl__isObjArray() {return false;}
+  final CstIterator _esdl__iter() {return null;}
+  final CstObjIntf _esdl__getChild(uint n) {assert (false);}
+  void visit() {}		// when an object is unrolled
 
   CstSolver[string] _solvers;
 
