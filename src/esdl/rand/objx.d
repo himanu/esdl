@@ -2,13 +2,13 @@ module esdl.rand.objx;
 
 import esdl.data.bvec;
 import esdl.data.bstr;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
+  isDynamicArray;
 
 import esdl.rand.misc;
 import esdl.rand.intr;
-import esdl.rand.base: CstVecPrim, CstVecExpr,
-  CstIterator, DomType, CstDomain, CstObjIntf,
-  CstLogicExpr, CstPredicate, CstObjectIntf, CstObjArrIntf;
+import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType, CstDomain,
+  CstLogicExpr, CstPredicate, CstObjIntf, CstObjectIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
