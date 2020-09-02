@@ -55,11 +55,16 @@ template _esdl__RandProxyType(T, int I, P, int PI)
   alias L = typeof(T.tupleof[I]);
   static if (isArray!L) alias E = LeafElementType!L;
   enum rand RAND = getRandAttr!(T, I);
-  static if (isArray!L && (isBitVector!E ||
-			   isIntegral!E ||
-			   isBoolean!E ||
-			   isSomeChar!E ||
-			   is (E == enum))) {
+  static if ((! RAND.hasProxy()) ||
+	     _esdl__TypeHasNorandAttr!L ||
+	     (is (L: _esdl__Norand))) {
+    alias _esdl__RandProxyType = _esdl__UNDEFINED;
+  }
+  else static if (isArray!L && (isBitVector!E ||
+				isIntegral!E ||
+				isBoolean!E ||
+				isSomeChar!E ||
+				is (E == enum))) {
     alias _esdl__RandProxyType = CstVecArrIdx!(L, RAND, 0, I, P, PI);
   }
   else static if (isBitVector!L || isIntegral!L ||
@@ -865,7 +870,7 @@ template _esdl__ProxyBase(T) {
   static if (is (T == class) &&
 	     is (T B == super) &&
 	     is (B[0] == class) &&
-	     (! hasNorandHierAttr!(B[0])) &&
+	     (! _esdl__TypeHasNorandAttr!(B[0])) &&
 	     (! is (B[0] == Object))) {
     alias U = B[0];
     // check if the base class has Randomization

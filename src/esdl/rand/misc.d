@@ -251,13 +251,18 @@ template _esdl__ArrOrder(T, int I, int N=0) {
 //   }
 // }
 
-template hasNorandHierAttr(T) {
-  enum rand RAND = scanRandAttr!(__traits(getAttributes, T));
-  static if (RAND.hasProxy()) {
-    enum bool hasNorandHierAttr = false;
+template _esdl__TypeHasNorandAttr(T) {
+  static if (is (T == class) || is (T == struct)) {
+    enum rand RAND = scanRandAttr!(__traits(getAttributes, T));
+    static if (RAND.hasProxy()) {
+      enum bool _esdl__TypeHasNorandAttr = false;
+    }
+    else {
+      enum bool _esdl__TypeHasNorandAttr = true;
+    }
   }
   else {
-    enum bool hasNorandHierAttr = true;
+      enum bool _esdl__TypeHasNorandAttr = false;
   }
 }
 
