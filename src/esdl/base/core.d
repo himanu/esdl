@@ -8598,7 +8598,7 @@ abstract class EsdlScheduler
     synchronized(this) {
       this._asyncNoticeQueue ~= e;
       this._asyncNoticeFlag = true;
-      assert(e._time >= _simulator._simTime,
+      assert (e._immediate || e._time >= _simulator._simTime,
 	     format("AsyncEventNotice time (%s) < Simulator time (%s)",
 		    e._time, _simulator._simTime));
       if (_asyncNoticeQueue.length == 1) {
