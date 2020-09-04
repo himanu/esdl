@@ -327,6 +327,9 @@ abstract class _esdl__Proxy: CstObjectIntf
     updateValDomains();
   }
 
+  private bool _solvedSome = false;
+  void solvedSome() { _solvedSome = true; }
+
   void solve() {
     assert(_root is this);
     this._cycle += 1;
@@ -339,7 +342,7 @@ abstract class _esdl__Proxy: CstObjectIntf
 	   _resolvedPreds.length > 0 ||
 	   _unresolvedPreds.length > 0 ||
 	   _toRolledPreds.length > 0) {
-      bool solvedSome = false;
+      _solvedSome = false;
 
       foreach (pred; _newPreds) procNewPredicate(pred);
       _newPreds.reset();
@@ -371,7 +374,7 @@ abstract class _esdl__Proxy: CstObjectIntf
 	  }
 	}
 	dist.uniform(distDom, _esdl__getRandGen());
-	solvedSome = true;
+	_solvedSome = true;
       }
       _resolvedDistPreds.reset();
       // import std.stdio;
@@ -398,6 +401,9 @@ abstract class _esdl__Proxy: CstObjectIntf
 	  pred.markAsUnresolved(_lap);
 	  _toRolledPreds ~= pred;
 	}
+	else {
+	  _solvedSome = true;
+	}
       }
 
       foreach (pred; _unresolvedPreds) {
@@ -422,7 +428,7 @@ abstract class _esdl__Proxy: CstObjectIntf
 	  _resolvedPreds ~= pred;
 	}
 	else {
-	  solvedSome = true;
+	  _solvedSome = true;
 	}
       }
       _toSolvePreds.reset();
@@ -443,7 +449,7 @@ abstract class _esdl__Proxy: CstObjectIntf
 	    _solvePreds ~= pred;
 	  }
 	  else {
-	    solvedSome = true;
+	    _solvedSome = true;
 	  }
 	}
       }
@@ -474,11 +480,11 @@ abstract class _esdl__Proxy: CstObjectIntf
 	  group.setGroupContext(pred);
 	  group.solve();
 	  _solvedGroups ~= group;
-	  solvedSome = true;
+	  _solvedSome = true;
 	}
       }
 
-      if (solvedSome is false) {
+      if (_solvedSome is false) {
 	import std.stdio;
 	if (_resolvedDistPreds.length > 0) {
 	  stderr.writeln("_resolvedDistPreds: ");

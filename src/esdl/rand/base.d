@@ -162,6 +162,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
     if (! isSolved()) {
       if (_rndPreds.length == 0) {
 	_esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
+	proxy.solvedSome();
 	markSolved();
 	proxy.addSolvedDomain(this);
 	execCbs();
