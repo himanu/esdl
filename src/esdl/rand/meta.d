@@ -527,8 +527,8 @@ mixin template Randomization()
       if (_esdl__proxyInst is null) {
 	_esdl__proxyInst =
 	  new _esdl__ProxyType(this, null);
-	static if(__traits(compiles, _esdl__setupProxy())) {
-	  _esdl__setupProxy();
+	static if(__traits(compiles, _esdl__seedRandom())) {
+	  _esdl__seedRandom();
 	}
       }
       else {
@@ -571,8 +571,8 @@ mixin template Randomization()
       if (_esdl__proxyInst is null) {
 	_esdl__proxyInst =
 	  new _esdl__ProxyType(this, null);
-	static if(__traits(compiles, _esdl__setupProxy())) {
-	  _esdl__setupProxy();
+	static if(__traits(compiles, _esdl__seedRandom())) {
+	  _esdl__seedRandom();
 	}
       }
       else {
