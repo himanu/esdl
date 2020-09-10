@@ -21,47 +21,6 @@ import std.algorithm.searching: canFind;
 import std.typetuple: staticIndexOf, TypeTuple;
 import std.traits: BaseClassesTuple; // required for staticIndexOf
 
-mixin template CstVecMixin() {
-  enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
-  alias LEAF = LeafElementType!V;
-
-  static if (HAS_RAND_ATTRIB) {
-    CstVecPrim[] _preReqs;
-  }
-
-  override string name() {
-    return _name;
-  }
-
-  override bool isRand() {
-    static if (HAS_RAND_ATTRIB) {
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-  void solveBefore(CstVecPrim other) {
-    static if (HAS_RAND_ATTRIB) {
-      other.addPreRequisite(this);
-    }
-    else {
-      assert (false);
-    }
-  }
-
-  void addPreRequisite(CstVecPrim domain) {
-    static if (HAS_RAND_ATTRIB) {
-      _preReqs ~= domain;
-    }
-    else {
-      assert (false);
-    }
-  }
-
-}
-
 // T represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVector represents
@@ -92,16 +51,63 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
 
 }
 
+class CstVectorBase(V, rand RAND_ATTR, int N)
+  if (_esdl__ArrOrder!(V, N) == 0):
+    CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim
+      {
+	enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
+	alias LEAF = LeafElementType!V;
+
+	static if (HAS_RAND_ATTRIB) {
+	  CstVecPrim[] _preReqs;
+	}
+
+	this(string name, _esdl__Proxy root) {
+	  // import std.stdio;
+	  // writeln("New vec ", name);
+	  super(name, root);
+	}
+
+	override string name() {
+	  return _name;
+	}
+
+	override bool isRand() {
+	  static if (HAS_RAND_ATTRIB) {
+	    return true;
+	  }
+	  else {
+	    return false;
+	  }
+	}
+
+	void solveBefore(CstVecPrim other) {
+	  static if (HAS_RAND_ATTRIB) {
+	    other.addPreRequisite(this);
+	  }
+	  else {
+	    assert (false);
+	  }
+	}
+
+	void addPreRequisite(CstVecPrim domain) {
+	  static if (HAS_RAND_ATTRIB) {
+	    _preReqs ~= domain;
+	  }
+	  else {
+	    assert (false);
+	  }
+	}
+      }
+
 // Primary Vector -- not an element of any array
-class CstVector(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim
+class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
+  CstVectorBase!(V, RAND_ATTR, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
       
-      mixin CstVecMixin;
-
       alias RV = typeof(this);
 
       V* _var;
@@ -207,15 +213,13 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0 && _esdl__ArrOrder!(V, N) =
     }
 
 // Array Element
-class CstVector(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) == 0):
-  CstVecDomain!(LeafElementType!V, RAND_ATTR), CstVecPrim
+class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
+  CstVectorBase!(V, RAND_ATTR, N)
     {
       import std.traits;
       import std.range;
       import esdl.data.bvec;
 
-      mixin CstVecMixin;
-      
       alias RV = typeof(this);
       alias P = CstVecArr!(V, RAND_ATTR, N-1);
       P _parent;
@@ -397,17 +401,36 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0 && _esdl__ArrOrder!(V, N) =
     }
 
 // Arrays (Multidimensional arrays as well)
-// template CstVecArrMixin(T, int I, int N=0)
-//   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstVecArrMixin = CstVecArrMixin!(typeof(T.tupleof[I]),
-// 					   getRandAttr!(T, I), N);
-// }
 
-mixin template CstVecArrMixin()
+class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
+		   P, int PIDX): CstVecArr!(V, RAND_ATTR, N)
 {
-  alias RV = typeof(this);
+  // static assert (is (typeof(this) == P.tupleof[PIDX]));
+  enum _esdl__ISRAND = RAND_ATTR.isRand();
+  enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
+  alias _esdl__PROXYT = P;
+  enum int _esdl__INDEX = IDX;
+  enum int _esdl__PINDEX = PIDX;
+  this(string name, ref V var, _esdl__Proxy parent) {
+    super(name, var, parent);
+  }
+
+  override RV unroll(CstIterator iter, uint n) {
+    // import std.stdio;
+    P parent = cast(P)(_parent);
+    assert (parent !is null);
+    assert (this is parent.tupleof[PIDX]);
+    // writeln("Unrolling: ", parent.tupleof[PIDX].stringof);
+    return this;
+  }
+}
+
+abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
+  if (_esdl__ArrOrder!(V, N) != 0): CstVecPrim, CstVecArrIntf
+{
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
   alias LEAF = LeafElementType!V;
+  alias RAND = RAND_ATTR;
 
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
@@ -419,9 +442,32 @@ mixin template CstVecArrMixin()
     alias EV = CstVecArr!(V, RAND_ATTR, N+1);
   }
 
+  alias RV = typeof(this);
+  
   EV[] _elems;
 
+  abstract EV createElem(uint i);
+  abstract EV createElem(CstVecExpr index);
+
+  abstract size_t getLen();
+  
+  // new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+  // 	 this, cast(uint) i);
+  
   string _name;
+
+  _esdl__Proxy _root;
+  
+  CstVecLen!(V, RAND_ATTR, N) _arrLen;
+
+  this(string name) {
+    _name = name;
+  }
+
+  _esdl__Proxy getProxyRoot() {
+    assert (_root !is null);
+    return _root;
+  }
 
   override string name() {
     return _name;
@@ -431,18 +477,13 @@ mixin template CstVecArrMixin()
     CstVecPrim[] _preReqs;
   }
 
-  override bool isRand() {
+  bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
     }
     else {
       return false;
     }
-  }
-
-  _esdl__Proxy getProxyRoot() {
-    assert (_root !is null);
-    return _root;
   }
 
   void solveBefore(CstVecPrim other) {
@@ -460,6 +501,20 @@ mixin template CstVecArrMixin()
     }
     else {
       assert(false);
+    }
+  }
+
+  uint maxArrLen() {
+    static if (HAS_RAND_ATTRIB) {
+      static if(isStaticArray!L) {
+	return cast(uint) L.length;
+      }
+      else {
+	return RAND_ATTR[N];
+      }
+    }
+    else {
+      return uint.max;
     }
   }
 
@@ -499,15 +554,22 @@ mixin template CstVecArrMixin()
       // 	     format("Trying to set length %d, while it should be a minimum %d",
       // 		    v, _forcedLength));
     }
-    size_t currLen = _elems.length;
+    uint currLen = cast(uint) _elems.length;
     if (currLen < v) {
       _elems.length = v;
-      for (size_t i=currLen; i!=v; ++i) {
+      for (uint i=currLen; i!=v; ++i) {
 	import std.conv: to;
-	_elems[i] = new EV(_name ~ "[#" ~ i.to!string() ~ "]",
-			   this, cast(uint) i);
+	_elems[i] = createElem(i);
       }
     }
+  }
+
+  CstVecLen!(V, RAND_ATTR, N) length() {
+    return _arrLen;
+  }
+
+  CstVecLen!(V, RAND_ATTR, N) arrLen() {
+    return _arrLen;
   }
 
   EV opIndex(CstVecExpr indexExpr) {
@@ -522,7 +584,7 @@ mixin template CstVecArrMixin()
       return _elems[index];
     }
     else {
-      return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
+      return createElem(indexExpr);
     }
   }
 
@@ -543,7 +605,7 @@ mixin template CstVecArrMixin()
 
   void _esdl__doRandomize(_esdl__RandGen randGen) {
     static if (HAS_RAND_ATTRIB) {
-      assert (arrLen !is null);
+      assert (_arrLen !is null);
       // if there is no constraint on the length of the array,
       // do not try to randomize it, since it will probably create a
       // big array which might lead to memory allocation issues
@@ -563,343 +625,317 @@ mixin template CstVecArrMixin()
 
   final bool _esdl__isVecArray() {return true;}
   final CstIterator _esdl__iter() {
-    CstVecIterator!RV iter = arrLen.makeIterVar();
+    CstVecIterator!(V, RAND_ATTR, N) iter = arrLen.makeIterVar();
     return iter;
   }
   final CstVecIntf _esdl__getChild(uint n) {
     return this[n];
   }
 
-  CstVecLen!RV length() {
-    return _arrLen;
-  }
-
-  CstVecLen!RV arrLen() {
-    return _arrLen;
-  }
-
-  uint maxArrLen() {
-    static if (HAS_RAND_ATTRIB) {
-      static if(isStaticArray!L) {
-	return cast(uint) L.length;
-      }
-      else {
-	return RAND_ATTR[N];
-      }
-    }
-    else {
-      return uint.max;
-    }
-  }
-
-}
-
-// template CstVecArr(T, int I, int N=0)
-//   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstVecArr = CstVecArr!(typeof(T.tupleof[I]), LeafElementType!(T.tupleof[I]),
-// 			       getRandAttr!(T, I), N);
-// }
-
-// Arrays (Multidimensional arrays as well)
-
-class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
-		   P, int PIDX): CstVecArr!(V, RAND_ATTR, N)
-{
-  // static assert (is (typeof(this) == P.tupleof[PIDX]));
-  enum _esdl__ISRAND = RAND_ATTR.isRand();
-  enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
-  alias _esdl__PROXYT = P;
-  enum int _esdl__INDEX = IDX;
-  enum int _esdl__PINDEX = PIDX;
-  this(string name, ref V var, _esdl__Proxy parent) {
-    super(name, var, parent);
-  }
-
-  override RV unroll(CstIterator iter, uint n) {
-    // import std.stdio;
-    P parent = cast(P)(_parent);
-    assert (parent !is null);
-    assert (this is parent.tupleof[PIDX]);
-    // writeln("Unrolling: ", parent.tupleof[PIDX].stringof);
-    return this;
-  }
 }
 
 // Primary Array
-class CstVecArr(V, rand RAND_ATTR, int N)
-  if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
-    CstVecPrim, CstVecArrIntf
-{
-  mixin CstVecArrMixin;
-  CstVecLen!RV _arrLen;
+class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
+  CstVecArrBase!(V, RAND_ATTR, N)
+    {
+      alias RV = typeof(this);
 
-  alias RAND=RAND_ATTR;
+      alias RAND=RAND_ATTR;
 
-  V* _var;
-  _esdl__Proxy _parent;
-  _esdl__Proxy _root;
+
+      V* _var;
+      _esdl__Proxy _parent;
     
-  void _esdl__setValRef(ref V var) {
-    _var = &var;
-  }
-      
-  this(string name, ref V var, _esdl__Proxy parent) {
-    _name = name;
-    _var = &var;
-    _parent = parent;
-    _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ "->length", this);
-  }
-
-  final bool isStatic() {
-    return true; 		// N == 0
-  }
-
-  final string fullName() {
-    if (_parent is _root) return _name;
-    else  
-      return _parent.fullName() ~ "." ~ name();
-  }
-      
-  RV getResolved() {
-    return this;
-  }
-
-  RV unroll(CstIterator iter, uint n) {
-    return this;
-  }
-
-  static private auto getRef(A, N...)(ref A arr, N indx)
-    if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
-      static if (N.length == 1) return &(arr[indx[0]]);
-      else {
-	return getRef(arr[indx[0]], indx[1..$]);
+      void _esdl__setValRef(ref V var) {
+	_var = &var;
       }
-    }
+      
+      this(string name, ref V var, _esdl__Proxy parent) {
+	super(name);
+	_var = &var;
+	_parent = parent;
+	_root = _parent.getProxyRoot();
+	_arrLen = new CstVecLen!(V, RAND_ATTR, N) (name ~ "->length", this);
+      }
 
-  auto getRef(J...)(J indx) if(isIntegral!(J[0])) {
-    return getRef(*_var, cast(size_t) indx);
-  }
+      final bool isStatic() {
+	return true; 		// N == 0
+      }
 
-  void setLen(N...)(size_t v, N indx) {
-    static if (HAS_RAND_ATTRIB) {
-      _setLen(*_var, v, indx);
-    }
-    else {
-      assert (false);
-    }
-  }
+      final string fullName() {
+	if (_parent is _root) return _name;
+	else  
+	  return _parent.fullName() ~ "." ~ name();
+      }
+      
+      RV getResolved() {
+	return this;
+      }
 
-  static private size_t getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
-    static if (N.length == 0) return arr.length;
-    else {
-      if (arr.length == 0) return 0;
-      else return getLen(arr[indx[0]], indx[1..$]);
-    }
-  }
+      RV unroll(CstIterator iter, uint n) {
+	return this;
+      }
 
-  size_t getLen(N...)(N indx) {
-    return getLen(*_var, indx);
-  }
+      static private auto getRef(A, N...)(ref A arr, N indx)
+	if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	  static if (N.length == 1) return &(arr[indx[0]]);
+	  else {
+	    return getRef(arr[indx[0]], indx[1..$]);
+	  }
+	}
 
-  void setDomainContext(CstPredicate pred,
-			ref CstDomain[] rnds,
-			ref CstDomain[] vars,
-			ref CstValue[] vals,
-			ref CstIterator[] iters,
-			ref CstDomain[] idxs,
-			ref CstDomain[] bitIdxs,
-			ref CstDomain[] deps) {
-    // arrlen should not be handled here. It is handled as part
-    // of the indexExpr in the elements when required (that is
-    // when indexExpr is not contant, but an expression)
+      auto getRef(J...)(J indx) if(isIntegral!(J[0])) {
+	return getRef(*_var, cast(size_t) indx);
+      }
+
+      void setLen(N...)(size_t v, N indx) {
+	static if (HAS_RAND_ATTRIB) {
+	  _setLen(*_var, v, indx);
+	}
+	else {
+	  assert (false);
+	}
+      }
+
+      static private size_t _getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
+	static if (N.length == 0) return arr.length;
+	else {
+	  if (arr.length == 0) return 0;
+	  else return _getLen(arr[indx[0]], indx[1..$]);
+	}
+      }
+
+      size_t _getLen(N...)(N indx) {
+	return _getLen(*_var, indx);
+      }
+
+      override size_t getLen() {
+	return _getLen();
+      }
+
+      void setDomainContext(CstPredicate pred,
+			    ref CstDomain[] rnds,
+			    ref CstDomain[] vars,
+			    ref CstValue[] vals,
+			    ref CstIterator[] iters,
+			    ref CstDomain[] idxs,
+			    ref CstDomain[] bitIdxs,
+			    ref CstDomain[] deps) {
+	// arrlen should not be handled here. It is handled as part
+	// of the indexExpr in the elements when required (that is
+	// when indexExpr is not contant, but an expression)
 	  
-    // auto iter = arrLen.makeIterVar();
-    // iters ~= iter;
+	// auto iter = arrLen.makeIterVar();
+	// iters ~= iter;
 
-    // no parent
-  }
+	// no parent
+      }
 
-  void markAsUnresolved(uint lap) {
-    foreach (elem; _elems) {
-      elem.markAsUnresolved(lap);
-    }
-  }
+      void markAsUnresolved(uint lap) {
+	foreach (elem; _elems) {
+	  elem.markAsUnresolved(lap);
+	}
+      }
 
-  auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
-  {
-    static if (S.length == 0) return this;
-    else static if (S[0] == "") {
-      return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
+      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
+      {
+	static if (S.length == 0) return this;
+	else static if (S[0] == "") {
+	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
+	}
+	else {
+	  static assert (S.length == 1);
+	  return __traits(getMember, this, S[0]);
+	}
+      }
+
+      override EV createElem(uint i) {
+	import std.conv: to;
+	return new EV(name() ~ "[#" ~ i.to!string() ~ "]",
+		      this, i);
+      }
+
+      override EV createElem(CstVecExpr index) {
+	return new EV(name() ~ "[#" ~ index.describe() ~ "]",
+		      this, index);
+      }
+
+      
     }
-    else {
-      static assert (S.length == 1);
-      return __traits(getMember, this, S[0]);
-    }
-  }
-}
 
 // Array that is elelment of another array
-class CstVecArr(V, rand RAND_ATTR, int N)
-  if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-    CstVecPrim, CstVecArrIntf
-{
-  mixin CstVecArrMixin;
-  import std.traits;
-  import std.range;
-  import esdl.data.bvec;
-  alias P = CstVecArr!(V, RAND_ATTR, N-1);
-  P _parent;
-  _esdl__Proxy _root;
-  CstVecExpr _indexExpr = null;
-  int _pindex = 0;
+class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
+  CstVecArrBase!(V, RAND_ATTR, N)
+    {
+      import std.traits;
+      import std.range;
+      import esdl.data.bvec;
+      alias P = CstVecArr!(V, RAND_ATTR, N-1);
+      P _parent;
+      CstVecExpr _indexExpr = null;
+      int _pindex = 0;
 
-  CstVecLen!RV _arrLen;
+      alias RV = typeof(this);
 
-  alias RAND=RAND_ATTR;
+      alias RAND=RAND_ATTR;
       
-  uint _resolvedCycle;	// cycle for which indexExpr has been resolved
-  RV _resolvedVec;
+      uint _resolvedCycle;	// cycle for which indexExpr has been resolved
+      RV _resolvedVec;
 
-  this(string name, P parent, CstVecExpr indexExpr) {
-    // import std.stdio;
-    // writeln("New ", name);
-    assert (parent !is null);
-    _name = name;
-    _parent = parent;
-    _indexExpr = indexExpr;
-    _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ "->length", this);
-  }
+      this(string name, P parent, CstVecExpr indexExpr) {
+	// import std.stdio;
+	// writeln("New ", name);
+	assert (parent !is null);
+	super(name);
+	_parent = parent;
+	_indexExpr = indexExpr;
+	_root = _parent.getProxyRoot();
+	_arrLen = new CstVecLen!(V, RAND_ATTR, N) (name ~ "->length", this);
+      }
 
-  this(string name, P parent, uint index) {
-    // import std.stdio;
-    // writeln("New ", name);
-    assert (parent !is null);
-    _name = name;
-    _parent = parent;
-    // _indexExpr = _esdl__cstVal(index);
-    _pindex = index;
-    _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ "->length", this);
-  }
+      this(string name, P parent, uint index) {
+	// import std.stdio;
+	// writeln("New ", name);
+	assert (parent !is null);
+	super(name);
+	_parent = parent;
+	// _indexExpr = _esdl__cstVal(index);
+	_pindex = index;
+	_root = _parent.getProxyRoot();
+	_arrLen = new CstVecLen!(V, RAND_ATTR, N) (name ~ "->length", this);
+      }
 
-  override bool opEquals(Object other) {
-    auto rhs = cast (RV) other;
-    if (rhs is null) return false;
-    else return (_parent == rhs._parent && _indexExpr == _indexExpr);
-  }
+      override bool opEquals(Object other) {
+	auto rhs = cast (RV) other;
+	if (rhs is null) return false;
+	else return (_parent == rhs._parent && _indexExpr == _indexExpr);
+      }
       
-  final bool isStatic() {
-    return ((_indexExpr is null  ||
-	     _indexExpr.isIterator ||
-	     _indexExpr.isConst) &&
-	    _parent.isStatic());
-  }
+      final bool isStatic() {
+	return ((_indexExpr is null  ||
+		 _indexExpr.isIterator ||
+		 _indexExpr.isConst) &&
+		_parent.isStatic());
+      }
 
-  final string fullName() {
-    return _parent.fullName() ~ "." ~ name();
-  }
+      final string fullName() {
+	return _parent.fullName() ~ "." ~ name();
+      }
       
-  RV getResolved() {
-    if (_resolvedCycle != getProxyRoot()._cycle) {
-      auto parent = _parent.getResolved();
-      if (_indexExpr) {
-	_resolvedVec = parent[_indexExpr.evaluate()];
+      RV getResolved() {
+	if (_resolvedCycle != getProxyRoot()._cycle) {
+	  auto parent = _parent.getResolved();
+	  if (_indexExpr) {
+	    _resolvedVec = parent[_indexExpr.evaluate()];
+	  }
+	  else {
+	    _resolvedVec = parent[_pindex];
+	  }
+	  _resolvedCycle = getProxyRoot()._cycle;
+	}
+	return _resolvedVec;
       }
-      else {
-	_resolvedVec = parent[_pindex];
+
+      RV unroll(CstIterator iter, uint n) {
+	if (_indexExpr) {
+	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
+	}
+	else {
+	  return _parent.unroll(iter,n)[_pindex];
+	}
       }
-      _resolvedCycle = getProxyRoot()._cycle;
-    }
-    return _resolvedVec;
-  }
 
-  RV unroll(CstIterator iter, uint n) {
-    if (_indexExpr) {
-      return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
-    }
-    else {
-      return _parent.unroll(iter,n)[_pindex];
-    }
-  }
-
-  void setLen(N...)(size_t v, N indx) {
-    static if (HAS_RAND_ATTRIB) {
-      _parent.setLen(v, _pindex, indx);
-    }
-  }
-
-  static private size_t getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
-    static if (N.length == 0) return arr.length;
-    else {
-      return getLen(arr[indx[0]], indx[1..$]);
-    }
-  }
-
-  size_t getLen(N...)(N indx) {
-    return _parent.getLen(_pindex, indx);
-  }
-
-  static private auto getRef(A, N...)(ref A arr, N indx)
-    if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
-      static if (N.length == 1) return &(arr[indx[0]]);
-      else {
-	return getRef(arr[indx[0]], indx[1..$]);
+      void setLen(N...)(size_t v, N indx) {
+	static if (HAS_RAND_ATTRIB) {
+	  _parent.setLen(v, _pindex, indx);
+	}
       }
-    }
 
-  auto getRef(N...)(N indx) if (isIntegral!(N[0])) {
-    if (_indexExpr) {
-      assert (_indexExpr.isConst());
-      return _parent.getRef(cast (size_t) _indexExpr.evaluate(), indx);
-    }
-    else {
-      return _parent.getRef(this._pindex, indx);
-    }
-  }
+      static private size_t _getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
+	static if (N.length == 0) return arr.length;
+	else {
+	  return _getLen(arr[indx[0]], indx[1..$]);
+	}
+      }
 
-  void setDomainContext(CstPredicate pred,
-			ref CstDomain[] rnds,
-			ref CstDomain[] vars,
-			ref CstValue[] vals,
-			ref CstIterator[] iters,
-			ref CstDomain[] idxs,
-			ref CstDomain[] bitIdxs,
-			ref CstDomain[] deps) {
-    // arrlen should not be handled here. It is handled as part
-    // of the indexExpr in the elements when required (that is
-    // when indexExpr is not contant, but an expression)
+      size_t _getLen(N...)(N indx) {
+	return _parent._getLen(_pindex, indx);
+      }
+
+      override size_t getLen() {
+	return _getLen();
+      }
+
+      static private auto getRef(A, N...)(ref A arr, N indx)
+	if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	  static if (N.length == 1) return &(arr[indx[0]]);
+	  else {
+	    return getRef(arr[indx[0]], indx[1..$]);
+	  }
+	}
+
+      auto getRef(N...)(N indx) if (isIntegral!(N[0])) {
+	if (_indexExpr) {
+	  assert (_indexExpr.isConst());
+	  return _parent.getRef(cast (size_t) _indexExpr.evaluate(), indx);
+	}
+	else {
+	  return _parent.getRef(this._pindex, indx);
+	}
+      }
+
+      void setDomainContext(CstPredicate pred,
+			    ref CstDomain[] rnds,
+			    ref CstDomain[] vars,
+			    ref CstValue[] vals,
+			    ref CstIterator[] iters,
+			    ref CstDomain[] idxs,
+			    ref CstDomain[] bitIdxs,
+			    ref CstDomain[] deps) {
+	// arrlen should not be handled here. It is handled as part
+	// of the indexExpr in the elements when required (that is
+	// when indexExpr is not contant, but an expression)
 	  
-    // auto iter = arrLen.makeIterVar();
-    // iters ~= iter;
-    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    if (_indexExpr !is null) {
-      _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
-    }
-  }
+	// auto iter = arrLen.makeIterVar();
+	// iters ~= iter;
+	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+	if (_indexExpr !is null) {
+	  _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
+	}
+      }
 
-  void markAsUnresolved(uint lap) {
-    if (isStatic()) {
-      foreach (elem; _elems) {
-	elem.markAsUnresolved(lap);
+      void markAsUnresolved(uint lap) {
+	if (isStatic()) {
+	  foreach (elem; _elems) {
+	    elem.markAsUnresolved(lap);
+	  }
+	}
+	else {
+	  _parent.markAsUnresolved(lap);
+	}
+      }
+
+      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
+      {
+	static if (S.length == 0) return this;
+	else static if (S[0] == "") {
+	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
+	}
+	else {
+	  static assert (S.length == 1);
+	  return __traits(getMember, this, S[0]);
+	}
+      }
+
+      override EV createElem(uint i) {
+	import std.conv: to;
+	return new EV(name() ~ "[#" ~ i.to!string() ~ "]",
+		      this, i);
+      }
+
+      override EV createElem(CstVecExpr index) {
+	return new EV(name() ~ "[#" ~ index.describe() ~ "]",
+		      this, index);
       }
     }
-    else {
-      _parent.markAsUnresolved(lap);
-    }
-  }
-
-  auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
-  {
-    static if (S.length == 0) return this;
-    else static if (S[0] == "") {
-      return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
-    }
-    else {
-      static assert (S.length == 1);
-      return __traits(getMember, this, S[0]);
-    }
-  }
-}
 
