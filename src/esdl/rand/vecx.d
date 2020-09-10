@@ -442,7 +442,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     alias EV = CstVecArr!(V, RAND_ATTR, N+1);
   }
 
-  alias RV = typeof(this);
+  alias RV = CstVecArr!(V, RAND_ATTR, N);
   
   EV[] _elems;
 
@@ -458,7 +458,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   _esdl__Proxy _root;
   
-  CstVecLen!(V, RAND_ATTR, N) _arrLen;
+  CstVecLen!(RV) _arrLen;
 
   this(string name) {
     _name = name;
@@ -564,11 +564,11 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     }
   }
 
-  CstVecLen!(V, RAND_ATTR, N) length() {
+  CstVecLen!(RV) length() {
     return _arrLen;
   }
 
-  CstVecLen!(V, RAND_ATTR, N) arrLen() {
+  CstVecLen!(RV) arrLen() {
     return _arrLen;
   }
 
@@ -625,7 +625,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   final bool _esdl__isVecArray() {return true;}
   final CstIterator _esdl__iter() {
-    CstVecIterator!(V, RAND_ATTR, N) iter = arrLen.makeIterVar();
+    CstVecIterator!(RV) iter = arrLen.makeIterVar();
     return iter;
   }
   final CstVecIntf _esdl__getChild(uint n) {
@@ -655,7 +655,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	_var = &var;
 	_parent = parent;
 	_root = _parent.getProxyRoot();
-	_arrLen = new CstVecLen!(V, RAND_ATTR, N) (name ~ "->length", this);
+	_arrLen = new CstVecLen!(RV) (name ~ "->length", this);
       }
 
       final bool isStatic() {
@@ -790,7 +790,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_parent = parent;
 	_indexExpr = indexExpr;
 	_root = _parent.getProxyRoot();
-	_arrLen = new CstVecLen!(V, RAND_ATTR, N) (name ~ "->length", this);
+	_arrLen = new CstVecLen!(RV) (name ~ "->length", this);
       }
 
       this(string name, P parent, uint index) {
@@ -802,7 +802,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
 	_root = _parent.getProxyRoot();
-	_arrLen = new CstVecLen!(V, RAND_ATTR, N) (name ~ "->length", this);
+	_arrLen = new CstVecLen!(RV) (name ~ "->length", this);
       }
 
       override bool opEquals(Object other) {

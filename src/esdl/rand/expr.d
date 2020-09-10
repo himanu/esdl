@@ -10,8 +10,6 @@ import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp,
   CstUnaryOp, CstSliceOp, writeHexString;
 
 import esdl.rand.base;
-import esdl.rand.vecx: CstVecArr;
-
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.data.bvec: isBitVector, toBitVec;
 import esdl.data.charbuf;
@@ -916,10 +914,8 @@ abstract class CstLogicTerm: CstLogicExpr
 
 }
 
-class CstVecIterator(V, rand RAND, int N): CstIterator
+class CstVecIterator(RV): CstIterator
 {
-  alias RV = CstVecArr!(V, RAND, N);
-
   RV _arrVar;
 
   RV arrVar() {
@@ -1022,14 +1018,12 @@ class CstVecIterator(V, rand RAND, int N): CstIterator
   }
 }
 
-class CstVecLen(V, rand RAND, int N): CstVecDomain!(uint, RAND), CstVecPrim
+class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 {
-
-  alias RV = CstVecArr!(V, RAND, N);
 
   enum HAS_RAND_ATTRIB = RV.RAND.isRand();
 
-  CstVecIterator!(V, RAND, N) _iterVar;
+  CstVecIterator!RV _iterVar;
 
   RV _parent;
 
@@ -1050,7 +1044,7 @@ class CstVecLen(V, rand RAND, int N): CstVecDomain!(uint, RAND), CstVecPrim
     super(name, parent.getProxyRoot());
     _name = name;
     _parent = parent;
-    _iterVar = new CstVecIterator!(V, RAND, N) (_parent);
+    _iterVar = new CstVecIterator!RV(_parent);
   }
 
   ~this() { }
@@ -1059,7 +1053,7 @@ class CstVecLen(V, rand RAND, int N): CstVecDomain!(uint, RAND), CstVecPrim
     return _parent.getProxyRoot();
   }
 
-  override CstVecLen!(V, RAND, N) getResolved() { // always self
+  override CstVecLen!RV getResolved() { // always self
     return this;
   }
 
@@ -1099,17 +1093,17 @@ class CstVecLen(V, rand RAND, int N): CstVecDomain!(uint, RAND), CstVecPrim
     return this.to!string();
   }
 
-  void iterVar(CstVecIterator!(V, RAND, N) var) {
+  void iterVar(CstVecIterator!RV var) {
     _iterVar = var;
   }
 
-  CstVecIterator!(V, RAND, N) iterVar() {
+  CstVecIterator!RV iterVar() {
     return _iterVar;
   }
 
-  CstVecIterator!(V, RAND, N) makeIterVar() {
+  CstVecIterator!RV makeIterVar() {
     if(_iterVar is null) {
-      _iterVar = new CstVecIterator!(V, RAND, N) (_parent);
+      _iterVar = new CstVecIterator!RV(_parent);
     }
     return _iterVar;
   }
