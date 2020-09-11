@@ -11,8 +11,8 @@ import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
   CstDomain, CstPredicate, CstVecIntf, CstVectorIntf, CstVecArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
-import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
+import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
+  CstVecTerm, CstArrIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
@@ -458,7 +458,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   _esdl__Proxy _root;
   
-  CstVecLen!(RV) _arrLen;
+  CstArrLength!(RV) _arrLen;
 
   this(string name) {
     _name = name;
@@ -564,11 +564,11 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     }
   }
 
-  CstVecLen!(RV) length() {
+  CstArrLength!(RV) length() {
     return _arrLen;
   }
 
-  CstVecLen!(RV) arrLen() {
+  CstArrLength!(RV) arrLen() {
     return _arrLen;
   }
 
@@ -625,7 +625,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   final bool _esdl__isVecArray() {return true;}
   final CstIterator _esdl__iter() {
-    CstVecIterator!(RV) iter = arrLen.makeIterVar();
+    CstArrIterator!(RV) iter = arrLen.makeIterVar();
     return iter;
   }
   final CstVecIntf _esdl__getChild(uint n) {
@@ -655,7 +655,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	_var = &var;
 	_parent = parent;
 	_root = _parent.getProxyRoot();
-	_arrLen = new CstVecLen!(RV) (name ~ "->length", this);
+	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
       }
 
       final bool isStatic() {
@@ -790,7 +790,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_parent = parent;
 	_indexExpr = indexExpr;
 	_root = _parent.getProxyRoot();
-	_arrLen = new CstVecLen!(RV) (name ~ "->length", this);
+	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
       }
 
       this(string name, P parent, uint index) {
@@ -802,7 +802,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
 	_root = _parent.getProxyRoot();
-	_arrLen = new CstVecLen!(RV) (name ~ "->length", this);
+	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
       }
 
       override bool opEquals(Object other) {

@@ -914,7 +914,7 @@ abstract class CstLogicTerm: CstLogicExpr
 
 }
 
-class CstVecIterator(RV): CstIterator
+class CstArrIterator(RV): CstIterator
 {
   RV _arrVar;
 
@@ -983,7 +983,7 @@ class CstVecIterator(RV): CstIterator
   }
 
   override uint resolveLap() {
-    assert (false, "resolveLap should never be called on CstVecIterator");
+    assert (false, "resolveLap should never be called on CstArrIterator");
   }
 
   override void resolveLap(uint lap) {}
@@ -1018,12 +1018,12 @@ class CstVecIterator(RV): CstIterator
   }
 }
 
-class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
+class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 {
 
   enum HAS_RAND_ATTRIB = RV.RAND.isRand();
 
-  CstVecIterator!RV _iterVar;
+  CstArrIterator!RV _iterVar;
 
   RV _parent;
 
@@ -1044,7 +1044,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     super(name, parent.getProxyRoot());
     _name = name;
     _parent = parent;
-    _iterVar = new CstVecIterator!RV(_parent);
+    _iterVar = new CstArrIterator!RV(_parent);
   }
 
   ~this() { }
@@ -1053,7 +1053,7 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.getProxyRoot();
   }
 
-  override CstVecLen!RV getResolved() { // always self
+  override CstArrLength!RV getResolved() { // always self
     return this;
   }
 
@@ -1093,17 +1093,17 @@ class CstVecLen(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return this.to!string();
   }
 
-  void iterVar(CstVecIterator!RV var) {
+  void iterVar(CstArrIterator!RV var) {
     _iterVar = var;
   }
 
-  CstVecIterator!RV iterVar() {
+  CstArrIterator!RV iterVar() {
     return _iterVar;
   }
 
-  CstVecIterator!RV makeIterVar() {
+  CstArrIterator!RV makeIterVar() {
     if(_iterVar is null) {
-      _iterVar = new CstVecIterator!RV(_parent);
+      _iterVar = new CstArrIterator!RV(_parent);
     }
     return _iterVar;
   }

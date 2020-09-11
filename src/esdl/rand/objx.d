@@ -7,11 +7,11 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
 
 import esdl.rand.misc;
 import esdl.rand.intr;
-import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType, CstDomain,
+import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain,
   CstLogicExpr, CstPredicate, CstObjIntf, CstObjectIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
-import esdl.rand.expr: CstVecLen, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstVecIterator, CstValue, CstRangeExpr;
+import esdl.rand.expr: CstArrLength, _esdl__cstVal,
+  CstArrIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve;
@@ -460,11 +460,11 @@ mixin template CstObjArrMixin()
     return this[_esdl__iter()];
   }
 
-  CstVecLen!RV length() {
+  CstArrLength!RV length() {
     return _arrLen;
   }
 
-  CstVecLen!RV arrLen() {
+  CstArrLength!RV arrLen() {
     return _arrLen;
   }
 
@@ -517,7 +517,7 @@ mixin template CstObjArrMixin()
   }
   final bool _esdl__isObjArray() {return true;}
   final CstIterator _esdl__iter() {
-    CstVecIterator!RV iter = arrLen.makeIterVar();
+    CstArrIterator!RV iter = arrLen.makeIterVar();
     return iter;
   }
   final CstObjIntf _esdl__getChild(uint n) {
@@ -562,7 +562,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
   CstObjArrIntf
 {
   mixin CstObjArrMixin;
-  CstVecLen!RV _arrLen;
+  CstArrLength!RV _arrLen;
 
   alias RAND=R;
 
@@ -579,7 +579,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
     _var = &var;
     _parent = parent;
     _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ "->length", this);
+    _arrLen = new CstArrLength!RV(name ~ "->length", this);
   }
 
   _esdl__Proxy getProxyRoot() {
@@ -661,7 +661,7 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
   }
 }
 
-class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): CstVecPrim, CstObjArrIntf
+class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): CstObjArrIntf
 {
   mixin CstObjArrMixin;
   import std.traits;
@@ -674,7 +674,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
   CstVecExpr _indexExpr = null;
   int _pindex = 0;
 
-  CstVecLen!RV _arrLen;
+  CstArrLength!RV _arrLen;
 
   alias RAND=R;
       
@@ -689,7 +689,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     _parent = parent;
     _indexExpr = indexExpr;
     _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ "->length", this);
+    _arrLen = new CstArrLength!RV(name ~ "->length", this);
   }
 
   this(string name, P parent, uint index) {
@@ -701,7 +701,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0): Cst
     // _indexExpr = _esdl__cstVal(index);
     _pindex = index;
     _root = _parent.getProxyRoot();
-    _arrLen = new CstVecLen!RV(name ~ "->length", this);
+    _arrLen = new CstArrLength!RV(name ~ "->length", this);
   }
 
   _esdl__Proxy getProxyRoot() {
