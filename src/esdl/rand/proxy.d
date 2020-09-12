@@ -15,14 +15,14 @@ import std.array;
 
 abstract class _esdl__ConstraintBase: _esdl__Norand
 {
-  this(_esdl__Proxy eng, string name, string constraint) {
-    _cstEng = eng;
+  this(_esdl__Proxy proxy, string name, string constraint) {
+    _proxy = proxy;
     _name = name;
     _constraint = constraint;
   }
   immutable @rand(false) string _constraint;
   protected @rand(false) bool _enabled = true;
-  protected @rand(false) _esdl__Proxy _cstEng;
+  protected @rand(false) _esdl__Proxy _proxy;
   protected @rand(false) string _name;
   protected @rand(false) CstBlock _cstBlock;
 
@@ -42,8 +42,12 @@ abstract class _esdl__ConstraintBase: _esdl__Norand
     return _name;
   }
 
+  string fullName() {
+    return _proxy.fullName() ~ _name;
+  }
+
   final _esdl__Proxy getProxy() {
-    return _cstEng;
+    return _proxy;
   }
 
   final CstBlock getCstBlock() {
@@ -344,12 +348,37 @@ abstract class _esdl__Proxy: CstObjectIntf
 	   _toRolledPreds.length > 0) {
       _solvedSome = false;
 
-      foreach (pred; _newPreds) procNewPredicate(pred);
-      _newPreds.reset();
+      // import std.stdio;
 
+      // if (_newPreds.length > 0) {
+      // 	writeln("Here for _newPreds: ", _newPreds.length);
+      // }
+      // if (_unrolledPreds.length > 0) {
+      // 	writeln("Here for _unrolledPreds: ", _unrolledPreds.length);
+      // }
+      // if (_resolvedDynPreds.length > 0) {
+      // 	writeln("Here for _resolvedDynPreds: ", _resolvedDynPreds.length);
+      // }
+      // if (_resolvedPreds.length > 0) {
+      // 	writeln("Here for _resolvedPreds: ", _resolvedPreds.length);
+      // }
+      // if (_unresolvedPreds.length > 0) {
+      // 	writeln("Here for _unresolvedPreds: ", _unresolvedPreds.length);
+      // }
+      // if (_toRolledPreds.length > 0) {
+      // 	writeln("Here for _toRolledPreds: ", _toRolledPreds.length);
+      // }
+
+      // Predicate unrolling across array of objects may result in
+      // registration of new constraints (via visitor predicates), so
+      // it is important to process unrolled predicates before dealing
+      // with new predicates
       foreach (pred; _unrolledPreds) procUnrolledPredicate(pred);
       _unrolledPreds.reset();
       
+      foreach (pred; _newPreds) procNewPredicate(pred);
+      _newPreds.reset();
+
       foreach (pred; _resolvedDistPreds) {
 	if (_esdl__debugSolver) {
 	  import std.stdio;
@@ -377,17 +406,7 @@ abstract class _esdl__Proxy: CstObjectIntf
 	_solvedSome = true;
       }
       _resolvedDistPreds.reset();
-      // import std.stdio;
 
-      // if (_resolvedMonoPreds.length > 0) {
-      // 	writeln("Here for _resolvedMonoPreds: ", _resolvedMonoPreds.length);
-      // }
-      // if (_resolvedPreds.length > 0) {
-      // 	writeln("Here for _resolvedPreds: ", _resolvedPreds.length);
-      // }
-      // if (_unresolvedPreds.length > 0) {
-      // 	writeln("Here for _unresolvedPreds: ", _unresolvedPreds.length);
-      // }
       // _lap, like _cycle starts with 1
       // this is to avoid default values
       _lap += 1;
