@@ -602,7 +602,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   string name() {
     import std.conv;
     if (_parent is null) {
-      return _constraint.name() ~ '/' ~ _statement.to!string;
+      return _constraint.fullName() ~ '/' ~ _statement.to!string;
     }
     else {
       return _parent.name() ~ '[' ~ _unrollIterVal.to!string ~ ']';
