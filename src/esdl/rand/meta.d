@@ -850,7 +850,7 @@ auto _esdl__arg_proxy(L, S)(string name, ref L arg, S parent) {
 
 template _esdl__ProxyResolve(T) {
   // static if(__traits(compiles, T._esdl__hasRandomization)) {
-  static if (is(T == class)) {
+  static if (is (T == class)) {
     static if (__traits(compiles, T._esdl__ProxyRand)) {
       alias _esdl__ProxyResolve = T._esdl__ProxyRand;
     }
@@ -858,7 +858,10 @@ template _esdl__ProxyResolve(T) {
       alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
     }
   }
-  else {
+  else static if (is (T == struct)) {
+    alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
+  }
+  else static if (is (T == U*, U) && is (U == struct)) {
     alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
   }
 }

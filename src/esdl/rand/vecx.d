@@ -104,10 +104,6 @@ class CstVectorBase(V, rand RAND_ATTR, int N)
 class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
   CstVectorBase!(V, RAND_ATTR, N)
     {
-      import std.traits;
-      import std.range;
-      import esdl.data.bvec;
-      
       alias RV = typeof(this);
 
       V* _var;
@@ -216,10 +212,6 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
   CstVectorBase!(V, RAND_ATTR, N)
     {
-      import std.traits;
-      import std.range;
-      import esdl.data.bvec;
-
       alias RV = typeof(this);
       alias P = CstVecArr!(V, RAND_ATTR, N-1);
       P _parent;
@@ -767,9 +759,6 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
   CstVecArrBase!(V, RAND_ATTR, N)
     {
-      import std.traits;
-      import std.range;
-      import esdl.data.bvec;
       alias P = CstVecArr!(V, RAND_ATTR, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
