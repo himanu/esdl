@@ -1061,6 +1061,22 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     solver.pushToEvalStack(this);
   }
 
+  override void randomizeIfUnconstrained(_esdl__Proxy proxy) {
+    if (! isSolved()) {
+      if (_rndPreds.length == 0) {
+	_esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
+	proxy.solvedSome();
+	markSolved();
+	proxy.addSolvedDomain(this);
+	execCbs();
+      }
+    }
+    if (! isRand()) {
+      _parent.buildElements(_parent.getLen());
+    }
+    execCbs();
+  }
+
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
     // this function will only be called when array lenght is
     // unconstrainted

@@ -158,7 +158,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
 
   abstract long value();
   
-  final void randomizeIfUnconstrained(_esdl__Proxy proxy) {
+  void randomizeIfUnconstrained(_esdl__Proxy proxy) {
     if (! isSolved()) {
       if (_rndPreds.length == 0) {
 	_esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
