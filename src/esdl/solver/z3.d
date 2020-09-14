@@ -625,8 +625,7 @@ class CstZ3Solver: CstSolver
   }
 
   override void pushToEvalStack(bool value) {
-    // writeln("push: ", value);
-    assert(false);
+    _evalStack ~= Z3Term(boolVal(_context, value));
   }
 
   override void pushIndexToEvalStack(ulong value) {

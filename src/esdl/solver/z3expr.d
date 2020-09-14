@@ -635,7 +635,6 @@ struct BvExpr
   }
 }
 
-
 BvExpr bvNumVal(Context c, long n, uint bitcount, bool signed) {
   Sort s = c.bvSort(bitcount);
   Z3_ast r;
@@ -1214,6 +1213,10 @@ struct BoolExpr
     _ast = AST(c, n);
   }
 
+  this(Context c, bool val) {
+      this(c, val ? Z3_mk_true(c) : Z3_mk_false(c));
+  }
+  
   this(this) { }
   
   // this(ref return scope BoolExpr rhs) {
@@ -1484,6 +1487,10 @@ struct BoolExpr
 	    Z3_get_ast_kind(c, a) == Z3_ast_kind.Z3_VAR_AST);
     return BoolExpr(c, a);
   }
+}
+
+BoolExpr boolVal(Context c, bool val) {
+  return BoolExpr(c, val);
 }
 
 void addRule()(auto ref Solver solver, auto ref BoolExpr e) {

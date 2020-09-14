@@ -3353,8 +3353,8 @@ CstVec2LogicExpr _esdl__neq_impl(CstVecExpr p, CstVecExpr q) {
   return new CstVec2LogicExpr(p, q, CstCompareOp.NEQ);
 }
 
-CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr first, CstRangeExpr[] ranges) {
-  CstLogicTerm result = vec.inside(first);
+CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr[] ranges) {
+  CstLogicTerm result = new CstLogicConst(false);
   foreach (r; ranges) {
     result = result | vec.inside(r);
   }
