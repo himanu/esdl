@@ -706,12 +706,19 @@ struct CstParser {
 	fill('"');
       }
       if (idChain[2] != -1) {
-	fill(")([");
+	fill(")(");
       }
+
+      bool isRange = false;
+      
       for (size_t i=1; i != MaxHierDepth-1; ++i) {
 	if (idChain[2*i] == -1) break;
 	if (i != 1) fill(", ");
 	if (CST[srcTag+idChain[2*i]] is '[') {
+	  if (isRange is false) {
+	    isRange = true;
+	    fill('[');
+	  }
 	  indexTag ~= outCursor-1;
 	  ++numIndex;
 	  procIndexExpr(srcTag+idChain[2*i]+1);
@@ -721,7 +728,8 @@ struct CstParser {
 	// }
       }
       if (idChain[2] != -1) {
-	fill("])");
+	if (isRange is true) fill(']');
+	fill(")");
       }
     }
     else {

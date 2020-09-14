@@ -773,7 +773,7 @@ auto ref _esdl__sym(L)(ref L l, string name,
 }
 
 auto _esdl__sym(L)(L l, string name,
-			  _esdl__Proxy parent)
+		   _esdl__Proxy parent)
   if (isIntegral!L || isBitVector!L ||
       isBoolean!L || isSomeChar!L || is (L == enum)) {
     return new CstVecValue!L(l); // CstVecValue!L.allocate(l);
@@ -789,6 +789,9 @@ struct _esdl__rand_type_proxy(T, P)
     _parent = parent;
   }
   
+  auto _esdl__sym(string S)() {
+    return esdl.rand.meta._esdl__sym(__traits(getMember, T, S), S, _parent);
+  }
 }
 
 // V is a type
