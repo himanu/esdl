@@ -1507,7 +1507,7 @@ class CstVec2VecExpr: CstVecTerm
   }
   
   override bool isConst() {
-    return false;
+    return _lhs.isConst() && _rhs.isConst();
   }
 
   override bool isIterator() {
@@ -1690,7 +1690,8 @@ class CstRangeExpr: CstVecTerm
   }
 
   override long evaluate() {
-    assert (false);
+    assert (_rhs is null);
+    return _lhs.evaluate();
   }
 
   override CstRangeExpr unroll(CstIterator iter, uint n) {
@@ -1722,7 +1723,7 @@ class CstRangeExpr: CstVecTerm
   }
   
   override bool isConst() {
-    return false;
+    return _rhs is null && _lhs.isConst();
   }
 
   override bool isIterator() {
@@ -2323,7 +2324,7 @@ class CstNotVecExpr: CstVecTerm
   }
   
   override bool isConst() {
-    return false;
+    return _expr.isConst();
   }
 
   override bool isIterator() {
@@ -2410,7 +2411,7 @@ class CstNegVecExpr: CstVecTerm
   }
   
   override bool isConst() {
-    return false;
+    return _expr.isConst();
   }
 
   override bool isIterator() {
@@ -2528,8 +2529,8 @@ class CstLogic2LogicExpr: CstLogicTerm
   }
   
   bool getUniRangeSetImpl(T)(ref T rs) {
-    assert(! _lhs.isSolved(), this.describe());
-    assert(! _rhs.isSolved(), this.describe());
+    if (_lhs.isSolved()) return false;
+    if (_rhs.isSolved()) return false;
 
     T lhs;
     T rhs;
