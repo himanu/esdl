@@ -17,9 +17,9 @@ import std.exception: enforce;
 import std.range: ElementType;
 
 import esdl.rand.misc;
-import esdl.rand.expr: CstVecValue, CstObjVisitorExpr;
+import esdl.rand.expr: CstVecValue, CstVarVisitorExpr;
 import esdl.rand.base: CstBlock, CstVecPrim, CstPredicate,
-  CstVarIntf, CstObjectIntf, CstObjArrIntf, CstVisitorPredicate;
+  CstVarNodeIntf, CstObjectIntf, CstObjArrIntf, CstVisitorPredicate;
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
 import esdl.rand.proxy;
@@ -136,7 +136,7 @@ void _esdl__doRandomizeElems(P, int I=0)(P p, _esdl__RandGen randGen) {
   }
   else {
     alias Q = typeof (P.tupleof[I]);
-    static if (is (Q: CstVarIntf)) {
+    static if (is (Q: CstVarNodeIntf)) {
       static if (P.tupleof[I]._esdl__ISRAND) {
 	if (p.tupleof[I].isRand())
 	  p.tupleof[I]._esdl__doRandomize(randGen);
@@ -160,7 +160,7 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
   else {
     alias Q = typeof (P.tupleof[I]);
     // pragma(msg, "#" ~ Q.stringof);
-    static if (is (Q: CstVarIntf)) {
+    static if (is (Q: CstVarNodeIntf)) {
       static if (Q._esdl__HASPROXY && Q._esdl__ISRAND) {
 	alias T = typeof(p._esdl__outer);
 	static if (is (T == class)) { // class
@@ -325,15 +325,9 @@ template _esdl__ConstraintsDecl(T, int I=0)
     }
     else static if (isArray!L) {
       alias E = LeafElementType!L;
-      static if (is (E == class) || is (E == struct) ||
-		 (is (E == U*, U) && is (U == struct))) {
-	enum _esdl__ConstraintsDecl =
-	  "  _esdl__Constraint!(\"" ~ NAME ~ "\") _esdl__visitorCst_"
-	  ~ NAME ~ ";\n"  ~ _esdl__ConstraintsDecl!(T, I+1);
-      }
-      else {
-	enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
-      }
+      enum _esdl__ConstraintsDecl =
+	"  _esdl__Constraint!(\"" ~ NAME ~ "\") _esdl__visitorCst_"
+	~ NAME ~ ";\n"  ~ _esdl__ConstraintsDecl!(T, I+1);
     }
     else {
       enum _esdl__ConstraintsDecl = _esdl__ConstraintsDecl!(T, I+1);
@@ -664,7 +658,7 @@ mixin template _esdl__ProxyMixin()
     override CstBlock makeCstBlock() {
       CstBlock _esdl__block = new CstBlock();
       _esdl__block ~= new CstVisitorPredicate(this, 0, this.outer, 0,
-					      new CstObjVisitorExpr(mixin(OBJ)));
+					      new CstVarVisitorExpr(mixin(OBJ)));
       return _esdl__block;
     }
   }

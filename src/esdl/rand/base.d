@@ -17,32 +17,27 @@ import std.array;
 import std.container.array;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
-interface CstVarIntf {
+interface CstVarNodeIntf {
   bool isRand();
   _esdl__Proxy getProxyRoot();
   string name();
   string fullName();
-}
 
-interface CstVecIntf: CstVarIntf {
-  bool _esdl__isVecArray();
-  CstIterator _esdl__iter();
-  CstVecIntf _esdl__getChild(uint n);
-  // void visit();			// when an object is unrolled
-}
-
-interface CstVectorIntf: CstVecIntf {}
-interface CstVecArrIntf: CstVecIntf {}
-
-interface CstObjIntf: CstVarIntf {
   bool _esdl__isObjArray();
   CstIterator _esdl__iter();
-  CstObjIntf _esdl__getChild(uint n);
+  CstVarNodeIntf _esdl__getChild(uint n);
   void visit();			// when an object is unrolled
 }
 
-interface CstObjectIntf: CstObjIntf {}
-interface CstObjArrIntf: CstObjIntf {}
+interface CstVecNodeIntf: CstVarNodeIntf {}
+
+interface CstVectorIntf: CstVecNodeIntf {}
+interface CstVecArrIntf: CstVecNodeIntf {}
+
+interface CstObjNodeIntf: CstVarNodeIntf {}
+
+interface CstObjectIntf: CstObjNodeIntf {}
+interface CstObjArrIntf: CstObjNodeIntf {}
 
 
 enum DomType: ubyte
@@ -147,10 +142,10 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract void registerDepPred(CstDepCallback depCb);
   abstract void registerIdxPred(CstDepCallback idxCb);
 
-  // CstVecIntf
+  // CstVecNodeIntf
   final bool _esdl__isVecArray() {return false;}
   final CstIterator _esdl__iter() {return null;}
-  final CstVecIntf _esdl__getChild(uint n) {assert (false);}
+  final CstVarNodeIntf _esdl__getChild(uint n) {assert (false);}
 
   bool _isDist;
   final bool isDist() { return _isDist; }
@@ -287,7 +282,7 @@ abstract class CstExpr
 
   abstract bool isSolved();
   abstract void visit(CstSolver solver);
-  void visit() {}		// used for CstObjVisitorExpr
+  void visit() {}		// used for CstVarVisitorExpr
   abstract void writeExprString(ref Charbuf str);
 }
 

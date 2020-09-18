@@ -3,7 +3,7 @@ import esdl.solver.base;
 
 import esdl.rand.base: CstVecPrim, CstLogicExpr,
   CstScope, CstDomain, CstPredicate, CstBlock, CstPredGroup,
-  DomType, CstVecExpr, CstObjIntf, CstObjectIntf, CstIterator;
+  DomType, CstVecExpr, CstVarNodeIntf, CstObjectIntf, CstIterator;
 
 import esdl.rand.misc;
 import esdl.data.folder;
@@ -114,10 +114,10 @@ abstract class _esdl__Proxy: CstObjectIntf
     else return _root;
   }
 
-  // CstObjIntf
+  // CstObjNodeIntf
   final bool _esdl__isObjArray() {return false;}
   final CstIterator _esdl__iter() {return null;}
-  final CstObjIntf _esdl__getChild(uint n) {assert (false);}
+  final CstVarNodeIntf _esdl__getChild(uint n) {assert (false);}
   void visit() {}		// when an object is unrolled
 
   CstSolver[string] _solvers;

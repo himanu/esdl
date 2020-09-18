@@ -3033,11 +3033,11 @@ class CstNotLogicExpr: CstLogicTerm
   }
 }
 
-class CstObjVisitorExpr: CstLogicTerm
+class CstVarVisitorExpr: CstLogicTerm
 {
-  CstObjIntf _obj;
+  CstVarNodeIntf _obj;
 
-  this(CstObjIntf obj) {
+  this(CstVarNodeIntf obj) {
     _obj = obj;
   }
 
@@ -3054,10 +3054,11 @@ class CstObjVisitorExpr: CstLogicTerm
     _obj.visit();
   }
 
-  override CstObjVisitorExpr unroll(CstIterator i, uint n) {
+  override CstVarVisitorExpr unroll(CstIterator i, uint n) {
+    assert (_obj !is null);
     CstIterator iter = _obj._esdl__iter();
     if (iter is i) {
-      return new CstObjVisitorExpr(_obj._esdl__getChild(n));
+      return new CstVarVisitorExpr(_obj._esdl__getChild(n));
     }
     else {
       return this;

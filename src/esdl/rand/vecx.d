@@ -9,7 +9,8 @@ import esdl.solver.base: CstSolver;
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
-  CstDomain, CstPredicate, CstVecIntf, CstVectorIntf, CstVecArrIntf;
+  CstDomain, CstPredicate, CstVarNodeIntf, CstVecNodeIntf,
+  CstVectorIntf, CstVecArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstArrIterator, CstValue, CstRangeExpr;
@@ -620,7 +621,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     CstArrIterator!(RV) iter = arrLen.makeIterVar();
     return iter;
   }
-  final CstVecIntf _esdl__getChild(uint n) {
+  final CstVarNodeIntf _esdl__getChild(uint n) {
     return this[n];
   }
 

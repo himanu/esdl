@@ -8,7 +8,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain,
-  CstLogicExpr, CstPredicate, CstObjIntf, CstObjectIntf, CstObjArrIntf;
+  CstLogicExpr, CstPredicate, CstVarNodeIntf, CstObjectIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr;
@@ -544,7 +544,7 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
       return iter;
     }
 
-    final CstObjIntf _esdl__getChild(uint n) {
+    final CstVarNodeIntf _esdl__getChild(uint n) {
       return this[n];
     }
 
