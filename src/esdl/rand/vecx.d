@@ -9,8 +9,7 @@ import esdl.solver.base: CstSolver;
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
-  CstDomain, CstPredicate, CstVarNodeIntf, CstVecNodeIntf,
-  CstVectorIntf, CstVecArrIntf;
+  CstDomain, CstPredicate, CstVarNodeIntf, CstVecNodeIntf, CstVecArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
   CstVecTerm, CstArrIterator, CstValue, CstRangeExpr;
@@ -172,9 +171,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 				     ref CstDomain[] vars,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
-				     ref CstDomain[] idxs,
+				     ref CstVecNodeIntf[] idxs,
 				     ref CstDomain[] bitIdxs,
-				     ref CstDomain[] deps) {
+				     ref CstVecNodeIntf[] deps) {
 	static if (RAND_ATTR.isRand()) {
 	  if (! canFind(rnds, this)) rnds ~= this;
 	}
@@ -336,9 +335,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 				     ref CstDomain[] vars,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
-				     ref CstDomain[] idxs,
+				     ref CstVecNodeIntf[] idxs,
 				     ref CstDomain[] bitIdxs,
-				     ref CstDomain[] deps) {
+				     ref CstVecNodeIntf[] deps) {
 	static if (RAND_ATTR.isRand()) {
 	  if (! this.isStatic()) {
 	    if (_type <= DomType.LAZYMONO) _type = DomType.MAYBEMONO;
@@ -358,7 +357,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
-	  _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
+	  CstDomain[] indexes;
+	  _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+	  foreach (index; indexes) idxs ~= index;
 	}
       }
 
@@ -711,9 +712,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 			    ref CstDomain[] vars,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
-			    ref CstDomain[] idxs,
+			    ref CstVecNodeIntf[] idxs,
 			    ref CstDomain[] bitIdxs,
-			    ref CstDomain[] deps) {
+			    ref CstVecNodeIntf[] deps) {
 	// arrlen should not be handled here. It is handled as part
 	// of the indexExpr in the elements when required (that is
 	// when indexExpr is not contant, but an expression)
@@ -879,9 +880,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 			    ref CstDomain[] vars,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
-			    ref CstDomain[] idxs,
+			    ref CstVecNodeIntf[] idxs,
 			    ref CstDomain[] bitIdxs,
-			    ref CstDomain[] deps) {
+			    ref CstVecNodeIntf[] deps) {
 	// arrlen should not be handled here. It is handled as part
 	// of the indexExpr in the elements when required (that is
 	// when indexExpr is not contant, but an expression)
@@ -890,7 +891,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	// iters ~= iter;
 	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
 	if (_indexExpr !is null) {
-	  _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
+	  CstDomain[] indexes;
+	  _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+	  foreach (index; indexes) idxs ~= index;
 	}
       }
 

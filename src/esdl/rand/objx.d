@@ -8,7 +8,8 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain,
-  CstLogicExpr, CstPredicate, CstVarNodeIntf, CstObjectIntf, CstObjArrIntf;
+  CstLogicExpr, CstPredicate, CstVecNodeIntf, CstVarNodeIntf,
+  CstObjectIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr;
@@ -308,9 +309,9 @@ class CstObject(V, rand R, int N) if (N != 0):
 			    ref CstDomain[] vars,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
-			    ref CstDomain[] idxs,
+			    ref CstVecNodeIntf[] idxs,
 			    ref CstDomain[] bitIdxs,
-			    ref CstDomain[] deps) {
+			    ref CstVecNodeIntf[] deps) {
 	static if (R.isRand()) {
 	  // 	if (! canFind(rnds, this)) rnds ~= this;
 	  // }
@@ -330,7 +331,9 @@ class CstObject(V, rand R, int N) if (N != 0):
 	  // not. When the indexExpr gets resolved, it should inform
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
-	  _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
+	  CstDomain[] indexes;
+	  _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+	  foreach (index; indexes) idxs ~= index;
 	}
       }
 
@@ -674,9 +677,9 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
 			ref CstDomain[] vars,
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
-			ref CstDomain[] idxs,
+			ref CstVecNodeIntf[] idxs,
 			ref CstDomain[] bitIdxs,
-			ref CstDomain[] deps) {
+			ref CstVecNodeIntf[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
     // when indexExpr is not contant, but an expression)
@@ -843,9 +846,9 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 			ref CstDomain[] vars,
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
-			ref CstDomain[] idxs,
+			ref CstVecNodeIntf[] idxs,
 			ref CstDomain[] bitIdxs,
-			ref CstDomain[] deps) {
+			ref CstVecNodeIntf[] deps) {
     // arrlen should not be handled here. It is handled as part
     // of the indexExpr in the elements when required (that is
     // when indexExpr is not contant, but an expression)
@@ -857,7 +860,9 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     }
     _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
     if (_indexExpr !is null) {
-      _indexExpr.setDomainContext(pred, idxs, idxs, vals, iters, idxs, bitIdxs, deps);
+      CstDomain[] indexes;
+      _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+      foreach (index; indexes) idxs ~= index;
     }
   }
 

@@ -29,9 +29,17 @@ interface CstVarNodeIntf {
   void visit();			// when an object is unrolled
 }
 
-interface CstVecNodeIntf: CstVarNodeIntf {}
+interface CstVecNodeIntf: CstVarNodeIntf {
+  abstract bool hasChanged();
+  abstract void registerRndPred(CstPredicate rndPred);  
+  abstract void registerDepPred(CstDepCallback depCb);
+  abstract void registerIdxPred(CstDepCallback idxCb);
+  abstract bool isSolved();
+  abstract void randomizeIfUnconstrained(_esdl__Proxy proxy);
+}
 
 interface CstVectorIntf: CstVecNodeIntf {}
+
 interface CstVecArrIntf: CstVecNodeIntf {}
 
 interface CstObjNodeIntf: CstVarNodeIntf {}
@@ -276,9 +284,9 @@ abstract class CstExpr
 				 ref CstDomain[] vars,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
-				 ref CstDomain[] idxs,
+				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
-				 ref CstDomain[] deps);
+				 ref CstVecNodeIntf[] deps);
 
   abstract bool isSolved();
   abstract void visit(CstSolver solver);
@@ -773,8 +781,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   CstDomain[] _dynRnds;
   CstDomain[] _vars;
   CstValue[]  _vals;
-  CstDomain[] _deps;
-  CstDomain[] _idxs;
+  CstVecNodeIntf[] _deps;
+  CstVecNodeIntf[] _idxs;
   CstDomain[] _bitIdxs;
   CstIterator[] _iters;
   CstIterator[] _parsedIters;
