@@ -451,6 +451,7 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
   }
 
   uint _esdl__unresolvedArrLen = uint.max;
+  uint _esdl__leafElemsCount = 0;
 
   final override bool isSolved() {
     return _esdl__unresolvedArrLen == 0;
@@ -489,9 +490,33 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
   void writeExprString(ref Charbuf str) {}
 }
 
+// auto CstArrRangeFront(int N, T)(T t, uint[] idxs) {
+//   static if (N == 0) {
+//     assert (idxs.length == 0);
+//     return t;
+//   }
+//   else {
+//     uint idx = idxs[0];
+//     assert (t._elems.length > idx);
+//     return CstArrRangeFront!(N-1)(t._elems[idx], idxs[1..$]);
+//   }
+// }
+
+// bool CstArrRangePopFront(int N, T)(T t, uint[] idxs) {
+//   static if (N == 1) {
+//     assert (idxs.length == 1);
+//     if (idxs[0] < 
+//   else {
+//     uint idx = idxs[0];
+//     assert (t._elems.length > idx);
+//     return CstArrRangeFront!(N-1)(t._elems[idx], idxs[1..$]);
+//   }
+// }
+
 abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   if (_esdl__ArrOrder!(V, N) != 0): CstVecArrNode
 {
+  enum ARR_ORDER = _esdl__ArrOrder!(V, N);
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
   alias LEAF = LeafElementType!V;
   alias RAND = RAND_ATTR;
@@ -509,6 +534,11 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   alias RV = CstVecArr!(V, RAND_ATTR, N);
   
   EV[] _elems;
+
+  struct Range {
+    RV* _arr;
+    uint[ARR_ORDER] _indeces;
+  }
 
   abstract EV createElem(uint i);
   abstract EV createElem(CstVecExpr index);
@@ -626,10 +656,12 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   void markArrLen(size_t length) {
     static if (is (EV: CstDomain)) {
       _esdl__unresolvedArrLen = 0;
+      _esdl__leafElemsCount = cast(uint) length;
       markSolved();
     }
     else {
       _esdl__unresolvedArrLen = cast(uint) length;
+      _esdl__leafElemsCount = 0;
     }
   }
 
@@ -827,14 +859,19 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 
       override void markSolved() {
 	// top level array -- no need to do anything
+	import std.stdio;
+	stderr.writeln("Array elements count: ", _esdl__leafElemsCount);
       }
 
-      void markChildSolved() {
+      void markChildSolved(uint n) {
 	assert (_esdl__unresolvedArrLen != 0 &&
 		_esdl__unresolvedArrLen != uint.max);
 	_esdl__unresolvedArrLen -= 1;
+	_esdl__leafElemsCount += n;
+	if (_esdl__unresolvedArrLen == 0) {
+	  markSolved();
+	}
       }
-
     }
 
 // Array that is elelment of another array
@@ -1018,12 +1055,14 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
       }
 
       override void markSolved() {
-	_parent.markChildSolved();
+	_parent.markChildSolved(_esdl__leafElemsCount);
       }
 
-      void markChildSolved() {
-	assert (_esdl__unresolvedArrLen != 0);
+      void markChildSolved(uint n) {
+	assert (_esdl__unresolvedArrLen != 0 &&
+		_esdl__unresolvedArrLen != uint.max);
 	_esdl__unresolvedArrLen -= 1;
+	_esdl__leafElemsCount += n;
 	if (_esdl__unresolvedArrLen == 0) {
 	  markSolved();
 	}
