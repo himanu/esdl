@@ -145,6 +145,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool updateVal();
   abstract bool hasChanged();
   abstract bool isStatic();
+  abstract bool isRolled();
   abstract void registerRndPred(CstPredicate rndPred);  
   // abstract void registerVarPred(CstPredicate varPred);  
   abstract void registerDepPred(CstDepCallback depCb);
@@ -179,6 +180,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
       stderr.writeln("Marking ", this.name(), " as SOLVED");
     }
     _tempPreds.reset();
+    assert (_state != State.SOLVED);
     _state = State.SOLVED;
   }
 
@@ -714,11 +716,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
       return;
     }
     // check if all the dependencies are resolved
-    foreach (dep; _deps) {
-      if (! dep.isSolved()) {
-	return;
-      }
-    }
+    // foreach (dep; _deps) {
+    //   if (! dep.isSolved()) {
+    // 	return;
+    //   }
+    // }
     CstIterator iter = _iters[0];
     if (iter.getLenVec().isSolved()) {
       this.unroll(iter);

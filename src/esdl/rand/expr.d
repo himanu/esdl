@@ -810,7 +810,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
   }
 
 
-  final override void markSolved() {
+  override void markSolved() {
     super.markSolved();
     static if (HAS_RAND_ATTRIB) {
       if (this.isRand()) {
@@ -1062,7 +1062,7 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   override void randomizeIfUnconstrained(_esdl__Proxy proxy) {
-    if (! isSolved()) {
+    if ((! isSolved()) && isStatic() && (! isRolled())) {
       if (_rndPreds.length == 0) {
 	_esdl__doRandomize(getProxyRoot()._esdl__getRandGen());
 	proxy.solvedSome();
@@ -1073,8 +1073,8 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     }
     if (! isRand()) {
       _parent.buildElements(_parent.getLen());
+      execCbs();
     }
-    execCbs();
   }
 
   override void _esdl__doRandomize(_esdl__RandGen randGen) {
@@ -1144,8 +1144,8 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
   }
 
   override void setVal(ulong value) {
-    markSolved();
     _parent.setLen(cast(size_t) value);
+    markSolved();
     execCbs();
   }
 
@@ -1154,6 +1154,11 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     markSolved();
     _parent.setLen(cast(size_t) v[0]);
     execCbs();
+  }
+
+  override void markSolved() {
+    super.markSolved();
+    _parent.markArrLen(value());
   }
 
   // override void collate(ulong v, int word = 0) {
@@ -1249,6 +1254,9 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.isStatic();
   }
 
+  final override bool isRolled() {
+    return _parent.isRolled();
+  }
 }
 
 abstract class CstValue: CstVecTerm
