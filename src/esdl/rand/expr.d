@@ -11,6 +11,8 @@ import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp,
 
 import esdl.rand.base;
 import esdl.rand.proxy: _esdl__Proxy;
+import esdl.rand.vecx: CstVecArrNode;
+
 import esdl.data.bvec: isBitVector, toBitVec;
 import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
@@ -1158,7 +1160,9 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override void markSolved() {
     super.markSolved();
-    _parent.markArrLen(value());
+    static if (is (RV: CstVecArrIntf)) {
+      _parent.markArrLen(value());
+    }
   }
 
   // override void collate(ulong v, int word = 0) {
@@ -1443,6 +1447,91 @@ class CstVecValue(T = int): CstValue
   }
 }
 
+
+class CstVecArrExpr: CstVecTerm
+{
+  import std.conv;
+
+  CstVecArrNode _arr;
+  CstBinaryOp _op;
+
+  override string describe() {
+    return "( " ~ _arr.fullName ~ " " ~ _op.to!string() ~ " )";
+  }
+
+  override void visit(CstSolver solver) {
+    _arr.visit(solver);
+    solver.processEvalStack(_op);
+  }
+
+  override long evaluate() {
+    assert (false, "TBD");
+  }
+
+  override CstVecArrExpr unroll(CstIterator iter, uint n) {
+    return this;
+  }
+
+  this(CstVecArrNode arr, CstBinaryOp op) {
+    _arr = arr;
+    _op = op;
+  }
+
+  override uint resolveLap() {
+    return _arr.resolveLap();
+  }
+
+  override void resolveLap(uint lap) {
+    _arr.resolveLap(lap);
+  }
+  
+  override bool isConst() {
+    return false;
+  }
+
+  override bool isIterator() {
+    return false;
+  }
+
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+
+  override void setDomainContext(CstPredicate pred,
+				 ref CstDomain[] rnds,
+				 ref CstDomain[] vars,
+				 ref CstValue[] vals,
+				 ref CstIterator[] iters,
+				 ref CstVecNodeIntf[] idxs,
+				 ref CstDomain[] bitIdxs,
+				 ref CstVecNodeIntf[] deps) {
+    _arr.setDomainArrContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  override bool getUniRange(ref UniRange rng) {
+    return false;
+  }
+
+  override bool getIntRange(ref IntR rng) {
+      return false;
+  }
+
+  override bool getIntType(ref INTTYPE iType) {
+    return false;
+  }
+
+  override bool isSolved() {
+    return _arr.isSolved();
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    str ~= '(';
+    str ~= _op.to!string;
+    str ~= ' ';
+    _arr.writeExprString(str);
+    str ~= ')';
+  }
+}
 
 // This class would hold two(bin) vector nodes and produces a vector
 // only after processing those two nodes

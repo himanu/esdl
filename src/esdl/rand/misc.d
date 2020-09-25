@@ -160,17 +160,18 @@ template PointersOf(ARGS...) {
 template _esdl__ArrOrder(T, int N=0) {
   import std.traits;
   import std.range;
-  static if(isArray!T) {
+  static if (isArray!T) {
     enum int _esdl__ArrOrder = 1 + _esdl__ArrOrder!(ElementType!T) - N;
   }
   else {
+    static assert (N == 0);
     enum int _esdl__ArrOrder = 0;
   }
 }
 
-template _esdl__ArrOrder(T, int I, int N=0) {
-  enum int _esdl__ArrOrder = _esdl__ArrOrder!(typeof(T.tupleof[I])) - N;
-}
+// template _esdl__ArrOrder(T, int I, int N=0) {
+//   enum int _esdl__ArrOrder = _esdl__ArrOrder!(typeof(T.tupleof[I])) - N;
+// }
 
 // Make sure that all the parameters are of type size_t
 // template CheckRandParamsLoop(N...) {

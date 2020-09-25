@@ -2,6 +2,7 @@ module esdl.rand.vecx;
 
 import esdl.data.bvec;
 import esdl.data.bstr;
+import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
 
 import esdl.solver.base: CstSolver;
@@ -13,7 +14,7 @@ import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
   CstDepCallback;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
-  CstVecTerm, CstArrIterator, CstValue, CstRangeExpr;
+  CstArrIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
@@ -126,11 +127,11 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
       }
       
       final override bool isStatic() {
-	return true;		// N == 0
+	return _parent.isStatic();		// N == 0
       }
 
       final override bool isRolled() {
-	return false;		// N == 0
+	return _parent.isRolled();		// N == 0
       }
 
       void _esdl__setValRef(ref V var) {
@@ -273,7 +274,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
       final override bool isRolled() {
 	return ((_indexExpr !is null &&
 		 _indexExpr.isIterator) ||
-		_parent.isStatic());
+		_parent.isRolled());
       }
 
       final override string fullName() {
@@ -430,8 +431,66 @@ class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
   }
 }
 
+abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
+{
+  string _name;
+
+  _esdl__Proxy _root;
+  
+  this(string name) {
+    _name = name;
+  }
+
+  _esdl__Proxy getProxyRoot() {
+    assert (_root !is null);
+    return _root;
+  }
+
+  override string name() {
+    return _name;
+  }
+
+  uint _esdl__unresolvedArrLen = uint.max;
+
+  final override bool isSolved() {
+    return _esdl__unresolvedArrLen == 0;
+  }
+
+  abstract void markSolved();
+  
+  bool hasChanged() {
+    assert (false);
+  }
+
+  void registerIdxPred(CstDepCallback idxCb) {
+    assert (false);
+  }
+
+  void randomizeIfUnconstrained(_esdl__Proxy proxy) {}
+	
+  void visit(CstSolver solver) {}
+
+  uint resolveLap() {
+    return 0;
+  }
+
+  void resolveLap(uint lap) {
+  }
+
+  void setDomainArrContext(CstPredicate pred,
+			   ref CstDomain[] rnds,
+			   ref CstDomain[] vars,
+			   ref CstValue[] vals,
+			   ref CstIterator[] iters,
+			   ref CstVecNodeIntf[] idxs,
+			   ref CstDomain[] bitIdxs,
+			   ref CstVecNodeIntf[] deps) {}
+
+  void writeExprString(ref Charbuf str) {}
+}
+
 abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
-  if (_esdl__ArrOrder!(V, N) != 0): CstVecPrim, CstVecArrIntf
+  if (_esdl__ArrOrder!(V, N) != 0): CstVecArrNode
 {
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
   alias LEAF = LeafElementType!V;
@@ -458,24 +517,11 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   
   // new EV(_name ~ "[#" ~ i.to!string() ~ "]",
   // 	 this, cast(uint) i);
-  
-  string _name;
 
-  _esdl__Proxy _root;
-  
   CstArrLength!(RV) _arrLen;
 
   this(string name) {
-    _name = name;
-  }
-
-  _esdl__Proxy getProxyRoot() {
-    assert (_root !is null);
-    return _root;
-  }
-
-  override string name() {
-    return _name;
+    super(name);
   }
 
   static if (HAS_RAND_ATTRIB) {
@@ -577,20 +623,16 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     return _arrLen;
   }
 
-  uint _esdl__arrLen;
-  
   void markArrLen(size_t length) {
     static if (is (EV: CstDomain)) {
-      _esdl__arrLen = 0;
+      _esdl__unresolvedArrLen = 0;
       markSolved();
     }
     else {
-      _esdl__arrLen = cast(uint) length;
+      _esdl__unresolvedArrLen = cast(uint) length;
     }
   }
 
-  abstract void markSolved();
-  
   EV opIndex(CstVecExpr indexExpr) {
     if (indexExpr.isConst()) {
       size_t index = cast(size_t) indexExpr.evaluate();
@@ -651,16 +693,6 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     return this[n];
   }
 
-  bool hasChanged() {
-    assert (false);
-  }
-
-  void registerIdxPred(CstDepCallback idxCb) {
-    assert (false);
-  }
-
-  void randomizeIfUnconstrained(_esdl__Proxy proxy) {}
-	
 }
 
 // Primary Array
@@ -688,11 +720,11 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
       }
 
       final bool isRolled() {
-	return false;
+	return _parent.isRolled();
       }
 
       final bool isStatic() {
-	return true; 		// N == 0
+	return _parent.isStatic(); 		// N == 0
       }
 
       final string fullName() {
@@ -798,8 +830,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
       }
 
       void markChildSolved() {
-	assert (_esdl__arrLen != 0);
-	_esdl__arrLen -= 1;
+	assert (_esdl__unresolvedArrLen != 0 &&
+		_esdl__unresolvedArrLen != uint.max);
+	_esdl__unresolvedArrLen -= 1;
       }
 
     }
@@ -851,7 +884,8 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
       
       final bool isRolled() {
 	return (_indexExpr !is null &&
-		_indexExpr.isIterator);
+		_indexExpr.isIterator) ||
+	  _parent.isRolled();
       }
 
       final bool isStatic() {
@@ -988,9 +1022,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
       }
 
       void markChildSolved() {
-	assert (_esdl__arrLen != 0);
-	_esdl__arrLen -= 1;
-	if (_esdl__arrLen == 0) {
+	assert (_esdl__unresolvedArrLen != 0);
+	_esdl__unresolvedArrLen -= 1;
+	if (_esdl__unresolvedArrLen == 0) {
 	  markSolved();
 	}
       }
