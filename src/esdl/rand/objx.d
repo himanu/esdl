@@ -160,6 +160,10 @@ class CstObject(V, rand R, int N) if (N == 0):
 	return _parent.isStatic();
       }
 
+      final override bool isRolled() {
+	return _parent.isRolled();		// N == 0
+      }
+
       // RV
       override _esdl__Proxy unroll(CstIterator iter, uint n) {
 	return this;
@@ -240,6 +244,12 @@ class CstObject(V, rand R, int N) if (N != 0):
 		 _indexExpr.isIterator ||
 		 _indexExpr.isConst) &&
 		_parent.isStatic());
+      }
+
+      final override bool isRolled() {
+	return ((_indexExpr !is null &&
+		 _indexExpr.isIterator) ||
+		_parent.isRolled());
       }
 
       final override string fullName() {
@@ -603,6 +613,10 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
     return _root;
   }
 
+  final bool isRolled() {
+    return _parent.isRolled();
+  }
+
   final bool isStatic() {
     return _parent.isStatic();
   }
@@ -751,6 +765,12 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     else return (_parent == rhs._parent && _indexExpr == _indexExpr);
   }
       
+  final bool isRolled() {
+    return (_indexExpr !is null &&
+	    _indexExpr.isIterator) ||
+      _parent.isRolled();
+  }
+
   final bool isStatic() {
     return ((_indexExpr is null  ||
 	     _indexExpr.isIterator ||

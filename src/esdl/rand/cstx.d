@@ -240,10 +240,14 @@ struct CstParser {
       SLICEINC,			// inclusive slice
       }
 
-  enum OpUnaryToken: byte
+  enum OpUnaryArithToken: byte
   {   NONE = 0,
       NEG,
       INV,
+      }
+
+  enum OpUnaryLogicToken: byte
+  {   NONE = 0,
       NOT,
       }
 
@@ -253,14 +257,25 @@ struct CstParser {
       RANGEWISE,
   }
 
-  OpUnaryToken parseUnaryOperator() {
-    OpUnaryToken tok = OpUnaryToken.NONE;
+  OpUnaryArithToken parseUnaryArithOperator() {
+    OpUnaryArithToken tok = OpUnaryArithToken.NONE;
     if (srcCursor < CST.length) {
-      if (CST[srcCursor] == '~') tok = OpUnaryToken.INV;
-      if (CST[srcCursor] == '!') tok = OpUnaryToken.NOT;
-      if (CST[srcCursor] == '-') tok = OpUnaryToken.NEG;
+      if (CST[srcCursor] == '~') tok = OpUnaryArithToken.INV;
+      if (CST[srcCursor] == '-') tok = OpUnaryArithToken.NEG;
     }
-    if (tok !is OpUnaryToken.NONE) {
+    if (tok !is OpUnaryArithToken.NONE) {
+      srcCursor += 1;
+      return tok;
+    }
+    return tok;			// None
+  }
+
+  OpUnaryLogicToken parseUnaryLogicOperator() {
+    OpUnaryLogicToken tok = OpUnaryLogicToken.NONE;
+    if (srcCursor < CST.length) {
+      if (CST[srcCursor] == '!') tok = OpUnaryLogicToken.NOT;
+    }
+    if (tok !is OpUnaryLogicToken.NONE) {
       srcCursor += 1;
       return tok;
     }
@@ -1538,7 +1553,8 @@ struct CstParser {
     srcCursor = savedCursor;
   }
 
-  void procArithExpr() {
+  bool procArithExpr() {
+    bool identOnly = true;
     size_t startNumParen = numParen;
     size_t srcTag = 0;
     size_t startAnchor = outCursor;
@@ -1557,19 +1573,31 @@ struct CstParser {
 
       // Parse any unary operators
       // if (unaryLegal) {
-      auto uTok = parseUnaryOperator();
+      auto uTok = parseUnaryArithOperator();
       final switch(uTok) {
-      case OpUnaryToken.NEG: fill('-'); break;
-      case OpUnaryToken.NOT: fill('*'); break;
-      case OpUnaryToken.INV: fill('~'); break;
-      case OpUnaryToken.NONE: break;
+      case OpUnaryArithToken.NEG: fill('-');
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	srcTag = srcCursor;
+	identOnly = false;
+	procArithExpr();
+	break;
+      case OpUnaryArithToken.INV: fill('~');
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	srcTag = srcCursor;
+	identOnly = false;
+	procArithExpr();
+	break;
+      case OpUnaryArithToken.NONE:
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	srcTag = procIdentifier();
+	break;
       }
       // }
       // unaryLegal = false;
 
-      srcTag = parseSpace();
-      fill(CST[srcTag..srcCursor]);
-      srcTag = procIdentifier();
       // fillDeclaration(CST[srcTag..srcCursor]);
       srcTag = parseSpace();
       fill(CST[srcTag..srcCursor]);
@@ -1582,7 +1610,7 @@ struct CstParser {
 
       final switch(opToken) {
       case OpArithToken.NONE:
-	return;
+	return identOnly;
 	// break;
       case OpArithToken.AND:
 	fill(" & ");
@@ -1617,7 +1645,9 @@ struct CstParser {
       case OpArithToken.SLICE:
 	assert(false); // FIXME
       }
+      identOnly = false;
     }
+    return false;
   }
 
   void procRangeExpr() {
@@ -1753,7 +1783,7 @@ struct CstParser {
 
   enum VEC2BOOL: byte  {COMPARE, INSIDE, DIST}
   
-  void procCmpExpr() {
+  bool procCmpExpr() {
     size_t srcTag = 0;
 
     VEC2BOOL opType = VEC2BOOL.COMPARE;
@@ -1766,7 +1796,8 @@ struct CstParser {
       // size_t openingParenAnchor = fill(' ');
       size_t startAnchor = outCursor;
       srcTag = srcCursor;
-      procArithExpr();
+      bool identOnly = procArithExpr();
+
       if (srcTag == srcCursor) {
 	assert(false, "Expecting an expression, got none");
       }
@@ -1813,7 +1844,8 @@ struct CstParser {
 	fill(")._esdl__dist(");
 	break;
       case OpCmpToken.NONE:
-	return;
+	fill("._esdl__bool()");
+	return true;
       }
       // RHS
       srcTag = parseSpace();
@@ -1841,6 +1873,10 @@ struct CstParser {
 	break;
       }
       fill(')');
+      return true;
+    }
+    else {
+      return false;
     }
   }
 
@@ -1854,11 +1890,44 @@ struct CstParser {
 
       if (srcCursor == CST.length) break;
 
-      srcTag = srcCursor;
-      procCmpExpr();
-      if (srcTag == srcCursor) {
-	assert(false, "Expecting an expression, got none");
+      // Parse any left braces now
+      srcTag = parseLeftParens();
+      // if (srcCursor > srcTag) unaryLegal = true;
+      fill(CST[srcTag..srcCursor]);
+
+      // Parse any unary operators
+      // if (unaryLegal) {
+      auto uTok = parseUnaryLogicOperator();
+      final switch(uTok) {
+      case OpUnaryLogicToken.NOT: fill('*');
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	srcTag = srcCursor;
+	procLogicExpr();
+	break;
+      case OpUnaryLogicToken.NONE:
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	// srcTag = srcCursor;
+	if (procCmpExpr() == false) {
+	  assert(false, "Expecting an expression, got none");
+	}
+	// srcTag = procIdentifier();
+	break;
       }
+      // }
+      // unaryLegal = false;
+
+      // fillDeclaration(CST[srcTag..srcCursor]);
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
+      srcTag = moveToRightParens();
+      
+      // srcTag = srcCursor;
+      // procCmpExpr();
+      // if (srcTag == srcCursor) {
+      // 	assert(false, "Expecting an expression, got none");
+      // }
       
       srcTag = srcCursor;
       OpLogicToken opToken = parseLogicOperator();
@@ -1907,12 +1976,11 @@ struct CstParser {
   //     fill(CST[srcTag..srcCursor]);
 
   //     // Parse any unary operators
-  //     auto uTok = parseUnaryOperator();
+  //     auto uTok = parseUnaryArithOperator();
   //     final switch(uTok) {
-  //     case OpUnaryToken.NEG: fill('-'); continue loop;
-  //     case OpUnaryToken.NOT: fill('*'); continue loop;
-  //     case OpUnaryToken.INV: fill('~'); continue loop;
-  //     case OpUnaryToken.NONE: break;
+  //     case OpUnaryArithToken.NEG: fill('-'); continue loop;
+  //     case OpUnaryArithToken.INV: fill('~'); continue loop;
+  //     case OpUnaryArithToken.NONE: break;
   //     }
   //     srcTag = parseSpace();
   //     fill(CST[srcTag..srcCursor]);

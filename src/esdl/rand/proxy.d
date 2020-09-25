@@ -252,6 +252,10 @@ abstract class _esdl__Proxy: CstObjectIntf
     return true;
   }
 
+  bool isRolled() {
+    return false;
+  }
+
   // Keep a list of constraints in the class
   _esdl__ConstraintBase _esdl__cstWith;
 
@@ -403,6 +407,7 @@ abstract class _esdl__Proxy: CstObjectIntf
 	  }
 	}
 	dist.uniform(distDom, _esdl__getRandGen());
+	_solvedDomains ~= distDom;
 	_solvedSome = true;
       }
       _resolvedDistPreds.reset();
