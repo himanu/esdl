@@ -490,28 +490,6 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
   void writeExprString(ref Charbuf str) {}
 }
 
-// auto CstArrRangeFront(int N, T)(T t, uint[] idxs) {
-//   static if (N == 0) {
-//     assert (idxs.length == 0);
-//     return t;
-//   }
-//   else {
-//     uint idx = idxs[0];
-//     assert (t._elems.length > idx);
-//     return CstArrRangeFront!(N-1)(t._elems[idx], idxs[1..$]);
-//   }
-// }
-
-// bool CstArrRangePopFront(int N, T)(T t, uint[] idxs) {
-//   static if (N == 1) {
-//     assert (idxs.length == 1);
-//     if (idxs[0] < 
-//   else {
-//     uint idx = idxs[0];
-//     assert (t._elems.length > idx);
-//     return CstArrRangeFront!(N-1)(t._elems[idx], idxs[1..$]);
-//   }
-// }
 
 abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   if (_esdl__ArrOrder!(V, N) != 0): CstVecArrNode
@@ -536,10 +514,51 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   EV[] _elems;
 
   struct Range {
-    RV* _arr;
-    uint[ARR_ORDER] _indeces;
+    static auto CstArrRangeFront(int N, E)(E[] e, uint idx) {
+      static if (N == 1) {
+	return e[idx];
+      }
+      else {
+	uint iter;
+	for (iter = 0;iter != e.length; ++iter) {
+	  assert (e[iter] !is null);
+	  if (idx >= e[iter]._esdl__leafElemsCount) {
+	    idx -= e[iter]._esdl__leafElemsCount;
+	  }
+	  else {
+	    break;
+	  }
+	}
+	return CstArrRangeFront!(N-1)(e[iter]._elems, idx);
+      }
+    }
+
+    RV _arr;
+    uint _idx;
+
+    this(RV arr) {
+      _arr = arr;
+      _idx = 0;
+    }
+
+    bool empty() {
+      return _idx >= _arr._esdl__leafElemsCount;
+    }
+
+    void popFront() {
+      _idx += 1;
+    }
+
+    auto front() {
+      return CstArrRangeFront!(ARR_ORDER)(_arr._elems, _idx);
+    }
   }
 
+  Range opSlice() {
+    RV arr = _esdl__staticCast!RV(this);
+    return Range(arr);
+  }
+  
   abstract EV createElem(uint i);
   abstract EV createElem(CstVecExpr index);
 
@@ -654,6 +673,9 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   }
 
   void markArrLen(size_t length) {
+    buildElements(length);
+    // import std.stdio;
+    // writeln("buildElements: ", length);
     static if (is (EV: CstDomain)) {
       _esdl__unresolvedArrLen = 0;
       _esdl__leafElemsCount = cast(uint) length;
@@ -687,11 +709,11 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
       if (len <= index) {
 	assert (false, "Index Out of Range");
       }
-      buildElements(len);
+      // buildElements(len);
     }
-    else {
-      buildElements(index+1);
-    }
+    // else {
+    //   buildElements(index+1);
+    // }
     // assert (_elems[index]._indexExpr is null);
     return _elems[index];
   }
@@ -702,7 +724,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
       // if there is no constraint on the length of the array,
       // do not try to randomize it, since it will probably create a
       // big array which might lead to memory allocation issues
-      buildElements(getLen());
+      // buildElements(getLen());
       for (size_t i=0; i != arrLen.evaluate(); ++i) {
 	this[i]._esdl__doRandomize(randGen);
       }
@@ -859,8 +881,11 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 
       override void markSolved() {
 	// top level array -- no need to do anything
-	import std.stdio;
-	stderr.writeln("Array elements count: ", _esdl__leafElemsCount);
+	// import std.stdio;
+	// stderr.writeln("Array elements count: ", _esdl__leafElemsCount);
+	// foreach (elem; this[]) {
+	//   stderr.writeln(elem.name());
+	// }
       }
 
       void markChildSolved(uint n) {
