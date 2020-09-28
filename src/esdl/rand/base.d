@@ -40,12 +40,87 @@ interface CstVecNodeIntf: CstVarNodeIntf {
 
 interface CstVectorIntf: CstVecNodeIntf {}
 
-interface CstVecArrIntf: CstVecNodeIntf {}
+interface CstVecArrIntf: CstVecNodeIntf {
+  CstDomain _esdl__nthLeaf(uint idx);
+  uint _esdl__leafsCount();
+
+  struct Range {
+    CstVecArrIntf _arr;
+    uint _idx;
+    uint _size;
+
+    this(CstVecArrIntf arr) {
+      _arr = arr;
+      _idx = 0;
+      _size = _arr._esdl__leafsCount();
+    }
+
+    bool empty() {
+      return _size == 0;
+    }
+
+    void popFront() {
+      _idx += 1;
+      _size -= 1;
+    }
+
+    auto front() {
+      return _arr._esdl__nthLeaf(_idx);
+    }
+
+    auto length() {
+      return _size;
+    }
+  }
+
+  final Range opSlice() {
+    return Range(this);
+  }
+
+}
 
 interface CstObjNodeIntf: CstVarNodeIntf {}
 
 interface CstObjectIntf: CstObjNodeIntf {}
-interface CstObjArrIntf: CstObjNodeIntf {}
+interface CstObjArrIntf: CstObjNodeIntf {
+
+  _esdl__Proxy _esdl__nthLeaf(uint idx);
+  uint _esdl__leafsCount();
+
+  struct Range {
+    CstObjArrIntf _arr;
+    uint _idx;
+    uint _size;
+
+    this(CstObjArrIntf arr) {
+      _arr = arr;
+      _idx = 0;
+      _size = _arr._esdl__leafsCount();
+    }
+
+    bool empty() {
+      return _size == 0;
+    }
+
+    void popFront() {
+      _idx += 1;
+      _size -= 1;
+    }
+
+    auto front() {
+      return _arr._esdl__nthLeaf(_idx);
+    }
+
+    auto length() {
+      return _size;
+    }
+  }
+
+  final Range opSlice() {
+    return Range(this);
+  }
+
+}
 
 
 enum DomType: ubyte

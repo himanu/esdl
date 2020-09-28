@@ -1160,9 +1160,7 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override void markSolved() {
     super.markSolved();
-    static if (is (RV: CstVecArrIntf)) {
-      _parent.markArrLen(value());
-    }
+    _parent.markArrLen(value());
   }
 
   // override void collate(ulong v, int word = 0) {

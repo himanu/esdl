@@ -453,6 +453,11 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
   uint _esdl__unresolvedArrLen = uint.max;
   uint _esdl__leafElemsCount = 0;
 
+  final uint _esdl__leafsCount() {
+    assert (isSolved());
+    return _esdl__leafElemsCount;
+  }
+  
   final override bool isSolved() {
     return _esdl__unresolvedArrLen == 0;
   }
@@ -513,52 +518,6 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   
   EV[] _elems;
 
-  struct Range {
-    static auto CstArrRangeFront(int N, E)(E[] e, uint idx) {
-      static if (N == 1) {
-	return e[idx];
-      }
-      else {
-	uint iter;
-	for (iter = 0;iter != e.length; ++iter) {
-	  assert (e[iter] !is null);
-	  if (idx >= e[iter]._esdl__leafElemsCount) {
-	    idx -= e[iter]._esdl__leafElemsCount;
-	  }
-	  else {
-	    break;
-	  }
-	}
-	return CstArrRangeFront!(N-1)(e[iter]._elems, idx);
-      }
-    }
-
-    RV _arr;
-    uint _idx;
-
-    this(RV arr) {
-      _arr = arr;
-      _idx = 0;
-    }
-
-    bool empty() {
-      return _idx >= _arr._esdl__leafElemsCount;
-    }
-
-    void popFront() {
-      _idx += 1;
-    }
-
-    auto front() {
-      return CstArrRangeFront!(ARR_ORDER)(_arr._elems, _idx);
-    }
-  }
-
-  Range opSlice() {
-    RV arr = _esdl__staticCast!RV(this);
-    return Range(arr);
-  }
-  
   abstract EV createElem(uint i);
   abstract EV createElem(CstVecExpr index);
 
@@ -745,6 +704,25 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
   }
   final CstVarNodeIntf _esdl__getChild(uint n) {
     return this[n];
+  }
+
+  final CstDomain _esdl__nthLeaf(uint idx) {
+    static if (is (EV: CstDomain)) {
+      return _elems[idx];
+    }
+    else {
+      uint iter;
+      for (iter = 0; iter != _elems.length; ++iter) {
+	assert (_elems[iter] !is null);
+	if (idx >= _elems[iter]._esdl__leafElemsCount) {
+	  idx -= _elems[iter]._esdl__leafElemsCount;
+	}
+	else {
+	  break;
+	}
+      }
+      return _elems[iter]._esdl__nthLeaf(idx);
+    }
   }
 
 }
@@ -1080,7 +1058,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
       }
 
       override void markSolved() {
-	_parent.markChildSolved(_esdl__leafElemsCount);
+	if (_indexExpr is null) {
+	  _parent.markChildSolved(_esdl__leafElemsCount);
+	}
       }
 
       void markChildSolved(uint n) {

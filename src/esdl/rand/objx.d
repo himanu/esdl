@@ -15,7 +15,7 @@ import esdl.rand.expr: CstArrLength, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr;
 
 import esdl.rand.intr: IntRangeSet;
-import esdl.rand.meta: _esdl__ProxyResolve;
+import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
 
 import std.algorithm.searching: canFind;
 
@@ -391,12 +391,48 @@ class CstObjArrIdx(V, rand R, int N, int IDX,
 }
 
 
+abstract class CstObjArrNode: CstObjArrIntf
+{
+  string _name;
+
+  _esdl__Proxy _root;
+  
+  this(string name) {
+    _name = name;
+  }
+
+  _esdl__Proxy getProxyRoot() {
+    assert (_root !is null);
+    return _root;
+  }
+
+  string name() {
+    return _name;
+  }
+
+  uint _esdl__unresolvedArrLen = uint.max;
+  uint _esdl__leafElemsCount = 0;
+
+  final uint _esdl__leafsCount() {
+    assert (isSolved());
+    return _esdl__leafElemsCount;
+  }
+  
+  final bool isSolved() {
+    return _esdl__unresolvedArrLen == 0;
+  }
+
+  abstract void markSolved();
+  
+}
+
 abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
-  CstObjArrIntf
+  CstObjArrNode
   {
 
     alias RV = CstObjArr!(V, R, N);
 
+    enum ARR_ORDER = _esdl__ArrOrder!(V, N);
     enum HAS_RAND_ATTRIB = R.isRand();
     alias LEAF = LeafElementType!V;
 
@@ -410,17 +446,13 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
       alias EV = CstObjArr!(V, R, N+1);
     }
 
+    this(string name) {
+      super(name);
+    }
+    
     CstArrLength!RV _arrLen;
 
     EV[] _elems;
-
-    string _name;
-
-    _esdl__Proxy _root;
-
-    string name() {
-      return _name;
-    }
 
     bool isRand() {
       static if (HAS_RAND_ATTRIB) {
@@ -529,6 +561,21 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
       return _arrLen;
     }
 
+    void markArrLen(size_t length) {
+      buildElements(length);
+      // import std.stdio;
+      // writeln("buildElements: ", length);
+      static if (is (EV: _esdl__Proxy)) {
+	_esdl__unresolvedArrLen = 0;
+	_esdl__leafElemsCount = cast(uint) length;
+	markSolved();
+      }
+      else {
+	_esdl__unresolvedArrLen = cast(uint) length;
+	_esdl__leafElemsCount = 0;
+      }
+    }
+
     static if (HAS_RAND_ATTRIB) {
       static private void _setLen(A, N...)(ref A arr, size_t v, N indx)
 	if(isArray!A) {
@@ -561,16 +608,30 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
       return this[n];
     }
 
+
+  final _esdl__Proxy _esdl__nthLeaf(uint idx) {
+    static if (is (EV: _esdl__Proxy)) {
+      return _elems[idx];
+    }
+    else {
+      uint iter;
+      for (iter = 0; iter != _elems.length; ++iter) {
+	assert (_elems[iter] !is null);
+	if (idx >= _elems[iter]._esdl__leafElemsCount) {
+	  idx -= _elems[iter]._esdl__leafElemsCount;
+	}
+	else {
+	  break;
+	}
+      }
+      return _elems[iter]._esdl__nthLeaf(idx);
+    }
+  }    
+
     final void visit() {
       // import std.stdio;
       // writeln("Visiting: ", this.fullName());
     }
-
-    _esdl__Proxy getProxyRoot()() {
-      assert (_root !is null);
-      return _root;
-    }
-  
 
     uint maxArrLen() {
       static if (HAS_RAND_ATTRIB) {
@@ -601,16 +662,11 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
   }
       
   this(string name, ref V var, _esdl__Proxy parent) {
-    _name = name;
+    super(name);
     _var = &var;
     _parent = parent;
     _root = _parent.getProxyRoot();
     _arrLen = new CstArrLength!RV(name ~ "->length", this);
-  }
-
-  _esdl__Proxy getProxyRoot() {
-    assert (_root !is null);
-    return _root;
   }
 
   final bool isRolled() {
@@ -715,6 +771,26 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
       return __traits(getMember, this, S[0]);
     }
   }
+
+
+  override void markSolved() {
+    // top level array -- no need to do anything
+    // import std.stdio;
+    // stderr.writeln("Array elements count: ", _esdl__leafElemsCount);
+    // foreach (elem; this[]) {
+    //   stderr.writeln(elem.name());
+    // }
+  }
+
+  void markChildSolved(uint n) {
+    assert (_esdl__unresolvedArrLen != 0 &&
+	    _esdl__unresolvedArrLen != uint.max);
+    _esdl__unresolvedArrLen -= 1;
+    _esdl__leafElemsCount += n;
+    if (_esdl__unresolvedArrLen == 0) {
+      markSolved();
+    }
+  }
 }
 
 class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
@@ -735,7 +811,7 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     // import std.stdio;
     // writeln("New ", name);
     assert (parent !is null);
-    _name = name;
+    super(name);
     _parent = parent;
     _indexExpr = indexExpr;
     _root = _parent.getProxyRoot();
@@ -746,17 +822,12 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     // import std.stdio;
     // writeln("New ", name);
     assert (parent !is null);
-    _name = name;
+    super(name);
     _parent = parent;
     // _indexExpr = _esdl__cstVal(index);
     _pindex = index;
     _root = _parent.getProxyRoot();
     _arrLen = new CstArrLength!RV(name ~ "->length", this);
-  }
-
-  _esdl__Proxy getProxyRoot() {
-    assert (_root !is null);
-    return _root;
   }
 
   override bool opEquals(Object other) {
@@ -895,6 +966,22 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     else {
       static assert (S.length == 1);
       return __traits(getMember, this, S[0]);
+    }
+  }
+
+  override void markSolved() {
+    if (_indexExpr is null) {
+      _parent.markChildSolved(_esdl__leafElemsCount);
+    }
+  }
+
+  void markChildSolved(uint n) {
+    assert (_esdl__unresolvedArrLen != 0 &&
+	    _esdl__unresolvedArrLen != uint.max);
+    _esdl__unresolvedArrLen -= 1;
+    _esdl__leafElemsCount += n;
+    if (_esdl__unresolvedArrLen == 0) {
+      markSolved();
     }
   }
 
