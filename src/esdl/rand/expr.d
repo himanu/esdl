@@ -1000,7 +1000,9 @@ class CstArrIterator(RV): CstIterator
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1194,7 +1196,9 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1215,7 +1219,8 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 	if (_type <= DomType.LAZYMONO) _type = DomType.MAYBEMONO;
       }
     }
-    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _parent.setDomainContext(pred, rnds, rndArrs, vars, varArrs,
+			     vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getIntType(ref INTTYPE iType) {
@@ -1377,7 +1382,9 @@ class CstVecValue(T = int): CstValue
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1497,13 +1504,16 @@ class CstVecArrExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _arr.setDomainArrContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _arr.setDomainArrContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    assert (rndArrs.length > 0 || varArrs.length > 0);
   }
 
   override bool getUniRange(ref UniRange rng) {
@@ -1631,14 +1641,16 @@ class CstVec2VecExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _lhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getUniRange(ref UniRange rng) {
@@ -1847,15 +1859,17 @@ class CstRangeExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _lhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     if (_rhs !is null)
-      _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+      _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getUniRange(ref UniRange rng) {
@@ -1939,13 +1953,15 @@ class CstDistRangeExpr: CstVecTerm
   }
 
   override void setDomainContext(CstPredicate pred,
-			ref CstDomain[] rnds,
-			ref CstDomain[] vars,
-			ref CstValue[] vals,
-			ref CstIterator[] iters,
-			ref CstVecNodeIntf[] idxs,
-			ref CstDomain[] bitIdxs,
-			ref CstVecNodeIntf[] deps) { }
+				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
+				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
+				 ref CstValue[] vals,
+				 ref CstIterator[] iters,
+				 ref CstVecNodeIntf[] idxs,
+				 ref CstDomain[] bitIdxs,
+				 ref CstVecNodeIntf[] deps) { }
 
   override bool getUniRange(ref UniRange rng) {
     assert (false);
@@ -2037,7 +2053,9 @@ class CstDistExpr(T): CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2160,16 +2178,18 @@ class CstDistExpr(T): CstLogicTerm
 
 //   void setDomainContext(CstPredicate pred,
 // 			ref CstDomain[] rnds,
+//		        ref CstVecArrIntf[] rndArrs,
 // 			ref CstDomain[] vars,
+//			ref CstVecArrIntf[] varArrs,
 // 			ref CstValue[] vals,
 // 			ref CstIterator[] iters,
 // 			ref CstVecNodeIntf[] idxs,
 // 			ref CstDomain[] bitIdxs,
 // 			ref CstVecNodeIntf[] deps) {
-//     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-//     _lhs.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+//     _vec.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+//     _lhs.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
 //     if (_rhs !is null)
-//       _rhs.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+//       _rhs.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
 //   }
 
 //   bool getIntRange(ref IntR rng) {
@@ -2268,14 +2288,16 @@ class CstVecSliceExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _range.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+    _vec.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    _range.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getIntRange(ref IntR rng) {
@@ -2359,14 +2381,16 @@ class CstVecSliceExpr: CstVecTerm
 
 //   void setDomainContext(CstPredicate pred,
 // 			ref CstDomain[] rnds,
+//			ref CstVecArrIntf[] rndArrs,
 // 			ref CstDomain[] vars,
+//			ref CstVecArrIntf[] varArrs,
 // 			ref CstValue[] vals,
 // 			ref CstIterator[] iters,
 // 			ref CstVecNodeIntf[] idxs,
 // 			ref CstDomain[] bitIdxs,
 // 			ref CstVecNodeIntf[] deps) {
-//     _vec.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-//     _index.setDomainContext(pred, bitIdxs, bitIdxs, vals, iters, idxs, bitIdxs, deps);
+//     _vec.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+//     _index.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
 //   }
 
 //   bool getIntRange(ref IntR rng) {
@@ -2448,13 +2472,15 @@ class CstNotVecExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _expr.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _expr.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getIntRange(ref IntR rng) {
@@ -2535,13 +2561,15 @@ class CstNegVecExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _expr.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _expr.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getIntRange(ref IntR rng) {
@@ -2609,14 +2637,16 @@ class CstLogic2LogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _lhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
@@ -2713,7 +2743,9 @@ class CstIteLogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2822,14 +2854,16 @@ class CstVec2LogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _lhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
-    _rhs.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   bool getIntType(ref INTTYPE iType) {
@@ -3003,7 +3037,9 @@ class CstLogicConst: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -3080,13 +3116,15 @@ class CstNotLogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    _expr.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _expr.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
   override bool getUniRangeSet(ref IntRS rs) {
@@ -3170,7 +3208,9 @@ class CstVarVisitorExpr: CstLogicTerm
   
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -3178,7 +3218,7 @@ class CstVarVisitorExpr: CstLogicTerm
 				 ref CstVecNodeIntf[] deps) {
     CstIterator iter = _obj._esdl__iter();
     if (iter !is null) {
-      iter.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+      iter.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     }
   }
 

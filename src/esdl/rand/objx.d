@@ -8,7 +8,7 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain,
-  CstLogicExpr, CstPredicate, CstVecNodeIntf, CstVarNodeIntf,
+  CstLogicExpr, CstPredicate, CstVecNodeIntf, CstVecArrIntf, CstVarNodeIntf,
   CstObjectIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, _esdl__cstVal,
@@ -316,7 +316,9 @@ class CstObject(V, rand R, int N) if (N != 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
+			    ref CstVecArrIntf[] rndArrs,
 			    ref CstDomain[] vars,
+			    ref CstVecArrIntf[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -331,7 +333,7 @@ class CstObject(V, rand R, int N) if (N != 0):
 	if (_parent.isStatic()) {
 	  deps ~= _parent._arrLen;
 	}
-	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+	_parent.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
 
 	if (_indexExpr !is null) {
 	  // Here we need to put the parent as a dep for the pred
@@ -342,7 +344,7 @@ class CstObject(V, rand R, int N) if (N != 0):
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
 	  CstDomain[] indexes;
-	  _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+	  _indexExpr.setDomainContext(pred, indexes, rndArrs, indexes, varArrs, vals, iters, idxs, bitIdxs, deps);
 	  foreach (index; indexes) idxs ~= index;
 	}
       }
@@ -744,7 +746,9 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
   
   void setDomainContext(CstPredicate pred,
 			ref CstDomain[] rnds,
+			ref CstVecArrIntf[] rndArrs,
 			ref CstDomain[] vars,
+			ref CstVecArrIntf[] varArrs,
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
 			ref CstVecNodeIntf[] idxs,
@@ -934,7 +938,9 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
   
   void setDomainContext(CstPredicate pred,
 			ref CstDomain[] rnds,
+			ref CstVecArrIntf[] rndArrs,
 			ref CstDomain[] vars,
+			ref CstVecArrIntf[] varArrs,
 			ref CstValue[] vals,
 			ref CstIterator[] iters,
 			ref CstVecNodeIntf[] idxs,
@@ -949,10 +955,12 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
     if (_parent.isStatic()) {
       deps ~= _parent._arrLen;
     }
-    _parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+    _parent.setDomainContext(pred, rnds, rndArrs, vars, varArrs,
+			     vals, iters, idxs, bitIdxs, deps);
     if (_indexExpr !is null) {
       CstDomain[] indexes;
-      _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+      _indexExpr.setDomainContext(pred, indexes, rndArrs, indexes, varArrs,
+				  vals, iters, idxs, bitIdxs, deps);
       foreach (index; indexes) idxs ~= index;
     }
   }

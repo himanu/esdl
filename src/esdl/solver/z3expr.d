@@ -688,6 +688,16 @@ bool promoteToCommonType(ref BvExpr a, ref BvExpr b,
   return signed;
 }
 
+// friend expr distinct(expr_vector const& args);
+BvExpr distinct()(auto ref BvExprVector args) {
+  assert (args.size() > 0);
+  Context ctx = args.context();
+  Z3_ast[] _args = args.toArray!Z3_ast();
+  Z3_ast r = Z3_mk_distinct(args.context(), cast(uint) _args.length, _args.ptr);
+  args.checkError();
+  return BvExpr(args.context(), r);
+}
+
 // friend expr concat(expr const& a, expr const& b);
 BvExpr concat()(auto ref BvExpr a, auto ref BvExpr b) {
   checkContext(a, b);

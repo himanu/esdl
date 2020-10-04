@@ -14,7 +14,7 @@ import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
   CstDepCallback;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
-  CstArrIterator, CstValue, CstRangeExpr;
+  CstArrIterator, CstValue, CstRangeExpr, CstVecArrExpr;
 
 import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
@@ -174,7 +174,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 
       override void setDomainContext(CstPredicate pred,
 				     ref CstDomain[] rnds,
+				     ref CstVecArrIntf[] rndArrs,
 				     ref CstDomain[] vars,
+				     ref CstVecArrIntf[] varArrs,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
 				     ref CstVecNodeIntf[] idxs,
@@ -243,6 +245,8 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	  _indexExpr = indexExpr;
 	  // only concrete elements need be added
 	  // getProxyRoot().addRndDomain(this);
+	  if (_parent._rndPreds.length > 0 ||
+	      _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
 	}
       }
 
@@ -255,7 +259,8 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
 	_root = _parent.getProxyRoot();
-	
+	if (_parent._rndPreds.length > 0 ||
+	    _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
       }
 
       override bool opEquals(Object other) {
@@ -344,7 +349,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 
       override void setDomainContext(CstPredicate pred,
 				     ref CstDomain[] rnds,
+				     ref CstVecArrIntf[] rndArrs,
 				     ref CstDomain[] vars,
+				     ref CstVecArrIntf[] varArrs,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
 				     ref CstVecNodeIntf[] idxs,
@@ -359,7 +366,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	else {
 	  if (! canFind(vars, this)) vars ~= this;
 	}
-	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+	_parent.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
 
 	if (_indexExpr !is null) {
 	  // Here we need to put the parent as a dep for the pred
@@ -370,7 +377,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	  // the parent about resolution which in turn should inform
 	  // the pred that it can go ahead
 	  CstDomain[] indexes;
-	  _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+	  _indexExpr.setDomainContext(pred, indexes, rndArrs, indexes, varArrs, vals, iters, idxs, bitIdxs, deps);
 	  foreach (index; indexes) idxs ~= index;
 	}
       }
@@ -483,16 +490,30 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
   void resolveLap(uint lap) {
   }
 
-  void setDomainArrContext(CstPredicate pred,
-			   ref CstDomain[] rnds,
-			   ref CstDomain[] vars,
-			   ref CstValue[] vals,
-			   ref CstIterator[] iters,
-			   ref CstVecNodeIntf[] idxs,
-			   ref CstDomain[] bitIdxs,
-			   ref CstVecNodeIntf[] deps) {}
+  abstract void setDomainArrContext(CstPredicate pred,
+				    ref CstDomain[] rnds,
+				    ref CstVecArrIntf[] rndArrs,
+				    ref CstDomain[] vars,
+				    ref CstVecArrIntf[] varArrs,
+				    ref CstValue[] vals,
+				    ref CstIterator[] iters,
+				    ref CstVecNodeIntf[] idxs,
+				    ref CstDomain[] bitIdxs,
+				    ref CstVecNodeIntf[] deps);
 
   void writeExprString(ref Charbuf str) {}
+
+  CstPredicate[] _rndPreds;
+  bool _esdl__parentIsConstrained;
+  override void registerRndPred(CstPredicate rndPred) {
+    foreach (pred; _rndPreds)
+      if (pred is rndPred) return;
+    _rndPreds ~= rndPred;
+  }
+
+  CstVecArrExpr sum() {
+    return new CstVecArrExpr(this, CstBinaryOp.ADD);
+  }
 }
 
 
@@ -725,6 +746,23 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     }
   }
 
+  override void setDomainArrContext(CstPredicate pred,
+				    ref CstDomain[] rnds,
+				    ref CstVecArrIntf[] rndArrs,
+				    ref CstDomain[] vars,
+				    ref CstVecArrIntf[] varArrs,
+				    ref CstValue[] vals,
+				    ref CstIterator[] iters,
+				    ref CstVecNodeIntf[] idxs,
+				    ref CstDomain[] bitIdxs,
+				    ref CstVecNodeIntf[] deps) {
+    static if (RAND_ATTR.isRand()) {
+      if (! canFind(rndArrs, this)) rndArrs ~= this;
+    }
+    else {
+      if (! canFind(varArrs, this)) varArrs ~= this;
+    }
+  }
 }
 
 // Primary Array
@@ -812,7 +850,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
+			    ref CstVecArrIntf[] rndArrs,
 			    ref CstDomain[] vars,
+			    ref CstVecArrIntf[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -902,6 +942,8 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_indexExpr = indexExpr;
 	_root = _parent.getProxyRoot();
 	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
+	if (_parent._rndPreds.length > 0 ||
+	    _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
       }
 
       this(string name, P parent, uint index) {
@@ -914,6 +956,8 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_pindex = index;
 	_root = _parent.getProxyRoot();
 	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
+	if (_parent._rndPreds.length > 0 ||
+	    _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
       }
 
       override bool opEquals(Object other) {
@@ -1003,7 +1047,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
+			    ref CstVecArrIntf[] rndArrs,
 			    ref CstDomain[] vars,
+			    ref CstVecArrIntf[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -1015,10 +1061,10 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	  
 	// auto iter = arrLen.makeIterVar();
 	// iters ~= iter;
-	_parent.setDomainContext(pred, rnds, vars, vals, iters, idxs, bitIdxs, deps);
+	_parent.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
 	if (_indexExpr !is null) {
 	  CstDomain[] indexes;
-	  _indexExpr.setDomainContext(pred, indexes, indexes, vals, iters, idxs, bitIdxs, deps);
+	  _indexExpr.setDomainContext(pred, indexes, rndArrs, indexes, varArrs, vals, iters, idxs, bitIdxs, deps);
 	  foreach (index; indexes) idxs ~= index;
 	}
       }

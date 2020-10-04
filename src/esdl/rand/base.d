@@ -328,6 +328,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
     }
   }
 
+  bool _esdl__parentIsConstrained;
   override abstract string describe();
 }
 
@@ -358,7 +359,9 @@ abstract class CstExpr
 
   abstract void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
+				 ref CstVecArrIntf[] rndArrs,
 				 ref CstDomain[] vars,
+				 ref CstVecArrIntf[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -855,8 +858,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
   
   CstDomain[] _rnds;
+  CstVecArrIntf[] _rndArrs;
   CstDomain[] _dynRnds;
   CstDomain[] _vars;
+  CstVecArrIntf[] _varArrs;
   CstValue[]  _vals;
   CstVecNodeIntf[] _deps;
   CstVecNodeIntf[] _idxs;
@@ -956,7 +961,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   final void setDomainContext() {
     CstIterator[] varIters;
     
-    _expr.setDomainContext(this, _rnds, _vars, _vals, varIters, _idxs, _bitIdxs, _deps);
+    _expr.setDomainContext(this, _rnds, _rndArrs, _vars, _varArrs, _vals,
+			   varIters, _idxs, _bitIdxs, _deps);
 
     // foreach (varIter; varIters) {
     //   import std.stdio;
@@ -973,7 +979,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     // foreach (var; _vars) var.registerVarPred(this);
 
-    if (! this.isVisitor()) {
+    if ((! this.isVisitor()) && _rndArrs.length == 0) {
       assert (_rnds.length != 0, this.describe());
       if (_rnds.length > 1) {
 	foreach (rnd; _rnds) {

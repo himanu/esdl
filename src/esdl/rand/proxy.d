@@ -553,7 +553,7 @@ abstract class _esdl__Proxy: CstObjectIntf
   }
 
   bool procMonoDomain(CstPredicate pred) {
-    assert (pred._rnds.length > 0);
+    assert (pred._rnds.length == 1);
     auto dom = pred._rnds[0];
     if (! dom.isSolved()) {
       if (dom.solveRange(_esdl__getRandGen())) {
@@ -585,7 +585,8 @@ abstract class _esdl__Proxy: CstObjectIntf
   }
 
   void procResolved(CstPredicate pred) {
-    assert (pred._rnds.length > 0, pred.describe());
+    assert (pred._rnds.length > 0 || pred._rndArrs.length > 0,
+	    pred.describe());
     if (pred.isDist()) {
       _resolvedDistPreds ~= pred;
     }
