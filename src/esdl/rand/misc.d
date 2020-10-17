@@ -445,4 +445,14 @@ enum CstLogicOp: byte
     }
 
 
+enum CstVectorOp: byte
+{   NONE,
+    BEGIN_INT,
+    BEGIN_UINT,
+    BEGIN_LONG,
+    BEGIN_ULONG,
+    UNIQUE,
+    SUM
+    }
+
 enum isLvalue(alias A) = is(typeof((ref _){}(A)));

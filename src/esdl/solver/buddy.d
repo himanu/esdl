@@ -622,6 +622,9 @@ class CstBuddySolver: CstSolver
     }
   }
 
+  override void processEvalStack(CstVectorOp op) {
+    assert (false, "CstVectorOp is handled only by SMT solvers");
+  }
 
   void popEvalStack(uint count) {
     assert (_evalStack.length >= count);

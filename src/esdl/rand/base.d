@@ -6,9 +6,9 @@ import esdl.solver.z3: CstZ3Solver;
 
 import esdl.rand.intr;
 import esdl.rand.dist;
-import esdl.rand.expr: CstValue, CstVecTerm;
+import esdl.rand.expr: CstValue, CstVecTerm, CstVecArrExpr;
 import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__Proxy;
-import esdl.rand.misc: _esdl__RandGen, isVecSigned, writeHexString;
+import esdl.rand.misc: _esdl__RandGen, isVecSigned, writeHexString, CstVectorOp;
 import esdl.data.bvec: isBitVector;
 import esdl.data.folder;
 import esdl.data.charbuf;
@@ -36,6 +36,8 @@ interface CstVecNodeIntf: CstVarNodeIntf {
   abstract void registerIdxPred(CstDepCallback idxCb);
   abstract bool isSolved();
   abstract void randomizeIfUnconstrained(_esdl__Proxy proxy);
+  abstract void setGroupContext(CstPredGroup group);
+  abstract void reset();
 }
 
 interface CstVectorIntf: CstVecNodeIntf {}
@@ -202,7 +204,14 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   
   uint         _varN = uint.max;
 
-  abstract string name();
+  _esdl__Proxy _root;
+  string _name;
+
+  string name() {
+    return _name;
+  }
+
+
   abstract string fullName();
   // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
@@ -213,7 +222,6 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool signed();
   abstract bool isRand();
   abstract uint bitcount();
-  abstract void reset();
   abstract _esdl__Proxy getProxyRoot();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract CstDomain getResolved();
@@ -222,9 +230,10 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool isStatic();
   abstract bool isRolled();
   abstract void registerRndPred(CstPredicate rndPred);  
+  abstract CstVecArrNode getParentArr();
   // abstract void registerVarPred(CstPredicate varPred);  
-  abstract void registerDepPred(CstDepCallback depCb);
-  abstract void registerIdxPred(CstDepCallback idxCb);
+  // abstract void registerDepPred(CstDepCallback depCb);
+  // abstract void registerIdxPred(CstDepCallback idxCb);
 
   // CstVecNodeIntf
   final bool _esdl__isVecArray() {return false;}
@@ -295,6 +304,13 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
 	pred.setGroupContext(group);
       }
     }
+    if (_esdl__parentIsConstrained) {
+      CstVecArrNode parent = getParentArr();
+      assert (parent !is null);
+      if (parent._state is CstVecArrNode.State.INIT) {
+	parent.setGroupContext(group);
+      }
+    }
   }
 
   abstract void annotate(CstPredGroup group);
@@ -304,6 +320,23 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   uint _cycle = -1;
   State _state;
   uint _unresolveLap;
+  uint _resolveLap = 0;
+  
+
+  override void reset() {
+    _state = State.INIT;
+    _resolveLap = 0;
+  }
+  
+  override uint resolveLap() {
+    if (isSolved()) return 0;
+    else return _resolveLap;
+  }
+
+  override void resolveLap(uint lap) {
+    if (isSolved()) _resolveLap = 0;
+    else _resolveLap = lap;
+  }
 
   DomType _type = DomType.TRUEMONO;
 
@@ -328,9 +361,190 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
     }
   }
 
+  override void registerDepPred(CstDepCallback depCb) {
+    foreach (cb; _depCbs) {
+      if (cb is depCb) {
+	return;
+      }
+    }
+    _depCbs ~= depCb;
+  }
+
+  override void registerIdxPred(CstDepCallback idxCb) {
+    foreach (cb; _depCbs) {
+      if (cb is idxCb) {
+	return;
+      }
+    }
+    _depCbs ~= idxCb; // use same callbacks as deps for now
+  }
+
+
   bool _esdl__parentIsConstrained;
   override abstract string describe();
 }
+
+abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
+{
+  State _state;
+  
+  string _name;
+
+  _esdl__Proxy _root;
+  
+  // Callbacks
+  CstDepCallback[] _depCbs;
+
+  void execCbs() {
+    execIterCbs();
+    execDepCbs();
+  }
+
+  void execIterCbs() { }
+  void execDepCbs() {
+    foreach (cb; _depCbs) {
+      cb.doResolve();
+    }
+  }
+
+  abstract CstVecArrNode getParentArr();
+  
+  override void registerDepPred(CstDepCallback depCb) {
+    foreach (cb; _depCbs) {
+      if (cb is depCb) {
+	return;
+      }
+    }
+    _depCbs ~= depCb;
+  }
+
+  override void registerIdxPred(CstDepCallback idxCb) {
+    foreach (cb; _depCbs) {
+      if (cb is idxCb) {
+	return;
+      }
+    }
+    _depCbs ~= idxCb; // use same callbacks as deps for now
+  }
+
+  this(string name) {
+    _name = name;
+  }
+
+  _esdl__Proxy getProxyRoot() {
+    assert (_root !is null);
+    return _root;
+  }
+
+  override string name() {
+    return _name;
+  }
+
+  uint _esdl__unresolvedArrLen = uint.max;
+  uint _esdl__leafElemsCount = 0;
+
+  override bool isSolved() {
+    return isResolved();
+  }
+  
+  final uint _esdl__leafsCount() {
+    assert (isResolved());
+    return _esdl__leafElemsCount;
+  }
+  
+  final bool isResolved() {
+    return _esdl__unresolvedArrLen == 0;
+  }
+
+  abstract void markSolved();
+  
+  bool hasChanged() {
+    assert (false);
+  }
+
+  void randomizeIfUnconstrained(_esdl__Proxy proxy) {}
+	
+  void visit(CstSolver solver) {
+    foreach (dom; this[]) {
+      // import std.stdio;
+      // writeln("Visiting: ", dom.fullName());
+      dom.visit(solver);
+    }
+  }
+
+  uint resolveLap() {
+    return 0;
+  }
+
+  void resolveLap(uint lap) {
+  }
+
+  abstract void setDomainArrContext(CstPredicate pred,
+				    ref CstDomain[] rnds,
+				    ref CstVecArrNode[] rndArrs,
+				    ref CstDomain[] vars,
+				    ref CstVecArrNode[] varArrs,
+				    ref CstValue[] vals,
+				    ref CstIterator[] iters,
+				    ref CstVecNodeIntf[] idxs,
+				    ref CstDomain[] bitIdxs,
+				    ref CstVecNodeIntf[] deps);
+
+  void writeExprString(ref Charbuf str) {
+    assert (isResolved());
+    foreach (dom; this[]) {
+      dom.writeExprString(str);
+      str ~= ' ';
+    }
+  }
+
+  CstPredicate[] _rndPreds;
+  bool _esdl__parentIsConstrained;
+  override void registerRndPred(CstPredicate rndPred) {
+    foreach (pred; _rndPreds)
+      if (pred is rndPred) return;
+    _rndPreds ~= rndPred;
+  }
+
+  CstVecArrExpr sum() {
+    return new CstVecArrExpr(this, CstVectorOp.SUM);
+  }
+
+  public enum State: ubyte
+  {   INIT,
+      GROUPED,
+      SOLVED
+      }
+
+  override void reset() {
+    _state = State.INIT;
+  }
+  
+  void setGroupContext(CstPredGroup group) {
+    assert (_state is State.INIT);
+    foreach (pred; _rndPreds) {
+      if (pred._state is CstPredicate.State.INIT) {
+	pred.setGroupContext(group);
+      }
+    }
+    if (_esdl__parentIsConstrained) {
+      CstVecArrNode parent = getParentArr();
+      assert (parent !is null);
+      if (parent._state is State.INIT) {
+	parent.setGroupContext(group);
+      }
+    }
+    else {			// only for the top arr
+      _state = State.GROUPED;
+      foreach (dom; this[]) {
+	if (dom._state is CstDomain.State.INIT && (! dom.isSolved())) {
+	  dom.setGroupContext(group);
+	}
+      }
+    }
+  }
+}
+
 
 // The client keeps a list of agents that when resolved makes the client happy
 interface CstIterCallback
@@ -359,9 +573,9 @@ abstract class CstExpr
 
   abstract void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrIntf[] rndArrs,
+				 ref CstVecArrNode[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrIntf[] varArrs,
+				 ref CstVecArrNode[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -459,9 +673,14 @@ class CstPredGroup			// group of related predicates
   uint _cycle;
 
   bool _hasSoftConstraints;
+  bool _hasVectorConstraints;
 
   bool hasSoftConstraints() {
     return _hasSoftConstraints;
+  }
+
+  bool hasVectorConstraints() {
+    return _hasVectorConstraints;
   }
   
   // List of predicates permanently in this group
@@ -499,6 +718,7 @@ class CstPredGroup			// group of related predicates
   bool _hasDynamicBinding;
 
   Folder!(CstDomain, "doms") _doms;
+
   uint addDomain(CstDomain dom) {
     uint index = cast (uint) _doms.length;
     _doms ~= dom;
@@ -507,6 +727,10 @@ class CstPredGroup			// group of related predicates
 
   CstDomain[] domains() {
     return _doms[];
+  }
+  
+  CstVecArrNode[] domainArrs() {
+    return _domArrs[];
   }
   
   Folder!(CstDomain, "vars") _vars;
@@ -518,6 +742,18 @@ class CstPredGroup			// group of related predicates
 
   CstDomain[] variables() {
     return _vars[];
+  }
+
+  Folder!(CstVecArrNode, "domArrs") _domArrs;
+  
+  void addDomainArr(CstVecArrNode domArr) {
+    _domArrs ~= domArr;
+  }
+
+  Folder!(CstVecArrNode, "varArrs") _varArrs;
+  
+  void addVariableArr(CstVecArrNode varArr) {
+    _varArrs ~= varArr;
   }
 
   // If there are groups that are related. This will only be true if
@@ -532,12 +768,14 @@ class CstPredGroup			// group of related predicates
 	_predList.length != _preds.length ||
 	_dynPredList.length != _dynPreds.length) {
       _hasSoftConstraints = false;
+      _hasVectorConstraints = false;
       _state = State.NEEDSYNC;	// mark that we need to reassign a solver
       foreach (pred; _preds) pred._group = null;
       _preds.reset();
       foreach (pred; sort!((x, y) => x.name() < y.name())(_predList[])) {
 	pred._group = this;
 	if (pred._soft != 0) _hasSoftConstraints = true;
+	if (pred._vectorOp != CstVectorOp.NONE) _hasVectorConstraints = true;
 	_preds ~= pred;
       }
       foreach (pred; _dynPreds) pred._group = null;
@@ -545,6 +783,7 @@ class CstPredGroup			// group of related predicates
       foreach (pred; sort!((x, y) => x.name() < y.name())(_dynPredList[])) {
 	pred._group = this;
 	if (pred._soft != 0) _hasSoftConstraints = true;
+	if (pred._vectorOp != CstVectorOp.NONE) _hasVectorConstraints = true;
 	_dynPreds ~= pred;
       }
     }
@@ -558,8 +797,20 @@ class CstPredGroup			// group of related predicates
       foreach (rnd; pred._rnds) {
 	rnd.annotate(this);
       }
+      foreach (rndArr; pred._rndArrs) {
+	addDomainArr(rndArr);
+	foreach (rnd; rndArr[]) {
+	  rnd.annotate(this);
+	}
+      }
       foreach (var; pred._vars) {
 	var.annotate(this);
+      }
+      foreach (varArr; pred._varArrs) {
+	addVariableArr(varArr);
+	foreach (var; varArr[]) {
+	  var.annotate(this);
+	}
       }
     }
   }
@@ -610,7 +861,7 @@ class CstPredGroup			// group of related predicates
       annotate();
       string sig = signature();
 
-    if (_proxy._esdl__debugSolver()) {
+      if (_proxy._esdl__debugSolver()) {
 	import std.stdio;
 	writeln(describe());
 	writeln(sig);
@@ -622,10 +873,14 @@ class CstPredGroup			// group of related predicates
 	_solver = *solverp;
       }
       else {
-	if (_hasSoftConstraints) {
+	if (_hasSoftConstraints || _hasVectorConstraints) {
 	  if (_proxy._esdl__debugSolver()) {
 	    import std.stdio;
-	    writeln("Invoking Z3 because of Soft Constraints");
+	    writeln("Invoking Z3 because of Soft/Vector Constraints");
+	    writeln("_preds: ", _preds[]);
+	    foreach (pred; _preds) {
+	      writeln(pred.describe());
+	    }
 	    writeln(describe());
 	  }
 	  _solver = new CstZ3Solver(sig, this);
@@ -717,6 +972,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   uint _unrollCycle;
   bool _markResolve = true;
 
+  CstVectorOp _vectorOp = CstVectorOp.NONE;
+  
   uint _soft = 0;
 
   uint getSoftWeight() {
@@ -768,6 +1025,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
       
     this.setDomainContext();
+
     debug(CSTPREDS) {
       import std.stdio;
       stderr.writeln(this.describe());
@@ -858,10 +1116,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
   
   CstDomain[] _rnds;
-  CstVecArrIntf[] _rndArrs;
+  CstVecArrNode[] _rndArrs;
   CstDomain[] _dynRnds;
   CstDomain[] _vars;
-  CstVecArrIntf[] _varArrs;
+  CstVecArrNode[] _varArrs;
   CstValue[]  _vals;
   CstVecNodeIntf[] _deps;
   CstVecNodeIntf[] _idxs;
@@ -977,6 +1235,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
 	_dynRnds ~= rnd;
       }
     }
+    foreach (rnd; _rndArrs) {
+      rnd.registerRndPred(this);
+    }
+
     // foreach (var; _vars) var.registerVarPred(this);
 
     if ((! this.isVisitor()) && _rndArrs.length == 0) {
@@ -1123,6 +1385,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
       assert(_group is null, "A predicate may add to a group, but group should not change");
       group.needSync();
     }
+    if (_rndArrs.length != 0) group.needSync();
     if (_bitIdxs.length != 0) group.needSync();
     if (this.isDynamic()) group.addDynPredicate(this);
     else group.addPredicate(this);
@@ -1130,6 +1393,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
       // if (dom.group is null && (! dom.isSolved())) {
       if (dom._state is CstDomain.State.INIT && (! dom.isSolved())) {
 	dom.setGroupContext(group);
+      }
+    }
+    foreach (arr; _rndArrs) {
+      // if (arr.group is null && (! arr.isSolved())) {
+      if (arr._state is CstVecArrNode.State.INIT && (! arr.isSolved())) {
+	arr.setGroupContext(group);
       }
     }
   }

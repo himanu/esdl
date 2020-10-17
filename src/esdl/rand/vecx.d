@@ -10,8 +10,8 @@ import esdl.solver.base: CstSolver;
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
-  CstDomain, CstPredicate, CstVarNodeIntf, CstVecNodeIntf, CstVecArrIntf,
-  CstDepCallback;
+  CstDomain, CstVecArrNode, CstPredicate, CstVarNodeIntf, CstVecNodeIntf,
+  CstVecArrIntf, CstDepCallback;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr, CstVecArrExpr;
@@ -174,9 +174,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 
       override void setDomainContext(CstPredicate pred,
 				     ref CstDomain[] rnds,
-				     ref CstVecArrIntf[] rndArrs,
+				     ref CstVecArrNode[] rndArrs,
 				     ref CstDomain[] vars,
-				     ref CstVecArrIntf[] varArrs,
+				     ref CstVecArrNode[] varArrs,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
 				     ref CstVecNodeIntf[] idxs,
@@ -214,6 +214,11 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 	  return __traits(getMember, this, S[0]);
 	}
       }
+
+      override CstVecArrNode getParentArr() {
+	return null;
+      }
+
     }
 
 // Array Element
@@ -246,7 +251,10 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	  // only concrete elements need be added
 	  // getProxyRoot().addRndDomain(this);
 	  if (_parent._rndPreds.length > 0 ||
-	      _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
+	      _parent._esdl__parentIsConstrained) {
+	    _type = DomType.MULTI;
+	    _esdl__parentIsConstrained = true;
+	  }
 	}
       }
 
@@ -260,7 +268,10 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	_pindex = index;
 	_root = _parent.getProxyRoot();
 	if (_parent._rndPreds.length > 0 ||
-	    _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
+	    _parent._esdl__parentIsConstrained) {
+	  _type = DomType.MULTI;
+	  _esdl__parentIsConstrained = true;
+	}
       }
 
       override bool opEquals(Object other) {
@@ -349,9 +360,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 
       override void setDomainContext(CstPredicate pred,
 				     ref CstDomain[] rnds,
-				     ref CstVecArrIntf[] rndArrs,
+				     ref CstVecArrNode[] rndArrs,
 				     ref CstDomain[] vars,
-				     ref CstVecArrIntf[] varArrs,
+				     ref CstVecArrNode[] varArrs,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
 				     ref CstVecNodeIntf[] idxs,
@@ -411,6 +422,10 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	  return __traits(getMember, this, S[0]);
 	}
       }
+
+      override CstVecArrNode getParentArr() {
+	return _parent;
+      }
     }
 
 // Arrays (Multidimensional arrays as well)
@@ -435,84 +450,6 @@ class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
     assert (this is parent.tupleof[PIDX]);
     // writeln("Unrolling: ", parent.tupleof[PIDX].stringof);
     return this;
-  }
-}
-
-abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
-{
-  string _name;
-
-  _esdl__Proxy _root;
-  
-  this(string name) {
-    _name = name;
-  }
-
-  _esdl__Proxy getProxyRoot() {
-    assert (_root !is null);
-    return _root;
-  }
-
-  override string name() {
-    return _name;
-  }
-
-  uint _esdl__unresolvedArrLen = uint.max;
-  uint _esdl__leafElemsCount = 0;
-
-  final uint _esdl__leafsCount() {
-    assert (isSolved());
-    return _esdl__leafElemsCount;
-  }
-  
-  final override bool isSolved() {
-    return _esdl__unresolvedArrLen == 0;
-  }
-
-  abstract void markSolved();
-  
-  bool hasChanged() {
-    assert (false);
-  }
-
-  void registerIdxPred(CstDepCallback idxCb) {
-    assert (false);
-  }
-
-  void randomizeIfUnconstrained(_esdl__Proxy proxy) {}
-	
-  void visit(CstSolver solver) {}
-
-  uint resolveLap() {
-    return 0;
-  }
-
-  void resolveLap(uint lap) {
-  }
-
-  abstract void setDomainArrContext(CstPredicate pred,
-				    ref CstDomain[] rnds,
-				    ref CstVecArrIntf[] rndArrs,
-				    ref CstDomain[] vars,
-				    ref CstVecArrIntf[] varArrs,
-				    ref CstValue[] vals,
-				    ref CstIterator[] iters,
-				    ref CstVecNodeIntf[] idxs,
-				    ref CstDomain[] bitIdxs,
-				    ref CstVecNodeIntf[] deps);
-
-  void writeExprString(ref Charbuf str) {}
-
-  CstPredicate[] _rndPreds;
-  bool _esdl__parentIsConstrained;
-  override void registerRndPred(CstPredicate rndPred) {
-    foreach (pred; _rndPreds)
-      if (pred is rndPred) return;
-    _rndPreds ~= rndPred;
-  }
-
-  CstVecArrExpr sum() {
-    return new CstVecArrExpr(this, CstBinaryOp.ADD);
   }
 }
 
@@ -660,6 +597,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
       _esdl__unresolvedArrLen = 0;
       _esdl__leafElemsCount = cast(uint) length;
       markSolved();
+      execCbs();
     }
     else {
       _esdl__unresolvedArrLen = cast(uint) length;
@@ -748,9 +686,9 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   override void setDomainArrContext(CstPredicate pred,
 				    ref CstDomain[] rnds,
-				    ref CstVecArrIntf[] rndArrs,
+				    ref CstVecArrNode[] rndArrs,
 				    ref CstDomain[] vars,
-				    ref CstVecArrIntf[] varArrs,
+				    ref CstVecArrNode[] varArrs,
 				    ref CstValue[] vals,
 				    ref CstIterator[] iters,
 				    ref CstVecNodeIntf[] idxs,
@@ -762,6 +700,8 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     else {
       if (! canFind(varArrs, this)) varArrs ~= this;
     }
+
+    if (! canFind(deps, this)) deps ~= this;
   }
 }
 
@@ -850,9 +790,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
-			    ref CstVecArrIntf[] rndArrs,
+			    ref CstVecArrNode[] rndArrs,
 			    ref CstDomain[] vars,
-			    ref CstVecArrIntf[] varArrs,
+			    ref CstVecArrNode[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -913,7 +853,12 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	_esdl__leafElemsCount += n;
 	if (_esdl__unresolvedArrLen == 0) {
 	  markSolved();
+	  execCbs();
 	}
+      }
+
+      override CstVecArrNode getParentArr() {
+	return null;
       }
     }
 
@@ -943,7 +888,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_root = _parent.getProxyRoot();
 	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
 	if (_parent._rndPreds.length > 0 ||
-	    _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
+	    _parent._esdl__parentIsConstrained) {
+	  _esdl__parentIsConstrained = true;
+	}
       }
 
       this(string name, P parent, uint index) {
@@ -957,7 +904,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_root = _parent.getProxyRoot();
 	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);
 	if (_parent._rndPreds.length > 0 ||
-	    _parent._esdl__parentIsConstrained) _esdl__parentIsConstrained = true;
+	    _parent._esdl__parentIsConstrained) {
+	  _esdl__parentIsConstrained = true;
+	}
       }
 
       override bool opEquals(Object other) {
@@ -1047,9 +996,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
-			    ref CstVecArrIntf[] rndArrs,
+			    ref CstVecArrNode[] rndArrs,
 			    ref CstDomain[] vars,
-			    ref CstVecArrIntf[] varArrs,
+			    ref CstVecArrNode[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -1116,8 +1065,12 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	_esdl__leafElemsCount += n;
 	if (_esdl__unresolvedArrLen == 0) {
 	  markSolved();
+	  execCbs();
 	}
       }
 
+      override CstVecArrNode getParentArr() {
+	return _parent;
+      }
     }
 

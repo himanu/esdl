@@ -196,6 +196,9 @@ class CstZ3Solver: CstSolver
 
   uint _seed;
 
+  BvExprVector _vector;
+
+  CstVectorOp _state;
   // the group is used only for the purpose of constructing the Z3 solver
   // otherwise the solver identifies with the signature only
   this(string signature, CstPredGroup group) {
@@ -209,6 +212,8 @@ class CstZ3Solver: CstSolver
     Config cfg = new Config();
     _context = new Context(cfg);
 
+    _vector = BvExprVector(_context);
+    
     CstDomain[] doms = group.domains();
     _domains.length = doms.length;
 
@@ -603,14 +608,35 @@ class CstZ3Solver: CstSolver
   }
 
   override void pushToEvalStack(CstDomain domain) {
+    // import std.stdio;
     uint n = domain.annotation();
     // writeln("push: ", domain.name(), " annotation: ", n);
     // writeln("_domains has a length: ", _domains.length);
-    if (domain.isSolved()) { // is a variable
-      _evalStack ~= Z3Term(_variables[n]);
-    }
-    else {
-      _evalStack ~= Z3Term(_domains[n]);
+
+    switch (_state) {
+    case CstVectorOp.NONE:
+      if (domain.isSolved()) { // is a variable
+	_evalStack ~= Z3Term(_variables[n]);
+      }
+      else {
+	_evalStack ~= Z3Term(_domains[n]);
+      }
+      break;
+    case CstVectorOp.BEGIN_INT:
+      _vector.pushBack(_domains[n].extendTo(32, true));
+      break;
+    case CstVectorOp.BEGIN_UINT:
+      _vector.pushBack(_domains[n].extendTo(32, false));
+      break;
+    case CstVectorOp.BEGIN_LONG:
+      _vector.pushBack(_domains[n].extendTo(64, true));
+      break;
+    case CstVectorOp.BEGIN_ULONG:
+      _vector.pushBack(_domains[n].extendTo(64, false));
+      break;
+    default:
+      import std.conv: to;
+      assert (false, "Unexpected state: " ~ _state.to!string());
     }
   }
 
@@ -786,6 +812,35 @@ class CstZ3Solver: CstSolver
 						cast(uint) _evalStack[$-2].toUlong());
       _evalStack.length = _evalStack.length - 3;
       _evalStack ~= Z3Term(e);
+      break;
+    }
+  }
+
+  override void processEvalStack(CstVectorOp op) {
+    // import std.conv: to;
+    // assert (false, "CstVectorOp is handled only by SMT solvers: " ~ op.to!string());
+    final switch (op) {
+    case CstVectorOp.NONE:
+      assert (false, "Unexpected op: CstVectorOp.NONE");
+    case
+      CstVectorOp.BEGIN_INT,
+      CstVectorOp.BEGIN_UINT,
+      CstVectorOp.BEGIN_LONG,
+      CstVectorOp.BEGIN_ULONG:
+      assert (_state is CstVectorOp.NONE);
+      _state = op;
+      BvExprVector vector = BvExprVector(_context);
+      _vector = vector;
+      break;
+    case CstVectorOp.UNIQUE:
+      BoolExpr e = distinct(_vector);
+      _evalStack ~= Z3Term(e);
+      _state = CstVectorOp.NONE;
+      break;
+    case CstVectorOp.SUM:
+      BvExpr e = sum(_vector);
+      _evalStack ~= Z3Term(e);
+      _state = CstVectorOp.NONE;
       break;
     }
   }
