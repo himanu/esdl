@@ -298,6 +298,7 @@ template _esdl__ConstraintsDecl(T, int I=0)
   }
   else {
     alias L = typeof(T.tupleof[I]);
+    static if (isArray!L) alias E = LeafElementType!L;
     static if (is (T == U*, U) && is (U == struct)) {
       enum NAME = __traits(identifier, U.tupleof[I]);
     }
@@ -323,8 +324,9 @@ template _esdl__ConstraintsDecl(T, int I=0)
 	", _esdl__FILE_" ~ NAME ~ ", _esdl__LINE_" ~ NAME ~ ") " ~
 	NAME ~ ";\n" ~ _esdl__ConstraintsDecl!(T, I+1);
     }
-    else static if (isArray!L) {
-      alias E = LeafElementType!L;
+    else static if (isArray!L &&
+		    (isIntegral!E || is (E == bool) ||
+		     is (E == struct) || is (E == class))) {
       enum _esdl__ConstraintsDecl =
 	"  _esdl__Constraint!(\"" ~ NAME ~ "\") _esdl__visitorCst_"
 	~ NAME ~ ";\n"  ~ _esdl__ConstraintsDecl!(T, I+1);
@@ -651,8 +653,6 @@ mixin template _esdl__ProxyMixin()
   class _esdl__Constraint(string OBJ): _esdl__ConstraintBase
   {
     this(_esdl__Proxy eng, string name) {
-      // import std.stdio;
-      // writeln("Creating a Visitor Constraint for: ", OBJ, " named: ", name);
       super(eng, name, OBJ);
     }
     override CstBlock makeCstBlock() {
