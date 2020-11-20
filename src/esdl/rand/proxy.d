@@ -3,7 +3,7 @@ import esdl.solver.base;
 
 import esdl.rand.base: CstVecPrim, CstLogicExpr, CstScope, CstDomain,
   CstPredicate, CstBlock, CstPredGroup, DomType, CstVecExpr,
-  CstVarNodeIntf, CstObjectIntf, CstIterator, CstVecArrNode;
+  CstVarNodeIntf, CstObjectIntf, CstIterator, CstDomSet;
 
 import esdl.rand.misc;
 import esdl.data.folder;
@@ -140,7 +140,7 @@ abstract class _esdl__Proxy: CstObjectIntf
   Folder!(CstPredicate, "resolvedMonoPreds") _resolvedMonoPreds;
 
   Folder!(CstDomain, "solvedDomains") _solvedDomains;
-  Folder!(CstVecArrNode, "solvedDomainArrs") _solvedDomainArrs;
+  Folder!(CstDomSet, "solvedDomainArrs") _solvedDomainArrs;
   
   Folder!(CstPredGroup, "solvedGroups") _solvedGroups;
 

@@ -10,7 +10,7 @@ import esdl.solver.base: CstSolver;
 import esdl.rand.misc;
 import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
-  CstDomain, CstVecArrNode, CstPredicate, CstVarNodeIntf, CstVecNodeIntf,
+  CstDomain, CstDomSet, CstPredicate, CstVarNodeIntf, CstVecNodeIntf,
   CstVecArrIntf, CstDepCallback;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
@@ -174,9 +174,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 
       override void setDomainContext(CstPredicate pred,
 				     ref CstDomain[] rnds,
-				     ref CstVecArrNode[] rndArrs,
+				     ref CstDomSet[] rndArrs,
 				     ref CstDomain[] vars,
-				     ref CstVecArrNode[] varArrs,
+				     ref CstDomSet[] varArrs,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
 				     ref CstVecNodeIntf[] idxs,
@@ -215,7 +215,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 	}
       }
 
-      override CstVecArrNode getParentArr() {
+      override CstDomSet getParentArr() {
 	return null;
       }
 
@@ -360,9 +360,9 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 
       override void setDomainContext(CstPredicate pred,
 				     ref CstDomain[] rnds,
-				     ref CstVecArrNode[] rndArrs,
+				     ref CstDomSet[] rndArrs,
 				     ref CstDomain[] vars,
-				     ref CstVecArrNode[] varArrs,
+				     ref CstDomSet[] varArrs,
 				     ref CstValue[] vals,
 				     ref CstIterator[] iters,
 				     ref CstVecNodeIntf[] idxs,
@@ -423,7 +423,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      override CstVecArrNode getParentArr() {
+      override CstDomSet getParentArr() {
 	return _parent;
       }
     }
@@ -455,7 +455,7 @@ class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
 
 
 abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
-  if (_esdl__ArrOrder!(V, N) != 0): CstVecArrNode
+  if (_esdl__ArrOrder!(V, N) != 0): CstDomSet
 {
   enum ARR_ORDER = _esdl__ArrOrder!(V, N);
   enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
@@ -686,9 +686,9 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   override void setDomainArrContext(CstPredicate pred,
 				    ref CstDomain[] rnds,
-				    ref CstVecArrNode[] rndArrs,
+				    ref CstDomSet[] rndArrs,
 				    ref CstDomain[] vars,
-				    ref CstVecArrNode[] varArrs,
+				    ref CstDomSet[] varArrs,
 				    ref CstValue[] vals,
 				    ref CstIterator[] iters,
 				    ref CstVecNodeIntf[] idxs,
@@ -790,9 +790,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
-			    ref CstVecArrNode[] rndArrs,
+			    ref CstDomSet[] rndArrs,
 			    ref CstDomain[] vars,
-			    ref CstVecArrNode[] varArrs,
+			    ref CstDomSet[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -857,7 +857,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	}
       }
 
-      override CstVecArrNode getParentArr() {
+      override CstDomSet getParentArr() {
 	return null;
       }
     }
@@ -996,9 +996,9 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
-			    ref CstVecArrNode[] rndArrs,
+			    ref CstDomSet[] rndArrs,
 			    ref CstDomain[] vars,
-			    ref CstVecArrNode[] varArrs,
+			    ref CstDomSet[] varArrs,
 			    ref CstValue[] vals,
 			    ref CstIterator[] iters,
 			    ref CstVecNodeIntf[] idxs,
@@ -1069,7 +1069,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      override CstVecArrNode getParentArr() {
+      override CstDomSet getParentArr() {
 	return _parent;
       }
     }

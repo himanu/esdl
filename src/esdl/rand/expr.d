@@ -954,9 +954,9 @@ class CstArrIterator(RV): CstIterator
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1150,9 +1150,9 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1219,7 +1219,7 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.isRolled();
   }
 
-  override CstVecArrNode getParentArr() {
+  override CstDomSet getParentArr() {
     assert (false);
   }
 }
@@ -1340,9 +1340,9 @@ class CstVecValue(T = int): CstValue
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1415,7 +1415,7 @@ class CstVecArrExpr: CstVecTerm
 {
   import std.conv;
 
-  CstVecArrNode _arr;
+  CstDomSet _arr;
   CstVectorOp _op;
 
   override string describe() {
@@ -1454,7 +1454,7 @@ class CstVecArrExpr: CstVecTerm
     return this;
   }
 
-  this(CstVecArrNode arr, CstVectorOp op) {
+  this(CstDomSet arr, CstVectorOp op) {
     _arr = arr;
     _op = op;
   }
@@ -1481,9 +1481,9 @@ class CstVecArrExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1619,9 +1619,9 @@ class CstVec2VecExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1837,9 +1837,9 @@ class CstRangeExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -1932,9 +1932,9 @@ class CstDistRangeExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2031,9 +2031,9 @@ class CstDistExpr(T): CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2156,9 +2156,9 @@ class CstDistExpr(T): CstLogicTerm
 
 //   void setDomainContext(CstPredicate pred,
 // 			ref CstDomain[] rnds,
-//		        ref CstVecArrNode[] rndArrs,
+//		        ref CstDomSet[] rndArrs,
 // 			ref CstDomain[] vars,
-//			ref CstVecArrNode[] varArrs,
+//			ref CstDomSet[] varArrs,
 // 			ref CstValue[] vals,
 // 			ref CstIterator[] iters,
 // 			ref CstVecNodeIntf[] idxs,
@@ -2266,9 +2266,9 @@ class CstVecSliceExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2359,9 +2359,9 @@ class CstVecSliceExpr: CstVecTerm
 
 //   void setDomainContext(CstPredicate pred,
 // 			ref CstDomain[] rnds,
-//			ref CstVecArrNode[] rndArrs,
+//			ref CstDomSet[] rndArrs,
 // 			ref CstDomain[] vars,
-//			ref CstVecArrNode[] varArrs,
+//			ref CstDomSet[] varArrs,
 // 			ref CstValue[] vals,
 // 			ref CstIterator[] iters,
 // 			ref CstVecNodeIntf[] idxs,
@@ -2450,9 +2450,9 @@ class CstNotVecExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2539,9 +2539,9 @@ class CstNegVecExpr: CstVecTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2615,9 +2615,9 @@ class CstLogic2LogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2721,9 +2721,9 @@ class CstIteLogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -2832,9 +2832,9 @@ class CstVec2LogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -3015,9 +3015,9 @@ class CstLogicConst: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -3094,9 +3094,9 @@ class CstNotLogicExpr: CstLogicTerm
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -3186,9 +3186,9 @@ class CstVarVisitorExpr: CstLogicTerm
   
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,

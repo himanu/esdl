@@ -230,7 +230,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool isStatic();
   abstract bool isRolled();
   abstract void registerRndPred(CstPredicate rndPred);  
-  abstract CstVecArrNode getParentArr();
+  abstract CstDomSet getParentArr();
   // abstract void registerVarPred(CstPredicate varPred);  
   // abstract void registerDepPred(CstDepCallback depCb);
   // abstract void registerIdxPred(CstDepCallback idxCb);
@@ -305,9 +305,9 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
       }
     }
     if (_esdl__parentIsConstrained) {
-      CstVecArrNode parent = getParentArr();
+      CstDomSet parent = getParentArr();
       assert (parent !is null);
-      if (parent._state is CstVecArrNode.State.INIT) {
+      if (parent._state is CstDomSet.State.INIT) {
 	parent.setGroupContext(group);
       }
     }
@@ -384,7 +384,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   override abstract string describe();
 }
 
-abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
+abstract class CstDomSet: CstVecPrim, CstVecArrIntf
 {
   State _state;
   
@@ -407,7 +407,7 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
     }
   }
 
-  abstract CstVecArrNode getParentArr();
+  abstract CstDomSet getParentArr();
   
   override void registerDepPred(CstDepCallback depCb) {
     foreach (cb; _depCbs) {
@@ -481,9 +481,9 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
 
   abstract void setDomainArrContext(CstPredicate pred,
 				    ref CstDomain[] rnds,
-				    ref CstVecArrNode[] rndArrs,
+				    ref CstDomSet[] rndArrs,
 				    ref CstDomain[] vars,
-				    ref CstVecArrNode[] varArrs,
+				    ref CstDomSet[] varArrs,
 				    ref CstValue[] vals,
 				    ref CstIterator[] iters,
 				    ref CstVecNodeIntf[] idxs,
@@ -528,7 +528,7 @@ abstract class CstVecArrNode: CstVecPrim, CstVecArrIntf
       }
     }
     if (_esdl__parentIsConstrained) {
-      CstVecArrNode parent = getParentArr();
+      CstDomSet parent = getParentArr();
       assert (parent !is null);
       if (parent._state is State.INIT) {
 	parent.setGroupContext(group);
@@ -573,9 +573,9 @@ abstract class CstExpr
 
   abstract void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
-				 ref CstVecArrNode[] rndArrs,
+				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
-				 ref CstVecArrNode[] varArrs,
+				 ref CstDomSet[] varArrs,
 				 ref CstValue[] vals,
 				 ref CstIterator[] iters,
 				 ref CstVecNodeIntf[] idxs,
@@ -729,7 +729,7 @@ class CstPredGroup			// group of related predicates
     return _doms[];
   }
   
-  CstVecArrNode[] domainArrs() {
+  CstDomSet[] domainArrs() {
     return _domArrs[];
   }
   
@@ -744,15 +744,15 @@ class CstPredGroup			// group of related predicates
     return _vars[];
   }
 
-  Folder!(CstVecArrNode, "domArrs") _domArrs;
+  Folder!(CstDomSet, "domArrs") _domArrs;
   
-  void addDomainArr(CstVecArrNode domArr) {
+  void addDomainArr(CstDomSet domArr) {
     _domArrs ~= domArr;
   }
 
-  Folder!(CstVecArrNode, "varArrs") _varArrs;
+  Folder!(CstDomSet, "varArrs") _varArrs;
   
-  void addVariableArr(CstVecArrNode varArr) {
+  void addVariableArr(CstDomSet varArr) {
     _varArrs ~= varArr;
   }
 
@@ -1116,10 +1116,10 @@ class CstPredicate: CstIterCallback, CstDepCallback
   }
   
   CstDomain[] _rnds;
-  CstVecArrNode[] _rndArrs;
+  CstDomSet[] _rndArrs;
   CstDomain[] _dynRnds;
   CstDomain[] _vars;
-  CstVecArrNode[] _varArrs;
+  CstDomSet[] _varArrs;
   CstValue[]  _vals;
   CstVecNodeIntf[] _deps;
   CstVecNodeIntf[] _idxs;
@@ -1397,7 +1397,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     foreach (arr; _rndArrs) {
       // if (arr.group is null && (! arr.isSolved())) {
-      if (arr._state is CstVecArrNode.State.INIT && (! arr.isSolved())) {
+      if (arr._state is CstDomSet.State.INIT && (! arr.isSolved())) {
 	arr.setGroupContext(group);
       }
     }
