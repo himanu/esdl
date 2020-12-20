@@ -1880,7 +1880,235 @@ class CstDistRangeExpr: CstVecTerm
 {
   import std.conv;
 
-  CstRangeExpr _range;
+  CstVecExpr _lhs;
+  CstVecExpr _rhs;
+
+  bool _inclusive = false;
+
+  override string describe() {
+    if (_rhs is null)
+      return "( " ~ _lhs.describe ~ " )";
+    else if (_inclusive)
+      return "( " ~ _lhs.describe ~ " : " ~ _rhs.describe ~ " )";
+    else
+      return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
+  }
+
+  override void visit(CstSolver solver) {
+    // assert (_lhs.isSolved());
+    // assert (_rhs.isSolved());
+    // solver.pushIndexToEvalStack(_lhs.evaluate());
+    // solver.pushIndexToEvalStack(_rhs.evaluate());
+    // if (_inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
+    // else solver.processEvalStack(CstSliceOp.SLICE);
+    assert (false);
+  }
+
+  override long evaluate() {
+    assert (_rhs is null);
+    return _lhs.evaluate();
+  }
+
+  override CstDistRangeExpr unroll(CstIterator iter, uint n) {
+    if (_rhs is null)
+      return new CstDistRangeExpr(_lhs.unroll(iter, n), null, _inclusive);
+    else
+      return new CstDistRangeExpr(_lhs.unroll(iter, n),
+				  _rhs.unroll(iter, n), _inclusive);
+  }
+
+  this(CstVecExpr lhs, CstVecExpr rhs, bool inclusive=false) {
+    _lhs = lhs;
+    _rhs = rhs;
+    _inclusive = inclusive;
+  }
+
+  override uint resolveLap() {
+    // auto lhs = _lhs.resolveLap();
+    // auto rhs = _rhs.resolveLap();
+    // if (rhs > lhs) return rhs;
+    // else return lhs;
+    assert (false);
+  }
+
+  override void resolveLap(uint lap) {
+    // _lhs.resolveLap(lap);
+    // _rhs.resolveLap(lap);
+    assert (false);
+  }
+  
+  override bool isConst() {
+    return _rhs is null && _lhs.isConst();
+  }
+
+  override bool isIterator() {
+    return false;
+  }
+
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+
+  override void setDomainContext(CstPredicate pred,
+				 ref CstDomain[] rnds,
+				 ref CstDomSet[] rndArrs,
+				 ref CstDomain[] vars,
+				 ref CstDomSet[] varArrs,
+				 ref CstValue[] vals,
+				 ref CstIterator[] iters,
+				 ref CstVecNodeIntf[] idxs,
+				 ref CstDomain[] bitIdxs,
+				 ref CstVecNodeIntf[] deps) {
+    _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    if (_rhs !is null)
+      _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  override bool getUniRange(ref UniRange rng) {
+    assert (false);
+  }
+
+  override bool getIntRange(ref IntR rng) {
+    assert (false);
+  }
+
+  override bool getIntType(ref INTTYPE iType) {
+    assert (false);
+  }
+
+  override bool isSolved() {
+    return _lhs.isSolved() && (_rhs is null || _rhs.isSolved());
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    _lhs.writeExprString(str);
+    if (_rhs !is null) {
+      if (_inclusive) str ~= " : ";
+      else str ~= " .. ";
+      _rhs.writeExprString(str);
+    }
+  }
+}
+
+class CstInsideRangeExpr: CstVecTerm
+{
+  import std.conv;
+
+  CstVecExpr _lhs;
+  CstVecExpr _rhs;
+
+  bool _inclusive = false;
+
+  override string describe() {
+    if (_rhs is null)
+      return "( " ~ _lhs.describe ~ " )";
+    else if (_inclusive)
+      return "( " ~ _lhs.describe ~ " : " ~ _rhs.describe ~ " )";
+    else
+      return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
+  }
+
+  override void visit(CstSolver solver) {
+    // assert (_lhs.isSolved());
+    // assert (_rhs.isSolved());
+    // solver.pushIndexToEvalStack(_lhs.evaluate());
+    // solver.pushIndexToEvalStack(_rhs.evaluate());
+    // if (_inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
+    // else solver.processEvalStack(CstSliceOp.SLICE);
+    assert (false);
+  }
+
+  override long evaluate() {
+    assert (_rhs is null);
+    return _lhs.evaluate();
+  }
+
+  override CstInsideRangeExpr unroll(CstIterator iter, uint n) {
+    if (_rhs is null)
+      return new CstInsideRangeExpr(_lhs.unroll(iter, n), null, _inclusive);
+    else
+      return new CstInsideRangeExpr(_lhs.unroll(iter, n),
+				    _rhs.unroll(iter, n), _inclusive);
+  }
+
+  this(CstVecExpr lhs, CstVecExpr rhs, bool inclusive=false) {
+    _lhs = lhs;
+    _rhs = rhs;
+    _inclusive = inclusive;
+  }
+
+  override uint resolveLap() {
+    // auto lhs = _lhs.resolveLap();
+    // auto rhs = _rhs.resolveLap();
+    // if (rhs > lhs) return rhs;
+    // else return lhs;
+    assert (false);
+  }
+
+  override void resolveLap(uint lap) {
+    // _lhs.resolveLap(lap);
+    // _rhs.resolveLap(lap);
+    assert (false);
+  }
+  
+  override bool isConst() {
+    return _rhs is null && _lhs.isConst();
+  }
+
+  override bool isIterator() {
+    return false;
+  }
+
+  override bool isOrderingExpr() {
+    return false;		// only CstVecOrderingExpr return true
+  }
+
+  override void setDomainContext(CstPredicate pred,
+				 ref CstDomain[] rnds,
+				 ref CstDomSet[] rndArrs,
+				 ref CstDomain[] vars,
+				 ref CstDomSet[] varArrs,
+				 ref CstValue[] vals,
+				 ref CstIterator[] iters,
+				 ref CstVecNodeIntf[] idxs,
+				 ref CstDomain[] bitIdxs,
+				 ref CstVecNodeIntf[] deps) {
+    _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    if (_rhs !is null)
+      _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  override bool getUniRange(ref UniRange rng) {
+    assert (false);
+  }
+
+  override bool getIntRange(ref IntR rng) {
+    assert (false);
+  }
+
+  override bool getIntType(ref INTTYPE iType) {
+    assert (false);
+  }
+
+  override bool isSolved() {
+    return _lhs.isSolved() && (_rhs is null || _rhs.isSolved());
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    _lhs.writeExprString(str);
+    if (_rhs !is null) {
+      if (_inclusive) str ~= " : ";
+      else str ~= " .. ";
+      _rhs.writeExprString(str);
+    }
+  }
+}
+
+class CstWeightedDistRangeExpr: CstVecTerm
+{
+  import std.conv;
+
+  CstDistRangeExpr _range;
   CstVecExpr   _weight;
   bool         _perItem = false;
 
@@ -1900,11 +2128,11 @@ class CstDistRangeExpr: CstVecTerm
     assert (false);
   }
 
-  override CstDistRangeExpr unroll(CstIterator iter, uint n) {
+  override CstWeightedDistRangeExpr unroll(CstIterator iter, uint n) {
     return this;
   }
 
-  this(CstRangeExpr range, CstVecExpr weight, bool perItem=false) {
+  this(CstDistRangeExpr range, CstVecExpr weight, bool perItem=false) {
     _range = range;
     _weight = weight;
     _perItem = perItem;
@@ -1971,11 +2199,11 @@ class CstDistExpr(T): CstLogicTerm
   import std.conv;
 
   CstDomain _vec;
-  CstDistRangeExpr[] _dists;
+  CstWeightedDistRangeExpr[] _dists;
 
   DistRangeSet!T _rs;
   
-  this(CstDomain vec, CstDistRangeExpr[] dists) {
+  this(CstDomain vec, CstWeightedDistRangeExpr[] dists) {
     _vec = vec;
     _dists = dists;
     _rs = new DistRangeSet!T;
@@ -3415,12 +3643,12 @@ CstVec2LogicExpr _esdl__equ_impl(CstVecExpr p, CstVecExpr q) {
   return new CstVec2LogicExpr(p, q, CstCompareOp.EQU);
 }
 
-auto _esdl__range(P, Q)(P p, Q q) {
+auto _esdl__index_range(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__range_impl(p, q);
+    return _esdl__index_range_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__range_impl(q, p);
+    return _esdl__index_range_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3428,23 +3656,23 @@ auto _esdl__range(P, Q)(P p, Q q) {
   }
 }
 
-CstRangeExpr _esdl__range_impl(Q)(CstVecExpr p, Q q)
+CstRangeExpr _esdl__index_range_impl(Q)(CstVecExpr p, Q q)
   if (isBitVector!Q || isIntegral!Q) {
-    if (q is null) return _esdl__range_impl(p, q);
+    if (q is null) return _esdl__index_range_impl(p, q);
     auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
-    return _esdl__range_impl(p, qq);
+    return _esdl__index_range_impl(p, qq);
   }
 
-CstRangeExpr _esdl__range_impl(CstVecExpr p, CstVecExpr q) {
+CstRangeExpr _esdl__index_range_impl(CstVecExpr p, CstVecExpr q) {
   return new CstRangeExpr(p, q);
 }
 
-auto _esdl__rangeinc(P, Q)(P p, Q q) {
+auto _esdl__index_rangeinc(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
-    return _esdl__rangeinc_impl(p, q);
+    return _esdl__index_rangeinc_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
-    return _esdl__rangeinc_impl(q, p);
+    return _esdl__index_rangeinc_impl(q, p);
   }
   else static if((isBitVector!P || isIntegral!P) &&
 		 (isBitVector!Q || isIntegral!Q)) {
@@ -3452,13 +3680,107 @@ auto _esdl__rangeinc(P, Q)(P p, Q q) {
   }
 }
 
-CstRangeExpr _esdl__rangeinc_impl(Q)(CstVecExpr p, Q q)
+CstRangeExpr _esdl__index_rangeinc_impl(Q)(CstVecExpr p, Q q)
   if(isBitVector!Q || isIntegral!Q) {
     auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
-    return _esdl__rangeinc_impl(p, qq);
+    return _esdl__index_rangeinc_impl(p, qq);
   }
 
-CstRangeExpr _esdl__rangeinc_impl(CstVecExpr p, CstVecExpr q) {
+CstRangeExpr _esdl__index_rangeinc_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstRangeExpr(p, q, true);
+}
+
+auto _esdl__dist_range(P, Q)(P p, Q q) {
+  static if(is(P: CstVecExpr)) {
+    return _esdl__dist_range_impl(p, q);
+  }
+  else static if(is(Q: CstVecExpr)) {
+    return _esdl__dist_range_impl(q, p);
+  }
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
+    static assert (false);
+  }
+}
+
+CstDistRangeExpr _esdl__dist_range_impl(Q)(CstVecExpr p, Q q)
+  if (isBitVector!Q || isIntegral!Q) {
+    if (q is null) return _esdl__dist_range_impl(p, q);
+    auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
+    return _esdl__dist_range_impl(p, qq);
+  }
+
+CstDistRangeExpr _esdl__dist_range_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstDistRangeExpr(p, q);
+}
+
+auto _esdl__dist_rangeinc(P, Q)(P p, Q q) {
+  static if(is(P: CstVecExpr)) {
+    return _esdl__dist_rangeinc_impl(p, q);
+  }
+  else static if(is(Q: CstVecExpr)) {
+    return _esdl__dist_rangeinc_impl(q, p);
+  }
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
+    return new CstLogicConst(p == q);
+  }
+}
+
+CstDistRangeExpr _esdl__dist_rangeinc_impl(Q)(CstVecExpr p, Q q)
+  if(isBitVector!Q || isIntegral!Q) {
+    auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
+    return _esdl__dist_rangeinc_impl(p, qq);
+  }
+
+CstDistRangeExpr _esdl__dist_rangeinc_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstDistRangeExpr(p, q, true);
+}
+
+auto _esdl__inside_range(P, Q)(P p, Q q) {
+  static if(is(P: CstVecExpr)) {
+    return _esdl__inside_range_impl(p, q);
+  }
+  else static if(is(Q: CstVecExpr)) {
+    return _esdl__inside_range_impl(q, p);
+  }
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
+    static assert (false);
+  }
+}
+
+CstRangeExpr _esdl__inside_range_impl(Q)(CstVecExpr p, Q q)
+  if (isBitVector!Q || isIntegral!Q) {
+    if (q is null) return _esdl__inside_range_impl(p, q);
+    auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
+    return _esdl__inside_range_impl(p, qq);
+  }
+
+CstRangeExpr _esdl__inside_range_impl(CstVecExpr p, CstVecExpr q) {
+  return new CstRangeExpr(p, q);
+}
+
+auto _esdl__inside_rangeinc(P, Q)(P p, Q q) {
+  static if(is(P: CstVecExpr)) {
+    return _esdl__inside_rangeinc_impl(p, q);
+  }
+  else static if(is(Q: CstVecExpr)) {
+    return _esdl__inside_rangeinc_impl(q, p);
+  }
+  else static if((isBitVector!P || isIntegral!P) &&
+		 (isBitVector!Q || isIntegral!Q)) {
+    return new CstLogicConst(p == q);
+  }
+}
+
+CstRangeExpr _esdl__inside_rangeinc_impl(Q)(CstVecExpr p, Q q)
+  if(isBitVector!Q || isIntegral!Q) {
+    auto qq = new CstVecValue!Q(q); // CstVecValue!Q.allocate(q);
+    return _esdl__inside_rangeinc_impl(p, qq);
+  }
+
+CstRangeExpr _esdl__inside_rangeinc_impl(CstVecExpr p, CstVecExpr q) {
   return new CstRangeExpr(p, q, true);
 }
 
@@ -3492,15 +3814,15 @@ CstLogicTerm _esdl__inside(CstVecTerm vec, CstRangeExpr[] ranges) {
   return result;
 }
 
-CstDistRangeExpr _esdl__rangeWeight(CstRangeExpr range, CstVecExpr weight) {
-  return new CstDistRangeExpr(range, weight, false);
+CstWeightedDistRangeExpr _esdl__rangeWeight(CstDistRangeExpr range, CstVecExpr weight) {
+  return new CstWeightedDistRangeExpr(range, weight, false);
 }
 
-CstDistRangeExpr _esdl__itemWeight(CstRangeExpr range, CstVecExpr weight) {
-  return new CstDistRangeExpr(range, weight, true);
+CstWeightedDistRangeExpr _esdl__itemWeight(CstDistRangeExpr range, CstVecExpr weight) {
+  return new CstWeightedDistRangeExpr(range, weight, true);
 }
 
 auto _esdl__dist(T, rand RAND)(CstVecDomain!(T, RAND) vec,
-			       CstDistRangeExpr[] ranges) {
+			       CstWeightedDistRangeExpr[] ranges) {
   return new CstDistExpr!T(vec, ranges);
 }

@@ -401,6 +401,17 @@ struct CstParser {
     return tok;			// None
   }
 
+  bool parseUniqueOperator() {
+    bool tok = false;
+    if (srcCursor <= CST.length - 6) {
+      if (CST[srcCursor..srcCursor+6] == "unique") {
+	tok = true;
+	srcCursor += 6;
+      }
+    }
+    return tok;
+  }
+
   OpLogicToken parseLogicOperator() {
     OpLogicToken tok = OpLogicToken.NONE;
     if (srcCursor <= CST.length - 2) {
@@ -1535,7 +1546,17 @@ struct CstParser {
     auto savedNumParen = numParen;
     numIndex = 0;
     numParen = 0;
-    procRangeExpr();
+    procRangeExpr("inside_");
+    numIndex = savedNumIndex;
+    numParen = savedNumParen;
+  }
+
+  void procDistRangeExpr() {
+    auto savedNumIndex = numIndex;
+    auto savedNumParen = numParen;
+    numIndex = 0;
+    numParen = 0;
+    procRangeExpr("dist_");
     numIndex = savedNumIndex;
     numParen = savedNumParen;
   }
@@ -1547,7 +1568,7 @@ struct CstParser {
     srcCursor = cursor;
     numIndex = 0;
     numParen = 0;
-    procRangeExpr();
+    procRangeExpr("index_");
     numIndex = savedNumIndex;
     numParen = savedNumParen;
     srcCursor = savedCursor;
@@ -1650,7 +1671,7 @@ struct CstParser {
     return false;
   }
 
-  void procRangeExpr() {
+  void procRangeExpr(string prefix) {
     size_t srcTag = 0;
 
     srcTag = parseSpace();
@@ -1676,13 +1697,19 @@ struct CstParser {
 
       final switch(opToken) {
       case OpRangeToken.RANGE:
-	fill(")._esdl__range(");
+	fill(")._esdl__");
+	fill(prefix);
+	fill("range(");
 	break;
       case OpRangeToken.RANGEINC:
-	fill(")._esdl__rangeinc(");
+	fill(")._esdl__");
+	fill(prefix);
+	fill("rangeinc(");
 	break;
       case OpRangeToken.NONE:
-	fill(")._esdl__range(null)");
+	fill(")._esdl__");
+	fill(prefix);
+	fill("range(null)");
 	return;
       }
       // RHS
@@ -1706,7 +1733,7 @@ struct CstParser {
       fill('[');
       srcCursor += 1;
       while (srcCursor < CST.length) {
-	procSetRangeExpr();
+	procDistRangeExpr();
 	srcTag = parseSpace();
 	fill(CST[srcTag..srcCursor]);
 	OpDistToken token = parseDistOperator();
@@ -1880,6 +1907,41 @@ struct CstParser {
     }
   }
 
+  bool procUniqueExpr() {
+    return false;
+    // size_t srcTag = 0;
+
+    // srcTag = parseSpace();
+    // fill(CST[srcTag..srcCursor]);
+
+    // // LHS
+    // if (srcCursor < CST.length) {
+    //   // size_t openingParenAnchor = fill(' ');
+    //   size_t startAnchor = outCursor;
+    //   srcTag = srcCursor;
+
+    //   bool tok = procUniqueExpr();
+
+    //   if (tok is false) {
+    // 	return false;
+    //   }
+
+    //   srcTag = parseSpace();
+    //   fill(CST[srcTag..srcCursor]);
+
+    //   procSetContainer();
+    //   if (srcTag == srcCursor) {
+    // 	assert(false, "Expecting a set container on RHS, got none");
+    //   }
+
+    //   fill(')');
+    //   return true;
+    // }
+    // else {
+    //   return false;
+    // }
+  }
+  
   void procLogicExpr() {
     size_t startNumParen = numParen;
     size_t srcTag = 0;
@@ -1909,11 +1971,16 @@ struct CstParser {
 	srcTag = parseSpace();
 	fill(CST[srcTag..srcCursor]);
 	// srcTag = srcCursor;
-	if (procCmpExpr() == false) {
+	if (procCmpExpr() == true) {
+	  break;
+	}
+	else if (procUniqueExpr() == true) {
+	  break;
+	}
+	else {
 	  assert(false, "Expecting an expression, got none");
 	}
 	// srcTag = procIdentifier();
-	break;
       }
       // }
       // unaryLegal = false;
