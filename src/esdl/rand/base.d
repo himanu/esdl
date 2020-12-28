@@ -507,7 +507,8 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
   }
 
   CstVecArrExpr sum() {
-    return new CstVecArrExpr(this, CstVectorOp.SUM);
+    return new CstVecArrExpr(this// , CstVectorOp.SUM
+    );
   }
 
   public enum State: ubyte

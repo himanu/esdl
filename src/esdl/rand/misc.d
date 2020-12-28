@@ -403,6 +403,13 @@ class _esdl__RandGen
     }
 }
 
+enum CstInsideOp: byte
+{   CONTAINS,
+    OPEN_RANGE,
+    CLOSED_RANGE,
+    DONE,
+    }
+
 enum CstUnaryOp: byte
 {   NOT,
     NEG,

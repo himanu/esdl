@@ -16,6 +16,7 @@ abstract class CstSolver
 
   abstract void solve(CstPredGroup group);
 
+  // abstract void pushToEvalStack();
   abstract void pushToEvalStack(CstDomain domain);
   abstract void pushToEvalStack(CstValue value);
 

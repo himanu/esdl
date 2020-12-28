@@ -1541,7 +1541,7 @@ struct CstParser {
     numParen = savedNumParen;
   }
 
-  void procSetRangeExpr() {
+  void procInsideElem() {
     auto savedNumIndex = numIndex;
     auto savedNumParen = numParen;
     numIndex = 0;
@@ -1777,7 +1777,7 @@ struct CstParser {
     }
   }
   
-  void procSetContainer() {
+  void procInsideSetContainer() {
     size_t srcTag = parseSpace();
     fill(CST[srcTag..srcCursor]);
 
@@ -1785,7 +1785,7 @@ struct CstParser {
       fill('[');
       srcCursor += 1;
       while (srcCursor < CST.length) {
-	procSetRangeExpr();
+	procInsideElem();
 	srcTag = parseSpace();
 	fill(CST[srcTag..srcCursor]);
 	if (srcCursor < CST.length && CST[srcCursor] == ',') {
@@ -1887,7 +1887,7 @@ struct CstParser {
 	}
 	break;
       case VEC2BOOL.INSIDE:
-	procSetContainer();
+	procInsideSetContainer();
 	if (srcTag == srcCursor) {
 	  assert(false, "Expecting a set container on RHS, got none");
 	}
@@ -1929,7 +1929,7 @@ struct CstParser {
     //   srcTag = parseSpace();
     //   fill(CST[srcTag..srcCursor]);
 
-    //   procSetContainer();
+    //   procInsideSetContainer();
     //   if (srcTag == srcCursor) {
     // 	assert(false, "Expecting a set container on RHS, got none");
     //   }
