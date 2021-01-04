@@ -938,12 +938,6 @@ class CstArrIterator(RV): CstIterator
     return _arrVar.unroll(iter,n).arrLen().makeIterVar();
   }
 
-  override uint resolveLap() {
-    assert (false, "resolveLap should never be called on CstArrIterator");
-  }
-
-  override void resolveLap(uint lap) {}
-
   override void visit(CstSolver solver) {
     assert (false, "Can not visit an Iter Variable without unrolling");
   }
@@ -1324,12 +1318,6 @@ class CstVecValue(T = int): CstValue
     return _val;
   }
 
-  override uint resolveLap() {
-    return 0;			// const
-  }
-
-  override void resolveLap(uint lap) {}
-
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
   }
@@ -1460,14 +1448,6 @@ class CstVecArrExpr: CstVecTerm
     _op = CstVectorOp.SUM;
   }
 
-  override uint resolveLap() {
-    return _arr.resolveLap();
-  }
-
-  override void resolveLap(uint lap) {
-    _arr.resolveLap(lap);
-  }
-  
   override bool isConst() {
     return false;
   }
@@ -1594,18 +1574,6 @@ class CstVec2VecExpr: CstVecTerm
     _op = op;
   }
 
-  override uint resolveLap() {
-    auto lhs = _lhs.resolveLap();
-    auto rhs = _rhs.resolveLap();
-    if (rhs > lhs) return rhs;
-    else return lhs;
-  }
-
-  override void resolveLap(uint lap) {
-    _lhs.resolveLap(lap);
-    _rhs.resolveLap(lap);
-  }
-  
   override bool isConst() {
     return _lhs.isConst() && _rhs.isConst();
   }
@@ -1810,20 +1778,6 @@ class CstRangeExpr: CstVecTerm
     _inclusive = inclusive;
   }
 
-  override uint resolveLap() {
-    // auto lhs = _lhs.resolveLap();
-    // auto rhs = _rhs.resolveLap();
-    // if (rhs > lhs) return rhs;
-    // else return lhs;
-    assert (false);
-  }
-
-  override void resolveLap(uint lap) {
-    // _lhs.resolveLap(lap);
-    // _rhs.resolveLap(lap);
-    assert (false);
-  }
-  
   override bool isConst() {
     return _rhs is null && _lhs.isConst();
   }
@@ -1924,20 +1878,6 @@ class CstDistSetElem: CstVecTerm
     _inclusive = inclusive;
   }
 
-  override uint resolveLap() {
-    // auto lhs = _lhs.resolveLap();
-    // auto rhs = _rhs.resolveLap();
-    // if (rhs > lhs) return rhs;
-    // else return lhs;
-    assert (false);
-  }
-
-  override void resolveLap(uint lap) {
-    // _lhs.resolveLap(lap);
-    // _rhs.resolveLap(lap);
-    assert (false);
-  }
-  
   override bool isConst() {
     return _rhs is null && _lhs.isConst();
   }
@@ -2047,20 +1987,6 @@ class CstInsideSetElem: CstVecTerm
     _arr = arr;
   }
 
-  override uint resolveLap() {
-    // auto lhs = _lhs.resolveLap();
-    // auto rhs = _rhs.resolveLap();
-    // if (rhs > lhs) return rhs;
-    // else return lhs;
-    assert (false);
-  }
-
-  override void resolveLap(uint lap) {
-    // _lhs.resolveLap(lap);
-    // _rhs.resolveLap(lap);
-    assert (false);
-  }
-  
   override bool isConst() {
     return _rhs is null && _lhs.isConst();
   }
@@ -2148,14 +2074,6 @@ class CstWeightedDistSetElem: CstVecTerm
     _perItem = perItem;
   }
 
-  override uint resolveLap() {
-    assert (false);
-  }
-
-  override void resolveLap(uint lap) {
-    assert (false);
-  }
-  
   override bool isConst() {
     return false;
   }
@@ -2257,15 +2175,6 @@ class CstDistExpr(T): CstLogicTerm
     // writeln("LHS: ", _lhs.unroll(iter, n).describe());
     return new CstDistExpr!T(cast (CstDomain) (_vec.unroll(iter, n)), _dists);
   }
-
-  override uint resolveLap() {
-    return _vec.resolveLap();
-  }
-  
-  override void resolveLap(uint lap) {
-    _vec.resolveLap(lap);
-  }
-
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
@@ -2372,14 +2281,6 @@ class CstDistExpr(T): CstLogicTerm
 //     _rhs = rhs;
 //   }
 
-//   uint resolveLap() {
-//     return _vec.resolveLap();
-//   }
-
-//   void resolveLap(uint lap) {
-//     _vec.resolveLap(lap);
-//   }
-
 //   bool isConst() {
 //     return false;
 //   }
@@ -2482,14 +2383,6 @@ class CstVecSliceExpr: CstVecTerm
     _range = range;
   }
 
-  override uint resolveLap() {
-    return _vec.resolveLap();
-  }
-
-  override void resolveLap(uint lap) {
-    _vec.resolveLap(lap);
-  }
-
   override bool isConst() {
     return false;
   }
@@ -2575,14 +2468,6 @@ class CstVecSliceExpr: CstVecTerm
 //     _index = index;
 //   }
 
-//   uint resolveLap() {
-//     return _vec.resolveLap();
-//   }
-
-//   void resolveLap(uint lap) {
-//     _vec.resolveLap(lap);
-//   }
-
 //   bool isConst() {
 //     return false;
 //   }
@@ -2666,14 +2551,6 @@ class CstNotVecExpr: CstVecTerm
     _expr = expr;
   }
 
-  override uint resolveLap() {
-    return _expr.resolveLap();
-  }
-
-  override void resolveLap(uint lap) {
-    _expr.resolveLap(lap);
-  }
-  
   override bool isConst() {
     return _expr.isConst();
   }
@@ -2755,14 +2632,6 @@ class CstNegVecExpr: CstVecTerm
     _expr = expr;
   }
 
-  override uint resolveLap() {
-    return _expr.resolveLap();
-  }
-
-  override void resolveLap(uint lap) {
-    _expr.resolveLap(lap);
-  }
-  
   override bool isConst() {
     return _expr.isConst();
   }
@@ -2838,17 +2707,6 @@ class CstLogic2LogicExpr: CstLogicTerm
 
   override CstLogic2LogicExpr unroll(CstIterator iter, uint n) {
     return new CstLogic2LogicExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
-  }
-
-  override uint resolveLap() {
-    uint lhs = _lhs.resolveLap();
-    uint rhs = _rhs.resolveLap();
-    if (lhs > rhs) return lhs;
-    else return rhs;
-  }
-  override void resolveLap(uint lap) {
-    _lhs.resolveLap(lap);
-    _rhs.resolveLap(lap);
   }
 
   override void setDomainContext(CstPredicate pred,
@@ -2982,22 +2840,15 @@ class CstLogic2LogicExpr: CstLogicTerm
 //     _term = term;
 //   }
 
+//   void addElem(CstInsideSetElem elem) {
+//     _elems ~= elem;
+//   }
+
 //   override CstInsideArrExpr unroll(CstIterator iter, uint n) {
 //     CstInsideArrExpr unrolled = new CstInsideArrExpr(_term.unroll(iter, n));
 //     foreach (elem; _elems) {
 //       unrolled.addElem(elem.unroll(iter, n));
 //     }
-//   }
-
-//   override uint resolveLap() {
-//     uint lhs = _lhs.resolveLap();
-//     uint rhs = _rhs.resolveLap();
-//     if (lhs > rhs) return lhs;
-//     else return rhs;
-//   }
-//   override void resolveLap(uint lap) {
-//     _lhs.resolveLap(lap);
-//     _rhs.resolveLap(lap);
 //   }
 
 //   override void setDomainContext(CstPredicate pred,
@@ -3147,14 +2998,6 @@ class CstIteLogicExpr: CstLogicTerm
     return false;
   }
 
-  override uint resolveLap() {
-    assert(false, "TBD");
-  }    
-
-  override void resolveLap(uint lap) {
-    assert(false, "TBD");
-  }    
-
   override CstLogicTerm unroll(CstIterator iter, uint n) {
     assert(false, "TBD");
   }
@@ -3203,19 +3046,6 @@ class CstVec2LogicExpr: CstLogicTerm
     // writeln("LHS: ", _lhs.unroll(iter, n).describe());
     return new CstVec2LogicExpr(_lhs.unroll(iter, n), _rhs.unroll(iter, n), _op);
   }
-
-  override uint resolveLap() {
-    uint lhs = _lhs.resolveLap();
-    uint rhs = _rhs.resolveLap();
-    if (lhs > rhs) return lhs;
-    else return rhs;
-  }
-  
-  override void resolveLap(uint lap) {
-    _lhs.resolveLap(lap);
-    _rhs.resolveLap(lap);
-  }
-
 
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
@@ -3395,11 +3225,6 @@ class CstLogicConst: CstLogicTerm
     return this;
   }
 
-  override uint resolveLap() {
-    return 0;
-  }
-  override void resolveLap(uint lap) {}
-
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
 				 ref CstDomSet[] rndArrs,
@@ -3470,13 +3295,6 @@ class CstNotLogicExpr: CstLogicTerm
 
   override CstNotLogicExpr unroll(CstIterator iter, uint n) {
     return new CstNotLogicExpr(_expr.unroll(iter, n));
-  }
-
-  override uint resolveLap() {
-    return _expr.resolveLap();
-  }
-  override void resolveLap(uint lap) {
-    _expr.resolveLap(lap);
   }
 
   override void setDomainContext(CstPredicate pred,
@@ -3563,14 +3381,6 @@ class CstVarVisitorExpr: CstLogicTerm
     }
   }
 
-  override uint resolveLap() {
-    assert (false);
-  }
-
-  override void resolveLap(uint lap) {
-    assert (false);
-  }
-  
   override void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
 				 ref CstDomSet[] rndArrs,

@@ -575,7 +575,6 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     if (currLen < v) {
       _elems.length = v;
       for (uint i=currLen; i!=v; ++i) {
-	import std.conv: to;
 	_elems[i] = createElem(i);
       }
     }

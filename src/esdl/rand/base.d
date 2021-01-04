@@ -320,24 +320,11 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   uint _cycle = -1;
   State _state;
   uint _unresolveLap;
-  uint _resolveLap = 0;
-  
 
   override void reset() {
     _state = State.INIT;
-    _resolveLap = 0;
   }
   
-  override uint resolveLap() {
-    if (isSolved()) return 0;
-    else return _resolveLap;
-  }
-
-  override void resolveLap(uint lap) {
-    if (isSolved()) _resolveLap = 0;
-    else _resolveLap = lap;
-  }
-
   DomType _type = DomType.TRUEMONO;
 
   void markAsUnresolved(uint lap) {
@@ -472,13 +459,6 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
     }
   }
 
-  uint resolveLap() {
-    return 0;
-  }
-
-  void resolveLap(uint lap) {
-  }
-
   abstract void setDomainArrContext(CstPredicate pred,
 				    ref CstDomain[] rnds,
 				    ref CstDomSet[] rndArrs,
@@ -568,9 +548,6 @@ interface CstVecPrim
 abstract class CstExpr
 {
   string describe();
-
-  abstract uint resolveLap();
-  abstract void resolveLap(uint lap);
 
   abstract void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
