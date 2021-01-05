@@ -190,15 +190,6 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 	}
       }
 
-      final override void markAsUnresolved(uint lap) {
-	if (_unresolveLap != lap) {
-	  _unresolveLap = lap;
-	  foreach (pred; _rndPreds) {
-	    pred.markAsUnresolved(lap);
-	  }
-	}
-      }
-      
       auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) {
@@ -215,7 +206,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 	}
       }
 
-      override CstDomSet getParentArr() {
+      override CstDomSet getParentDomSet() {
 	return null;
       }
 
@@ -393,20 +384,6 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      override void markAsUnresolved(uint lap) {
-	if (isStatic()) {
-	  if (_unresolveLap != lap) {
-	    _unresolveLap = lap;
-	    foreach (pred; _rndPreds) {
-	      pred.markAsUnresolved(lap);
-	    }
-	  }
-	}
-	else {
-	  _parent.markAsUnresolved(lap);
-	}
-      }
-
       auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) {
@@ -423,7 +400,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      override CstDomSet getParentArr() {
+      override CstDomSet getParentDomSet() {
 	return _parent;
       }
     }
@@ -702,6 +679,27 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
     if (! canFind(deps, this)) deps ~= this;
   }
+
+  final override void markAsUnresolved(uint lap, bool hier) {
+    if (_unresolveLap != lap) {
+      _unresolveLap = lap;
+      CstDomSet parent = getParentDomSet();
+      if (parent !is null)
+	parent.markAsUnresolved(lap, false);
+      foreach (pred; _rndPreds)
+	pred.markAsUnresolved(lap);
+      if (hier is true) {
+	foreach (elem; _elems) {
+	  static if (is (EV: CstDomSet))
+	    elem.markAsUnresolved(lap, hier);
+	  else 
+	    elem.markAsUnresolved(lap);
+	}
+      }
+    }
+  }
+
+  
 }
 
 // Primary Array
@@ -807,12 +805,6 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	// no parent
       }
 
-      void markAsUnresolved(uint lap) {
-	foreach (elem; _elems) {
-	  elem.markAsUnresolved(lap);
-	}
-      }
-
       auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) return this;
@@ -856,7 +848,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	}
       }
 
-      override CstDomSet getParentArr() {
+      override CstDomSet getParentDomSet() {
 	return null;
       }
     }
@@ -1017,17 +1009,6 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      void markAsUnresolved(uint lap) {
-	if (isStatic()) {
-	  foreach (elem; _elems) {
-	    elem.markAsUnresolved(lap);
-	  }
-	}
-	else {
-	  _parent.markAsUnresolved(lap);
-	}
-      }
-
       auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
       {
 	static if (S.length == 0) return this;
@@ -1068,7 +1049,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      override CstDomSet getParentArr() {
+      override CstDomSet getParentDomSet() {
 	return _parent;
       }
     }

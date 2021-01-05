@@ -230,7 +230,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool isStatic();
   abstract bool isRolled();
   abstract void registerRndPred(CstPredicate rndPred);  
-  abstract CstDomSet getParentArr();
+  abstract CstDomSet getParentDomSet();
   // abstract void registerVarPred(CstPredicate varPred);  
   // abstract void registerDepPred(CstDepCallback depCb);
   // abstract void registerIdxPred(CstDepCallback idxCb);
@@ -305,7 +305,7 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
       }
     }
     if (_esdl__parentIsConstrained) {
-      CstDomSet parent = getParentArr();
+      CstDomSet parent = getParentDomSet();
       assert (parent !is null);
       if (parent._state is CstDomSet.State.INIT) {
 	parent.setGroupContext(group);
@@ -327,12 +327,14 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   
   DomType _type = DomType.TRUEMONO;
 
-  void markAsUnresolved(uint lap) {
+  final void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {
       _unresolveLap = lap;
-      foreach (pred; _rndPreds) {
+      CstDomSet parent = getParentDomSet();
+      if (parent !is null)
+	parent.markAsUnresolved(lap, false);
+      foreach (pred; _rndPreds)
 	pred.markAsUnresolved(lap);
-      }
     }
   }
 
@@ -382,6 +384,10 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
   // Callbacks
   CstDepCallback[] _depCbs;
 
+  uint _unresolveLap;
+
+  abstract void markAsUnresolved(uint lap, bool hier);
+  
   void execCbs() {
     execIterCbs();
     execDepCbs();
@@ -394,7 +400,7 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
     }
   }
 
-  abstract CstDomSet getParentArr();
+  abstract CstDomSet getParentDomSet();
   
   override void registerDepPred(CstDepCallback depCb) {
     foreach (cb; _depCbs) {
@@ -509,7 +515,7 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
       }
     }
     if (_esdl__parentIsConstrained) {
-      CstDomSet parent = getParentArr();
+      CstDomSet parent = getParentDomSet();
       assert (parent !is null);
       if (parent._state is State.INIT) {
 	parent.setGroupContext(group);
@@ -1151,9 +1157,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
   final void markAsUnresolved(uint lap) {
     if (_unresolveLap != lap) {	 // already marked -- avoid infinite recursion
       _unresolveLap = lap;
-      foreach (rnd; _rnds) {
-	rnd.markAsUnresolved(lap);
-      }
+      foreach (rnd; _rnds) rnd.markAsUnresolved(lap);
+      foreach (rndArr; _rndArrs) rndArr.markAsUnresolved(lap, true);
     }
   }
 

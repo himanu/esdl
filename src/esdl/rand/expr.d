@@ -1213,8 +1213,9 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
     return _parent.isRolled();
   }
 
-  override CstDomSet getParentArr() {
-    assert (false);
+  override CstDomSet getParentDomSet() {
+    static if (is (RV: CstDomSet)) return _parent;
+    else return null;
   }
 }
 
