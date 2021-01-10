@@ -11,10 +11,12 @@ abstract class CstSolver
     _signature = signature;
   }
 
+  abstract string describe();
+
   // abstract void registerDomain(CstDomain domain);
   // abstract void registerValue(CstValue value);
 
-  abstract void solve(CstPredGroup group);
+  abstract bool solve(CstPredGroup group);
 
   // abstract void pushToEvalStack();
   abstract void pushToEvalStack(CstDomain domain);

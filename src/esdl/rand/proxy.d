@@ -601,14 +601,14 @@ abstract class _esdl__Proxy: CstObjectIntf
     if (pred.isDist()) {
       _resolvedDistPreds ~= pred;
     }
-    else if (pred._rnds.length == 1 &&
-	     pred._rndArrs.length == 0 &&
-	     pred._rnds[0]._type <= DomType.LAZYMONO//  &&
-	     // pred._rnds[0]._esdl__parentIsConstrained is false
-	     ) {
-      _resolvedMonoPreds ~= pred;
-      // procMonoDomain(pred._rnds[0], pred);
-    }
+    // else if (pred._rnds.length == 1 &&
+    // 	     pred._rndArrs.length == 0 &&
+    // 	     pred._rnds[0]._type <= DomType.LAZYMONO//  &&
+    // 	     // pred._rnds[0]._esdl__parentIsConstrained is false
+    // 	     ) {
+    //   _resolvedMonoPreds ~= pred;
+    //   // procMonoDomain(pred._rnds[0], pred);
+    // }
     else if (pred._dynRnds.length > 0) {
       foreach (rnd; pred._dynRnds) {
 	auto dom = rnd.getResolved();

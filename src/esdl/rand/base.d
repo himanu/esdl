@@ -3,7 +3,7 @@ module esdl.rand.base;
 import esdl.solver.base;
 import esdl.solver.buddy: CstBuddySolver;
 import esdl.solver.z3: CstZ3Solver;
-
+import esdl.solver.mono: CstMonoSolver;
 import esdl.rand.intr;
 import esdl.rand.dist;
 import esdl.rand.expr: CstValue, CstVecTerm, CstVecArrExpr;
@@ -855,6 +855,7 @@ class CstPredGroup			// group of related predicates
 
       if (solverp !is null) {
 	_solver = *solverp;
+	_solver.solve(this);
       }
       else {
 	if (_hasSoftConstraints || _hasVectorConstraints) {
@@ -868,20 +869,47 @@ class CstPredGroup			// group of related predicates
 	    writeln(describe());
 	  }
 	  _solver = new CstZ3Solver(sig, this);
+	  _solver.solve(this);
 	}
 	else {
-	  uint totalBits;
-	  foreach (dom; _doms) totalBits += dom.bitcount();
-	  foreach (var; _vars) totalBits += var.bitcount();
-	  if (totalBits > 32) {
-	    if (_proxy._esdl__debugSolver()) {
-	      import std.stdio;
-	      writeln("Invoking Z3 because of > 32 bits");
-	      writeln(describe());
+	  bool monoFlag = false;
+	  if (_doms.length == 1) {
+	    if(_doms[0].bitcount() <= 32){
+	      if(_doms[0].signed()){
+		_solver = new CstMonoSolver!int(sig, this);
+	      }
+	      else{
+		_solver = new CstMonoSolver!uint(sig, this);
+	      }
 	    }
-	    _solver = new CstZ3Solver(sig, this);
+	    else{
+	      if(_doms[0].signed()){
+		_solver = new CstMonoSolver!long(sig, this);
+	      }
+	      else{
+		_solver = new CstMonoSolver!ulong(sig, this);
+	      }
+	    }
+	    monoFlag = _solver.solve(this);
 	  }
-	  else _solver = new CstBuddySolver(sig, this);
+	  if (! monoFlag) {
+	    uint totalBits;
+	    foreach (dom; _doms) totalBits += dom.bitcount();
+	    foreach (var; _vars) totalBits += var.bitcount();
+	    if (totalBits > 32) {
+	      if (_proxy._esdl__debugSolver()) {
+		import std.stdio;
+		writeln("Invoking Z3 because of > 32 bits");
+		writeln(describe());
+	      }
+	      _solver = new CstZ3Solver(sig, this);
+	      _solver.solve(this);
+	    }
+	    else {
+	      _solver = new CstBuddySolver(sig, this);
+	      _solver.solve(this);
+	    }
+	  }
 	}
 	_proxy._solvers[sig] = _solver;
       }
@@ -889,8 +917,16 @@ class CstPredGroup			// group of related predicates
 	var._domN = uint.max;
       }
     }
+    else {
+      // import std.stdio;
+      // writeln(_solver.describe());
+      // writeln("We are here");
+      _solver.solve(this);
+    }
 
-    _solver.solve(this);
+    // import std.stdio;
+    // writeln(_solver.describe());
+    // _solver.solve(this);
     this.solved();
   }
       

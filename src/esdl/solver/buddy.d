@@ -315,6 +315,10 @@ class CstBuddySolver: CstSolver
 
   }
 
+  override string describe() {
+    return "OBDD Solver";
+  }
+
   BvVar.State varState;
 
   void push() {
@@ -331,7 +335,7 @@ class CstBuddySolver: CstSolver
 
   ulong[] _solveValue;
   
-  override void solve(CstPredGroup group) {
+  override bool solve(CstPredGroup group) {
     CstDomain[] doms = group.domains();
     updateVars(group);
     _context.updateDist();
@@ -371,7 +375,7 @@ class CstBuddySolver: CstSolver
       }
       vec.setVal(array(_solveValue[0..NUMWORDS]));
     }
-
+    return true;
   }
   
   void updateVars(CstPredGroup group) {

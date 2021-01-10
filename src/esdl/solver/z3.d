@@ -294,6 +294,10 @@ class CstZ3Solver: CstSolver
     // writeln("sat.random_seed: ", getParam("sat.random_seed"));
   }
 
+  override string describe() {
+    return "Z3 SMT Solver";
+  }
+
   // BvVar.State varState;
 
   enum State: ubyte
@@ -399,7 +403,7 @@ class CstZ3Solver: CstSolver
     return assumptions[];
   }
   
-  override void solve(CstPredGroup group) {
+  override bool solve(CstPredGroup group) {
     updateVars(group);
     if (_needOptimize) {
       if (updateOptimize() || (_optimizeInit is false)) {
@@ -442,9 +446,9 @@ class CstZ3Solver: CstSolver
       import std.stdio;
       writeln(_solver);
     }
+    _solver.check();
     // writeln(_solver.check());
     // writeln(_solver.getModel());
-    _solver.check();
     auto model = _solver.getModel();
     foreach (i, ref dom; _domains) {
       // import std.string: format;
@@ -459,6 +463,7 @@ class CstZ3Solver: CstSolver
       // writeln(value);
     }
 
+    return true;
   }
 
   void updateVarState(ref State state) {
