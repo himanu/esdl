@@ -679,9 +679,14 @@ class CstPredGroup			// group of related predicates
   }
 
   _esdl__Proxy _proxy;
-
+  __gshared uint _count;
+  immutable uint _id;
+  
   this(_esdl__Proxy proxy) {
     _proxy = proxy;
+    synchronized (typeid(CstPredGroup)) {
+      _id = _count++;
+    }
   }
 
   _esdl__Proxy getProxy() {
@@ -820,13 +825,16 @@ class CstPredGroup			// group of related predicates
   
   void reset() {
     _state = State.INIT;
+    foreach (pred; _preds) {
+      pred.reset();
+    }
   }
 
   void needSync() {
     _state = State.NEEDSYNC;
   }
 
-  void solved() {
+  void markSolved() {
     _state = State.SOLVED;
   }
 
@@ -839,6 +847,11 @@ class CstPredGroup			// group of related predicates
   void solve() {
     // import std.stdio;
     // writeln(this.describe());
+    if (_proxy._esdl__debugSolver()) {
+      import std.stdio;
+      writeln(describe());
+    }
+
     if (_state is State.NEEDSYNC) {
       _doms.reset();
       _vars.reset();
@@ -847,7 +860,6 @@ class CstPredGroup			// group of related predicates
 
       if (_proxy._esdl__debugSolver()) {
 	import std.stdio;
-	writeln(describe());
 	writeln(sig);
       }
 
@@ -927,12 +939,16 @@ class CstPredGroup			// group of related predicates
     // import std.stdio;
     // writeln(_solver.describe());
     // _solver.solve(this);
-    this.solved();
+    foreach (pred; _preds) {
+      pred.markSolved();
+    }
+    this.markSolved();
   }
       
 
   string describe() {
-    string description = "CstPredGroup:\n";
+    import std.conv: to;
+    string description = "CstPredGroup Id: " ~ _id.to!string() ~ '\n';
     if (_preds.length > 0) {
       description ~= "  Predicates:\n";
 	foreach (pred; _preds) {
@@ -960,10 +976,12 @@ class CstPredicate: CstIterCallback, CstDepCallback
   string name() {
     import std.conv;
     if (_parent is null) {
-      return _constraint.fullName() ~ '/' ~ _statement.to!string;
+      return _constraint.fullName() ~ '/' ~
+	_statement.to!string() ~ '%' ~ _id.to!string();
     }
     else {
-      return _parent.name() ~ '[' ~ _unrollIterVal.to!string ~ ']';
+      return _parent.name() ~
+	'[' ~ _unrollIterVal.to!string() ~ ']' ~'%' ~ _id.to!string();
     }
   }
 
@@ -1009,11 +1027,17 @@ class CstPredicate: CstIterCallback, CstDepCallback
   Folder!(CstPredicate, "uwPreds") _uwPreds;
   size_t _uwLength;
   
+  __gshared uint _count;
+  immutable uint _id;
+
   this(_esdl__ConstraintBase cst, uint stmt, _esdl__Proxy proxy,
        uint soft, CstLogicExpr expr, CstPredicate parent=null,
        CstIterator unrollIter=null, uint unrollIterVal=0// ,
        // CstIterator[] iters ...
        ) {
+    synchronized(typeid(CstPredicate)) {
+      _id = _count++;
+    }
     assert(proxy !is null);
     _constraint = cst;
     _soft = soft;
@@ -1337,7 +1361,9 @@ class CstPredicate: CstIterCallback, CstDepCallback
 
   string describe() {
     import std.string:format;
-    string description = "Expr: " ~ _expr.describe() ~ "\n    ";
+    import std.conv: to;
+    string description = "    Predicate ID: " ~ _id.to!string() ~ "\n    ";
+    description ~= "Expr: " ~ _expr.describe() ~ "\n    ";
     description ~= _scope.describe();
     description ~= format("    Level: %s\n", _level);
     if (_iters.length > 0) {
@@ -1436,6 +1462,14 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool isDist() { return _isDist; }
   void isDist(bool b) { _isDist = b; }
 
+  void markSolved() {
+    assert (_state == State.GROUPED);
+    _state = State.SOLVED;
+  }
+  
+  bool isSolved() {
+    return (_state == State.SOLVED);
+  }
 }
 
 class CstVisitorPredicate: CstPredicate
