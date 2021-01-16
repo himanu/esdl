@@ -497,7 +497,7 @@ mixin template Randomization()
 
   }
 
-  enum bool _esdl__hasRandomization = true;
+  // enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
 
   static _esdl__Type _esdl__thisHasRandomization()() {

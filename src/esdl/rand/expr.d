@@ -778,10 +778,10 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
   final override string describe() {
     import std.conv: to;
     string desc = "CstDomain: " ~ name();
-    desc ~= "\n	DomType: " ~ _type.to!string();
-    if (_type !is DomType.MULTI) {
-      desc ~= "\nIntRS: " ~ _rs.toString();
-    }
+    // desc ~= "\n	DomType: " ~ _type.to!string();
+    // if (_type !is DomType.MULTI) {
+    //   desc ~= "\nIntRS: " ~ _rs.toString();
+    // }
     if (_rndPreds.length > 0) {
       desc ~= "\n	Preds:";
       foreach (pred; _rndPreds) {
