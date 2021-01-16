@@ -193,7 +193,7 @@ class CstMonoSolver (S): CstSolver
     super(signature);
   }
   override string describe() {
-    return "MONO Solver";
+    return "Mono Solver"  ~ super.describe();
   }
   override void pushToEvalStack(CstDomain domain) {
     if (domain.isRand()) {
@@ -378,6 +378,18 @@ class CstMonoSolver (S): CstSolver
       _testfinalRange.length = 0;
     }
   }
+  void trim(int bitcount, bool signed){
+    if(signed){
+      S a = 1<<(bitcount-1);
+      S[2] x = [-a, a-1];
+      ANDRANGE(_finalRange, x);
+    }
+    else {
+      S a = 1<<(bitcount);
+      S[2] x = [0, a-1];
+      ANDRANGE(_finalRange, x);
+    }
+  }
   override bool solve(CstPredGroup group) {
     CstDomain [] doms = group.domains();
     assert (doms.length == 1);
@@ -456,13 +468,26 @@ class CstMonoSolver (S): CstSolver
 	_rangeStack.length = 0;
       }
     }
+    debug (MONOSOLVER){
+      import std.stdio;
+      writeln("all edge elements of the range tested successfully");
+    }
+    int bitc = doms[0].bitcount();
+    if(bitc != 32 && bitc != 64){
+      trim(bitc, doms[0].signed());
+      debug (MONOSOLVER){
+	import std.stdio;
+	writeln("reducing _finalRange to fit in bitcount ", bitc);
+	writeln("finalRange now: ");
+	display(_finalRange);
+      }
+    }
     _count = counter();
     auto rand = _proxy._esdl__rGen.gen(0, _count);
     ulong num = choose(rand);
     doms[0].setVal(num);
     debug (MONOSOLVER){
       import std.stdio;
-      writeln("all edge elements of the range tested successfully");
       writeln("count for the range is: " ,_count);
       writeln("random number generated is (between 0 and count): " ,rand);
       writeln("random number chosen from range: " ,num);
@@ -968,6 +993,7 @@ class CstMonoSolver (S): CstSolver
 		_rangeStack ~= Range!S(false);
 	      }
 	      else{
+		_rangeStack[$-2] = Range!S(a);
 		_rangeStack.length -=1;
 	      }
 	    }
@@ -1704,24 +1730,25 @@ class CstMonoSolver (S): CstSolver
     }
     return num;
   }
-  ulong choose(ulong rand){
+  ulong choose(ulong rand) {
     size_t i;
-    rand += 1;
-    for( i = 0; i < _finalRange.length - 1; i += 2){
-      rand -= _finalRange[i+1] - _finalRange[i] + 1;
-      if(rand <= 0){
-	i += 2;
-	break;
-      }
+    ulong step;
+    debug (MONOSOLVER) {
+      import std.stdio;
+      writeln(rand);
     }
-    i -= 2;
+    for(i = 0; i < _finalRange.length - 1; i += 2) {
+      step = _finalRange[i+1] - _finalRange[i] + 1;
+      if (rand < step) break;
+      else rand -= step;
+    }
     debug (MONOSOLVER){
       import std.stdio;
       writeln(i);
       writeln(_finalRange.length);
       writeln(rand);
     }
-    return (cast(ulong)(_finalRange[i+1] + rand));
+    return (cast(ulong)(_finalRange[i] + rand));
   }
   void ANDRANGE(ref S[] a, ref S[] b){
     int a1 = 0;
