@@ -295,7 +295,7 @@ class CstZ3Solver: CstSolver
   }
 
   override string describe() {
-    return "Z3 SMT Solver";
+    return "Z3 SMT Solver"  ~ super.describe();
   }
 
   // BvVar.State varState;

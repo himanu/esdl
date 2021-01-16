@@ -316,7 +316,7 @@ class CstBuddySolver: CstSolver
   }
 
   override string describe() {
-    return "OBDD Solver";
+    return "OBDD Solver\n" ~ super.describe();
   }
 
   BvVar.State varState;

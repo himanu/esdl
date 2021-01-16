@@ -7,11 +7,23 @@ abstract class CstSolver
 {
   string _signature;
 
+  __gshared uint _count;
+
+  immutable uint _id;
+
   this(string signature) {
     _signature = signature;
+    synchronized {
+      _id = _count++;
+    }
+    // import std.stdio;
+    // writeln(this.describe());
   }
 
-  abstract string describe();
+  string describe() {
+    import std.conv: to;
+    return "\nID: " ~ _id.to!string ~ "\nSignature: " ~ _signature;
+  }
 
   // abstract void registerDomain(CstDomain domain);
   // abstract void registerValue(CstValue value);
