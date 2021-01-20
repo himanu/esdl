@@ -403,13 +403,6 @@ class _esdl__RandGen
     }
 }
 
-enum CstInsideOp: byte
-{   CONTAINS,
-    OPEN_RANGE,
-    CLOSED_RANGE,
-    DONE,
-    }
-
 enum CstUnaryOp: byte
 {   NOT,
     NEG,
@@ -460,6 +453,13 @@ enum CstVectorOp: byte
     BEGIN_ULONG,
     UNIQUE,
     SUM
+    }
+
+enum CstInsideOp: byte
+{   INSIDE,
+    EQUAL,
+    RANGE,
+    RANGEINCL
     }
 
 enum isLvalue(alias A) = is(typeof((ref _){}(A)));

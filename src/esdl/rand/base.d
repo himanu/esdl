@@ -508,6 +508,7 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
   }
   
   void setGroupContext(CstPredGroup group) {
+    assert (this.isResolved());
     assert (_state is State.INIT);
     foreach (pred; _rndPreds) {
       if (pred._state is CstPredicate.State.INIT) {
@@ -1427,7 +1428,7 @@ class CstPredicate: CstIterCallback, CstDepCallback
   void setGroupContext(CstPredGroup group) {
     _state = State.GROUPED;
     if (_group !is group) {
-      assert(_group is null, "A predicate may add to a group, but group should not change");
+      assert(_group is null, "A predicate may be added to a group, but group should not change");
       group.needSync();
     }
     if (_rndArrs.length != 0) group.needSync();
@@ -1442,7 +1443,8 @@ class CstPredicate: CstIterCallback, CstDepCallback
     }
     foreach (arr; _rndArrs) {
       // if (arr.group is null && (! arr.isSolved())) {
-      if (arr._state is CstDomSet.State.INIT && (! arr.isSolved())) {
+      if (arr._state is CstDomSet.State.INIT // && (! arr.isSolved())
+	  ) {
 	arr.setGroupContext(group);
       }
     }
