@@ -459,7 +459,8 @@ enum CstInsideOp: byte
 {   INSIDE,
     EQUAL,
     RANGE,
-    RANGEINCL
+    RANGEINCL,
+    DONE
     }
 
 enum isLvalue(alias A) = is(typeof((ref _){}(A)));

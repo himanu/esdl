@@ -887,23 +887,31 @@ class CstPredGroup			// group of related predicates
 	else {
 	  bool monoFlag = false;
 	  if (_doms.length == 1) {
-	    if(_doms[0].bitcount() <= 32){
-	      if(_doms[0].signed()){
+	    if (_doms[0].bitcount() < 32) {
+	      _solver = new CstMonoSolver!int(sig, this);
+	    }
+	    else if (_doms[0].bitcount == 32) {
+	      if(_doms[0].signed()) {
 		_solver = new CstMonoSolver!int(sig, this);
 	      }
 	      else{
 		_solver = new CstMonoSolver!uint(sig, this);
 	      }
 	    }
-	    else{
-	      if(_doms[0].signed()){
+	    else if (_doms[0].bitcount < 64) {
+	      _solver = new CstMonoSolver!long(sig, this);
+	    }
+	    else if (_doms[0].bitcount == 64) {
+	      if(_doms[0].signed()) {
 		_solver = new CstMonoSolver!long(sig, this);
 	      }
-	      else{
+	      else {
 		_solver = new CstMonoSolver!ulong(sig, this);
 	      }
 	    }
-	    monoFlag = _solver.solve(this);
+	    if ( _solver !is null ) {
+	      monoFlag = _solver.solve(this);
+	    }
 	  }
 	  if (! monoFlag) {
 	    uint totalBits;

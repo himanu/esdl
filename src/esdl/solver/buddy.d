@@ -630,6 +630,10 @@ class CstBuddySolver: CstSolver
     assert (false, "CstVectorOp is handled only by SMT solvers");
   }
 
+  override void processEvalStack(CstInsideOp op) {
+    assert (false, "TBD");
+  }
+
   void popEvalStack(uint count) {
     assert (_evalStack.length >= count);
     for (size_t i=0; i!=count; ++i) {

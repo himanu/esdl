@@ -175,6 +175,8 @@ class CstZ3Solver: CstSolver
   
   Z3Term[] _evalStack;
 
+  Z3Term _term;
+
   BvExpr[] _domains;
   BvVar[] _variables;
 
@@ -849,6 +851,40 @@ class CstZ3Solver: CstSolver
       break;
     }
   }
-  
-}
 
+  override void processEvalStack(CstInsideOp op) {
+    final switch (op) {
+    case CstInsideOp.INSIDE:
+      _term = _evalStack[$-1];
+      _evalStack.length -= 1;
+      break;
+    case CstInsideOp.EQUAL:
+      BoolExpr e = eq(_term.toBv(), _evalStack[$-1].toBv());
+      _evalStack.length = _evalStack.length - 1;
+      _evalStack ~= Z3Term(e);
+      processEvalStack(CstLogicOp.LOGICOR);
+      break;
+    case CstInsideOp.RANGE:
+      BoolExpr upper = lt(_term.toBv(), _evalStack[$-1].toBv());
+      BoolExpr lower = ge(_term.toBv(), _evalStack[$-2].toBv());
+      _evalStack.length = _evalStack.length - 2;
+      _evalStack ~= Z3Term(upper);
+      _evalStack ~= Z3Term(lower);
+      processEvalStack(CstLogicOp.LOGICAND);
+      processEvalStack(CstLogicOp.LOGICOR);
+      break;
+    case CstInsideOp.RANGEINCL:
+      BoolExpr upper = le(_term.toBv(), _evalStack[$-1].toBv());
+      BoolExpr lower = ge(_term.toBv(), _evalStack[$-2].toBv());
+      _evalStack.length = _evalStack.length - 2;
+      _evalStack ~= Z3Term(upper);
+      _evalStack ~= Z3Term(lower);
+      processEvalStack(CstLogicOp.LOGICAND);
+      processEvalStack(CstLogicOp.LOGICOR);
+      break;
+    case CstInsideOp.DONE:
+      _term = Z3Term.init;
+      break;
+    }
+  }
+}

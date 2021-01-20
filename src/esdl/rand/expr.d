@@ -5,7 +5,7 @@ import esdl.rand.dist;
 
 import esdl.solver.base: CstSolver;
 
-import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst, CstVectorOp;
+import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst, CstVectorOp, CstInsideOp;
 import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp,
   CstUnaryOp, CstSliceOp, writeHexString;
 
@@ -2014,8 +2014,10 @@ class CstInsideSetElem: CstVecTerm
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
-    if (_arr !is null)
+    if (_arr !is null) {
       _arr.setDomainArrContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+      assert (rndArrs.length > 0 || varArrs.length > 0);
+    }
     if (_lhs !is null)
       _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     if (_rhs !is null)
@@ -2839,14 +2841,34 @@ class CstInsideArrExpr: CstLogicTerm
   }
 
   override void visit(CstSolver solver) {
-    // CstVecArrIntf.Range range = _arr[];
-    // solver.pushToEvalStack(false);
-
-    // foreach (dom; range) {
-    //   _term.visit();
-    //   solver.pushToEvalStack(dom);
-    //   solver.processEvalStack(CstBinaryOp.ADD);
-    // }
+    solver.pushToEvalStack(false);
+    _term.visit(solver);
+    solver.processEvalStack(CstInsideOp.INSIDE);
+    foreach (elem; _elems) {
+      if (elem._lhs !is null) {
+	assert (elem._arr is null);
+	elem._lhs.visit(solver);
+	if (elem._rhs !is null) {
+	  elem._rhs.visit(solver);
+	  if (elem._inclusive) solver.processEvalStack(CstInsideOp.RANGEINCL);
+	  else solver.processEvalStack(CstInsideOp.RANGE);
+	  // solver.processEvalStack(CstLogicOp.LOGICAND);
+	}
+	else {
+	  solver.processEvalStack(CstInsideOp.EQUAL);
+	}
+	// solver.processEvalStack(CstLogicOp.LOGICOR);
+      }
+      else {
+	assert (elem._arr !is null);
+	foreach (dom; elem._arr[]) {
+	  dom.visit(solver);
+	  solver.processEvalStack(CstInsideOp.EQUAL);
+	  // solver.processEvalStack(CstLogicOp.LOGICOR);
+	}
+      }
+    }
+    solver.processEvalStack(CstInsideOp.DONE);
   }
 
   this(CstVecExpr term) {
@@ -3688,7 +3710,10 @@ CstDistSetElem _esdl__dist_rangeinc_impl(CstVecExpr p, CstVecExpr q) {
 }
 
 auto _esdl__inside_range(P, Q)(P p, Q q) {
-  static if(is(P: CstVecExpr)) {
+  static if(is(P: CstDomSet)) {
+    return _esdl__inside_range_impl(p, q);
+  }
+  else static if(is(P: CstVecExpr)) {
     return _esdl__inside_range_impl(p, q);
   }
   else static if(is(Q: CstVecExpr)) {
@@ -3699,6 +3724,12 @@ auto _esdl__inside_range(P, Q)(P p, Q q) {
     static assert (false);
   }
 }
+
+CstInsideSetElem _esdl__inside_range_impl(Q)(CstDomSet p, Q q) {
+  assert (q is null);
+  return new CstInsideSetElem(p);
+}
+
 
 CstInsideSetElem _esdl__inside_range_impl(Q)(CstVecExpr p, Q q)
   if (isBitVector!Q || isIntegral!Q) {
@@ -3756,12 +3787,12 @@ CstVec2LogicExpr _esdl__neq_impl(CstVecExpr p, CstVecExpr q) {
   return new CstVec2LogicExpr(p, q, CstCompareOp.NEQ);
 }
 
-CstLogicTerm _esdl__inside(CstVecTerm vec, CstInsideSetElem[] ranges) {
-  CstLogicTerm result = new CstLogicConst(false);
+CstInsideArrExpr _esdl__inside(CstVecExpr vec, CstInsideSetElem[] ranges) {
+  CstInsideArrExpr expr = new CstInsideArrExpr(vec);
   foreach (r; ranges) {
-    result = result | vec.inside(r);
+    expr.addElem(r);
   }
-  return result;
+  return expr;
 }
 
 CstWeightedDistSetElem _esdl__rangeWeight(CstDistSetElem range, CstVecExpr weight) {
