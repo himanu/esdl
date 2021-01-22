@@ -4,7 +4,6 @@ import esdl.solver.base;
 import esdl.solver.buddy: CstBuddySolver;
 import esdl.solver.z3: CstZ3Solver;
 import esdl.solver.mono: CstMonoSolver;
-import esdl.rand.intr;
 import esdl.rand.dist;
 import esdl.rand.expr: CstValue, CstVecTerm, CstVecArrExpr;
 import esdl.rand.proxy: _esdl__ConstraintBase, _esdl__Proxy;
@@ -216,7 +215,6 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   // abstract void collate(ulong v, int word=0);
   abstract void setVal(ulong[] v);
   abstract void setVal(ulong v);
-  abstract bool solveRange(_esdl__RandGen randGen);
   // abstract uint domIndex();
   // abstract void domIndex(uint s);
   // abstract bool signed();
@@ -282,7 +280,6 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   CstPredicate[] _rndPreds;
   // CstPredicate[] _varPreds;
 
-  IntRS _rangeSet;
   CstPredicate [] getRandPreds(){
     return _rndPreds;
   }
@@ -588,12 +585,6 @@ abstract class CstVecExpr: CstExpr
 
   abstract bool isOrderingExpr();
 
-  abstract bool getIntRange(ref IntR iRange);
-  abstract bool getUniRange(ref UniRange rs);
-
-  // get the number of bits and the sign information of an expression
-  abstract bool getIntType(ref INTTYPE iType);
-
   abstract uint bitcount();
   abstract bool signed();
 
@@ -601,12 +592,6 @@ abstract class CstVecExpr: CstExpr
 
 abstract class CstLogicExpr: CstExpr
 {
-  abstract bool getIntRangeSet(ref IntRS iRangeSet);
-
-  abstract bool getUniRangeSet(ref IntRS rs);
-  abstract bool getUniRangeSet(ref UIntRS rs);
-  abstract bool getUniRangeSet(ref LongRS rs);
-  abstract bool getUniRangeSet(ref ULongRS rs);
   abstract DistRangeSetBase getDist();
   abstract CstVecExpr isNot(CstDomain A);
   abstract CstLogicExpr unroll(CstIterator iter, uint n);
@@ -645,15 +630,6 @@ abstract class CstIterator: CstVecTerm
   }
   override bool isOrderingExpr() {
     return false;		// only CstVecOrderingExpr return true
-  }
-  override bool getIntRange(ref IntR rng) {
-    return false;
-  }
-  override bool getUniRange(ref UniRange rng) {
-    return false;
-  }
-  override bool getIntType(ref INTTYPE iType) {
-    return false;
   }
 }
 

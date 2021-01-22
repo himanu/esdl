@@ -558,40 +558,6 @@ abstract class _esdl__Proxy: CstObjectIntf
       
   }
 
-  // bool procMonoDomain(CstPredicate pred) {
-  //   assert (pred._rnds.length == 1);
-  //   auto dom = pred._rnds[0];
-  //   if (! dom.isSolved()) {
-  //     if (dom.solveRange(_esdl__getRandGen())) {
-  // 	_solvedDomains ~= dom;
-  // 	return true;
-  //     }
-  //     else return false;
-  //   }
-  //   else return true;
-  // }
-
-  // bool procMaybeMonoDomain(CstPredicate pred) {
-  //   assert (pred._rnds.length > 0);
-  //   if (pred._rnds.length > 1 || pred._rndArrs.length > 0) {
-  //     return false;
-  //   }
-  //   auto dom = pred._rnds[0];
-  //   if (dom._type > DomType.MAYBEMONO) return false;
-  //   // if (dom._esdl__parentIsConstrained) return false;
-  //   if (! dom.isStatic()) {
-  //     dom = dom.getResolved();
-  //   }
-  //   if (! dom.isSolved()) {
-  //     if (dom.solveRange(_esdl__getRandGen())) {
-  // 	_solvedDomains ~= dom;
-  // 	return true;
-  //     }
-  //     else return false;
-  //   }
-  //   else return true;
-  // }
-
   void procResolved(CstPredicate pred) {
     assert (pred._rnds.length > 0 || pred._rndArrs.length > 0,
 	    pred.describe());

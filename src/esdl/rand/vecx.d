@@ -9,7 +9,6 @@ import std.traits: isIntegral, isBoolean, isArray,
 import esdl.solver.base: CstSolver;
 
 import esdl.rand.misc;
-import esdl.rand.intr;
 import esdl.rand.base: CstVecPrim, CstVecExpr, CstIterator, DomType,
   CstDomain, CstDomSet, CstPredicate, CstVarNodeIntf, CstVecNodeIntf,
   CstVecArrIntf, CstDepCallback;
@@ -17,7 +16,6 @@ import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, CstVecDomain, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr, CstVecArrExpr;
 
-import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
 
 import std.algorithm.searching: canFind;

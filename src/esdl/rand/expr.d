@@ -1,6 +1,5 @@
 module esdl.rand.expr;
 
-import esdl.rand.intr;
 import esdl.rand.dist;
 
 import esdl.solver.base: CstSolver;
@@ -348,7 +347,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
   this(string name, _esdl__Proxy root) {
     _name = name;
     _root = root;
-    fixRangeSet();
   }
 
   ~this() {
@@ -403,84 +401,7 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
       return false;
     }
   }
-
-  override bool getIntRange(ref IntR rng) {
-    return true;
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    INTTYPE iType;
-    if (this.getIntType(iType)) {
-      rng.map(iType);
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    static if (isIntegral!T) {
-      import std.traits;
-      enum bool signed = isSigned!T;
-      enum uint bits = T.sizeof * 8;
-    }
-    else static if (isBitVector!T) {
-      enum bool signed = T.ISSIGNED;
-      enum uint bits = T.SIZE;
-    }
-    else {			// bool
-      enum signed = false;
-      enum bits = 1;
-    }
-    static if (bits <= 64) {
-      // final
-      switch (iType) {
-      case INTTYPE.UINT: iType = bits <= 32 ?
-	  (signed ? INTTYPE.INT : INTTYPE.UINT) :
-	(signed ? INTTYPE.LONG : INTTYPE.ULONG);
-	break;
-      case INTTYPE.INT: iType = bits <= 32 ?
-	  INTTYPE.INT : INTTYPE.LONG;
-	break;
-      case INTTYPE.ULONG: iType = signed ?
-	  INTTYPE.LONG : INTTYPE.ULONG;
-	break;
-      case INTTYPE.LONG: break;
-      default: assert(false);
-      }
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-
   
-  void fixRangeSet() {
-    static if (isIntegral!T) {
-      static if (RangeT.sizeof == T.sizeof) {
-	IntRange!RangeT fixR = IntRange!RangeT(true);
-      }
-      else {
-	IntRange!RangeT fixR =
-	  IntRange!RangeT(cast(int) T.min, cast(int) T.max + 1);
-      }
-      _rs &= fixR;
-    }
-    static if (isBitVector!T && T.SIZE <= 32) {
-      static if (int.sizeof*8 == T.SIZE) {
-	IntRange!RangeT fixR = IntRange!RangeT(true);
-      }
-      else {
-	IntRange!RangeT fixR =
-	  IntRange!RangeT(cast(int) T.min, cast(int) T.max + 1);
-      }
-      _rs &= fixR;
-    }
-  }
-
   abstract T* getRef();
   
   // override void collate(ulong v, int word = 0) {
@@ -617,17 +538,14 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
       enum bool tSigned = false;
     }
     enum size_t tSize = T.sizeof * 8;
-    enum bool IS_RANGE = true;
   }
   else static if (isBoolean!T) {
     enum bool tSigned = false;
     enum size_t tSize = 1;
-    enum bool IS_RANGE = true;
   }
   else static if (isSomeChar!T) {
     enum bool tSigned = false;
     enum size_t tSize = T.sizeof * 8;
-    enum bool IS_RANGE = true;
   }
   else static if (isBitVector!T) {
     static if (T.ISSIGNED) {
@@ -638,97 +556,9 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
     }
     static if (T.SIZE <= 64) {
       enum size_t tSize = T.SIZE;
-      enum bool IS_RANGE = true;
     }
-    else {
-      enum bool IS_RANGE = false;
-    }
-  }
-  else {			// boolean
-    enum bool IS_RANGE = false;
   }
 
-  static if (IS_RANGE) {
-    static if (tSigned) {
-      static if (tSize <= 32) {
-	alias RangeT = int;
-      }
-      else static if (tSize <= 64) {
-	alias RangeT = long;
-      }
-    }
-    else {
-      static if (tSize <= 32) {
-	alias RangeT = uint;
-      }
-      else {
-	alias RangeT = ulong;
-      }
-    }
-    IntRangeSet!RangeT _rs;
-    // pragma(msg, typeof(_rs).stringof);
-  }
-
-  override bool solveRange(_esdl__RandGen randGen) {
-    // final
-    switch(this._type) {
-    case DomType.TRUEMONO:
-      if (this._rs.isEmpty()) {
-	assert(false, "Constraints on domain " ~ this.name() ~
-	       " do not converge");
-      }
-      this.setVal(this._rs.uniform(randGen));
-      break;
-    case DomType.LAZYMONO:
-      auto rns = this._rs.dup();
-      foreach (rp; this._rndPreds) {
-	if (rp._vars.length > 0) {
-	  IntRangeSet!RangeT tmprns;
-	  if (! rp.getExpr().getUniRangeSet(tmprns)) {
-	    return false;
-	  }
-	  rns &= tmprns;
-	}
-      }
-      if (rns.isEmpty()) {
-	assert(false, "Constraints on domain " ~ this.name() ~
-	       " do not converge");
-      }
-      this.setVal(rns.uniform(randGen));
-      break;
-    case DomType.MAYBEMONO:
-      auto rns = this._rs.dup();
-      foreach (rp; this._rndPreds) {
-	if (rp._vars.length > 0) {
-	  IntRangeSet!RangeT tmprns;
-	  if (! rp.getExpr().getUniRangeSet(tmprns)) {
-	    return false;
-	  }
-	  rns &= tmprns;
-	}
-      }
-      foreach (tp; this._tempPreds) {
-	IntRangeSet!RangeT tmprns;
-	if (! tp.getExpr().getUniRangeSet(tmprns)) {
-	  return false;
-	}
-	rns &= tmprns;
-      }
-      if (rns.isEmpty()) {
-	assert(false, "Constraints on domain " ~ this.name() ~
-	       " do not converge");
-      }
-      this.setVal(rns.uniform(randGen));
-      break;
-    case DomType.INDEXEDMONO:
-      assert(false);
-    case DomType.MULTI:
-      return false;
-    default:
-      assert(false);
-    }
-    return true;
-  }
 
   override void registerRndPred(CstPredicate rndPred) {
     foreach (pred; _rndPreds) {
@@ -737,24 +567,6 @@ class CstVecDomain(T, rand RAND_ATTR): CstDomain
       }
     }
     _rndPreds ~= rndPred;
-    static if(IS_RANGE) {
-      if (_type !is DomType.MULTI && !rndPred.isDist()) {
-
-	IntRangeSet!RangeT rs;
-	if (rndPred._vars.length == 0) {
-	  if (rndPred.getExpr().getUniRangeSet(rs)) {
-	    _rs &= rs;
-	  }
-	  else {
-	    _type = DomType.MULTI;
-	  }
-	  // import std.stdio;
-	  // writeln(this.name());
-	  // writeln(_rs);
-	}
-
-      }
-    }
   }
   
   // override void registerVarPred(CstPredicate varPred) {
@@ -1179,11 +991,6 @@ class CstArrLength(RV): CstVecDomain!(uint, RV.RAND), CstVecPrim
 			     vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getIntType(ref INTTYPE iType) {
-    // INTTYPE defaults to UINT
-    return true;
-  }
-
   override void execIterCbs() {
     assert(_iterVar !is null);
     _iterVar.unrollCbs();
@@ -1348,39 +1155,6 @@ class CstVecValue(T = int): CstValue
     vals ~= this;
   }
 
-  override bool getIntRange(ref IntR rng) {
-    assert(false, "getIntRange should never be called for a CstVecValue");
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    assert(false, "UniRange should never be called for a CstVecValue");
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    static if (BITCOUNT <= 64) {
-      // final
-      switch (iType) {
-      case INTTYPE.UINT: iType = BITCOUNT <= 32 ?
-	  (SIGNED ? INTTYPE.INT : INTTYPE.UINT) :
-	(SIGNED ? INTTYPE.LONG : INTTYPE.ULONG);
-	break;
-      case INTTYPE.INT: iType = BITCOUNT <= 32 ?
-	  INTTYPE.INT : INTTYPE.LONG;
-	break;
-      case INTTYPE.ULONG: iType = SIGNED ?
-	  INTTYPE.LONG : INTTYPE.ULONG;
-	break;
-      case INTTYPE.LONG: break;
-      default: assert(false);
-      }
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-
-
   override void writeExprString(ref Charbuf str) {
     // VSxxxxx or VUxxxxx
     str ~= 'V';
@@ -1505,18 +1279,6 @@ class CstVecArrExpr: CstVecTerm
     pred._vectorOp = _op;
     _arr.setDomainArrContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     assert (rndArrs.length > 0 || varArrs.length > 0);
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    return false;
-  }
-
-  override bool getIntRange(ref IntR rng) {
-      return false;
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    return false;
   }
 
   override bool isSolved() {
@@ -1661,122 +1423,6 @@ class CstVec2VecExpr: CstVecTerm
 				 ref CstVecNodeIntf[] deps) {
     _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    INTTYPE iType;
-    if (this.getIntType(iType)) {
-      rng.map(iType);
-      if (_rhs.isSolved()) {
-	assert(! _lhs.isSolved());
-	long rhs = _rhs.evaluate();
-	switch(_op) {
-	case CstBinaryOp.ADD:
-	  UniRangeMod(IntRangeModOp.ADD, rhs).apply(rng);
-	  return _lhs.getUniRange(rng);
-	case CstBinaryOp.SUB: 
-	  UniRangeMod(IntRangeModOp.SUB, rhs).apply(rng);
-	  return _lhs.getUniRange(rng);
-	default:
-	  return false;
-	}
-      }
-      else if (_lhs.isSolved()) {
-	assert(! _rhs.isSolved());
-	long lhs = _lhs.evaluate();
-	switch(_op) {
-	case CstBinaryOp.ADD:
-	  UniRangeMod(IntRangeModOp.ADD, lhs).apply(rng);
-	  return _rhs.getUniRange(rng);
-	case CstBinaryOp.SUB: 
-	  UniRangeMod(IntRangeModOp.SUBD, lhs).apply(rng);
-	  return _rhs.getUniRange(rng);
-	default:
-	  return false;
-	}
-      }
-      else {
-	return false;
-      }
-    }
-    else {
-      return false;
-    }
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    if (_rhs.isSolved()) {
-      assert(! _lhs.isSolved());
-      auto rhs = cast(int) _rhs.evaluate();
-      switch(_op) {
-      case CstBinaryOp.ADD:
-	IntRangeMod!int(IntRangeModOp.ADD, rhs).apply(rng);
-	return _lhs.getIntRange(rng);
-      case CstBinaryOp.SUB: 
-	IntRangeMod!int(IntRangeModOp.SUB, rhs).apply(rng);
-	return _lhs.getIntRange(rng);
-      default:
-	return false;
-      }
-    }
-    else if (_lhs.isSolved()) {
-      assert(! _rhs.isSolved());
-      auto lhs = cast(int) _lhs.evaluate();
-      switch(_op) {
-      case CstBinaryOp.ADD:
-	IntRangeMod!int(IntRangeModOp.ADD, lhs).apply(rng);
-	return _rhs.getIntRange(rng);
-      case CstBinaryOp.SUB: 
-	IntRangeMod!int(IntRangeModOp.SUBD, lhs).apply(rng);
-	return _rhs.getIntRange(rng);
-      default:
-	return false;
-      }
-    }
-    else {
-      return false;
-    }
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    bool lvalid, rvalid;
-    INTTYPE lType, rType;
-    
-    lvalid = _lhs.getIntType(lType);
-    rvalid = _rhs.getIntType(rType);
-
-    if (lvalid && rvalid) {
-      if (lType == INTTYPE.LONG ||
-	  rType == INTTYPE.LONG ||
-	  iType == INTTYPE.LONG) {
-	iType = INTTYPE.LONG;
-      }
-      else if ((lType == INTTYPE.ULONG ||
-		rType == INTTYPE.ULONG ||
-		iType == INTTYPE.ULONG) &&
-	       (lType == INTTYPE.INT ||
-		rType == INTTYPE.INT ||
-		iType == INTTYPE.INT))	       {
-	iType = INTTYPE.LONG;
-      }
-      else if (lType == INTTYPE.ULONG ||
-	       rType == INTTYPE.ULONG ||
-	       iType == INTTYPE.ULONG) {
-	iType = INTTYPE.ULONG;
-      }
-      else if (lType == INTTYPE.INT ||
-	       rType == INTTYPE.INT ||
-	       iType == INTTYPE.INT) {
-	iType = INTTYPE.INT;
-      }
-      else {
-	iType = INTTYPE.UINT;
-      }
-      return true;
-    }
-    else {
-      return false;
-    }
   }
 
   override bool isSolved() {
@@ -2296,34 +1942,6 @@ class CstDistExpr(T): CstLogicTerm
     _vec.isDist(true);
   }
 
-  bool getIntType(ref INTTYPE iType) {
-    assert (false);
-  }
-  
-  override bool getUniRangeSet(ref IntRS rs) {
-    assert (false);
-  }
-    
-  override bool getUniRangeSet(ref UIntRS rs) {
-    assert (false);
-  }
-    
-  override bool getUniRangeSet(ref LongRS rs) {
-    assert (false);
-  }
-    
-  override bool getUniRangeSet(ref ULongRS rs) {
-    assert (false);
-  }
-    
-  bool getUniRangeSetImpl(RS)(ref RS rs) {
-    assert (false);
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    assert (false);
-  }
-
   override bool isSolved() {
     return _vec.isSolved();
   }
@@ -2414,18 +2032,6 @@ class CstDistExpr(T): CstLogicTerm
 //       _rhs.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
 //   }
 
-//   bool getIntRange(ref IntR rng) {
-//     return false;
-//   }
-
-//   bool getUniRange(ref UniRange rng) {
-//     return false;
-//   }
-
-//   bool getIntType(ref INTTYPE iType) {
-//     return false;
-//   }
-  
 //   override bool isSolved() {
 //     if (_rhs is null) return _lhs.isSolved() && _vec.isSolved();
 //     else return _lhs.isSolved() && _rhs.isSolved() && _vec.isSolved();
@@ -2522,18 +2128,6 @@ class CstVecSliceExpr: CstVecTerm
     _range.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getIntRange(ref IntR rng) {
-    return false;
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    return false;
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    return false;
-  }
-  
   override bool isSolved() {
     return _range.isSolved() && _vec.isSolved();
   }
@@ -2607,18 +2201,6 @@ class CstVecSliceExpr: CstVecTerm
 //     _index.setDomainContext(pred, bitIdxs, rndArrs, bitIdxs, varArrs, vals, iters, idxs, bitIdxs, deps);
 //   }
 
-//   bool getIntRange(ref IntR rng) {
-//     return false;
-//   }
-
-//   bool getUniRange(ref UniRange rng) {
-//     return false;
-//   }
-
-//   bool getIntType(ref INTTYPE iType) {
-//     return false;
-//   }
-  
 //   override bool isSolved() {
 //     return _index.isSolved() && _vec.isSolved();
 //   }
@@ -2703,18 +2285,6 @@ class CstNotVecExpr: CstVecTerm
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
     _expr.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    return false;
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    return false;
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    return false;
   }
 
   override bool isSolved() {
@@ -2802,18 +2372,6 @@ class CstNegVecExpr: CstVecTerm
     _expr.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getIntRange(ref IntR rng) {
-    return false;
-  }
-
-  override bool getUniRange(ref UniRange rng) {
-    return false;
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    return false;
-  }
-
   override bool isSolved() {
     return _expr.isSolved();
   }
@@ -2868,68 +2426,10 @@ class CstLogic2LogicExpr: CstLogicTerm
     _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getUniRangeSet(ref IntRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-    
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-    
-  override bool getUniRangeSet(ref LongRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-    
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-  
   override CstVecExpr isNot(CstDomain dom){
     return null;
   }
   
-  bool getUniRangeSetImpl(T)(ref T rs) {
-    if (_lhs.isSolved()) return false;
-    if (_rhs.isSolved()) return false;
-
-    T lhs;
-    T rhs;
-
-    if (_lhs.getUniRangeSet(lhs) is false) return false;
-    if (_rhs.getUniRangeSet(rhs) is false) return false;
-
-    final switch(_op) {
-    case CstLogicOp.LOGICAND: lhs &= rhs; break;
-    case CstLogicOp.LOGICOR:  lhs |= rhs; break;
-    case CstLogicOp.LOGICIMP: return false;
-    case CstLogicOp.LOGICNOT: assert(false);
-    }
-
-    rs = lhs;
-    return true;
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    assert(! _lhs.isSolved());
-    assert(! _rhs.isSolved());
-
-    IntRS lhs;
-    IntRS rhs;
-
-    if (_lhs.getIntRangeSet(lhs) is false) return false;
-    if (_rhs.getIntRangeSet(rhs) is false) return false;
-
-    final switch(_op) {
-    case CstLogicOp.LOGICAND: lhs &= rhs; break;
-    case CstLogicOp.LOGICOR:  lhs |= rhs; break;
-    case CstLogicOp.LOGICIMP: return false;
-    case CstLogicOp.LOGICNOT: assert(false);
-    }
-
-    rs = lhs;
-    return true;
-  }
-
   bool cstExprIsNop() {
     return false;
   }
@@ -3031,34 +2531,10 @@ class CstInsideArrExpr: CstLogicTerm
     }
   }
 
-  override bool getUniRangeSet(ref IntRS rs) {
-    return false;
-  }
-    
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return false;
-  }
-    
-  override bool getUniRangeSet(ref LongRS rs) {
-    return false;
-  }
-    
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return false;
-  }
-  
   override CstVecExpr isNot(CstDomain dom){
     return null;
   }
   
-  bool getUniRangeSetImpl(T)(ref T rs) {
-    return false;
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    return false;
-  }
-
   bool cstExprIsNop() {
     return false;
   }
@@ -3141,34 +2617,10 @@ class CstUniqueArrExpr: CstLogicTerm
     }
   }
 
-  override bool getUniRangeSet(ref IntRS rs) {
-    return false;
-  }
-    
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return false;
-  }
-    
-  override bool getUniRangeSet(ref LongRS rs) {
-    return false;
-  }
-    
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return false;
-  }
-  
   override CstVecExpr isNot(CstDomain dom){
     return null;
   }
   
-  bool getUniRangeSetImpl(T)(ref T rs) {
-    return false;
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    return false;
-  }
-
   bool cstExprIsNop() {
     return false;
   }
@@ -3210,26 +2662,6 @@ class CstIteLogicExpr: CstLogicTerm
     assert(false, "TBD");
   }
 
-  override bool getUniRangeSet(ref IntRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref LongRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return false;
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    return false;
-  }
-  
   override CstVecExpr isNot(CstDomain dom){
     return null;
   }
@@ -3300,60 +2732,6 @@ class CstVec2LogicExpr: CstLogicTerm
     _lhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
-
-  bool getIntType(ref INTTYPE iType) {
-    bool lvalid, rvalid;
-    INTTYPE lType, rType;
-
-    assert(iType == INTTYPE.UINT);
-
-    lvalid = _lhs.getIntType(lType);
-    rvalid = _rhs.getIntType(rType);
-
-    if (lvalid && rvalid) {
-      if (lType == INTTYPE.ULONG ||
-	  rType == INTTYPE.ULONG) {
-	iType = INTTYPE.ULONG;
-      }
-      else if ((lType == INTTYPE.LONG ||
-		rType == INTTYPE.LONG) &&
-	       (lType == INTTYPE.UINT ||
-		rType == INTTYPE.UINT))	       {
-	iType = INTTYPE.ULONG;
-      }
-      else if (lType == INTTYPE.LONG ||
-	       rType == INTTYPE.LONG) {
-	iType = INTTYPE.LONG;
-      }
-      else if (lType == INTTYPE.UINT ||
-	       rType == INTTYPE.UINT) {
-	iType = INTTYPE.UINT;
-      }
-      else {
-	iType = INTTYPE.INT;
-      }
-      return true;
-    }
-    else {
-      return false;
-    }
-  }
-  
-  override bool getUniRangeSet(ref IntRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-    
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-    
-  override bool getUniRangeSet(ref LongRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
-    
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return getUniRangeSetImpl(rs);
-  }
   
   override CstVecExpr isNot(CstDomain dom){
     if (_op is CstCompareOp.NEQ) {
@@ -3366,65 +2744,6 @@ class CstVec2LogicExpr: CstLogicTerm
     return null;
   }
     
-  bool getUniRangeSetImpl(RS)(ref RS rs) {
-    static if (is (RS == IntRangeSet!T, T)) {
-      if (_rhs.isSolved()) {
-	INTTYPE iType;
-	assert(! _lhs.isSolved(), this.describe());
-	bool valid = this.getIntType(iType);
-	if (valid) {
-	  ulong rhs = cast(int) _rhs.evaluate();
-	  UniRange rn = UniRange(_op, iType, rhs);
-	  valid = _lhs.getUniRange(rn);
-	  auto irn = IntRange!T(rn);
-	  rs ~= irn;
-	}
-	return valid;
-      }
-      else if (_lhs.isSolved()) {
-	INTTYPE iType;
-	assert(! _rhs.isSolved(), this.describe());
-	bool valid = this.getIntType(iType);
-	if (valid) {
-	  ulong lhs = cast(int) _lhs.evaluate();
-	  UniRange rn = UniRange(_op, iType, lhs);
-	  valid = _rhs.getUniRange(rn);
-	  auto irn = IntRange!T(rn);
-	  rs ~= irn;
-	}
-	return valid;
-      }
-      else {
-	return false;
-      }
-    }
-    else {
-      static assert(false);
-    }
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    if (_rhs.isSolved()) {
-      assert(! _lhs.isSolved(), "Expression: " ~ _lhs.describe());
-      auto rhs = cast(int) _rhs.evaluate();
-      IntR rn = IntR(_op, rhs);
-      bool valid = _lhs.getIntRange(rn);
-      rs ~= rn;
-      return valid;
-    }
-    else if (_lhs.isSolved()) {
-      assert(! _rhs.isSolved(), "Expression: " ~ _rhs.describe());
-      auto lhs = cast(int) _lhs.evaluate();
-      IntR rn = IntR(_op, lhs, true);
-      bool valid = _rhs.getIntRange(rn);
-      rs ~= rn;
-      return valid;
-    }
-    else {
-      return false;
-    }
-  }
-
   override bool isSolved() {
     return _lhs.isSolved && _rhs.isSolved();
   }
@@ -3478,26 +2797,6 @@ class CstLogicConst: CstLogicTerm
     // nothing for CstLogicConst
   }
 
-  override bool getUniRangeSet(ref IntRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref LongRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return false;
-  }
-
-  override bool getIntRangeSet(ref IntRS rng) {
-    return false;
-  }
-  
   override CstVecExpr isNot(CstDomain dom){
     return null;
   }
@@ -3550,26 +2849,6 @@ class CstNotLogicExpr: CstLogicTerm
     _expr.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getUniRangeSet(ref IntRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref UIntRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref LongRS rs) {
-    return false;
-  }
-
-  override bool getUniRangeSet(ref ULongRS rs) {
-    return false;
-  }
-
-  override bool getIntRangeSet(ref IntRS rng) {
-    return false;
-  }
-  
   override CstVecExpr isNot(CstDomain dom){
     return null;
   }
@@ -3594,6 +2873,7 @@ class CstVarVisitorExpr: CstLogicTerm
   CstVarNodeIntf _obj;
 
   this(CstVarNodeIntf obj) {
+    assert (obj !is null);
     _obj = obj;
   }
 
@@ -3631,38 +2911,11 @@ class CstVarVisitorExpr: CstLogicTerm
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
+    assert (_obj !is null);
     CstIterator iter = _obj._esdl__iter();
     if (iter !is null) {
       iter.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     }
-  }
-
-  bool getIntType(ref INTTYPE iType) {
-    assert (false);
-  }
-  
-  override bool getUniRangeSet(ref IntRS rs) {
-    assert (false);
-  }
-    
-  override bool getUniRangeSet(ref UIntRS rs) {
-    assert (false);
-  }
-    
-  override bool getUniRangeSet(ref LongRS rs) {
-    assert (false);
-  }
-    
-  override bool getUniRangeSet(ref ULongRS rs) {
-    assert (false);
-  }
-    
-  bool getUniRangeSetImpl(RS)(ref RS rs) {
-    assert (false);
-  }
-
-  override bool getIntRangeSet(ref IntRS rs) {
-    assert (false);
   }
 
   override bool isSolved() {

@@ -6,7 +6,6 @@ import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
   isDynamicArray;
 
 import esdl.rand.misc;
-import esdl.rand.intr;
 import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain,
   CstLogicExpr, CstPredicate, CstVecNodeIntf, CstVecArrIntf, CstVarNodeIntf,
   CstObjectIntf, CstObjArrIntf, CstDomSet;
@@ -14,7 +13,6 @@ import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr;
 
-import esdl.rand.intr: IntRangeSet;
 import esdl.rand.meta: _esdl__ProxyResolve, _esdl__staticCast;
 
 import std.algorithm.searching: canFind;
