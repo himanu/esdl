@@ -219,9 +219,9 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   abstract bool solveRange(_esdl__RandGen randGen);
   // abstract uint domIndex();
   // abstract void domIndex(uint s);
-  abstract bool signed();
+  // abstract bool signed();
   abstract bool isRand();
-  abstract uint bitcount();
+  // abstract uint bitcount();
   abstract _esdl__Proxy getProxyRoot();
   abstract void _esdl__doRandomize(_esdl__RandGen randGen);
   abstract CstDomain getResolved();
@@ -387,6 +387,9 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
   uint _unresolveLap;
 
   abstract void markAsUnresolved(uint lap, bool hier);
+  abstract uint elemBitcount();
+  abstract bool elemSigned();
+
   
   void execCbs() {
     execIterCbs();
@@ -401,6 +404,7 @@ abstract class CstDomSet: CstVecPrim, CstVecArrIntf
   }
 
   abstract CstDomSet getParentDomSet();
+  abstract CstDomSet unroll(CstIterator iter, uint n);
   
   override void registerDepPred(CstDepCallback depCb) {
     foreach (cb; _depCbs) {
@@ -589,6 +593,9 @@ abstract class CstVecExpr: CstExpr
 
   // get the number of bits and the sign information of an expression
   abstract bool getIntType(ref INTTYPE iType);
+
+  abstract uint bitcount();
+  abstract bool signed();
 
 }
 

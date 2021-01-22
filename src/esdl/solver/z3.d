@@ -198,7 +198,7 @@ class CstZ3Solver: CstSolver
 
   uint _seed;
 
-  BvExprVector _vector;
+  Z3_ast[] _vector;
 
   CstVectorOp _state;
   // the group is used only for the purpose of constructing the Z3 solver
@@ -214,7 +214,7 @@ class CstZ3Solver: CstSolver
     Config cfg = new Config();
     _context = new Context(cfg);
 
-    _vector = BvExprVector(_context);
+    // _vector = BvExprVector(_context);
     
     CstDomain[] doms = group.domains();
     _domains.length = doms.length;
@@ -620,31 +620,13 @@ class CstZ3Solver: CstSolver
     // writeln("push: ", domain.name(), " annotation: ", n);
     // writeln("_domains has a length: ", _domains.length);
 
-    switch (_state) {
-    case CstVectorOp.NONE:
-      if (domain.isSolved()) { // is a variable
-	_evalStack ~= Z3Term(_variables[n]);
-      }
-      else {
-	_evalStack ~= Z3Term(_domains[n]);
-      }
-      break;
-    case CstVectorOp.BEGIN_INT:
-      _vector.pushBack(_domains[n].extendTo(32, true));
-      break;
-    case CstVectorOp.BEGIN_UINT:
-      _vector.pushBack(_domains[n].extendTo(32, false));
-      break;
-    case CstVectorOp.BEGIN_LONG:
-      _vector.pushBack(_domains[n].extendTo(64, true));
-      break;
-    case CstVectorOp.BEGIN_ULONG:
-      _vector.pushBack(_domains[n].extendTo(64, false));
-      break;
-    default:
-      import std.conv: to;
-      assert (false, "Unexpected state: " ~ _state.to!string());
+    if (domain.isSolved()) { // is a variable
+      _evalStack ~= Z3Term(_variables[n]);
     }
+    else {
+      _evalStack ~= Z3Term(_domains[n]);
+    }
+
   }
 
   override void pushToEvalStack(CstValue value) {
@@ -826,30 +808,32 @@ class CstZ3Solver: CstSolver
   override void processEvalStack(CstVectorOp op) {
     // import std.conv: to;
     // assert (false, "CstVectorOp is handled only by SMT solvers: " ~ op.to!string());
-    final switch (op) {
-    case CstVectorOp.NONE:
-      assert (false, "Unexpected op: CstVectorOp.NONE");
-    case
-      CstVectorOp.BEGIN_INT,
-      CstVectorOp.BEGIN_UINT,
-      CstVectorOp.BEGIN_LONG,
-      CstVectorOp.BEGIN_ULONG:
-      assert (_state is CstVectorOp.NONE);
-      _state = op;
-      BvExprVector vector = BvExprVector(_context);
-      _vector = vector;
-      break;
-    case CstVectorOp.UNIQUE:
-      BoolExpr e = distinct(_vector);
-      _evalStack ~= Z3Term(e);
-      _state = CstVectorOp.NONE;
-      break;
-    case CstVectorOp.SUM:
-      BvExpr e = sum(_vector);
-      _evalStack ~= Z3Term(e);
-      _state = CstVectorOp.NONE;
-      break;
-    }
+    // final switch (op) {
+    // case CstVectorOp.NONE:
+    //   assert (false, "Unexpected op: CstVectorOp.NONE");
+    // case
+    //   CstVectorOp.BEGIN_INT,
+    //   CstVectorOp.BEGIN_UINT,
+    //   CstVectorOp.BEGIN_LONG,
+    //   CstVectorOp.BEGIN_ULONG:
+    //   assert (_state is CstVectorOp.NONE);
+    //   _state = op;
+    //   _vector.length = 0;
+    //   // BvExprVector vector = BvExprVector(_context);
+    //   // _vector = vector;
+    //   break;
+    // case CstVectorOp.SUM:
+    //   BvExpr e = sum(_vector);
+    //   _evalStack ~= Z3Term(e);
+    //   _state = CstVectorOp.NONE;
+    //   break;
+    // case CstVectorOp.MULT:
+    //   // BoolExpr e = mul(_vector);
+    //   // _evalStack ~= Z3Term(e);
+    //   // _state = CstVectorOp.NONE;
+    //   assert(false, "TBD");
+    //   // break;
+    // }
   }
 
   override void processEvalStack(CstInsideOp op) {
@@ -887,4 +871,70 @@ class CstZ3Solver: CstSolver
       break;
     }
   }
+
+  override void processEvalStack(CstUniqueOp op) {
+    import esdl.intf.z3.api;
+    final switch(op) {
+    case CstUniqueOp.INIT:
+      foreach (uv; _vector) {
+	Z3_dec_ref(_context, uv);
+      }
+      _vector.length = 0;
+      break;
+    case CstUniqueOp.INT:
+    case CstUniqueOp.UINT:
+      assert (_evalStack.length > 0);
+      BvExpr bv = _evalStack[$-1].toBv();
+      bool signed = bv.isSigned();
+      uint size = bv.size();
+      assert (size <= 32);
+      uint extBy = 32 - size;
+      _evalStack.length = _evalStack.length - 1;
+
+      Z3_ast uv = bv.getAST();
+      if (extBy > 0) {
+	if (signed) uv = Z3_mk_sign_ext(_context, extBy, uv);
+	else uv = Z3_mk_zero_ext(_context, extBy, uv);
+      }
+
+      Z3_inc_ref(_context, uv);
+      _vector ~= uv;
+      break;
+    case CstUniqueOp.LONG:
+    case CstUniqueOp.ULONG:
+      assert (_evalStack.length > 0);
+      BvExpr bv = _evalStack[$-1].toBv();
+      bool signed = bv.isSigned();
+      uint size = bv.size();
+      assert (size <= 64);
+      uint extBy = 64 - size;
+      _evalStack.length = _evalStack.length - 1;
+
+      Z3_ast uv = bv.getAST();
+      if (extBy > 0) {
+	if (signed) uv = Z3_mk_sign_ext(_context, extBy, uv);
+	else uv = Z3_mk_zero_ext(_context, extBy, uv);
+      }
+
+      Z3_inc_ref(_context, uv);
+      _vector ~= uv;
+      break;
+    case CstUniqueOp.UNIQUE:
+      if (_vector.length == 0) {
+	_evalStack ~= Z3Term(true);
+      }
+      else {
+	Z3_ast r = Z3_mk_distinct(_context, cast(uint) _vector.length, _vector.ptr);
+	_context.checkError();
+	_evalStack ~= Z3Term(BoolExpr(_context, r));
+	// destroy the _vector
+	foreach (uv; _vector) {
+	  Z3_dec_ref(_context, uv);
+	}
+	_vector.length = 0;
+      }
+      break;
+    }
+  }
+  
 }

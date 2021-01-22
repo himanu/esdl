@@ -451,9 +451,19 @@ enum CstVectorOp: byte
     BEGIN_UINT,
     BEGIN_LONG,
     BEGIN_ULONG,
-    UNIQUE,
-    SUM
+    SUM,
+    MULT
     }
+
+enum CstUniqueOp: byte
+{   INIT,
+    INT,
+    UINT,
+    LONG,
+    ULONG,
+    UNIQUE
+    }
+
 
 enum CstInsideOp: byte
 {   INSIDE,

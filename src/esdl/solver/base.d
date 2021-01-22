@@ -46,4 +46,5 @@ abstract class CstSolver
   abstract void processEvalStack(CstSliceOp op);
   abstract void processEvalStack(CstVectorOp op);
   abstract void processEvalStack(CstInsideOp op);
+  abstract void processEvalStack(CstUniqueOp op);
 }

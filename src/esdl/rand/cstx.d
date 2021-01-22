@@ -1546,7 +1546,17 @@ struct CstParser {
     auto savedNumParen = numParen;
     numIndex = 0;
     numParen = 0;
-    procRangeExpr("inside_");
+    procRangeTerm("inside_");
+    numIndex = savedNumIndex;
+    numParen = savedNumParen;
+  }
+
+  void procUniqueElem() {
+    auto savedNumIndex = numIndex;
+    auto savedNumParen = numParen;
+    numIndex = 0;
+    numParen = 0;
+    procUniqueTerm();
     numIndex = savedNumIndex;
     numParen = savedNumParen;
   }
@@ -1556,7 +1566,7 @@ struct CstParser {
     auto savedNumParen = numParen;
     numIndex = 0;
     numParen = 0;
-    procRangeExpr("dist_");
+    procRangeTerm("dist_");
     numIndex = savedNumIndex;
     numParen = savedNumParen;
   }
@@ -1568,7 +1578,7 @@ struct CstParser {
     srcCursor = cursor;
     numIndex = 0;
     numParen = 0;
-    procRangeExpr("index_");
+    procRangeTerm("index_");
     numIndex = savedNumIndex;
     numParen = savedNumParen;
     srcCursor = savedCursor;
@@ -1671,7 +1681,7 @@ struct CstParser {
     return false;
   }
 
-  void procRangeExpr(string prefix) {
+  void procRangeTerm(string prefix) {
     size_t srcTag = 0;
 
     srcTag = parseSpace();
@@ -1722,6 +1732,27 @@ struct CstParser {
 	assert(false, "Expecting an arithmatic expression on RHS, got none");
       }
       fill(')');
+    }
+  }
+
+  void procUniqueTerm() {
+    size_t srcTag = 0;
+
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    // LHS
+    if (srcCursor < CST.length) {
+      // size_t openingParenAnchor = fill(' ');
+      // size_t startAnchor = outCursor;
+      srcTag = srcCursor;
+      fill("_esdl__unique_elem(");
+      procArithExpr();
+      fill(")");
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting an expression, got none");
+      }
+
     }
   }
 
@@ -1805,6 +1836,37 @@ struct CstParser {
     }
     else {
       assert (false, "[ expected after 'inside', found: " ~ CST[srcCursor]);
+    }
+  }
+
+  void procUniqueSetContainer() {
+    size_t srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
+
+    if (srcCursor < CST.length && CST[srcCursor] == '[') {
+      fill('[');
+      srcCursor += 1;
+      while (srcCursor < CST.length) {
+	procUniqueElem();
+	srcTag = parseSpace();
+	fill(CST[srcTag..srcCursor]);
+	if (srcCursor < CST.length && CST[srcCursor] == ',') {
+	  srcCursor += 1;
+	  fill(',');
+	  continue;
+	}
+	else if (srcCursor < CST.length && CST[srcCursor] == ']') {
+	  fill(']');
+	  srcCursor += 1;
+	  break;
+	}
+	else {
+	  assert (false, "Unexpected token found: " ~ CST[srcCursor]);
+	}
+      }
+    }
+    else {
+      assert (false, "[ expected after 'unique', found: " ~ CST[srcCursor]);
     }
   }
 
@@ -1908,38 +1970,40 @@ struct CstParser {
   }
 
   bool procUniqueExpr() {
-    return false;
-    // size_t srcTag = 0;
+    // return false;
+    size_t srcTag = 0;
 
-    // srcTag = parseSpace();
-    // fill(CST[srcTag..srcCursor]);
+    srcTag = parseSpace();
+    fill(CST[srcTag..srcCursor]);
 
-    // // LHS
-    // if (srcCursor < CST.length) {
-    //   // size_t openingParenAnchor = fill(' ');
-    //   size_t startAnchor = outCursor;
-    //   srcTag = srcCursor;
+    // LHS
+    if (srcCursor < CST.length) {
+      // size_t openingParenAnchor = fill(' ');
+      size_t startAnchor = outCursor;
+      srcTag = srcCursor;
 
-    //   bool tok = procUniqueExpr();
+      bool tok = parseUniqueOperator();
 
-    //   if (tok is false) {
-    // 	return false;
-    //   }
+      if (tok is false) {
+	return false;
+      }
 
-    //   srcTag = parseSpace();
-    //   fill(CST[srcTag..srcCursor]);
+      srcTag = parseSpace();
+      fill(CST[srcTag..srcCursor]);
 
-    //   procInsideSetContainer();
-    //   if (srcTag == srcCursor) {
-    // 	assert(false, "Expecting a set container on RHS, got none");
-    //   }
+      fill("_esdl__unique(");
 
-    //   fill(')');
-    //   return true;
-    // }
-    // else {
-    //   return false;
-    // }
+      procUniqueSetContainer();
+      if (srcTag == srcCursor) {
+	assert(false, "Expecting a set container on RHS, got none");
+      }
+
+      fill(')');
+      return true;
+    }
+    else {
+      return false;
+    }
   }
   
   void procLogicExpr() {
@@ -1971,10 +2035,10 @@ struct CstParser {
 	srcTag = parseSpace();
 	fill(CST[srcTag..srcCursor]);
 	// srcTag = srcCursor;
-	if (procCmpExpr() == true) {
+	if (procUniqueExpr() == true) {
 	  break;
 	}
-	else if (procUniqueExpr() == true) {
+	else if (procCmpExpr() == true) {
 	  break;
 	}
 	else {

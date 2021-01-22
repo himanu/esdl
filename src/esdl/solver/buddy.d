@@ -634,6 +634,10 @@ class CstBuddySolver: CstSolver
     assert (false, "TBD");
   }
 
+  override void processEvalStack(CstUniqueOp op) {
+    assert(false, "TBD");
+  }
+
   void popEvalStack(uint count) {
     assert (_evalStack.length >= count);
     for (size_t i=0; i!=count; ++i) {

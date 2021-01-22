@@ -3,7 +3,8 @@ module esdl.rand.vecx;
 import esdl.data.bvec;
 import esdl.data.bstr;
 import esdl.data.charbuf;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+import std.traits: isIntegral, isBoolean, isArray,
+  isStaticArray, isDynamicArray, isSigned;
 
 import esdl.solver.base: CstSolver;
 
@@ -471,6 +472,30 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     CstVecPrim[] _preReqs;
   }
 
+  override uint elemBitcount() {
+    static if (isIntegral!LEAF) {
+      return LEAF.sizeof * 8;
+    }
+    else static if(isBitVector!T) {
+      return cast(uint) LEAF.SIZE;
+    }
+    else static if(isBoolean!T) {
+      return 1;
+    }
+  }
+
+  override bool elemSigned() {
+    static if (isIntegral!LEAF) {
+      return isSigned!LEAF;
+    }
+    else static if(isBitVector!T) {
+      return LEAF.ISSIGNED;
+    }
+    else static if(isBoolean!T) {
+      return false;
+    }
+  }
+
   bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
@@ -744,7 +769,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	return this;
       }
 
-      RV unroll(CstIterator iter, uint n) {
+      override RV unroll(CstIterator iter, uint n) {
 	return this;
       }
 
@@ -809,7 +834,8 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
       {
 	static if (S.length == 0) return this;
 	else static if (S[0] == "") {
-	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
+	  assert (indx[0]._rhs is null);
+	  return this.opIndex(indx[0]._lhs)._esdl__sym!(S[1..$])(indx[1..$]);
 	}
 	else {
 	  static assert (S.length == 1);
@@ -937,7 +963,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	return _resolvedVec;
       }
 
-      RV unroll(CstIterator iter, uint n) {
+      override RV unroll(CstIterator iter, uint n) {
 	if (_indexExpr) {
 	  return _parent.unroll(iter,n)[_indexExpr.unroll(iter,n)];
 	}

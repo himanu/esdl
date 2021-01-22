@@ -7,7 +7,7 @@ import esdl.solver.base: CstSolver;
 
 import esdl.rand.misc: rand, _esdl__RandGen, isVecSigned, Unconst, CstVectorOp, CstInsideOp;
 import esdl.rand.misc: CstBinaryOp, CstCompareOp, CstLogicOp,
-  CstUnaryOp, CstSliceOp, writeHexString;
+  CstUnaryOp, CstSliceOp, writeHexString, CstUniqueOp;
 
 import esdl.rand.base;
 import esdl.rand.proxy: _esdl__Proxy;
@@ -960,6 +960,14 @@ class CstArrIterator(RV): CstIterator
     iters ~= this;
   }
 
+  override bool signed() {
+    return false;
+  }
+
+  override uint bitcount() {
+    return 64;
+  }
+  
   override bool isSolved() {
     return _arrVar._arrLen.isSolved();
   }
@@ -1236,8 +1244,8 @@ abstract class CstValue: CstVecTerm
   }
 
   abstract long value();
-  abstract bool signed();
-  abstract uint bitcount();
+  // abstract bool signed();
+  // abstract uint bitcount();
 }
 
 auto _esdl__cstVal(T)(T val) {
@@ -1449,6 +1457,29 @@ class CstVecArrExpr: CstVecTerm
     _op = CstVectorOp.SUM;
   }
 
+  override uint bitcount() {
+    uint _elemBitCount = _arr.elemBitcount();
+
+    if (_elemBitCount <= 32) return 32;
+    else if (_elemBitCount <= 64) return 64;
+    else {
+      assert (false, "CstVecArrExpr works only for bitcount <= 64");
+    }
+  }
+
+  override bool signed() {
+    uint _elemBitCount = _arr.elemBitcount();
+    bool _elemSigned = _arr.elemSigned();
+
+    if (_elemBitCount < 32) return true;
+    else if (_elemBitCount == 32) return _elemSigned;
+    else if (_elemBitCount < 64) return true;
+    else if (_elemBitCount == 64) return _elemSigned;
+    else {
+      assert (false, "CstVecArrExpr works only for bitcount <= 64");
+    }
+  }
+  
   override bool isConst() {
     return false;
   }
@@ -1575,6 +1606,37 @@ class CstVec2VecExpr: CstVecTerm
     _op = op;
   }
 
+  override uint bitcount() {
+    uint lhsBitcount = _lhs.bitcount();
+    uint rhsBitCount = _rhs.bitcount();
+    uint count = rhsBitCount > lhsBitcount ? rhsBitCount : lhsBitcount;
+
+    if (count <= 32) return 32;
+    else if (count <= 64) return 64;
+    else return count;
+  }
+  
+  override bool signed() {
+    uint lhsBitcount = _lhs.bitcount();
+    uint rhsBitcount = _rhs.bitcount();
+    bool lhsSigned = _lhs.signed();
+    bool rhsSigned = _rhs.signed();
+
+    if (lhsSigned && rhsSigned) return true; // both signed
+    else if (lhsBitcount > rhsBitcount) {
+      if (lhsBitcount == 32 || lhsBitcount == 64) return lhsSigned;
+      else return false;
+    }
+    else if (rhsBitcount > lhsBitcount) {
+      if (rhsBitcount == 32 || rhsBitcount == 64) return rhsSigned;
+      else return false;
+    }
+    else {			// size is same
+      if (rhsBitcount == 32 || rhsBitcount == 64) return rhsSigned && lhsSigned;
+      else return false;
+    }
+  }
+  
   override bool isConst() {
     return _lhs.isConst() && _rhs.isConst();
   }
@@ -1732,7 +1794,7 @@ class CstVec2VecExpr: CstVecTerm
   }
 }
 
-class CstRangeExpr: CstVecTerm
+class CstRangeExpr
 {
   import std.conv;
 
@@ -1741,7 +1803,7 @@ class CstRangeExpr: CstVecTerm
 
   bool _inclusive = false;
 
-  override string describe() {
+  string describe() {
     if (_rhs is null)
       return "( " ~ _lhs.describe ~ " )";
     else if (_inclusive)
@@ -1750,22 +1812,12 @@ class CstRangeExpr: CstVecTerm
       return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
   }
 
-  override void visit(CstSolver solver) {
-    // assert (_lhs.isSolved());
-    // assert (_rhs.isSolved());
-    // solver.pushIndexToEvalStack(_lhs.evaluate());
-    // solver.pushIndexToEvalStack(_rhs.evaluate());
-    // if (_inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
-    // else solver.processEvalStack(CstSliceOp.SLICE);
-    assert (false);
-  }
-
-  override long evaluate() {
+  long evaluate() {
     assert (_rhs is null);
     return _lhs.evaluate();
   }
 
-  override CstRangeExpr unroll(CstIterator iter, uint n) {
+  CstRangeExpr unroll(CstIterator iter, uint n) {
     if (_rhs is null)
       return new CstRangeExpr(_lhs.unroll(iter, n), null, _inclusive);
     else
@@ -1779,19 +1831,19 @@ class CstRangeExpr: CstVecTerm
     _inclusive = inclusive;
   }
 
-  override bool isConst() {
-    return _rhs is null && _lhs.isConst();
-  }
+  // bool isConst() {
+  //   return _rhs is null && _lhs.isConst();
+  // }
 
-  override bool isIterator() {
-    return false;
-  }
+  // bool isIterator() {
+  //   return false;
+  // }
 
-  override bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
+  // bool isOrderingExpr() {
+  //   return false;		// only CstVecOrderingExpr return true
+  // }
 
-  override void setDomainContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
 				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
@@ -1806,23 +1858,11 @@ class CstRangeExpr: CstVecTerm
       _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getUniRange(ref UniRange rng) {
-    assert (false);
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    assert (false);
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    assert (false);
-  }
-
-  override bool isSolved() {
+  bool isSolved() {
     return _lhs.isSolved() && (_rhs is null || _rhs.isSolved());
   }
 
-  override void writeExprString(ref Charbuf str) {
+  void writeExprString(ref Charbuf str) {
     _lhs.writeExprString(str);
     if (_rhs !is null) {
       if (_inclusive) str ~= " : ";
@@ -1832,7 +1872,7 @@ class CstRangeExpr: CstVecTerm
   }
 }
 
-class CstDistSetElem: CstVecTerm
+class CstDistSetElem
 {
   import std.conv;
 
@@ -1841,7 +1881,7 @@ class CstDistSetElem: CstVecTerm
 
   bool _inclusive = false;
 
-  override string describe() {
+  string describe() {
     if (_rhs is null)
       return "( " ~ _lhs.describe ~ " )";
     else if (_inclusive)
@@ -1850,22 +1890,12 @@ class CstDistSetElem: CstVecTerm
       return "( " ~ _lhs.describe ~ " .. " ~ _rhs.describe ~ " )";
   }
 
-  override void visit(CstSolver solver) {
-    // assert (_lhs.isSolved());
-    // assert (_rhs.isSolved());
-    // solver.pushIndexToEvalStack(_lhs.evaluate());
-    // solver.pushIndexToEvalStack(_rhs.evaluate());
-    // if (_inclusive) solver.processEvalStack(CstSliceOp.SLICEINC);
-    // else solver.processEvalStack(CstSliceOp.SLICE);
-    assert (false);
-  }
-
-  override long evaluate() {
+  long evaluate() {
     assert (_rhs is null);
     return _lhs.evaluate();
   }
 
-  override CstDistSetElem unroll(CstIterator iter, uint n) {
+  CstDistSetElem unroll(CstIterator iter, uint n) {
     if (_rhs is null)
       return new CstDistSetElem(_lhs.unroll(iter, n), null, _inclusive);
     else
@@ -1879,19 +1909,19 @@ class CstDistSetElem: CstVecTerm
     _inclusive = inclusive;
   }
 
-  override bool isConst() {
-    return _rhs is null && _lhs.isConst();
-  }
+  // bool isConst() {
+  //   return _rhs is null && _lhs.isConst();
+  // }
 
-  override bool isIterator() {
-    return false;
-  }
+  // bool isIterator() {
+  //   return false;
+  // }
 
-  override bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
+  // bool isOrderingExpr() {
+  //   return false;		// only CstVecOrderingExpr return true
+  // }
 
-  override void setDomainContext(CstPredicate pred,
+  void setDomainContext(CstPredicate pred,
 				 ref CstDomain[] rnds,
 				 ref CstDomSet[] rndArrs,
 				 ref CstDomain[] vars,
@@ -1906,23 +1936,11 @@ class CstDistSetElem: CstVecTerm
       _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getUniRange(ref UniRange rng) {
-    assert (false);
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    assert (false);
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    assert (false);
-  }
-
-  override bool isSolved() {
+  bool isSolved() {
     return _lhs.isSolved() && (_rhs is null || _rhs.isSolved());
   }
 
-  override void writeExprString(ref Charbuf str) {
+  void writeExprString(ref Charbuf str) {
     _lhs.writeExprString(str);
     if (_rhs !is null) {
       if (_inclusive) str ~= " : ";
@@ -1932,7 +1950,117 @@ class CstDistSetElem: CstVecTerm
   }
 }
 
-class CstInsideSetElem: CstVecTerm
+class CstUniqueSetElem
+{
+  import std.conv;
+
+  CstVecExpr _vec;
+  CstDomSet  _arr;
+
+  bool _inclusive = false;
+
+  string describe() {
+    if (_arr !is null) {
+      assert (_vec is null);
+      return "( " ~ _arr.fullName ~ "[] )";
+    }
+    else {
+      assert (_arr is null);
+      return "( " ~ _vec.describe ~ " )";
+    }
+  }
+
+  CstUniqueSetElem unroll(CstIterator iter, uint n) {
+    if (_arr !is null) {
+      assert (_vec is null);
+      return new CstUniqueSetElem(_arr.unroll(iter, n));
+    }
+    else {
+      assert (_arr is null);
+      return new CstUniqueSetElem(_vec.unroll(iter, n));
+    }
+  }
+
+  this(CstVecExpr vec) {
+    _vec = vec;
+  }
+
+  this(CstDomSet arr) {
+    _arr = arr;
+  }
+
+  bool signed() {
+    if (_arr !is null) return _arr.elemSigned();
+    else return _vec.signed();
+  }
+
+  uint bitcount() {
+    if (_arr !is null) return _arr.elemBitcount();
+    else return _vec.bitcount();
+  }
+
+  void fixIntType(ref CstUniqueOp type) {
+    uint count = this.bitcount();
+    bool sign = this.signed();
+
+    CstUniqueOp t;
+    if (count < 32) t = CstUniqueOp.INT;
+    else if (count == 32) t = sign ? CstUniqueOp.INT : CstUniqueOp.UINT;
+    else if (count < 64) t = CstUniqueOp.LONG;
+    else if (count == 64) t = sign ? CstUniqueOp.LONG : CstUniqueOp.ULONG;
+    else assert (false, "unique not supported for bitcount > 64");
+
+    if (t > type) type = t;
+  }
+  // bool isConst() {
+  //   if (_arr !is null) return false;
+  //   return _vec.isConst();
+  // }
+
+  // bool isIterator() {
+  //   return false;
+  // }
+
+  // bool isOrderingExpr() {
+  //   return false;		// only CstVecOrderingExpr return true
+  // }
+
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomSet[] rndArrs,
+			ref CstDomain[] vars,
+			ref CstDomSet[] varArrs,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstVecNodeIntf[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstVecNodeIntf[] deps) {
+    if (_arr !is null) {
+      _arr.setDomainArrContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+      assert (rndArrs.length > 0 || varArrs.length > 0);
+    }
+    if (_vec !is null)
+      _vec.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+  }
+
+  bool isSolved() {
+    return false;
+  }
+
+  void writeExprString(ref Charbuf str) {
+    if (_arr !is null) {
+      str ~= "[ ";
+      _arr.writeExprString(str);
+      str ~= " ]";
+    }
+    else {
+      _vec.writeExprString(str);
+    }
+  }
+}
+
+
+class CstInsideSetElem
 {
   import std.conv;
 
@@ -1943,7 +2071,7 @@ class CstInsideSetElem: CstVecTerm
 
   bool _inclusive = false;
 
-  override string describe() {
+  string describe() {
     if (_arr !is null)
       return "( " ~ _arr.fullName ~ "[] )";
     else {
@@ -1957,18 +2085,10 @@ class CstInsideSetElem: CstVecTerm
     }
   }
 
-  override void visit(CstSolver solver) {
-    assert (false);
-  }
-
-  override long evaluate() {
-    assert (false);
-  }
-
-  override CstInsideSetElem unroll(CstIterator iter, uint n) {
+  CstInsideSetElem unroll(CstIterator iter, uint n) {
     if (_arr !is null) {
       assert (_lhs is null);
-      return this;
+      return new CstInsideSetElem(_arr.unroll(iter, n));
     }
     else {
       assert (_arr is null);
@@ -1990,30 +2110,30 @@ class CstInsideSetElem: CstVecTerm
     _arr = arr;
   }
 
-  override bool isConst() {
-    if (_arr !is null) return false;
-    if (_rhs !is null) return false;
-    return _lhs.isConst();
-  }
+  // bool isConst() {
+  //   if (_arr !is null) return false;
+  //   if (_rhs !is null) return false;
+  //   return _lhs.isConst();
+  // }
 
-  override bool isIterator() {
-    return false;
-  }
+  // bool isIterator() {
+  //   return false;
+  // }
 
-  override bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
+  // bool isOrderingExpr() {
+  //   return false;		// only CstVecOrderingExpr return true
+  // }
 
-  override void setDomainContext(CstPredicate pred,
-				 ref CstDomain[] rnds,
-				 ref CstDomSet[] rndArrs,
-				 ref CstDomain[] vars,
-				 ref CstDomSet[] varArrs,
-				 ref CstValue[] vals,
-				 ref CstIterator[] iters,
-				 ref CstVecNodeIntf[] idxs,
-				 ref CstDomain[] bitIdxs,
-				 ref CstVecNodeIntf[] deps) {
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomSet[] rndArrs,
+			ref CstDomain[] vars,
+			ref CstDomSet[] varArrs,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstVecNodeIntf[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstVecNodeIntf[] deps) {
     if (_arr !is null) {
       _arr.setDomainArrContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
       assert (rndArrs.length > 0 || varArrs.length > 0);
@@ -2024,23 +2144,11 @@ class CstInsideSetElem: CstVecTerm
       _rhs.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
   }
 
-  override bool getUniRange(ref UniRange rng) {
-    assert (false);
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    assert (false);
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    assert (false);
-  }
-
-  override bool isSolved() {
+  bool isSolved() {
     return false;
   }
 
-  override void writeExprString(ref Charbuf str) {
+  void writeExprString(ref Charbuf str) {
     if (_arr !is null) {
       str ~= "[ ";
       _arr.writeExprString(str);
@@ -2057,7 +2165,7 @@ class CstInsideSetElem: CstVecTerm
   }
 }
 
-class CstWeightedDistSetElem: CstVecTerm
+class CstWeightedDistSetElem
 {
   import std.conv;
 
@@ -2065,7 +2173,7 @@ class CstWeightedDistSetElem: CstVecTerm
   CstVecExpr   _weight;
   bool         _perItem = false;
 
-  override string describe() {
+  string describe() {
     string str = "( " ~ _range.describe;
     if (_perItem) str ~= " := ";
     else str ~= " :/ ";
@@ -2073,15 +2181,7 @@ class CstWeightedDistSetElem: CstVecTerm
     return str;
   }
 
-  override void visit(CstSolver solver) {
-    assert (false);
-  }
-
-  override long evaluate() {
-    assert (false);
-  }
-
-  override CstWeightedDistSetElem unroll(CstIterator iter, uint n) {
+  CstWeightedDistSetElem unroll(CstIterator iter, uint n) {
     return this;
   }
 
@@ -2091,46 +2191,34 @@ class CstWeightedDistSetElem: CstVecTerm
     _perItem = perItem;
   }
 
-  override bool isConst() {
-    return false;
-  }
+  // bool isConst() {
+  //   return false;
+  // }
 
-  override bool isIterator() {
-    return false;
-  }
+  // bool isIterator() {
+  //   return false;
+  // }
 
-  override bool isOrderingExpr() {
-    return false;		// only CstVecOrderingExpr return true
-  }
+  // bool isOrderingExpr() {
+  //   return false;		// only CstVecOrderingExpr return true
+  // }
 
-  override void setDomainContext(CstPredicate pred,
-				 ref CstDomain[] rnds,
-				 ref CstDomSet[] rndArrs,
-				 ref CstDomain[] vars,
-				 ref CstDomSet[] varArrs,
-				 ref CstValue[] vals,
-				 ref CstIterator[] iters,
-				 ref CstVecNodeIntf[] idxs,
-				 ref CstDomain[] bitIdxs,
-				 ref CstVecNodeIntf[] deps) { }
+  void setDomainContext(CstPredicate pred,
+			ref CstDomain[] rnds,
+			ref CstDomSet[] rndArrs,
+			ref CstDomain[] vars,
+			ref CstDomSet[] varArrs,
+			ref CstValue[] vals,
+			ref CstIterator[] iters,
+			ref CstVecNodeIntf[] idxs,
+			ref CstDomain[] bitIdxs,
+			ref CstVecNodeIntf[] deps) { }
 
-  override bool getUniRange(ref UniRange rng) {
-    assert (false);
-  }
-
-  override bool getIntRange(ref IntR rng) {
-    assert (false);
-  }
-
-  override bool getIntType(ref INTTYPE iType) {
-    assert (false);
-  }
-
-  override bool isSolved() {
+  bool isSolved() {
     return _range.isSolved() && _weight.isSolved();
   }
 
-  override void writeExprString(ref Charbuf str) {
+  void writeExprString(ref Charbuf str) {
     import std.conv: to;
     _range.writeExprString(str);
     if (_perItem) str ~= " := ";
@@ -2400,6 +2488,14 @@ class CstVecSliceExpr: CstVecTerm
     _range = range;
   }
 
+  override uint bitcount() {
+    return _vec.bitcount();
+  }
+  
+  override bool signed() {
+    return false;
+  }
+  
   override bool isConst() {
     return false;
   }
@@ -2568,6 +2664,22 @@ class CstNotVecExpr: CstVecTerm
     _expr = expr;
   }
 
+  override uint bitcount() {
+    uint count = _expr.bitcount();
+
+    if (count <= 32) return 32;
+    else if (count <= 64) return 64;
+    else return count;
+  }
+  
+  override bool signed() {
+    bool sign = _expr.signed();
+    uint count = _expr.bitcount();
+
+    if (count == 32 || count == 64) return sign;
+    else return true;		// int promotion
+  }
+  
   override bool isConst() {
     return _expr.isConst();
   }
@@ -2649,6 +2761,22 @@ class CstNegVecExpr: CstVecTerm
     _expr = expr;
   }
 
+  override uint bitcount() {
+    uint count = _expr.bitcount();
+
+    if (count <= 32) return 32;
+    else if (count <= 64) return 64;
+    else return count;
+  }
+  
+  override bool signed() {
+    bool sign = _expr.signed();
+    uint count = _expr.bitcount();
+
+    if (count == 32 || count == 64) return sign;
+    else return true;		// int promotion
+  }
+  
   override bool isConst() {
     return _expr.isConst();
   }
@@ -2942,6 +3070,115 @@ class CstInsideArrExpr: CstLogicTerm
   override void writeExprString(ref Charbuf str) {
     str ~= "(INSIDE ";
     _term.writeExprString(str);
+    str ~= " [";
+    foreach (elem; _elems)
+      elem.writeExprString(str);
+    str ~= "])\n";
+  }
+
+  override DistRangeSetBase getDist() {
+    assert (false);
+  }
+}
+
+class CstUniqueArrExpr: CstLogicTerm
+{
+  CstUniqueSetElem[] _elems;
+
+  override string describe() {
+    string description = "( unique [";
+    foreach (elem; _elems) {
+      description ~= elem.describe();
+    }
+    description ~= "]";
+    return description;
+  }
+
+  override void visit(CstSolver solver) {
+    CstUniqueOp intT = CstUniqueOp.INT;
+    foreach (elem; _elems) elem.fixIntType(intT);
+    foreach (elem; _elems) {
+      if (elem._vec !is null) {
+	elem._vec.visit(solver);
+	solver.processEvalStack(intT);
+      }
+      else {
+	foreach (arrElem; elem._arr[]) {
+	  arrElem.visit(solver);
+	  solver.processEvalStack(intT);
+	}
+      }
+    }
+    solver.processEvalStack(CstUniqueOp.UNIQUE);
+  }
+
+  this() { }
+
+  void addElem(CstUniqueSetElem elem) {
+    _elems ~= elem;
+  }
+
+  override CstUniqueArrExpr unroll(CstIterator iter, uint n) {
+    CstUniqueArrExpr unrolled = new CstUniqueArrExpr();
+    foreach (elem; _elems) {
+      unrolled.addElem(elem.unroll(iter, n));
+    }
+    return unrolled;
+  }
+
+  override void setDomainContext(CstPredicate pred,
+				 ref CstDomain[] rnds,
+				 ref CstDomSet[] rndArrs,
+				 ref CstDomain[] vars,
+				 ref CstDomSet[] varArrs,
+				 ref CstValue[] vals,
+				 ref CstIterator[] iters,
+				 ref CstVecNodeIntf[] idxs,
+				 ref CstDomain[] bitIdxs,
+				 ref CstVecNodeIntf[] deps) {
+    foreach (elem; _elems) {
+      elem.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
+    }
+  }
+
+  override bool getUniRangeSet(ref IntRS rs) {
+    return false;
+  }
+    
+  override bool getUniRangeSet(ref UIntRS rs) {
+    return false;
+  }
+    
+  override bool getUniRangeSet(ref LongRS rs) {
+    return false;
+  }
+    
+  override bool getUniRangeSet(ref ULongRS rs) {
+    return false;
+  }
+  
+  override CstVecExpr isNot(CstDomain dom){
+    return null;
+  }
+  
+  bool getUniRangeSetImpl(T)(ref T rs) {
+    return false;
+  }
+
+  override bool getIntRangeSet(ref IntRS rs) {
+    return false;
+  }
+
+  bool cstExprIsNop() {
+    return false;
+  }
+
+  override bool isSolved() {
+    return false;
+  }
+
+  override void writeExprString(ref Charbuf str) {
+    str ~= "(UNIQUE ";
     str ~= " [";
     foreach (elem; _elems)
       elem.writeExprString(str);
@@ -3765,6 +4002,10 @@ CstInsideSetElem _esdl__inside_rangeinc_impl(CstVecExpr p, CstVecExpr q) {
   return new CstInsideSetElem(p, q, true);
 }
 
+auto _esdl__unique_elem(P)(P p) {
+  return new CstUniqueSetElem(p);
+}
+
 auto _esdl__neq(P, Q)(P p, Q q) {
   static if(is(P: CstVecExpr)) {
     return _esdl__neq_impl(p, q);
@@ -3789,6 +4030,14 @@ CstVec2LogicExpr _esdl__neq_impl(CstVecExpr p, CstVecExpr q) {
 
 CstInsideArrExpr _esdl__inside(CstVecExpr vec, CstInsideSetElem[] ranges) {
   CstInsideArrExpr expr = new CstInsideArrExpr(vec);
+  foreach (r; ranges) {
+    expr.addElem(r);
+  }
+  return expr;
+}
+
+CstUniqueArrExpr _esdl__unique(CstUniqueSetElem[] ranges) {
+  CstUniqueArrExpr expr = new CstUniqueArrExpr();
   foreach (r; ranges) {
     expr.addElem(r);
   }

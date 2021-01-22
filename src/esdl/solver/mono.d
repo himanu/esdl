@@ -1185,10 +1185,18 @@ class CstMonoSolver (S): CstSolver
     case CstInsideOp.INSIDE:
       break;
     case CstInsideOp.EQUAL:
+      if(_evalStack[$ - 1].getType() != Type.NUM && _evalStack[$ - 1].getType() != Type.RAND){
+	_endFlag = 3;
+	break;
+      }
       _insideEqual ~= _evalStack[$ - 1];
       _evalStack.length -= 1;
       break;
     case CstInsideOp.RANGE:
+      if(_evalStack[$ - 2].getType() != Type.NUM || _evalStack[$ - 1].getType() != Type.NUM){
+	_endFlag = 3;
+	break;
+      }
       if(doesSatisfy(_evalStack[$ - 2], CstCompareOp.GTE, _evalStack[$ - 1])) {
 	break;
       }
@@ -1198,6 +1206,10 @@ class CstMonoSolver (S): CstSolver
       _evalStack.length -= 2;
       break;
     case CstInsideOp.RANGEINCL:
+      if(_evalStack[$ - 2].getType() != Type.NUM || _evalStack[$ - 1].getType() != Type.NUM){
+	_endFlag = 3;
+	break;
+      }
       if(doesSatisfy(_evalStack[$ - 2], CstCompareOp.GTH, _evalStack[$ - 1])){
 	break;
       }
@@ -1210,6 +1222,34 @@ class CstMonoSolver (S): CstSolver
       break;
     }
   }
+  override void processEvalStack(CstUniqueOp op) {
+    final switch(op) {// insideEqual used to store numbers, insideRange used for domains/expressions
+    case CstUniqueOp.INIT:
+      break;
+    case CstUniqueOp.UINT:
+    case CstUniqueOp.LONG:
+    case CstUniqueOp.ULONG:
+    case CstUniqueOp.INT:
+      if(_evalStack[$-1].getType() == Type.NUM){
+	assert(_evalStack.length == 1);
+	_insideEqual ~= _evalStack[0];
+	_evalStack.length = 0;
+      }
+      else{
+	if(_insideRange.length != 0){
+	  _endFlag = 3;
+	  break;
+	}
+	_insideRange ~= _evalStack[0..$];
+	_evalStack.length = 0;
+      }
+      break;
+    case CstUniqueOp.UNIQUE:
+      solveUnique();
+      break;
+    }
+  }
+
   override void processEvalStack(CstSliceOp op) {
     _endFlag = 3;
   }
@@ -1264,6 +1304,43 @@ class CstMonoSolver (S): CstSolver
     _insideEqual.length = 0;
     _insideRange.length = 0;
   }
+  void solveUnique(){
+    import std.algorithm.sorting: sort;
+    sort!(compareTerms)(_insideEqual);
+    for(size_t i = 0; i<_insideEqual.length-1; ++i){
+      if(doesSatisfy(_insideEqual[i], CstCompareOp.EQU, _insideEqual[i+1])){
+	pushToEvalStack(false);
+	if(_rangeStack.length > 1){
+	  processEvalStack(CstLogicOp.LOGICAND);
+	}
+	return;
+      }
+    }
+    if(_insideRange.length == 0){
+      pushToEvalStack(true);
+      if(_rangeStack.length > 1){
+	processEvalStack(CstLogicOp.LOGICAND);
+      }
+      return;
+    }
+    foreach(i, elem; _insideEqual){
+      _evalStack ~= _insideRange;
+      _evalStack ~= elem;
+      _hasRand = true;
+      processEvalStack(CstCompareOp.NEQ);
+    }
+    for(size_t i = 0; i<_insideEqual.length-1; ++i){
+      processEvalStack(CstLogicOp.LOGICAND);
+    }
+    _insideEqual.length = 0;
+    _insideRange.length = 0;
+    if(_rangeStack.length > 1){
+      processEvalStack(CstLogicOp.LOGICAND);
+    }
+  }
+  static bool compareTerms(Term a, Term b){
+    return doesSatisfy(a, CstCompareOp.GTH, b);
+  }
   void modifyRange1(T)(T n1, Term binOp, ref T[2] range){
     import std.string: format;
     switch (binOp.getType()){
@@ -1293,7 +1370,7 @@ class CstMonoSolver (S): CstSolver
     }
   }
 
-  bool doesSatisfy(Term a, CstCompareOp op, Term b){
+  static bool doesSatisfy(Term a, CstCompareOp op, Term b){
     assert(a.getType() == Type.NUM && b.getType == Type.NUM);
     final switch (a.getNumType()){
     case NumType.INT:
