@@ -208,6 +208,11 @@ class CstMonoSolver (S): CstSolver
       } 
       if (_hasRand){
 	_endFlag = 3;
+	debug (MONOSOLVER){
+	  import std.stdio;
+	  writeln("same domain used twice in one inequality, mono cant solve this");
+	}
+	return;
       }
       uint n = domain.bitcount();
       /*if (n>32){
@@ -626,10 +631,14 @@ class CstMonoSolver (S): CstSolver
   }
   
   override void processEvalStack(CstVectorOp op) {
-    assert (false, "CstVectorOp is handled only by SMT solvers");
+    _endFlag = 3;
+    //assert (false, "CstVectorOp is handled only by SMT solvers");
   }
 
   override void processEvalStack(CstUnaryOp op) {
+    if(checkError()){
+      return;
+    }
     debug (MONOSOLVER){
       import std.stdio;
       final switch (op) {
@@ -673,6 +682,9 @@ class CstMonoSolver (S): CstSolver
   }
   
   override void processEvalStack(CstBinaryOp op){
+    if(checkError()){
+      return;
+    }
     debug (MONOSOLVER){
       import std.stdio;
       final switch (op) {
@@ -844,6 +856,9 @@ class CstMonoSolver (S): CstSolver
   }
 
   override void processEvalStack(CstCompareOp op) {
+    if(checkError()){
+      return;
+    }
     S[2] range1;
     debug (MONOSOLVER){
       import std.stdio;
@@ -967,6 +982,9 @@ class CstMonoSolver (S): CstSolver
     }
   }
   override void processEvalStack(CstLogicOp op) {
+    if(checkError()){
+      return;
+    }
     debug (MONOSOLVER){
       import std.stdio;
       final switch (op){
@@ -1181,6 +1199,9 @@ class CstMonoSolver (S): CstSolver
     }
   }
   override void processEvalStack(CstInsideOp op) {
+    if(checkError()){
+      return;
+    }
     final switch (op){
     case CstInsideOp.INSIDE:
       break;
@@ -1223,6 +1244,9 @@ class CstMonoSolver (S): CstSolver
     }
   }
   override void processEvalStack(CstUniqueOp op) {
+    if(checkError()){
+      return;
+    }
     final switch(op) {// insideEqual used to store numbers, insideRange used for domains/expressions
     case CstUniqueOp.INIT:
       break;
@@ -2707,6 +2731,12 @@ class CstMonoSolver (S): CstSolver
     case CstCompareOp.GTE:
       return [num, T.max];
     }
+  }
+  bool checkError(){
+    if(_endFlag == 3){
+      return true;
+    }
+    return false;
   }
 }
 unittest
