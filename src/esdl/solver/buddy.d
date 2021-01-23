@@ -233,6 +233,8 @@ class CstBuddySolver: CstSolver
 
   BuddyTerm[] _evalStack;
 
+  BuddyTerm _term;		// for inside constraint processing
+
   BddVec[] _domains;
 
   BvVar[] _variables;
@@ -305,7 +307,7 @@ class CstBuddySolver: CstSolver
       }
       pred.visit(this);
       _context.addRule(_evalStack[0].toBool());
-      popEvalStack(1);
+      popEvalStack();
       assert(_evalStack.length == 0);
       // writeln("We are here too");
       // _evalStack.length = 0;
@@ -438,7 +440,8 @@ class CstBuddySolver: CstSolver
 
   override void pushToEvalStack(bool value) {
     // writeln("push: ", value);
-    assert(false);
+    BuddyTerm e = BuddyTerm(BDD(BddFalse, _esdl__buddy));
+    pushToEvalStack(e);
   }
 
   override void pushIndexToEvalStack(ulong value) {
@@ -452,13 +455,13 @@ class CstBuddySolver: CstSolver
     final switch (op) {
     case CstUnaryOp.NOT:
       BddVec e = ~ (_evalStack[$-1].toBv());
-      popEvalStack(1);
+      popEvalStack();
       // _evalStack.length = _evalStack.length - 1;
       pushToEvalStack(e);
       break;
     case CstUnaryOp.NEG:
       BddVec e = - (_evalStack[$-1].toBv());
-      popEvalStack(1);
+      popEvalStack();
       // _evalStack.length = _evalStack.length - 1;
       pushToEvalStack(e);
       break;
@@ -600,7 +603,7 @@ class CstBuddySolver: CstSolver
       break;
     case CstLogicOp.LOGICNOT:
       BDD e = ~ _evalStack[$-1].toBool();
-      popEvalStack(1);
+      popEvalStack();
       // _evalStack.length = _evalStack.length - 1;
       pushToEvalStack(e);
       break;
@@ -631,25 +634,58 @@ class CstBuddySolver: CstSolver
   }
 
   override void processEvalStack(CstInsideOp op) {
-    assert (false, "TBD");
+    final switch (op) {
+    case CstInsideOp.INSIDE:
+      _term = _evalStack[$-1];
+      popEvalStack();
+      break;
+    case CstInsideOp.EQUAL:
+      BDD e = _term.toBv().equ(_evalStack[$-1].toBv());
+      popEvalStack();
+      pushToEvalStack(e);
+      processEvalStack(CstLogicOp.LOGICOR);
+      break;
+    case CstInsideOp.RANGE:
+      BDD upper = _term.toBv().lth(_evalStack[$-1].toBv());
+      BDD lower = _term.toBv().gte(_evalStack[$-2].toBv());
+      popEvalStack(2);
+      pushToEvalStack(upper);
+      pushToEvalStack(lower);
+      processEvalStack(CstLogicOp.LOGICAND);
+      processEvalStack(CstLogicOp.LOGICOR);
+      break;
+    case CstInsideOp.RANGEINCL:
+      BDD upper = _term.toBv().lte(_evalStack[$-1].toBv());
+      BDD lower = _term.toBv().gte(_evalStack[$-2].toBv());
+      popEvalStack(2);
+      pushToEvalStack(upper);
+      pushToEvalStack(lower);
+      processEvalStack(CstLogicOp.LOGICAND);
+      processEvalStack(CstLogicOp.LOGICOR);
+      break;
+    case CstInsideOp.DONE:
+      BuddyTerm init;
+      _term = init;
+      break;
+    }
   }
 
   override void processEvalStack(CstUniqueOp op) {
     assert(false, "TBD");
   }
 
-  void popEvalStack(uint count) {
+  void popEvalStack(uint count=1) {
     assert (_evalStack.length >= count);
-    for (size_t i=0; i!=count; ++i) {
-      // BuddyTerm invalid = BuddyTerm();
-      // _evalStack[$-1] = invalid;
-      _evalStack.length = _evalStack.length - 1;
-    }
+    _evalStack.length = _evalStack.length - count;
+    // for (size_t i=0; i!=count; ++i) {
+    //   // BuddyTerm invalid = BuddyTerm();
+    //   // _evalStack[$-1] = invalid;
+    //   _evalStack.length = _evalStack.length - 1;
+    // }
     // writeln("After POP _evalStack is of size: ", _evalStack.length);
   }
 
   void pushToEvalStack(ref BddVec vec) {
-    import std.stdio;
     BuddyTerm term = BuddyTerm(vec);
     pushToEvalStack(term);
   }
