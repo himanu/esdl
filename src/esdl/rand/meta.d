@@ -63,12 +63,15 @@ template _esdl__RandProxyType(T, int I, P, int PI)
   else static if (isArray!L && (isBitVector!E ||
 				isIntegral!E ||
 				isBoolean!E ||
-				isSomeChar!E ||
+				// isSomeChar!E || // exclude strings
 				is (E == enum))) {
     alias _esdl__RandProxyType = CstVecArrIdx!(L, RAND, 0, I, P, PI);
   }
-  else static if (isBitVector!L || isIntegral!L ||
-		  isBoolean!L || isSomeChar!L || is (L == enum)) {
+  else static if (isBitVector!L ||
+		  isIntegral!L ||
+		  isBoolean!L ||
+		  // isSomeChar!L || // exclude chars
+		  is (L == enum)) {
     alias _esdl__RandProxyType = CstVecIdx!(L, RAND, 0, I, P, PI);
   }
   else static if (isArray!L && (is (E == class) || is (E == struct) ||
@@ -161,7 +164,9 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
     alias Q = typeof (P.tupleof[I]);
     // pragma(msg, "#" ~ Q.stringof);
     static if (is (Q: CstVarNodeIntf)) {
-      static if (Q._esdl__HASPROXY && Q._esdl__ISRAND) {
+      static if (Q._esdl__HASPROXY // && Q._esdl__ISRAND // not just @rand
+		 ) {
+	// pragma(msg, "#" ~ Q.stringof);
 	alias T = typeof(p._esdl__outer);
 	static if (is (T == class)) { // class
 	  enum NAME = __traits(identifier, T.tupleof[Q._esdl__INDEX]);

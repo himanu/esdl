@@ -642,6 +642,7 @@ class CstPredGroup			// group of related predicates
 
   bool _hasSoftConstraints;
   bool _hasVectorConstraints;
+  bool _hasUniqueConstraints;
 
   bool hasSoftConstraints() {
     return _hasSoftConstraints;
@@ -649,6 +650,10 @@ class CstPredGroup			// group of related predicates
 
   bool hasVectorConstraints() {
     return _hasVectorConstraints;
+  }
+  
+  bool hasUniqueConstraints() {
+    return _hasUniqueConstraints;
   }
   
   // List of predicates permanently in this group
@@ -742,6 +747,7 @@ class CstPredGroup			// group of related predicates
 	_dynPredList.length != _dynPreds.length) {
       _hasSoftConstraints = false;
       _hasVectorConstraints = false;
+      _hasUniqueConstraints = false;
       _state = State.NEEDSYNC;	// mark that we need to reassign a solver
       foreach (pred; _preds) pred._group = null;
       _preds.reset();
@@ -749,6 +755,7 @@ class CstPredGroup			// group of related predicates
 	pred._group = this;
 	if (pred._soft != 0) _hasSoftConstraints = true;
 	if (pred._vectorOp != CstVectorOp.NONE) _hasVectorConstraints = true;
+	if (pred._uniqueFlag is true) _hasUniqueConstraints = true;
 	_preds ~= pred;
       }
       foreach (pred; _dynPreds) pred._group = null;
@@ -757,6 +764,7 @@ class CstPredGroup			// group of related predicates
 	pred._group = this;
 	if (pred._soft != 0) _hasSoftConstraints = true;
 	if (pred._vectorOp != CstVectorOp.NONE) _hasVectorConstraints = true;
+	if (pred._uniqueFlag is true) _hasUniqueConstraints = true;
 	_dynPreds ~= pred;
       }
     }
@@ -900,7 +908,7 @@ class CstPredGroup			// group of related predicates
 	    uint totalBits;
 	    foreach (dom; _doms) totalBits += dom.bitcount();
 	    foreach (var; _vars) totalBits += var.bitcount();
-	    if (totalBits > 32) {
+	    if (totalBits > 32 || _hasUniqueConstraints) {
 	      if (_proxy._esdl__debugSolver()) {
 		import std.stdio;
 		writeln("Invoking Z3 because of > 32 bits");
@@ -1003,12 +1011,11 @@ class CstPredicate: CstIterCallback, CstDepCallback
   bool _markResolve = true;
 
   CstVectorOp _vectorOp = CstVectorOp.NONE;
-  
+  bool _uniqueFlag = false;
+  void setUniqueFlag() { _uniqueFlag = true; }
   uint _soft = 0;
 
-  uint getSoftWeight() {
-    return _soft;
-  }
+  uint getSoftWeight() { return _soft; }
 
   State _state = State.INIT;
 

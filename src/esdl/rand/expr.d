@@ -2612,6 +2612,7 @@ class CstUniqueArrExpr: CstLogicTerm
 				 ref CstVecNodeIntf[] idxs,
 				 ref CstDomain[] bitIdxs,
 				 ref CstVecNodeIntf[] deps) {
+    pred.setUniqueFlag();
     foreach (elem; _elems) {
       elem.setDomainContext(pred, rnds, rndArrs, vars, varArrs, vals, iters, idxs, bitIdxs, deps);
     }
