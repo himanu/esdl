@@ -2459,6 +2459,10 @@ class CstInsideArrExpr: CstLogicTerm
 
   CstVecExpr _term;
 
+  bool _notinside = false;
+
+  void setNotInside() { _notinside = true; }
+
   override string describe() {
     string description = "( " ~ _term.describe() ~ " inside [";
     foreach (elem; _elems) {
@@ -2497,6 +2501,7 @@ class CstInsideArrExpr: CstLogicTerm
       }
     }
     solver.processEvalStack(CstInsideOp.DONE);
+    if (_notinside) solver.processEvalStack(CstLogicOp.LOGICNOT);
   }
 
   this(CstVecExpr term) {
@@ -3287,6 +3292,12 @@ CstInsideArrExpr _esdl__inside(CstVecExpr vec, CstInsideSetElem[] ranges) {
   foreach (r; ranges) {
     expr.addElem(r);
   }
+  return expr;
+}
+
+CstInsideArrExpr _esdl__notinside(CstVecExpr vec, CstInsideSetElem[] ranges) {
+  CstInsideArrExpr expr = _esdl__inside(vec, ranges);
+  expr.setNotInside();
   return expr;
 }
 

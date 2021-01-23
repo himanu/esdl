@@ -197,6 +197,7 @@ struct CstParser {
       GTH,
       LTH,
       INSIDE,
+      NOTINSIDE,
       DIST,
   }
 
@@ -366,19 +367,26 @@ struct CstParser {
 
   OpCmpToken parseCmpOperator() {
     OpCmpToken tok = OpCmpToken.NONE;
-    if (srcCursor <= CST.length - 6) {
-      if (CST[srcCursor..srcCursor+6] == "inside") tok = OpCmpToken.INSIDE;
+    if (srcCursor <= CST.length - 7) {
+      if (CST[srcCursor..srcCursor+7] == "!inside") {
+	tok = OpCmpToken.NOTINSIDE;
+	srcCursor += 7;
+	return tok;
+      }
     }
-    if (tok !is OpCmpToken.NONE) {
-      srcCursor += 6;
-      return tok;
+    if (srcCursor <= CST.length - 6) {
+      if (CST[srcCursor..srcCursor+6] == "inside") {
+	tok = OpCmpToken.INSIDE;
+	srcCursor += 6;
+	return tok;
+      }
     }
     if (srcCursor <= CST.length - 4) {
-      if (CST[srcCursor..srcCursor+4] == "dist") tok = OpCmpToken.DIST;
-    }
-    if (tok !is OpCmpToken.NONE) {
-      srcCursor += 4;
-      return tok;
+      if (CST[srcCursor..srcCursor+4] == "dist") {
+	tok = OpCmpToken.DIST;
+	srcCursor += 4;
+	return tok;
+      }
     }
     if (srcCursor <= CST.length - 2) {
       if (CST[srcCursor] == '=' && CST[srcCursor+1] == '=') tok = OpCmpToken.EQU;
@@ -1926,6 +1934,11 @@ struct CstParser {
 	insertOpeningParen(startAnchor);
 	opType = VEC2BOOL.INSIDE;
 	fill(")._esdl__inside(");
+	break;
+      case OpCmpToken.NOTINSIDE:
+	insertOpeningParen(startAnchor);
+	opType = VEC2BOOL.INSIDE;
+	fill(")._esdl__notinside(");
 	break;
       case OpCmpToken.DIST:
 	insertOpeningParen(startAnchor);
