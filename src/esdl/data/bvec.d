@@ -873,9 +873,9 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     static if(L) {
       private store_t[STORESIZE] _bval;
     }
-    else {
-      private enum store_t[STORESIZE] _bval = 0;
-    }
+    // else {
+    //   private store_t[STORESIZE] _bval = 0;
+    // }
 
     public ubyte getByte(size_t index) const {
       return (cast(ubyte*) _aval.ptr)[0..STORESIZE*store_t.sizeof][index];
@@ -920,7 +920,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	for (size_t i=0; i != scale; ++i) {
 	  if (word * scale + i < STORESIZE) {
 	    _aval[word * scale + i] = cast(store_t) v;
-	    _bval[word] = 0;
+	    static if (L) _bval[word] = 0;
 	    v >>= WORDSIZE;
 	  }
 	}
@@ -935,7 +935,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	_aval[n] &= ~mask;
 	_aval[n] |= w;
 	// bval
-	_bval[n] = 0;
+	static if (L) _bval[n] = 0;
       }
       // if MSB word
       if(word == (SIZE-1)/(T.sizeof*8)) {
