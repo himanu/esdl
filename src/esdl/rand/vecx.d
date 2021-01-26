@@ -33,7 +33,7 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  this(string name, ref V var, _esdl__Proxy parent) {
+  this(string name, V* var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
 
@@ -110,11 +110,11 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
       V* _var;
       _esdl__Proxy _parent;
       
-      this(string name, ref V var, _esdl__Proxy parent) {
+      this(string name, V* var, _esdl__Proxy parent) {
 	// import std.stdio;
 	// writeln("New vec ", name);
 	super(name, parent.getProxyRoot());
-	_var = &var;
+	_var = var;
 	_parent = parent;
 	_root = _parent.getProxyRoot();
       }
@@ -133,8 +133,8 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
 	return _parent.isRolled();		// N == 0
       }
 
-      void _esdl__setValRef(ref V var) {
-	_var = &var;
+      void _esdl__setValRef(V* var) {
+	_var = var;
       }
       
       override _esdl__Proxy getProxyRoot() {
@@ -415,7 +415,7 @@ class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
   enum int _esdl__PINDEX = PIDX;
-  this(string name, ref V var, _esdl__Proxy parent) {
+  this(string name, V* var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
 
@@ -737,13 +737,13 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
       V* _var;
       _esdl__Proxy _parent;
     
-      void _esdl__setValRef(ref V var) {
-	_var = &var;
+      void _esdl__setValRef(V* var) {
+	_var = var;
       }
       
-      this(string name, ref V var, _esdl__Proxy parent) {
+      this(string name, V* var, _esdl__Proxy parent) {
 	super(name);
-	_var = &var;
+	_var = var;
 	_parent = parent;
 	_root = _parent.getProxyRoot();
 	_arrLen = new CstArrLength!(RV) (name ~ "->length", this);

@@ -176,7 +176,17 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
 	  enum NAME = __traits(identifier, U.tupleof[Q._esdl__INDEX]);
 	}
 	T t = p._esdl__outer;
-	p.tupleof[I] = new Q(NAME, t.tupleof[Q._esdl__INDEX], p);
+	if (t !is null) {
+	  static if (is (typeof(t.tupleof[Q._esdl__INDEX]) == class)) { // class
+	    p.tupleof[I] = new Q(NAME, t.tupleof[Q._esdl__INDEX], p);
+	  }
+	  else {
+	    p.tupleof[I] = new Q(NAME, &(t.tupleof[Q._esdl__INDEX]), p);
+	  }
+	}
+	else {
+	  p.tupleof[I] = new Q(NAME, null, p);
+	}
       }
     }
     _esdl__doInitRandsElems!(P, I+1)(p);
@@ -223,7 +233,7 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
 		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
-	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
+	  p.tupleof[I]._esdl__setValRef(&(p._esdl__outer.tupleof[IDX]));
 	}
       }
     }
@@ -232,7 +242,7 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
       static if (Q._esdl__HASPROXY) {
 	static if (is (L == struct)) {
 	  if (p.tupleof[I] !is null) {
-	    p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
+	    p.tupleof[I]._esdl__setValRef(&(p._esdl__outer.tupleof[IDX]));
 	  }
 	}
 	else {
@@ -246,7 +256,7 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
 		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
-	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
+	  p.tupleof[I]._esdl__setValRef(&(p._esdl__outer.tupleof[IDX]));
 	}
       }
     }
@@ -254,7 +264,7 @@ void _esdl__doSetOuterElems(P, int I=0)(P p, bool changed) {
 		   L, rand RAND, int N, int IDX, P, int PIDX)) {
       static if (Q._esdl__HASPROXY) {
 	if (p.tupleof[I] !is null) {
-	  p.tupleof[I]._esdl__setValRef(p._esdl__outer.tupleof[IDX]);
+	  p.tupleof[I]._esdl__setValRef(&(p._esdl__outer.tupleof[IDX]));
 	}
       }
     }
@@ -829,7 +839,12 @@ auto _esdl__sym(alias V, S)(string name, S parent) {
     // }
     if (V is null) {
       L._esdl__PROXYT p = parent;
-      V = new L(name, p._esdl__outer.tupleof[L._esdl__INDEX], parent);
+      if (p !is null) {
+	V = new L(name, &(p._esdl__outer.tupleof[L._esdl__INDEX]), parent);
+      }
+      else {
+	V = new L(name, null, parent);
+      }
     }
     return V;
     // return __traits(getMember, parent, VS);

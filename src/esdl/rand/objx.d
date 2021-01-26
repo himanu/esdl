@@ -29,9 +29,16 @@ class CstObjIdx(V, rand R, int N, int IDX,
   enum _esdl__HASPROXY = R.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  this(string name, ref V var, _esdl__Proxy parent) {
-    super(name, var, parent);
+  static if (is (V == struct)) {
+    this(string name, V* var, _esdl__Proxy parent) {
+      super(name, var, parent);
+    }
   }
+  else {
+    this(string name, V var, _esdl__Proxy parent) {
+      super(name, var, parent);
+    }
+  }    
 
   override _esdl__Proxy unroll(CstIterator iter, uint n) {
     if (_parent !is _root) {
@@ -104,14 +111,14 @@ class CstObject(V, rand R, int N) if (N == 0):
       _esdl__Proxy _parent;
       
       static if (is (V == struct)) {
-	this(string name, ref V var, _esdl__Proxy parent) {
+	this(string name, V* var, _esdl__Proxy parent) {
 	  // import std.stdio;
 	  // writeln("New obj ", name);
 	  super(var, parent);
 	  _name = name;
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
-	  // _var = &var;
+	  // _var = var;
 	}
       }
       else {
@@ -122,7 +129,7 @@ class CstObject(V, rand R, int N) if (N == 0):
 	  _name = name;
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
-	  // _var = &var;
+	  // _var = var;
 	}
       }
 
@@ -140,7 +147,7 @@ class CstObject(V, rand R, int N) if (N == 0):
       }
 
       // void _esdl__setValRef(ref V var) {
-      // 	_var = &var;
+      // 	_var = var;
       // }
       
       final override string fullName() {
@@ -375,7 +382,7 @@ class CstObjArrIdx(V, rand R, int N, int IDX,
   enum _esdl__HASPROXY = R.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  this(string name, ref V var, _esdl__Proxy parent) {
+  this(string name, V* var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
   override CstObjArr!(V, R, N) unroll(CstIterator iter, uint n) {
@@ -657,13 +664,13 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
   V* _var;
   _esdl__Proxy _parent;
     
-  void _esdl__setValRef(ref V var) {
-    _var = &var;
+  void _esdl__setValRef(V* var) {
+    _var = var;
   }
       
-  this(string name, ref V var, _esdl__Proxy parent) {
+  this(string name, V* var, _esdl__Proxy parent) {
     super(name);
-    _var = &var;
+    _var = var;
     _parent = parent;
     _root = _parent.getProxyRoot();
     _arrLen = new CstArrLength!RV(name ~ "->length", this);
