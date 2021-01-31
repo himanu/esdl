@@ -14,6 +14,22 @@ import std.conv: to;
 import std.range: ElementType;
 
 
+template isQueue(T)
+{
+  static if (is (T: Queue!L, L))
+    enum bool isQueue = true;
+  else
+    enum bool isQueue = false;
+}
+
+template QueueElementType(T) if (isQueue!T)
+{
+  static if (is (T: Queue!L, L))
+    alias QueueElementType = L;
+  else
+    static assert (false);
+}
+
 /** The Queue class provides a random access container where appending and
     removing takes amortized O(1) for both ends. Internally it is a array with
     a base pointer in form of a long and a size value in form of a size_t.
@@ -23,6 +39,8 @@ import std.range: ElementType;
 public struct Queue(T) {
   import std.traits: isIterable, isArray;
   import std.string: format;
+
+  alias ElementType = T;
 
   private T[] data; /// the actual stored data
   private size_t head = 0; /// insert first than move
@@ -486,8 +504,8 @@ public struct Queue(T) {
     return this.to!(string);
   }
 
-  void toString(scope void delegate(const(char)[]) sink,
-  		ref FormatSpec!char f) {
+  void toString(void delegate(scope const(char)[]) sink,
+  		const FormatSpec!char f) {
     char[] buff;
     switch(f.spec) {
     case 's':
@@ -1856,6 +1874,15 @@ public struct Queue(T) {
   */
   @property public size_t length() const @safe nothrow { 
     return this.size;
+  }
+
+  @property public void length(size_t nsize) @safe nothrow { 
+    if (nsize > size) {
+      while (nsize >= this.data.length) {
+	this.growCapacity();
+      }
+    }
+    this.size = nsize;
   }
 
   /** The size of the internal array -1 is returned by this function. This
