@@ -2204,6 +2204,7 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
     }
 
     static if (SIZE % 8 == 0) {
+      alias swapEndian = byteReverse;
       public auto byteReverse() {
 	typeof(this) retval;
 	ubyte* aptr = cast (ubyte*) _aval;
@@ -5524,4 +5525,20 @@ unittest {
 
 }
 
+ubyte getByte(T)(T data, size_t n) if (isIntegral!T) {
+  import std.traits: Unconst;
+  assert (n < T.sizeof);
+  Unconst!T d = data;
+  d >>>= n * 8;
+  return cast(ubyte) d;
+ }
 
+void setByte(T)(ref T data, size_t n, ubyte b) if (isIntegral!T) {
+  assert (n < T.sizeof);
+  T mask = 0xff;
+  T byt = b;
+  mask <<= n * 8;
+  byt <<= n * 8;
+  data &= ~mask;
+  data |= byt;
+ }
