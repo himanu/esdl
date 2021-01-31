@@ -14,7 +14,7 @@ import esdl.data.charbuf;
 import std.algorithm;
 import std.array;
 import std.container.array;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray, isDynamicArray;
+import std.traits: isIntegral, isBoolean;
 
 interface CstVarNodeIntf {
   bool isRand();

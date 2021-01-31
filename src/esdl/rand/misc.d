@@ -1,9 +1,10 @@
 module esdl.rand.misc;
 
 import esdl.data.bvec: isBitVector;
+import esdl.data.queue;
 import esdl.data.charbuf;
 import std.traits: isIntegral, isBoolean, isArray,
-  isStaticArray, isDynamicArray, EnumMembers, isSomeChar;
+  EnumMembers, isSomeChar;
 import std.meta: AliasSeq;
 
 interface _esdl__Norand { } 	// classes derived from this interface shall not have a proxy
@@ -125,8 +126,11 @@ template LeafElementType(T)
   static if (is (T == string)) {
     alias LeafElementType = immutable(char);
   }
-  else static if(isArray!T) {
+  else static if (isArray!T) {
     alias LeafElementType = LeafElementType!(ElementType!T);
+  }
+  else static if (isQueue!T) {
+    alias LeafElementType = LeafElementType!(T.ElementType);
   }
   else {
     alias LeafElementType = T;
@@ -162,6 +166,9 @@ template _esdl__ArrOrder(T, int N=0) {
   import std.range;
   static if (isArray!T) {
     enum int _esdl__ArrOrder = 1 + _esdl__ArrOrder!(ElementType!T) - N;
+  }
+  else static if (isQueue!T) {
+    enum int _esdl__ArrOrder = 1 + _esdl__ArrOrder!(T.ElementType) - N;
   }
   else {
     static assert (N == 0);

@@ -13,8 +13,8 @@ import esdl.rand.proxy: _esdl__Proxy;
 
 import esdl.data.bvec: isBitVector, toBitVec;
 import esdl.data.charbuf;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
-  isDynamicArray, isSomeChar, EnumMembers, isSigned, OriginalType;
+import std.traits: isIntegral, isBoolean, isStaticArray,
+  isSomeChar, EnumMembers, isSigned, OriginalType;
 
 abstract class CstVecTerm: CstVecExpr
 {

@@ -3,6 +3,7 @@ module esdl.rand.vecx;
 import esdl.data.bvec;
 import esdl.data.bstr;
 import esdl.data.charbuf;
+import esdl.data.queue;
 import std.traits: isIntegral, isBoolean, isArray,
   isStaticArray, isDynamicArray, isSigned;
 
@@ -523,7 +524,7 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   uint maxArrLen() {
     static if (HAS_RAND_ATTRIB) {
-      static if(isStaticArray!L) {
+      static if (isStaticArray!L) {
 	return cast(uint) L.length;
       }
       else {
@@ -537,15 +538,15 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
 
   static if (HAS_RAND_ATTRIB) {
     static private void _setLen(A, N...)(ref A arr, size_t v, N indx)
-      if(isArray!A) {
-	static if(N.length == 0) {
-	  static if(isDynamicArray!A) {
+      if (isArray!A || isQueue!A) {
+	static if (N.length == 0) {
+	  static if (isDynamicArray!A || isQueue!A) {
 	    arr.length = v;
 	    // import std.stdio;
 	    // writeln(arr, " indx: ", N.length);
 	  }
 	  else {
-	    assert(false, "Can not set length of a fixed length array");
+	    assert (false, "Can not set length of a fixed length array");
 	  }
 	}
 	else {
@@ -772,7 +773,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
       }
 
       static private auto getRef(A, N...)(ref A arr, N indx)
-	if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	if ((isArray!A || isQueue!A) && N.length > 0 && isIntegral!(N[0])) {
 	  static if (N.length == 1) return &(arr[indx[0]]);
 	  else {
 	    return getRef(arr[indx[0]], indx[1..$]);
@@ -792,13 +793,14 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	}
       }
 
-      static private size_t _getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
-	static if (N.length == 0) return arr.length;
-	else {
-	  if (arr.length == 0) return 0;
-	  else return _getLen(arr[indx[0]], indx[1..$]);
+      static private size_t _getLen(A, N...)(ref A arr, N indx)
+	if (isArray!A || isQueue!A) {
+	  static if (N.length == 0) return arr.length;
+	  else {
+	    if (arr.length == 0) return 0;
+	    else return _getLen(arr[indx[0]], indx[1..$]);
+	  }
 	}
-      }
 
       size_t _getLen(N...)(N indx) {
 	return _getLen(*_var, indx);
@@ -976,11 +978,12 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
 	}
       }
 
-      static private size_t _getLen(A, N...)(ref A arr, N indx) if(isArray!A) {
-	static if (N.length == 0) return arr.length;
-	else {
-	  return _getLen(arr[indx[0]], indx[1..$]);
-	}
+      static private size_t _getLen(A, N...)(ref A arr, N indx)
+	if (isArray!A || isQueue!A) {
+	  static if (N.length == 0) return arr.length;
+	  else {
+	    return _getLen(arr[indx[0]], indx[1..$]);
+	  }
       }
 
       size_t _getLen(N...)(N indx) {
@@ -992,7 +995,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
       }
 
       static private auto getRef(A, N...)(ref A arr, N indx)
-	if (isArray!A && N.length > 0 && isIntegral!(N[0])) {
+	if ((isArray!A || isQueue!A) && N.length > 0 && isIntegral!(N[0])) {
 	  static if (N.length == 1) return &(arr[indx[0]]);
 	  else {
 	    return getRef(arr[indx[0]], indx[1..$]);
