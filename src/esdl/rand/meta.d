@@ -179,7 +179,9 @@ void _esdl__doInitRandsElems(P, int I=0)(P p) {
 	}
 	T t = p._esdl__outer;
 	if (t !is null) {
-	  static if (is (typeof(t.tupleof[Q._esdl__INDEX]) == class)) { // class
+	  alias M = typeof(t.tupleof[Q._esdl__INDEX]);
+	  static if (is (M == class) ||
+		     (is (M == U*, U) && is (U == struct))) { // class or struct*
 	    p.tupleof[I] = new Q(NAME, t.tupleof[Q._esdl__INDEX], p);
 	  }
 	  else {
@@ -644,8 +646,8 @@ class _esdl__ProxyNoRand(_esdl__T)
 	    this._esdl__doSetOuter(true);
 	  }
 	}
-	this(ref _esdl__T outer, _esdl__Proxy parent) {
-	  _esdl__outer = &outer;
+	this(_esdl__T* outer, _esdl__Proxy parent) {
+	  _esdl__outer = outer;
 	  super(parent);
 	  _esdl__doInitRandsElems(this);
 	  _esdl__doInitCstsElems(this);
@@ -834,7 +836,7 @@ auto _esdl__sym(alias V, S)(string name, S parent) {
   }
   else {
     // import std.stdio;
-    assert (parent !is null);
+    // assert (parent !is null);
     // writeln(V.stringof);
     // writeln(VS);
     // writeln(__traits(getMember, parent, VS).stringof);
@@ -843,11 +845,18 @@ auto _esdl__sym(alias V, S)(string name, S parent) {
     // }
     if (V is null) {
       L._esdl__PROXYT p = parent;
-      if (p !is null) {
-	V = new L(name, &(p._esdl__outer.tupleof[L._esdl__INDEX]), parent);
+      if (p is null) {
+	V = new L(name, null, parent);
       }
       else {
-	V = new L(name, null, parent);
+	alias M = typeof(p._esdl__outer.tupleof[L._esdl__INDEX]);
+	static if (is (M == class) ||
+		   (is (M == U*, U) && is (U == struct))) {
+	  V = new L(name, p._esdl__outer.tupleof[L._esdl__INDEX], parent);
+	}
+	else {
+	  V = new L(name, &(p._esdl__outer.tupleof[L._esdl__INDEX]), parent);
+	}
       }
     }
     return V;

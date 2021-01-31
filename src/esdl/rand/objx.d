@@ -59,12 +59,15 @@ class CstObjectBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) == 0):
       enum HAS_RAND_ATTRIB = R.isRand();
       alias LEAF = LeafElementType!V;
 
-      this(ref LEAF var, _esdl__Proxy parent) {
-	super(var, parent);
+      static if (is (V == struct)) {
+	this(LEAF* var, _esdl__Proxy parent) {
+	  super(var, parent);
+	}
       }
-
-      this(LEAF var, _esdl__Proxy parent) {
-	super(var, parent);
+      else {
+	this(LEAF var, _esdl__Proxy parent) {
+	  super(var, parent);
+	}
       }
 
       string _name;
