@@ -475,10 +475,10 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     static if (isIntegral!LEAF) {
       return LEAF.sizeof * 8;
     }
-    else static if(isBitVector!T) {
+    else static if(isBitVector!LEAF) {
       return cast(uint) LEAF.SIZE;
     }
-    else static if(isBoolean!T) {
+    else static if(isBoolean!LEAF) {
       return 1;
     }
   }
@@ -487,10 +487,10 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     static if (isIntegral!LEAF) {
       return isSigned!LEAF;
     }
-    else static if(isBitVector!T) {
+    else static if(isBitVector!LEAF) {
       return LEAF.ISSIGNED;
     }
-    else static if(isBoolean!T) {
+    else static if(isBoolean!LEAF) {
       return false;
     }
   }
