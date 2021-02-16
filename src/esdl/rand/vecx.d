@@ -23,7 +23,7 @@ import std.algorithm.searching: canFind;
 import std.typetuple: staticIndexOf, TypeTuple;
 import std.traits: BaseClassesTuple; // required for staticIndexOf
 
-// T represents the type of the declared array/non-array member
+// V represents the type of the declared array/non-array member
 // N represents the level of the array-elements we have to traverse
 // for the elements this CstVector represents
 
@@ -50,7 +50,6 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
       }
     }
   }
-
 }
 
 class CstVectorBase(V, rand RAND_ATTR, int N)
