@@ -486,7 +486,9 @@ mixin template Randomization()
 {
   alias _esdl__T = typeof(this);
   alias _esdl__BASEPT = _esdl__ProxyBase!_esdl__T;
-  
+
+  static assert (is (_esdl__T == class),
+		 "mixin Randomization is allowed only inside classes");
   // While making _esdl__ProxyRand class non-static nested class
   // also works as far as dlang compilers are concerned, do not do
   // that since in that case _esdl__outer object would have an

@@ -31,7 +31,8 @@ class CstObjIdx(V, rand RAND_ATTR, int N, int IDX,
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  static if (is (V == struct)) {
+
+  static if (is (LEAF == struct)) {
     this(string name, V* var, _esdl__Proxy parent) {
       super(name, var, parent);
     }
@@ -63,7 +64,7 @@ class CstObjectBase(V, rand RAND_ATTR, int N)
 	enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
 	alias LEAF = LeafElementType!V;
 
-	static if (is (V == struct)) {
+	static if (is (LEAF == struct)) {
 	  this(string name, LEAF* var, _esdl__Proxy parent) {
 	    _name = name;
 	    super(var, parent);
@@ -119,7 +120,7 @@ class CstObject(V, rand RAND_ATTR, int N) if (N == 0):
       _esdl__Proxy _root;
       _esdl__Proxy _parent;
       
-      static if (is (V == struct)) {
+      static if (is (LEAF == struct)) {
 	this(string name, V* var, _esdl__Proxy parent) {
 	  // import std.stdio;
 	  // writeln("New obj ", name);
@@ -186,18 +187,6 @@ class CstObject(V, rand RAND_ATTR, int N) if (N == 0):
 	assert (this.getRef() !is null);
 	_esdl__setValRef(this.getRef());
 	_esdl__doConstrain(getProxyRoot());
-      }
-
-      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
-      {
-	static if (S.length == 0) return this;
-	else static if (S[0] == "") {
-	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
-	}
-	else {
-	  static assert (S.length == 1);
-	  return __traits(getMember, this, S[0]);
-	}
       }
     }
 
@@ -299,20 +288,20 @@ class CstObject(V, rand R, int N) if (N != 0):
       static if (is (LEAF == struct)) {
 	LEAF* getRef() {
 	  if (_indexExpr) {
-	    return _parent.getRef(cast(size_t) _indexExpr.evaluate());
+	    return getRefTmpl(_parent, cast(size_t) _indexExpr.evaluate());
 	  }
 	  else {
-	    return _parent.getRef(this._pindex);
+	    return getRefTmpl(_parent, this._pindex);
 	  }
 	}
       }
       else {
 	LEAF getRef() {
 	  if (_indexExpr) {
-	    return _parent.getRef(cast(size_t) _indexExpr.evaluate());
+	    return getRefTmpl(_parent, cast(size_t) _indexExpr.evaluate());
 	  }
 	  else {
-	    return _parent.getRef(this._pindex);
+	    return getRefTmpl(_parent, this._pindex);
 	  }
 	}
       }
@@ -357,18 +346,6 @@ class CstObject(V, rand R, int N) if (N != 0):
 	  CstDomain[] indexes;
 	  _indexExpr.setDomainContext(pred, indexes, rndArrs, indexes, varArrs, vals, iters, idxs, bitIdxs, deps);
 	  foreach (index; indexes) idxs ~= index;
-	}
-      }
-
-      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
-      {
-	static if (S.length == 0) return this;
-	else static if (S[0] == "") {
-	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
-	}
-	else {
-	  static assert (S.length == 1);
-	  return __traits(getMember, this, S[0]);
 	}
       }
     }
@@ -746,19 +723,6 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	  markSolved();
 	}
       }
-
-      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
-      {
-	static if (S.length == 0) return this;
-	else static if (S[0] == "") {
-	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
-	}
-	else {
-	  static assert (S.length == 1);
-	  return __traits(getMember, this, S[0]);
-	}
-      }
-
     }
 
 class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
@@ -907,19 +871,6 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	  markSolved();
 	}
       }
-
-      auto _esdl__sym(S ...)(CstRangeExpr[] indx=[])
-      {
-	static if (S.length == 0) return this;
-	else static if (S[0] == "") {
-	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
-	}
-	else {
-	  static assert (S.length == 1);
-	  return __traits(getMember, this, S[0]);
-	}
-      }
-    
     }
 
 
@@ -939,15 +890,15 @@ private auto getArrElemTmpl(A, N...)(ref A arr, N indx)
     }
   }
 
-private auto getRef(RV, J...)(RV rv, J indx)
+private auto getRefTmpl(RV, J...)(RV rv, J indx)
   if (is (RV: CstObjArrNode) && isIntegral!(J[0])) {
     static if (is (RV: CstObjIndexed)) {
       if (rv._indexExpr) {
 	  assert (rv._indexExpr.isConst());
-	  return getRef(rv._parent, cast (size_t) rv._indexExpr.evaluate(), indx);
+	  return getRefTmpl(rv._parent, cast (size_t) rv._indexExpr.evaluate(), indx);
 	}
 	else {
-	  return getRef(rv._parent, rv._pindex, indx);
+	  return getRefTmpl(rv._parent, rv._pindex, indx);
 	}
       }
     else {
