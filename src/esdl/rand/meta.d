@@ -764,7 +764,7 @@ mixin template _esdl__ProxyMixin()
 }
 
 auto ref _esdl__sym(L)(ref L l, string name,
-			      _esdl__Proxy parent) {
+		       _esdl__Proxy parent) {
   import std.traits: isIntegral, isBoolean, isArray, isSomeChar;
   import esdl.data.queue: Queue, isQueue;
   static if (isIntegral!L || isBitVector!L ||
@@ -803,7 +803,7 @@ struct _esdl__rand_type_proxy(T, P)
     _parent = parent;
   }
   
-  auto _esdl__sym(string S)() {
+  auto _esdl__dot(string S)() {
     return esdl.rand.meta._esdl__sym(__traits(getMember, T, S), S, _parent);
   }
 }
@@ -863,6 +863,12 @@ auto _esdl__sym(alias V, S)(string name, S parent) {
     // return __traits(getMember, parent, VS);
   }
 }
+
+auto _esdl__dot(string S, RV)(RV rv)
+{
+  return __traits(getMember, rv, S);
+}
+
 
 auto _esdl__arg_proxy(L, S)(string name, ref L arg, S parent) {
   import std.traits: isIntegral, isBoolean, isArray, isSomeChar;

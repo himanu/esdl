@@ -620,6 +620,11 @@ abstract class CstVecArrBase(V, rand RAND_ATTR, int N)
     }
   }
 
+  EV opIndex(CstRangeExpr index) {
+    assert (index._rhs is null);
+    return this.opIndex(index._lhs);
+  }
+
   EV opIndex(size_t index) {
     if (_arrLen.isSolved()) {
       uint len = cast(uint) _arrLen.evaluate();
@@ -833,8 +838,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
       {
 	static if (S.length == 0) return this;
 	else static if (S[0] == "") {
-	  assert (indx[0]._rhs is null);
-	  return this.opIndex(indx[0]._lhs)._esdl__sym!(S[1..$])(indx[1..$]);
+	  return this.opIndex(indx[0])._esdl__sym!(S[1..$])(indx[1..$]);
 	}
 	else {
 	  static assert (S.length == 1);
@@ -992,14 +996,6 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N != 0):
       override size_t getLen() {
 	return _getLen();
       }
-
-      static private auto getRef(A, N...)(ref A arr, N indx)
-	if ((isArray!A || isQueue!A) && N.length > 0 && isIntegral!(N[0])) {
-	  static if (N.length == 1) return &(arr[indx[0]]);
-	  else {
-	    return getRef(arr[indx[0]], indx[1..$]);
-	  }
-	}
 
       auto getRef(N...)(N indx) if (isIntegral!(N[0])) {
 	if (_indexExpr) {
