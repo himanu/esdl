@@ -50,7 +50,7 @@ template isBitVector(T) {
   static if(is(T unused == _bvec!(S, L, N), bool S, bool L, N...))
     enum bool isBitVector = true;
   else
-  enum bool isBitVector = false;
+    enum bool isBitVector = false;
 }
 
 template BitLength(T) {
@@ -581,7 +581,7 @@ struct _bvec(bool S, bool L, string VAL, size_t RADIX) {
       // 			       store_t.sizeof, STORESIZE));
       foreach(i, n; (mixin(stringToBits(extractBits!(false, RADIX)(VAL),
 				        store_t.sizeof, STORESIZE)))) {
-	_aval[i] &= cast(store_t) ~n;
+	_aval[i] &= ~n;
       }
       if(this.aValMSB) {
 	_aval[$-1] |= SMASK;
@@ -2614,13 +2614,38 @@ struct _bvec(bool S, bool L, N...) if(CheckVecParams!N)
 	  result = getValue() / other.getValue();
 	}
 	else {
-	  pragma(msg, "Not implemented yet -- TBD (use std.internal.math.biguintcore");
+	  import std.internal.math.biguintcore;
+	  //pragma(msg, "Not implemented yet -- TBD (use std.internal.math.biguintcore");
+	  uint[] a = cast(uint[]) this._aval;
+	  uint[] b = cast(uint[]) other._aval;
+	  uint[] r = cast(uint[]) result._aval;
+	  divModInternal(r, null, a, b);
 	}
-
 	if (result.aValMSB) result._aval[$-1] |= result.SMASK;
 	return result;
       }
-
+    
+    public auto opBinary(string op, string file= __FILE__,
+			 size_t line = __LINE__, V)(V other) const
+      if(isBitVector!V && (op == "%")) {
+	reportX!(file, line)(other);
+	alias R = _bvec!(this_type, V, "%");
+	R result = 0;
+	static if(R.SIZE <= 64) {
+	  result = getValue() % other.getValue();
+	}
+	else {
+	  import std.internal.math.biguintcore;
+	  //pragma(msg, "Not implemented yet -- TBD (use std.internal.math.biguintcore");
+	  uint[] a = cast(uint[]) this._aval;
+	  uint[] b = cast(uint[]) other._aval;
+	  uint[] r = cast(uint[]) result._aval;
+	  uint[] temp = [];
+	  divModInternal(temp, r, a, b);
+	}
+	if (result.aValMSB) result._aval[$-1] |= result.SMASK;
+	return result;
+      }
 
     // Left Shift Assign
     public void opOpAssign(string op)(size_t shift)
