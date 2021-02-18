@@ -3,13 +3,12 @@ module esdl.rand.objx;
 import esdl.data.bvec;
 import esdl.data.bstr;
 import esdl.data.queue;
-import std.traits: isIntegral, isBoolean, isArray, isStaticArray,
-  isDynamicArray;
+import std.traits: isIntegral, isBoolean, isArray,
+  isStaticArray, isDynamicArray;
 
 import esdl.rand.misc;
-import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain,
-  CstLogicExpr, CstPredicate, CstVecNodeIntf, CstVecArrIntf, CstVarNodeIntf,
-  CstObjectIntf, CstObjArrIntf, CstDomSet;
+import esdl.rand.base: CstVecExpr, CstIterator, DomType, CstDomain, CstDomSet,
+  CstObjSet, CstPredicate, CstVarNodeIntf, CstVecNodeIntf, CstObjArrIntf;
 import esdl.rand.proxy: _esdl__Proxy;
 import esdl.rand.expr: CstArrLength, _esdl__cstVal,
   CstArrIterator, CstValue, CstRangeExpr;
@@ -122,30 +121,20 @@ class CstObject(V, rand RAND_ATTR, int N) if (N == 0):
       
       static if (is (LEAF == struct)) {
 	this(string name, V* var, _esdl__Proxy parent) {
-	  // import std.stdio;
-	  // writeln("New obj ", name);
 	  super(name, var, parent);
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
-	  // _var = var;
 	}
       }
       else {
 	this(string name, V var, _esdl__Proxy parent) {
-	  // import std.stdio;
-	  // writeln("New obj ", name);
 	  super(name, var, parent);
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
-	  // _var = var;
 	}
       }
 
 
-      // void _esdl__setValRef(ref V var) {
-      // 	_var = var;
-      // }
-      
       final override string fullName() {
 	if (_parent is _root) return _name;
 	else  
@@ -188,18 +177,30 @@ class CstObject(V, rand RAND_ATTR, int N) if (N == 0):
 	_esdl__setValRef(this.getRef());
 	_esdl__doConstrain(getProxyRoot());
       }
+
+      void setDomainContext(CstPredicate pred,
+			    ref CstDomain[] rnds,
+			    ref CstDomSet[] rndArrs,
+			    ref CstDomain[] vars,
+			    ref CstDomSet[] varArrs,
+			    ref CstValue[] vals,
+			    ref CstIterator[] iters,
+			    ref CstVecNodeIntf[] idxs,
+			    ref CstDomain[] bitIdxs,
+			    ref CstVecNodeIntf[] deps) {
+	// no parent
+      }
+
     }
 
-class CstObject(V, rand R, int N) if (N != 0):
+// Array Element
+class CstObject(V, rand RAND_ATTR, int N) if (N != 0):
   // _esdl__ProxyResolve!(LeafElementType!V)
-  CstObjectBase!(V, R, N), CstObjIndexed
+  CstObjectBase!(V, RAND_ATTR, N), CstObjIndexed
     {
-
       alias RV = typeof(this);
-      alias P = CstObjArr!(V, R, N-1);
-
+      alias P = CstObjArr!(V, RAND_ATTR, N-1);
       P _parent;
-      _esdl__Proxy _root;
 
       CstVecExpr _indexExpr = null;
       int _pindex = 0;
@@ -207,28 +208,29 @@ class CstObject(V, rand R, int N) if (N != 0):
       uint _resolvedCycle;	// cycle for which indexExpr has been resolved
       RV _resolvedObj;
 
+      _esdl__Proxy _root;
+
       this(string name, P parent, CstVecExpr indexExpr) {
-	super(name, null, parent.getProxyRoot());
-	// import std.stdio;
-	// writeln("New ", name);
-	assert (parent !is null);
-	_name = name;
-	_parent = parent;
-	_indexExpr = indexExpr;
-	_root = _parent.getProxyRoot();
-	// only concrete elements need be added
-	// getProxyRoot().addRndDomain(this);
+	if (indexExpr.isConst()) {
+	  uint index = cast(uint) indexExpr.evaluate();
+	  this(name, parent, index);
+	}
+	else {
+	  assert (parent !is null);
+	  super(name, null, parent.getProxyRoot());
+	  _name = name;
+	  _parent = parent;
+	  _root = _parent.getProxyRoot();
+	  _indexExpr = indexExpr;
+	}
       }
 
       this(string name, P parent, uint index) {
-	super(name, null, parent.getProxyRoot());
-	// import std.stdio;
-	// writeln("New ", name);
 	assert (parent !is null);
+	super(name, null, parent.getProxyRoot());
 	// super(parent.getProxyRoot());
 	_name = name;
 	_parent = parent;
-	// _indexExpr = _esdl__cstVal(index);
 	_pindex = index;
 	_root = _parent.getProxyRoot();
       }
@@ -262,16 +264,16 @@ class CstObject(V, rand R, int N) if (N != 0):
       }
 
       RV getResolved() {
-	// if (_resolvedCycle != getProxyRoot()._cycle) {
-	// 	auto parent = _parent.getResolved();
-	// 	if (_indexExpr) {
-	// 	  _resolvedObj = parent[cast(size_t) _indexExpr.evaluate()];
-	// 	}
-	// 	else {
-	// 	  _resolvedObj = parent[_pindex];
-	// 	}
-	// 	_resolvedCycle = getProxyRoot()._cycle;
-	// }
+	if (_resolvedCycle != getProxyRoot()._cycle) {
+	  auto parent = _parent.getResolved();
+	  if (_indexExpr) {
+	    _resolvedObj = parent[cast(size_t) _indexExpr.evaluate()];
+	  }
+	  else {
+	    _resolvedObj = parent[_pindex];
+	  }
+	  _resolvedCycle = getProxyRoot()._cycle;
+	}
 	return _resolvedObj;
       }
 
@@ -324,7 +326,7 @@ class CstObject(V, rand R, int N) if (N != 0):
 			    ref CstVecNodeIntf[] idxs,
 			    ref CstDomain[] bitIdxs,
 			    ref CstVecNodeIntf[] deps) {
-	static if (R.isRand()) {
+	static if (RAND_ATTR.isRand()) {
 	  // 	if (! canFind(rnds, this)) rnds ~= this;
 	  // }
 	  // else {
@@ -351,24 +353,19 @@ class CstObject(V, rand R, int N) if (N != 0):
     }
 
 
-// template CstObjArr(T, int I, int N=0)
-//   if(_esdl__ArrOrder!(T, I, N) != 0) {
-//   alias CstObjArr = CstObjArr!(typeof(T.tupleof[I]), LeafElementType!(T.tupleof[I]),
-// 			       getRandAttr!(T, I), N);
-// }
 
 // Arrays (Multidimensional arrays as well)
-class CstObjArrIdx(V, rand R, int N, int IDX,
-		   P, int PIDX): CstObjArr!(V, R, N)
+class CstObjArrIdx(V, rand RAND_ATTR, int N, int IDX,
+		   P, int PIDX): CstObjArr!(V, RAND_ATTR, N)
 {
-  enum _esdl__ISRAND = R.isRand();
-  enum _esdl__HASPROXY = R.hasProxy();
+  enum _esdl__ISRAND = RAND_ATTR.isRand();
+  enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
   this(string name, V* var, _esdl__Proxy parent) {
     super(name, var, parent);
   }
-  override CstObjArr!(V, R, N) unroll(CstIterator iter, uint n) {
+  override RV unroll(CstIterator iter, uint n) {
     if (_parent !is _root) {
       P uparent = cast(P)(_parent.unroll(iter, n));
       assert (uparent !is null);
@@ -381,59 +378,24 @@ class CstObjArrIdx(V, rand R, int N, int IDX,
 }
 
 
-abstract class CstObjArrNode: CstObjArrIntf
-{
-  string _name;
-
-  _esdl__Proxy _root;
-  
-  this(string name) {
-    _name = name;
-  }
-
-  _esdl__Proxy getProxyRoot() {
-    assert (_root !is null);
-    return _root;
-  }
-
-  string name() {
-    return _name;
-  }
-
-  uint _esdl__unresolvedArrLen = uint.max;
-  uint _esdl__leafElemsCount = 0;
-
-  final uint _esdl__leafsCount() {
-    assert (isSolved());
-    return _esdl__leafElemsCount;
-  }
-  
-  final bool isSolved() {
-    return _esdl__unresolvedArrLen == 0;
-  }
-
-  abstract void markSolved();
-  
-}
-
-abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
-  CstObjArrNode
+abstract class CstObjArrBase(V, rand RAND_ATTR, int N)
+  if (_esdl__ArrOrder!(V, N) != 0): CstObjSet
 {
 
-  alias RV = CstObjArr!(V, R, N);
+  alias RV = CstObjArr!(V, RAND_ATTR, N);
 
   enum ARR_ORDER = _esdl__ArrOrder!(V, N);
-  enum HAS_RAND_ATTRIB = R.isRand();
+  enum HAS_RAND_ATTRIB = RAND_ATTR.isRand();
   alias LEAF = LeafElementType!V;
 
   alias L = ElementTypeN!(V, N);
   alias E = ElementTypeN!(V, N+1);
 
   static if (_esdl__ArrOrder!(V, N+1) == 0) {
-    alias EV = CstObject!(V, R, N+1);
+    alias EV = CstObject!(V, RAND_ATTR, N+1);
   }
   else {
-    alias EV = CstObjArr!(V, R, N+1);
+    alias EV = CstObjArr!(V, RAND_ATTR, N+1);
   }
 
   this(string name) {
@@ -444,6 +406,9 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
 
   EV[] _elems;
 
+  abstract EV createElem(CstVecExpr indexExpr);
+  abstract EV createElem(uint i);
+    
   bool isRand() {
     static if (HAS_RAND_ATTRIB) {
       return true;
@@ -453,8 +418,8 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
     }
   }
 
-  abstract EV createElem(CstVecExpr indexExpr);
-  abstract EV createElem(uint i);
+  abstract size_t getLen();
+  abstract void setLen(size_t len);
     
   size_t _forcedLength;
 
@@ -475,19 +440,9 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
     if (currLen < v) {
       _elems.length = v;
       for (uint i=currLen; i!=v; ++i) {
-	// import std.conv: to;
 	_elems[i] = createElem(i);
       }
     }
-    // static if (is (EV: CstObjectIntf)) {
-    //   if (_parent.isStatic()) {
-    // 	import std.stdio;
-    // 	writeln("Need to call setOuter in these CstObject's:");
-    // 	foreach (elem; _elems) {
-    // 	  writeln("    ", elem.fullName());
-    // 	}
-    //   }
-    // }
   }
 
   EV opIndex(CstVecExpr indexExpr) {
@@ -526,9 +481,6 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
     return _elems[index];
   }
 
-  abstract size_t getLen();
-  abstract void setLen(size_t len);
-    
   void _esdl__doRandomize(_esdl__RandGen randGen) {
     static if (HAS_RAND_ATTRIB) {
       assert (_arrLen !is null);
@@ -545,8 +497,18 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
     }
   }
 
-  EV _esdl__elems() {
-    return this[_esdl__iter()];
+  uint maxArrLen() {
+    static if (HAS_RAND_ATTRIB) {
+      static if(isStaticArray!L) {
+	return L.length;
+      }
+      else {
+	return RAND_ATTR[N];
+      }
+    }
+    else {
+      return uint.max;
+    }
   }
 
   CstArrLength!RV length() {
@@ -572,6 +534,11 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
     }
   }
 
+  EV _esdl__elems() {
+    return this[_esdl__iter()];
+  }
+
+  
   final bool _esdl__isObjArray() {return true;}
 
   final CstIterator _esdl__iter() {
@@ -608,26 +575,12 @@ abstract class CstObjArrBase(V, rand R, int N) if (_esdl__ArrOrder!(V, N) != 0):
     // writeln("Visiting: ", this.fullName());
   }
 
-  uint maxArrLen() {
-    static if (HAS_RAND_ATTRIB) {
-      static if(isStaticArray!L) {
-	return L.length;
-      }
-      else {
-	return R[N];
-      }
-    }
-    else {
-      return uint.max;
-    }
-  }
-
 }
 
-class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstObjArrBase!(V, R, N)
+class CstObjArr(V, rand RAND_ATTR, int N) if (N == 0):
+  CstObjArrBase!(V, RAND_ATTR, N)
     {
-      alias RAND=R;
+      alias RAND=RAND_ATTR;
 
       V* _var;
       _esdl__Proxy _parent;
@@ -674,16 +627,6 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	return getLenTmpl(this);
       }
 
-      override EV createElem(CstVecExpr indexExpr) {
-	return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
-      }
-  
-      override EV createElem(uint i) {
-	import std.conv: to;
-	return new EV(_name ~ "[#" ~ i.to!string() ~ "]",
-		      this, cast(uint) i);
-      }
-  
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
 			    ref CstDomSet[] rndArrs,
@@ -704,7 +647,16 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
 	// no parent
       }
 
-
+      override EV createElem(CstVecExpr indexExpr) {
+	return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
+      }
+  
+      override EV createElem(uint i) {
+	import std.conv: to;
+	return new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+		      this, cast(uint) i);
+      }
+  
       override void markSolved() {
 	// top level array -- no need to do anything
 	// import std.stdio;
@@ -725,16 +677,15 @@ class CstObjArr(V, rand R, int N) if (N == 0 && _esdl__ArrOrder!(V, N) != 0):
       }
     }
 
-class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
-  CstObjArrBase!(V, R, N), CstObjIndexed
+class CstObjArr(V, rand RAND_ATTR, int N) if (N != 0):
+  CstObjArrBase!(V, RAND_ATTR, N), CstObjIndexed
     {
-      alias P = CstObjArr!(V, R, N-1);
-
+      alias P = CstObjArr!(V, RAND_ATTR, N-1);
       P _parent;
       CstVecExpr _indexExpr = null;
       int _pindex = 0;
 
-      alias RAND=R;
+      alias RAND=RAND_ATTR;
       
       uint _resolvedCycle;	// cycle for which indexExpr has been resolved
       RV _resolvedObj;
@@ -786,16 +737,16 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
       }
       
       RV getResolved() {
-	// if (_resolvedCycle != getProxyRoot()._cycle) {
-	//   auto parent = _parent.getResolved();
-	//   if (_indexExpr) {
-	// 	_resolvedObj = parent[_indexExpr.evaluate()];
-	//   }
-	//   else {
-	// 	_resolvedObj = parent[_pindex];
-	//   }
-	//   _resolvedCycle = getProxyRoot()._cycle;
-	// }
+	if (_resolvedCycle != getProxyRoot()._cycle) {
+	  auto parent = _parent.getResolved();
+	  if (_indexExpr) {
+		_resolvedObj = parent[_indexExpr.evaluate()];
+	  }
+	  else {
+		_resolvedObj = parent[_pindex];
+	  }
+	  _resolvedCycle = getProxyRoot()._cycle;
+	}
 	return _resolvedObj;
       }
 
@@ -817,16 +768,6 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	return getLenTmpl(this);
       }
 
-      override EV createElem(CstVecExpr indexExpr) {
-	return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
-      }
-  
-      override EV createElem(uint i) {
-	import std.conv: to;
-	return new EV(_name ~ "[#" ~ i.to!string() ~ "]",
-		      this, cast(uint) i);
-      }
-  
       void setDomainContext(CstPredicate pred,
 			    ref CstDomain[] rnds,
 			    ref CstDomSet[] rndArrs,
@@ -856,6 +797,16 @@ class CstObjArr(V, rand R, int N) if(N != 0 && _esdl__ArrOrder!(V, N) != 0):
 	}
       }
 
+      override EV createElem(CstVecExpr indexExpr) {
+	return new EV(name ~ "[" ~ indexExpr.describe() ~ "]", this, indexExpr);
+      }
+  
+      override EV createElem(uint i) {
+	import std.conv: to;
+	return new EV(_name ~ "[#" ~ i.to!string() ~ "]",
+		      this, cast(uint) i);
+      }
+  
       override void markSolved() {
 	if (_indexExpr is null) {
 	  _parent.markChildSolved(_esdl__leafElemsCount);
@@ -891,7 +842,7 @@ private auto getArrElemTmpl(A, N...)(ref A arr, N indx)
   }
 
 private auto getRefTmpl(RV, J...)(RV rv, J indx)
-  if (is (RV: CstObjArrNode) && isIntegral!(J[0])) {
+  if (is (RV: CstObjSet) && isIntegral!(J[0])) {
     static if (is (RV: CstObjIndexed)) {
       if (rv._indexExpr) {
 	  assert (rv._indexExpr.isConst());
@@ -916,7 +867,7 @@ private size_t getArrLenTmpl(A, N...)(ref A arr, N indx)
     }
   }
 
-size_t getLenTmpl(RV, N...)(RV rv, N indx) {
+private size_t getLenTmpl(RV, N...)(RV rv, N indx) {
   static if (is (RV: CstObjIndexed)) {
     return getLenTmpl(rv._parent, rv._pindex, indx);
   }
@@ -930,16 +881,12 @@ private void setArrLen(A, N...)(ref A arr, size_t v, N indx)
     static if(N.length == 0) {
       static if(isDynamicArray!A || isQueue!A) {
 	arr.length = v;
-	// import std.stdio;
-	// writeln(arr, " indx: ", N.length);
       }
       else {
 	assert(false, "Can not set length of a fixed length array");
       }
     }
     else {
-      // import std.stdio;
-      // writeln(arr, " indx: ", N.length);
       setArrLen(arr[indx[0]], v, indx[1..$]);
     }
   }

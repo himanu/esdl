@@ -370,6 +370,41 @@ abstract class CstDomain: CstVecTerm, CstVectorIntf
   override abstract string describe();
 }
 
+abstract class CstObjSet: CstObjArrIntf
+{
+  string _name;
+
+  _esdl__Proxy _root;
+  
+  this(string name) {
+    _name = name;
+  }
+
+  _esdl__Proxy getProxyRoot() {
+    assert (_root !is null);
+    return _root;
+  }
+
+  string name() {
+    return _name;
+  }
+
+  uint _esdl__unresolvedArrLen = uint.max;
+  uint _esdl__leafElemsCount = 0;
+
+  final uint _esdl__leafsCount() {
+    assert (isSolved());
+    return _esdl__leafElemsCount;
+  }
+  
+  final bool isSolved() {
+    return _esdl__unresolvedArrLen == 0;
+  }
+
+  abstract void markSolved();
+  
+}
+
 abstract class CstDomSet: CstVecPrim, CstVecArrIntf
 {
   State _state;
