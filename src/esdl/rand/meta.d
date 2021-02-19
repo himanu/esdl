@@ -553,14 +553,7 @@ mixin template Randomization()
   }
 
 
-  // enum bool _esdl__hasRandomization = true;
-  alias _esdl__Type = typeof(this);
-
-  static _esdl__Type _esdl__thisHasRandomization()() {
-    return null;
-  }
-
-  alias _esdl__ProxyType = _esdl__ProxyResolve!_esdl__Type;
+  alias _esdl__ProxyType = _esdl__ProxyResolve!_esdl__T;
 
   // final auto _esdl__randEval(string NAME)() {
   //   return mixin(NAME);
@@ -568,6 +561,7 @@ mixin template Randomization()
 
   static if(// is(_esdl__T: Randomizable) ||
 	    __traits(compiles, _esdl__proxyInst)) {
+    static assert (is (_esdl__T == class)); // only classes can have a base class
     override void _esdl__virtualRandomize(_esdl__ConstraintBase withCst = null) {
       _esdl__randomize(this, withCst);
     }
@@ -577,14 +571,8 @@ mixin template Randomization()
     override void _esdl__initProxy() {
       assert(this !is null);
       if (_esdl__proxyInst is null) {
-	static if (is (typeof(this) == class)) {
-	  _esdl__proxyInst =
-	    new _esdl__ProxyType(this, null);
-	}
-	else {
-	  _esdl__proxyInst =
-	    new _esdl__ProxyType(&this, null);
-	}
+	_esdl__proxyInst =
+	  new _esdl__ProxyType(this, null);
 	static if(__traits(compiles, _esdl__seedRandom())) {
 	  _esdl__seedRandom();
 	}
@@ -644,8 +632,6 @@ mixin template Randomization()
       }
     }
   }
-  // static if(_esdl__baseHasRandomization!_esdl__Type) {
-  // }
 }
 
 class _esdl__ProxyNoRand(_esdl__T)
@@ -965,15 +951,7 @@ template _esdl__ProxyBase(T) {
 	     (! _esdl__TypeHasNorandAttr!(B[0])) &&
 	     (! is (B[0] == Object))) {
     alias U = B[0];
-    // check if the base class has Randomization
-    // static if(__traits(compiles, _esdl__ProxyResolve!U)) {
-    // static if(__traits(compiles, U._esdl__thisHasRandomization()) &&
-    // 	      is(U == typeof(U._esdl__thisHasRandomization()))) {
     alias _esdl__ProxyBase = _esdl__ProxyResolve!U;
-    // }
-    // else {
-    //   alias _esdl__ProxyBase = _esdl__ProxyBase!U;
-    // }
   }
   else {
     alias _esdl__ProxyBase = _esdl__Proxy;
