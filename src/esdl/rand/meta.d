@@ -23,6 +23,7 @@ import esdl.rand.base: CstBlock, CstVecPrim, CstPredicate,
 import esdl.rand.vecx: CstVecIdx, CstVecArrIdx;
 import esdl.rand.objx: CstObjIdx, CstObjArrIdx;
 import esdl.rand.proxy;
+import esdl.rand.func;
 
 /// C++ type static_cast for down-casting when you are sure
 private import std.typetuple: staticIndexOf, TypeTuple;
@@ -487,36 +488,70 @@ mixin template Randomization()
   alias _esdl__T = typeof(this);
   alias _esdl__BASEPT = _esdl__ProxyBase!_esdl__T;
 
-  static assert (is (_esdl__T == class),
-		 "mixin Randomization is allowed only inside classes");
+  // static assert (is (_esdl__T == class),
+  // 		 "mixin Randomization is allowed only inside classes");
   // While making _esdl__ProxyRand class non-static nested class
   // also works as far as dlang compilers are concerned, do not do
   // that since in that case _esdl__outer object would have an
   // implicit pointer to the outer object which can not be changed
-  static class _esdl__ProxyRand: _esdl__BASEPT
-  {
-    mixin _esdl__ProxyMixin;
 
-    _esdl__T _esdl__outer;
-    _esdl__T _esdl__getRef()() {return _esdl__outer;}
+  static if (is (_esdl__T == class)) {
+    static class _esdl__ProxyRand: _esdl__BASEPT
+    {
+
+      mixin _esdl__ProxyMixin;
+
+      _esdl__T _esdl__outer;
+      _esdl__T _esdl__getRef()() {return _esdl__outer;}
       
-    void _esdl__setValRef()(_esdl__T outer) {
-      if (_esdl__outer !is outer) {
+      void _esdl__setValRef()(_esdl__T outer) {
+	if (_esdl__outer !is outer) {
+	  _esdl__outer = outer;
+	  this._esdl__doSetOuter(true);
+	}
+      }
+      this(_esdl__T outer, _esdl__Proxy parent) {
 	_esdl__outer = outer;
-	this._esdl__doSetOuter(true);
+	static if (is (_esdl__BASEPT == _esdl__Proxy))
+	  super(parent);
+	else
+	  super(outer, parent);
+	_esdl__doInitRandsElems(this);
+	_esdl__doInitCstsElems(this);
       }
     }
-    this(_esdl__T outer, _esdl__Proxy parent) {
-      _esdl__outer = outer;
-      static if (is (_esdl__BASEPT == _esdl__Proxy))
-	super(parent);
-      else
-	super(outer, parent);
-      _esdl__doInitRandsElems(this);
-      _esdl__doInitCstsElems(this);
-    }
-
   }
+  else static if (is (_esdl__T == struct)) {
+    static class _esdl__ProxyRand: _esdl__BASEPT
+    {
+      mixin _esdl__ProxyMixin;
+      _esdl__T* _esdl__outer;
+      _esdl__T* _esdl__getRef() {return _esdl__outer;}
+      void _esdl__setValRef()(ref _esdl__T outer) {
+	if (_esdl__outer !is &outer) {
+	  _esdl__outer = &outer;
+	  this._esdl__doSetOuter(true);
+	}
+      }
+      void _esdl__setValRef()(_esdl__T* outer) {
+	if (_esdl__outer !is outer) {
+	  _esdl__outer = outer;
+	  this._esdl__doSetOuter(true);
+	}
+      }
+      this(_esdl__T* outer, _esdl__Proxy parent) {
+	_esdl__outer = outer;
+	super(parent);
+	_esdl__doInitRandsElems(this);
+	_esdl__doInitCstsElems(this);
+      }
+    }
+  }
+  else {
+    static assert (false, "mixin Randomization is allowed only inside a class or a struct; not " ~
+		   _esdl__T.stringof);
+  }
+
 
   // enum bool _esdl__hasRandomization = true;
   alias _esdl__Type = typeof(this);
@@ -542,8 +577,14 @@ mixin template Randomization()
     override void _esdl__initProxy() {
       assert(this !is null);
       if (_esdl__proxyInst is null) {
-	_esdl__proxyInst =
-	  new _esdl__ProxyType(this, null);
+	static if (is (typeof(this) == class)) {
+	  _esdl__proxyInst =
+	    new _esdl__ProxyType(this, null);
+	}
+	else {
+	  _esdl__proxyInst =
+	    new _esdl__ProxyType(&this, null);
+	}
 	static if(__traits(compiles, _esdl__seedRandom())) {
 	  _esdl__seedRandom();
 	}
@@ -586,8 +627,14 @@ mixin template Randomization()
     alias srandom = seedRandom;	// SV names the similar method srandom
     void _esdl__initProxy() {
       if (_esdl__proxyInst is null) {
-	_esdl__proxyInst =
-	  new _esdl__ProxyType(this, null);
+	static if (is (typeof(this) == class)) {
+	  _esdl__proxyInst =
+	    new _esdl__ProxyType(this, null);
+	}
+	else {
+	  _esdl__proxyInst =
+	    new _esdl__ProxyType(&this, null);
+	}
 	static if(__traits(compiles, _esdl__seedRandom())) {
 	  _esdl__seedRandom();
 	}
@@ -889,17 +936,20 @@ auto _esdl__arg_proxy(L, S)(string name, ref L arg, S parent) {
 
 template _esdl__ProxyResolve(T) {
   // static if(__traits(compiles, T._esdl__hasRandomization)) {
-  static if (is (T == class)) {
+  static if (is (T == class) || is (T == struct)) {
+    // pragma(msg, T.stringof);
     static if (__traits(compiles, T._esdl__ProxyRand)) {
+      // pragma(msg, "ProxyRand: ", T.stringof);
       alias _esdl__ProxyResolve = T._esdl__ProxyRand;
     }
     else {
+      // pragma(msg, "ProxyNoRand: ", T.stringof);
       alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
     }
   }
-  else static if (is (T == struct)) {
-    alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
-  }
+  // else static if (is (T == struct)) {
+  //   alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
+  // }
   else static if (is (T == U*, U) && is (U == struct)) {
     alias _esdl__ProxyResolve = _esdl__ProxyNoRand!T;
   }
