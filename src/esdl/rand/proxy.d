@@ -256,7 +256,15 @@ abstract class _esdl__Proxy: CstObjectIntf
 
   // Array!ulong _solveValue;
   
-  this(_esdl__Proxy parent) { // for structs
+  this(_esdl__Proxy parent, Object outer) {
+    this(parent);
+  }
+
+  this(_esdl__Proxy parent, void* outer) {
+    this(parent);
+  }
+
+  this(_esdl__Proxy parent) {
     import std.random: Random, uniform;
     debug(NOCONSTRAINTS) {
       assert(false, "Constraint engine started");

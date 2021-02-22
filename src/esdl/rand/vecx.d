@@ -31,8 +31,8 @@ class CstVecIdx(V, rand RAND_ATTR, int N, int IDX,
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
 
-  this(string name, V* var, _esdl__Proxy parent) {
-    super(name, var, parent);
+  this(string name, _esdl__Proxy parent, V* var) {
+    super(name, parent, var);
   }
 
   static if (PIDX >= 0) {	// exclude randomize_with
@@ -105,7 +105,7 @@ class CstVector(V, rand RAND_ATTR, int N) if (N == 0):
       V* _var;
       _esdl__Proxy _parent;
       
-      this(string name, V* var, _esdl__Proxy parent) {
+      this(string name, _esdl__Proxy parent, V* var) {
 	super(name, parent.getProxyRoot());
 	_var = var;
 	_parent = parent;
@@ -367,8 +367,8 @@ class CstVecArrIdx(V, rand RAND_ATTR, int N, int IDX,
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  this(string name, V* var, _esdl__Proxy parent) {
-    super(name, var, parent);
+  this(string name, _esdl__Proxy parent, V* var) {
+    super(name, parent, var);
   }
 
   override RV unroll(CstIterator iter, uint n) {
@@ -677,7 +677,7 @@ class CstVecArr(V, rand RAND_ATTR, int N) if (N == 0):
 	_var = var;
       }
       
-      this(string name, V* var, _esdl__Proxy parent) {
+      this(string name, _esdl__Proxy parent, V* var) {
 	super(name);
 	_var = var;
 	_parent = parent;

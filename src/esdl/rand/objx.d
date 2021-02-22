@@ -32,13 +32,13 @@ class CstObjIdx(V, rand RAND_ATTR, int N, int IDX,
   enum int _esdl__INDEX = IDX;
 
   static if (is (LEAF == struct)) {
-    this(string name, V* var, _esdl__Proxy parent) {
-      super(name, var, parent);
+    this(string name, _esdl__Proxy parent, V* var) {
+      super(name, parent, var);
     }
   }
   else {
-    this(string name, V var, _esdl__Proxy parent) {
-      super(name, var, parent);
+    this(string name, _esdl__Proxy parent, V var) {
+      super(name, parent, var);
     }
   }    
 
@@ -64,15 +64,15 @@ class CstObjectBase(V, rand RAND_ATTR, int N)
 	alias LEAF = LeafElementType!V;
 
 	static if (is (LEAF == struct)) {
-	  this(string name, LEAF* var, _esdl__Proxy parent) {
+	  this(string name, _esdl__Proxy parent, LEAF* var) {
 	    _name = name;
-	    super(var, parent);
+	    super(parent, var);
 	  }
 	}
 	else {
-	  this(string name, LEAF var, _esdl__Proxy parent) {
+	  this(string name, _esdl__Proxy parent, LEAF var) {
 	    _name = name;
-	    super(var, parent);
+	    super(parent, var);
 	  }
 	}
 
@@ -120,15 +120,15 @@ class CstObject(V, rand RAND_ATTR, int N) if (N == 0):
       _esdl__Proxy _parent;
       
       static if (is (LEAF == struct)) {
-	this(string name, V* var, _esdl__Proxy parent) {
-	  super(name, var, parent);
+	this(string name, _esdl__Proxy parent, V* var) {
+	  super(name, parent, var);
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
 	}
       }
       else {
-	this(string name, V var, _esdl__Proxy parent) {
-	  super(name, var, parent);
+	this(string name, _esdl__Proxy parent, V var) {
+	  super(name, parent, var);
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
 	}
@@ -217,7 +217,7 @@ class CstObject(V, rand RAND_ATTR, int N) if (N != 0):
 	}
 	else {
 	  assert (parent !is null);
-	  super(name, null, parent.getProxyRoot());
+	  super(name, parent.getProxyRoot(), null);
 	  _name = name;
 	  _parent = parent;
 	  _root = _parent.getProxyRoot();
@@ -227,7 +227,7 @@ class CstObject(V, rand RAND_ATTR, int N) if (N != 0):
 
       this(string name, P parent, uint index) {
 	assert (parent !is null);
-	super(name, null, parent.getProxyRoot());
+	super(name, parent.getProxyRoot(), null);
 	// super(parent.getProxyRoot());
 	_name = name;
 	_parent = parent;
@@ -362,8 +362,8 @@ class CstObjArrIdx(V, rand RAND_ATTR, int N, int IDX,
   enum _esdl__HASPROXY = RAND_ATTR.hasProxy();
   alias _esdl__PROXYT = P;
   enum int _esdl__INDEX = IDX;
-  this(string name, V* var, _esdl__Proxy parent) {
-    super(name, var, parent);
+  this(string name, _esdl__Proxy parent, V* var) {
+    super(name, parent, var);
   }
   override RV unroll(CstIterator iter, uint n) {
     if (_parent !is _root) {
@@ -589,7 +589,7 @@ class CstObjArr(V, rand RAND_ATTR, int N) if (N == 0):
 	_var = var;
       }
       
-      this(string name, V* var, _esdl__Proxy parent) {
+      this(string name, _esdl__Proxy parent, V* var) {
 	super(name);
 	_var = var;
 	_parent = parent;
